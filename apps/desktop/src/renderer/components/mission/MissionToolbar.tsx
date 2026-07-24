@@ -166,7 +166,7 @@ function SaveMenu({
   enabled: boolean;
   multipleGroups: boolean;
   onLibrary: () => void;
-  onExport: (format: 'waypoints' | 'plan') => void;
+  onExport: (format: 'waypoints' | 'plan' | 'kmz') => void;
 }) {
   const [open, setOpen] = useState(false);
   const [pos, setPos] = useState<{ top: number; right: number } | null>(null);
@@ -227,6 +227,13 @@ function SaveMenu({
             >
               QGC Plan (.plan)
               <span className="block text-[10px] text-content-tertiary mt-0.5">QGroundControl{multipleGroups ? ' · flattens groups' : ''}</span>
+            </button>
+            <button
+              onClick={() => { onExport('kmz'); setOpen(false); }}
+              className="w-full text-left px-3 py-2 text-xs text-content hover:bg-surface-input transition-colors"
+            >
+              DJI KMZ (.kmz)
+              <span className="block text-[10px] text-content-tertiary mt-0.5">DJI Fly waypoint mission · plain waypoints only</span>
             </button>
           </div>
         </>,
@@ -428,13 +435,13 @@ export function MissionToolbar({ onResetLayout, showToast }: MissionToolbarProps
     useSurveyStore.getState().deactivateSurvey();
   };
 
-  const handleSaveFile = async (format: 'waypoints' | 'plan' = 'waypoints') => {
+  const handleSaveFile = async (format: 'waypoints' | 'plan' | 'kmz' = 'waypoints') => {
     if (!hasItems) return;
 
     if (activeMode === 'mission') {
       const result = await window.electronAPI?.saveMissionToFile(missionStore.missionItems, format);
       if (result?.success) {
-        showToast?.(`Exported ${missionStore.missionItems.length} waypoints to ${format === 'plan' ? '.plan' : '.waypoints'}`, 'success');
+        showToast?.(`Exported ${missionStore.missionItems.length} waypoints to ${format === 'plan' ? '.plan' : format === 'kmz' ? '.kmz' : '.waypoints'}`, 'success');
       } else if (result?.error && result.error !== 'Cancelled') {
         showToast?.(result.error, 'error');
       }

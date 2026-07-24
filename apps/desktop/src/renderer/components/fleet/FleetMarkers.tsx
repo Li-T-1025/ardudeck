@@ -80,7 +80,7 @@ function screenBearing(from: [number, number], to: [number, number]): number {
 function useFanOffsets(
   vehicles: FleetVehicle[],
   map: L.Map,
-  leaderKey: string | null,
+  leaderKeys: ReadonlySet<string>,
   activeKey: string | null,
 ): Record<string, Offset> {
   const [tick, setTick] = useState(0);
@@ -121,7 +121,7 @@ function useFanOffsets(
       if (members.length < 2) continue;
 
       // Main: formation leader, else active/selected, else lowest sysid.
-      let main = members.find((m) => m.v.key === leaderKey) || members.find((m) => m.v.key === activeKey);
+      let main = members.find((m) => leaderKeys.has(m.v.key)) || members.find((m) => m.v.key === activeKey);
       if (!main) {
         main = members[0];
         for (const m of members) if (main && m.v.sysid < main.v.sysid) main = m;
@@ -156,7 +156,7 @@ function useFanOffsets(
       offsets[anchor.v.key] = { dx: 0, dy: 0, scale: 1, main: true };
     }
     return offsets;
-  }, [vehicles, map, tick, leaderKey, activeKey]);
+  }, [vehicles, map, tick, leaderKeys, activeKey]);
 }
 
 /**
@@ -260,17 +260,18 @@ function FleetMarker({ v, isLeader, offset }: { v: FleetVehicle; isLeader: boole
 
 export function FleetMarkers() {
   const vehicles = useFleetVehicles();
-  const formationLeaderKey = useActiveVehicleStore((s) => s.formationLeaderKey);
+  const formations = useActiveVehicleStore((s) => s.formations);
   const activeVehicleKey = useActiveVehicleStore((s) => s.activeVehicleKey);
   const map = useMap();
-  const offsets = useFanOffsets(vehicles, map, formationLeaderKey, activeVehicleKey);
+  const leaderKeys = useMemo(() => new Set(Object.keys(formations)), [formations]);
+  const offsets = useFanOffsets(vehicles, map, leaderKeys, activeVehicleKey);
 
   return (
     <>
       {vehicles
         .filter((v) => !v.isActive && v.position !== null)
         .map((v) => (
-          <FleetMarker key={v.key} v={v} isLeader={v.key === formationLeaderKey} offset={offsets[v.key]} />
+          <FleetMarker key={v.key} v={v} isLeader={leaderKeys.has(v.key)} offset={offsets[v.key]} />
         ))}
     </>
   );

@@ -512,22 +512,23 @@ function MavlinkFlightControl({ mavTypeOverride }: { mavTypeOverride?: number })
     sitlFrame: sitlIsRunning ? sitlFrame : undefined,
   });
   const capabilities = VEHICLE_CAPABILITIES[vehicleClass];
-  // Squad command: when a formation is active and the LEADER is selected, arm/disarm/mode
-  // fan out to the whole formation (the leader leads the squad). Otherwise commands act on
-  // just the active vehicle. Movement already propagates via the follow.leader loop.
-  const formationLeaderKey = useActiveVehicleStore((s) => s.formationLeaderKey);
+  // Squad command: when the active vehicle LEADS a formation, arm/disarm/mode fan out
+  // to that formation's members (the leader leads its squad - other formations and free
+  // vehicles are untouched). Otherwise commands act on just the active vehicle.
+  // Movement already propagates via the follow.leader loop.
+  const formations = useActiveVehicleStore((s) => s.formations);
   const activeVehicleKey = useActiveVehicleStore((s) => s.activeVehicleKey);
   const fleetVehicles = useFleetVehicles();
-  const squadKeys = formationLeaderKey && activeVehicleKey === formationLeaderKey
-    ? fleetVehicles.map((v) => v.key)
-    : null;
+  const squadKeys = activeVehicleKey ? formations[activeVehicleKey] ?? null : null;
   // Fleet takeoff routing: when the active vehicle belongs to an orchestrator fleet, take off
   // via the engine's synchronized takeoff (squad if leading a formation, else just this one).
   const orchServers = useOrchestrationStore((s) => s.servers);
   const orchServer = Object.values(orchServers).find((s) => s.capabilities.includes('takeoff.synchronized'));
   const activeFleetVehicle = fleetVehicles.find((v) => v.key === activeVehicleKey);
   const fleetTakeoffSysids = orchServer && activeFleetVehicle
-    ? (squadKeys ? fleetVehicles.map((v) => v.sysid) : [activeFleetVehicle.sysid])
+    ? (squadKeys
+        ? fleetVehicles.filter((v) => squadKeys.includes(v.key)).map((v) => v.sysid)
+        : [activeFleetVehicle.sysid])
     : null;
   const missionItems = useMissionStore((s) => s.missionItems);
   const currentSeq = useMissionStore((s) => s.currentSeq);

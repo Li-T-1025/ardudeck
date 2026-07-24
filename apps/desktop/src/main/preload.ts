@@ -635,7 +635,7 @@ const api = {
   setCurrentWaypoint: (seq: number): Promise<{ success: boolean; error?: string }> =>
     ipcRenderer.invoke(IPC_CHANNELS.MISSION_SET_CURRENT, seq),
 
-  saveMissionToFile: (items: MissionItem[], format?: 'waypoints' | 'plan'): Promise<{ success: boolean; filePath?: string; error?: string }> =>
+  saveMissionToFile: (items: MissionItem[], format?: 'waypoints' | 'plan' | 'kmz'): Promise<{ success: boolean; filePath?: string; error?: string }> =>
     ipcRenderer.invoke(IPC_CHANNELS.MISSION_SAVE_FILE, items, format),
 
   loadMissionFromFile: (): Promise<{ success: boolean; items?: MissionItem[]; error?: string }> =>

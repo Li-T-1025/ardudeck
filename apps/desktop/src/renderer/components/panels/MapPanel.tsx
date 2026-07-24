@@ -1841,11 +1841,11 @@ const TelemetryMap2D = React.memo(function TelemetryMap2D() {
   // route via activeFlightTarget() in the main process). Single-vehicle mode is
   // unchanged: you must click the marker to select before commanding.
   const activeVehicleKey = useActiveVehicleStore((s) => s.activeVehicleKey);
-  const formationLeaderKey = useActiveVehicleStore((s) => s.formationLeaderKey);
+  const formations = useActiveVehicleStore((s) => s.formations);
   const fleetActive = !connectionState.isConnected && activeVehicleKey !== null;
   // The big primary marker renders the active vehicle; mark it as leader when the
-  // active vehicle is the formation leader (after "form up", the leader IS active).
-  const activeIsLeader = fleetActive && activeVehicleKey === formationLeaderKey;
+  // active vehicle leads a formation (after "form up", the leader IS active).
+  const activeIsLeader = fleetActive && activeVehicleKey !== null && activeVehicleKey in formations;
 
   // Active vehicle identity (fleet mode): its SYS id label + identity colour, matching the
   // strip card / its waypoints. Single-vehicle mode keeps the plain state-coloured marker.

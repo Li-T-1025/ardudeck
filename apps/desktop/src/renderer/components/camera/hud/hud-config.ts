@@ -32,6 +32,8 @@ export const FIXED_WIDGETS = [
   // Not an SVG instrument — toggles the world-locked 3D waypoint overlay
   // (HudWorldOverlay). Lives here so it appears in the HUD instruments editor.
   'waypoints',
+  // Other fleet vehicles rendered as contact markers (fleet mode only).
+  'swarm',
 ] as const;
 
 /**
@@ -89,6 +91,7 @@ export const HUD_WIDGETS: HudWidgetMeta[] = [
   { id: 'altitudeTape', label: 'Altitude tape', movable: false },
   { id: 'vsi', label: 'Vertical speed', movable: false },
   { id: 'waypoints', label: 'Waypoints (3D)', movable: false },
+  { id: 'swarm', label: 'Swarm contacts', movable: false },
   { id: 'status', label: 'Status (mode/sat/thr)', movable: true },
   { id: 'battery', label: 'Battery', movable: true },
   { id: 'home', label: 'Home arrow + distance', movable: true },
@@ -145,6 +148,7 @@ export const DEFAULT_GROUND_WIDGETS: Record<HudWidgetId, boolean> = {
   vsi: false,
   groundSpeed: true,
   waypoints: true,
+  swarm: true,
   status: true,
   battery: true,
   home: true,
@@ -168,6 +172,7 @@ export const DEFAULT_HUD_CONFIG: HudConfig = {
     vsi: true,
     groundSpeed: false,
     waypoints: true,
+    swarm: true,
     status: true,
     battery: true,
     home: true,

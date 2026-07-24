@@ -32,17 +32,12 @@ interface ActiveVehicleState {
   selectedVehicleKeys: string[];
 
   /**
-   * When a leader-follower formation is active, the leader's key. The fleet strip
-   * renders the rest as wingmen nested under it. Null = no formation.
+   * Active leader-follower formations: leader key -> member keys (leader first,
+   * then its wingmen). Several formations can run at once - the fleet strip nests
+   * each group under its leader; vehicles in no formation stay free cards. A
+   * vehicle belongs to at most one formation (setFormation strips it elsewhere).
    */
-  formationLeaderKey: string | null;
-
-  /**
-   * Keys of the vehicles actually in the active formation (leader + its wingmen).
-   * May be a subset of the fleet - the operator can form only some vehicles. The
-   * fleet strip nests these under the leader; everyone else stays a free vehicle.
-   */
-  formationMemberKeys: string[];
+  formations: Record<string, string[]>;
 
   /** Set the active selection. Pass null for both to clear. */
   setActive: (transportId: string | null, vehicleKey: string | null) => void;
@@ -52,10 +47,12 @@ interface ActiveVehicleState {
   /** Replace the group-command selection. */
   setSelected: (vehicleKeys: string[]) => void;
 
-  /** Set (or clear with null) the active formation leader. */
-  setFormationLeader: (vehicleKey: string | null) => void;
-  /** Replace the set of vehicles in the active formation. */
-  setFormationMembers: (vehicleKeys: string[]) => void;
+  /** Register/replace a formation. Members are removed from any other formation. */
+  setFormation: (leaderKey: string, memberKeys: string[]) => void;
+  /** Drop one formation (its vehicles become free). */
+  removeFormation: (leaderKey: string) => void;
+  /** Drop every formation. */
+  clearFormations: () => void;
 
   /**
    * Record a vehicle the registry just discovered. Adds it to `knownVehicles`
@@ -83,15 +80,33 @@ export const useActiveVehicleStore = create<ActiveVehicleState>((set, get) => ({
   activeTransportId: null,
   knownVehicles: {},
   selectedVehicleKeys: [],
-  formationLeaderKey: null,
-  formationMemberKeys: [],
+  formations: {},
 
   setActive: (transportId, vehicleKey) => {
     set({ activeTransportId: transportId, activeVehicleKey: vehicleKey });
   },
 
-  setFormationLeader: (vehicleKey) => set({ formationLeaderKey: vehicleKey }),
-  setFormationMembers: (vehicleKeys) => set({ formationMemberKeys: vehicleKeys }),
+  setFormation: (leaderKey, memberKeys) => {
+    const members = new Set(memberKeys);
+    const next: Record<string, string[]> = {};
+    // A vehicle flies in one formation: strip the new members from every other
+    // group; a group whose leader was stolen (or that shrinks below 2) dissolves.
+    for (const [lead, keys] of Object.entries(get().formations)) {
+      if (lead === leaderKey || members.has(lead)) continue;
+      const kept = keys.filter((k) => !members.has(k));
+      if (kept.length >= 2) next[lead] = kept;
+    }
+    next[leaderKey] = memberKeys;
+    set({ formations: next });
+  },
+
+  removeFormation: (leaderKey) => {
+    const next = { ...get().formations };
+    delete next[leaderKey];
+    set({ formations: next });
+  },
+
+  clearFormations: () => set({ formations: {} }),
 
   toggleSelected: (vehicleKey) => {
     const current = get().selectedVehicleKeys;
@@ -119,13 +134,19 @@ export const useActiveVehicleStore = create<ActiveVehicleState>((set, get) => ({
     const next = { ...get().knownVehicles };
     delete next[vehicleKey];
     const wasActive = get().activeVehicleKey === vehicleKey;
-    const wasLeader = get().formationLeaderKey === vehicleKey;
+    // Drop the lost vehicle from its formation; a formation whose leader is lost
+    // (or that shrinks below leader+1) dissolves.
+    const formations: Record<string, string[]> = {};
+    for (const [lead, keys] of Object.entries(get().formations)) {
+      if (lead === vehicleKey) continue;
+      const kept = keys.filter((k) => k !== vehicleKey);
+      if (kept.length >= 2) formations[lead] = kept;
+    }
     set({
       knownVehicles: next,
       selectedVehicleKeys: get().selectedVehicleKeys.filter((k) => k !== vehicleKey),
-      formationMemberKeys: get().formationMemberKeys.filter((k) => k !== vehicleKey),
+      formations,
       ...(wasActive ? { activeVehicleKey: null, activeTransportId: null } : {}),
-      ...(wasLeader ? { formationLeaderKey: null, formationMemberKeys: [] } : {}),
     });
   },
 
@@ -151,6 +172,17 @@ export const useActiveVehicleStore = create<ActiveVehicleState>((set, get) => ({
   },
 
   clearAll: () => {
-    set({ activeVehicleKey: null, activeTransportId: null, knownVehicles: {}, selectedVehicleKeys: [], formationLeaderKey: null, formationMemberKeys: [] });
+    set({ activeVehicleKey: null, activeTransportId: null, knownVehicles: {}, selectedVehicleKeys: [], formations: {} });
   },
 }));
+
+/** The formation a vehicle belongs to (as leader or wingman), or null. */
+export function formationOf(
+  formations: Record<string, string[]>,
+  vehicleKey: string,
+): { leaderKey: string; memberKeys: string[] } | null {
+  for (const [leaderKey, memberKeys] of Object.entries(formations)) {
+    if (memberKeys.includes(vehicleKey)) return { leaderKey, memberKeys };
+  }
+  return null;
+}

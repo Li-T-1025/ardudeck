@@ -130,6 +130,7 @@ import { PARAMETER_METADATA_URLS, mavTypeToVehicleType, type VehicleType, type P
 import type { AttitudeData, PositionData, GpsData, BatteryData, VfrHudData, FlightState, RcChannelsData, NavControllerData } from '../shared/telemetry-types.js';
 import { COPTER_MODES, PLANE_MODES, ROVER_MODES, SUB_MODES } from '../shared/telemetry-types.js';
 import type { MissionItem, MissionProgress, MavFrame } from '../shared/mission-types.js';
+import { buildDjiWpml, parseDjiWpml } from '../shared/dji-wpml.js';
 import { MAV_MISSION_RESULT, MAV_MISSION_TYPE } from '../shared/mission-types.js';
 import type { FenceItem, FenceStatus } from '../shared/fence-types.js';
 import type { RallyItem } from '../shared/rally-types.js';
@@ -1205,11 +1206,27 @@ function buildBackgroundTransport(options: ConnectOptions): Transport {
  * mission / fence state machines or mutate connectionState - those stay bound to
  * the primary connection. Returns null for messages it doesn't decode.
  */
+/**
+ * MAVLink v2 truncates trailing zero bytes off every payload, so a hovering or
+ * stationary vehicle sends e.g. GLOBAL_POSITION_INT as 27 bytes (hdg=0 dropped)
+ * and VFR_HUD as 17 (throttle=0). Zero-padding back to the full wire length is
+ * the spec-correct inverse. The fleet decode used hard `length < N` guards
+ * instead, silently dropping position/VFR for every vehicle that wasn't moving
+ * - fleet map/HUD telemetry froze until a command made the fields non-zero.
+ */
+function padTo(payload: Uint8Array, len: number): Uint8Array {
+  if (payload.length >= len) return payload;
+  const out = new Uint8Array(len);
+  out.set(payload);
+  return out;
+}
+
 function decodeFleetTelemetry(packet: MAVLinkPacket): Record<string, unknown> | null {
-  const { msgid, payload } = packet;
+  const { msgid, payload: rawPayload } = packet;
+  let payload = rawPayload;
   switch (msgid) {
     case MSG_HEARTBEAT: {
-      if (payload.length < 8) return null;
+      payload = padTo(payload, 9);
       const customMode = readUint32(payload, 0);
       const vehicleType = payload[4]!;
       const baseMode = payload[6]!;
@@ -1225,7 +1242,7 @@ function decodeFleetTelemetry(packet: MAVLinkPacket): Record<string, unknown> | 
       return { flight };
     }
     case MSG_GLOBAL_POSITION_INT: {
-      if (payload.length < 28) return null;
+      payload = padTo(payload, 28);
       const position: PositionData = {
         lat: readInt32(payload, 4) / 1e7,
         lon: readInt32(payload, 8) / 1e7,
@@ -1238,7 +1255,7 @@ function decodeFleetTelemetry(packet: MAVLinkPacket): Record<string, unknown> | 
       return { position };
     }
     case MSG_GPS_RAW_INT: {
-      if (payload.length < 30) return null;
+      payload = padTo(payload, 30);
       const gps: GpsData = {
         fixType: payload[28]!,
         satellites: payload[29]!,
@@ -1251,7 +1268,7 @@ function decodeFleetTelemetry(packet: MAVLinkPacket): Record<string, unknown> | 
       return { gps };
     }
     case MSG_SYS_STATUS: {
-      if (payload.length < 31) return null;
+      payload = padTo(payload, 31);
       const battery: BatteryData = {
         voltage: readUint16(payload, 14) / 1000,
         current: readInt16(payload, 16) / 100,
@@ -1260,7 +1277,7 @@ function decodeFleetTelemetry(packet: MAVLinkPacket): Record<string, unknown> | 
       return { battery };
     }
     case MSG_VFR_HUD: {
-      if (payload.length < 20) return null;
+      payload = padTo(payload, 20);
       const vfrHud: VfrHudData = {
         airspeed: readFloat(payload, 0),
         groundspeed: readFloat(payload, 4),
@@ -1272,7 +1289,7 @@ function decodeFleetTelemetry(packet: MAVLinkPacket): Record<string, unknown> | 
       return { vfrHud };
     }
     case MSG_ATTITUDE: {
-      if (payload.length < 28) return null;
+      payload = padTo(payload, 28);
       const r2d = 180 / Math.PI;
       const attitude: AttitudeData = {
         roll: readFloat(payload, 4) * r2d,
@@ -1376,6 +1393,42 @@ function createBackgroundDiscoveryHandler(
             Object.assign(batch, fields);
             telBatches.set(vehicleKey, batch);
             scheduleFlush();
+          }
+
+          // Operator feedback that previously existed only on the PRIMARY
+          // connection path (handleMavlinkPacket): STATUSTEXT (arm-refusal
+          // reasons, prearm failures) and COMMAND_ACK results. Fleet vehicles
+          // live on background/orchestration transports, so in fleet mode a
+          // refused arm or takeoff produced no reason and no response at all -
+          // the Messages panel stayed silent. Tag with the source SYS id since
+          // many vehicles share this panel.
+          if (packet.msgid === MSG_STATUSTEXT && packet.payload.length >= 51) {
+            const severity = packet.payload[0]!;
+            const text = new TextDecoder().decode(packet.payload.slice(1, 51)).replace(/\0.*$/, '');
+            if (text) {
+              const severityLabel = SEVERITY_LABELS[severity] ?? 'INFO';
+              safeSend(mainWindow, IPC_CHANNELS.MAVLINK_STATUSTEXT, {
+                severity, severityLabel, text: `SYS ${packet.sysid}: ${text}`,
+              });
+            }
+          } else if (packet.msgid === MSG_COMMAND_ACK && packet.payload.length >= 3) {
+            const ackCommand = readUint16(packet.payload, 0);
+            const ackResult = packet.payload[2] ?? 0;
+            const FEEDBACK_CMDS: Record<number, string> = {
+              400: 'ARM/DISARM', 22: 'Takeoff', 192: 'GO_TO', 176: 'Mode change', 34: 'ORBIT',
+            };
+            const label = FEEDBACK_CMDS[ackCommand];
+            // Mode-change ACCEPTED is routine noise; every other tracked result
+            // (accepts and refusals) is operator-relevant.
+            if (label && !(ackCommand === 176 && ackResult === 0)) {
+              const MAV_RESULT_NAMES = ['ACCEPTED', 'TEMPORARILY_REJECTED', 'DENIED', 'UNSUPPORTED', 'FAILED', 'IN_PROGRESS'];
+              const severity = ackResult === 0 ? 6 : 4;
+              safeSend(mainWindow, IPC_CHANNELS.MAVLINK_STATUSTEXT, {
+                severity,
+                severityLabel: SEVERITY_LABELS[severity] ?? 'INFO',
+                text: `SYS ${packet.sysid}: ${label} ${MAV_RESULT_NAMES[ackResult] ?? `UNKNOWN(${ackResult})`}`,
+              });
+            }
           }
 
           // Drive a per-vehicle mission upload whose target is on THIS link, so
@@ -2370,7 +2423,8 @@ function parseTelemetry(mainWindow: BrowserWindow, packet: MAVLinkPacket): void 
       // NAV_CONTROLLER_OUTPUT (62) wire order: nav_roll(4), nav_pitch(4),
       //   alt_error(4), aspd_error(4), xtrack_error(4), nav_bearing(2, i16),
       //   target_bearing(2, i16), wp_dist(2, u16)
-      if (payload.length < 26) break;
+      // v2 zero-truncation: an idle vehicle (zero bearings/wp_dist) sends a
+      // short payload; missing bytes read back as their true value, 0.
       const navController: NavControllerData = {
         altError: readFloat(payload, 8),
         aspdError: readFloat(payload, 12),
@@ -8495,26 +8549,25 @@ export function setupIpcHandlers(mainWindow: BrowserWindow): void {
   });
 
   // Save mission to file
-  ipcMain.handle(IPC_CHANNELS.MISSION_SAVE_FILE, async (_, items: MissionItem[], format?: 'waypoints' | 'plan'): Promise<{ success: boolean; filePath?: string; error?: string }> => {
+  ipcMain.handle(IPC_CHANNELS.MISSION_SAVE_FILE, async (_, items: MissionItem[], format?: 'waypoints' | 'plan' | 'kmz'): Promise<{ success: boolean; filePath?: string; error?: string }> => {
     try {
       // When the caller picked a format explicitly (Export dropdown), default
       // the filename + filter to it so the saved file is unambiguous; otherwise
-      // offer both and decide by the chosen extension.
-      const planFirst = format === 'plan';
+      // offer all and decide by the chosen extension.
+      const allFilters = {
+        waypoints: { name: 'Waypoints', extensions: ['waypoints', 'txt'] },
+        plan: { name: 'QGC Plan', extensions: ['plan'] },
+        kmz: { name: 'DJI KMZ', extensions: ['kmz'] },
+      };
+      const first = format && format in allFilters ? format : 'waypoints';
       const result = await dialog.showSaveDialog(mainWindow, {
         title: 'Save Mission',
-        defaultPath: planFirst ? 'mission.plan' : 'mission.waypoints',
-        filters: planFirst
-          ? [
-              { name: 'QGC Plan', extensions: ['plan'] },
-              { name: 'Waypoints', extensions: ['waypoints', 'txt'] },
-              { name: 'All Files', extensions: ['*'] },
-            ]
-          : [
-              { name: 'Waypoints', extensions: ['waypoints', 'txt'] },
-              { name: 'QGC Plan', extensions: ['plan'] },
-              { name: 'All Files', extensions: ['*'] },
-            ],
+        defaultPath: `mission.${first === 'waypoints' ? 'waypoints' : first === 'plan' ? 'plan' : 'kmz'}`,
+        filters: [
+          allFilters[first],
+          ...(['waypoints', 'plan', 'kmz'] as const).filter((f) => f !== first).map((f) => allFilters[f]),
+          { name: 'All Files', extensions: ['*'] },
+        ],
       });
 
       if (result.canceled || !result.filePath) {
@@ -8524,6 +8577,21 @@ export function setupIpcHandlers(mainWindow: BrowserWindow): void {
       const fs = await import('fs/promises');
       const path = await import('path');
       const ext = path.extname(result.filePath).toLowerCase();
+
+      if (ext === '.kmz' || (ext === '' && format === 'kmz')) {
+        // DJI WPML mission (issue #121): zip with wpmz/template.kml + waylines.wpml
+        const { templateKml, waylinesWpml, waypointCount } = buildDjiWpml(items, Date.now());
+        if (waypointCount === 0) {
+          return { success: false, error: 'No exportable waypoints (DJI KMZ needs plain waypoints with coordinates)' };
+        }
+        const AdmZip = (await import('adm-zip')).default;
+        const zip = new AdmZip();
+        zip.addFile('wpmz/template.kml', Buffer.from(templateKml, 'utf-8'));
+        zip.addFile('wpmz/waylines.wpml', Buffer.from(waylinesWpml, 'utf-8'));
+        await fs.writeFile(result.filePath, zip.toBuffer());
+        sendLog(mainWindow, 'info', `Saved DJI KMZ mission (${waypointCount} waypoints) to ${result.filePath}`);
+        return { success: true, filePath: result.filePath };
+      }
 
       let content: string;
       if (ext === '.plan' || (ext === '' && format === 'plan')) {
@@ -8551,7 +8619,7 @@ export function setupIpcHandlers(mainWindow: BrowserWindow): void {
       const result = await dialog.showOpenDialog(mainWindow, {
         title: 'Load Mission',
         filters: [
-          { name: 'Mission Files', extensions: ['waypoints', 'txt', 'plan'] },
+          { name: 'Mission Files', extensions: ['waypoints', 'txt', 'plan', 'kmz'] },
           { name: 'All Files', extensions: ['*'] },
         ],
         properties: ['openFile'],
@@ -8564,14 +8632,28 @@ export function setupIpcHandlers(mainWindow: BrowserWindow): void {
       const filePath = result.filePaths[0]!;
       const fs = await import('fs/promises');
       const path = await import('path');
-      const content = await fs.readFile(filePath, 'utf-8');
       const ext = path.extname(filePath).toLowerCase();
 
       let items: MissionItem[];
-      if (ext === '.plan') {
-        items = parseQgcPlan(content);
+      if (ext === '.kmz') {
+        // DJI WPML mission (issue #121): waylines.wpml inside the zip holds the waypoints
+        const AdmZip = (await import('adm-zip')).default;
+        const zip = new AdmZip(filePath);
+        const entry = zip.getEntries().find((e) => e.entryName.toLowerCase().endsWith('waylines.wpml'));
+        if (!entry) {
+          return { success: false, error: 'Not a DJI waypoint mission: no waylines.wpml inside the .kmz' };
+        }
+        items = parseDjiWpml(entry.getData().toString('utf-8'));
+        if (items.length === 0) {
+          return { success: false, error: 'No waypoints found in the DJI mission' };
+        }
       } else {
-        items = parseWaypointsFile(content);
+        const content = await fs.readFile(filePath, 'utf-8');
+        if (ext === '.plan') {
+          items = parseQgcPlan(content);
+        } else {
+          items = parseWaypointsFile(content);
+        }
       }
 
       sendLog(mainWindow, 'info', `Loaded mission (${items.length} items) from ${filePath}`);

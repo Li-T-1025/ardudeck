@@ -9,11 +9,13 @@ import { useTelemetryStore } from '../../../stores/telemetry-store';
 import { useMissionStore } from '../../../stores/mission-store';
 import { useHudStore } from '../../../stores/hud-store';
 import { useConnectionStore } from '../../../stores/connection-store';
+import { useActiveVehicleStore } from '../../../stores/active-vehicle-store';
+import { useFleetTelemetryStore } from '../../../stores/fleet-telemetry-store';
 import { bearingDeg, haversineMeters } from '../../../utils/osd/live-telemetry';
 import { wrap180 } from './hud-geometry';
 import { resolveHudProfile } from './hud-config';
 import { useLinkHistory } from './useLinkHistory';
-import { FighterHud, type FighterHudValues } from './FighterHud';
+import { FighterHud, type FighterHudValues, type HudContact } from './FighterHud';
 
 export const LiveFighterHud = memo(function LiveFighterHud() {
   const t = useTelemetryStore();
@@ -33,6 +35,36 @@ export const LiveFighterHud = memo(function LiveFighterHud() {
   if (home && (lat || lon)) {
     distance = haversineMeters(lat, lon, home.lat, home.lon);
     homeDirection = wrap180(bearingDeg(lat, lon, home.lat, home.lon) - heading);
+  }
+
+  // Swarm contacts: every OTHER fleet vehicle with a position, as azimuth /
+  // elevation relative to own nose. Uses relative altitudes (a swarm shares a
+  // launch area, so the same datum). Rendering is gated by the `swarm` widget
+  // toggle in FighterHud; without a fleet this is just an empty array.
+  const activeVehicleKey = useActiveVehicleStore((s) => s.activeVehicleKey);
+  const knownVehicles = useActiveVehicleStore((s) => s.knownVehicles);
+  const formations = useActiveVehicleStore((s) => s.formations);
+  const byVehicle = useFleetTelemetryStore((s) => s.byVehicle);
+  const contacts: HudContact[] = [];
+  if (activeVehicleKey && (lat || lon)) {
+    const ownAlt = t.position.relativeAlt;
+    for (const info of Object.values(knownVehicles)) {
+      if (info.key === activeVehicleKey) continue;
+      const tel = byVehicle[info.key];
+      const cLat = tel?.gps?.lat || tel?.position?.lat;
+      const cLon = tel?.gps?.lon || tel?.position?.lon;
+      if (!cLat || !cLon) continue;
+      const distanceM = haversineMeters(lat, lon, cLat, cLon);
+      const dAlt = (tel?.position?.relativeAlt ?? 0) - ownAlt;
+      contacts.push({
+        key: info.key,
+        label: `SYS ${info.sysid}`,
+        bearingRel: wrap180(bearingDeg(lat, lon, cLat, cLon) - heading),
+        elevation: (Math.atan2(dAlt, Math.max(distanceM, 1)) * 180) / Math.PI,
+        distanceM,
+        leader: info.key in formations,
+      });
+    }
   }
 
   // Steering output: servo 1 is the ground-steering output on ArduPilot
@@ -72,6 +104,7 @@ export const LiveFighterHud = memo(function LiveFighterHud() {
     steer,
     wpDistance: t.navController?.wpDist,
     xtrackError: t.navController?.xtrackError,
+    contacts,
   };
 
   return <FighterHud v={v} config={config} profile={profile} />;

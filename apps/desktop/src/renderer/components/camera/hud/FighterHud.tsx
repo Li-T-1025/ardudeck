@@ -29,6 +29,20 @@ import {
   HUD_PX_PER_DEG,
 } from './hud-projection';
 
+/** Another fleet vehicle rendered as a HUD contact marker. */
+export interface HudContact {
+  key: string;
+  /** Short designation, e.g. "SYS 3". */
+  label: string;
+  /** Bearing relative to own heading, wrapped to -180..180. */
+  bearingRel: number;
+  /** Elevation angle above own horizontal plane, degrees. */
+  elevation: number;
+  distanceM: number;
+  /** Formation leader gets the emphasized symbol. */
+  leader?: boolean;
+}
+
 export interface FighterHudValues {
   roll: number;
   pitch: number;
@@ -60,6 +74,8 @@ export interface FighterHudValues {
   steer?: number;
   wpDistance?: number;
   xtrackError?: number;
+  /** Other fleet vehicles as HUD contacts (fleet mode; empty/absent = none). */
+  contacts?: HudContact[];
 }
 
 const VB_W = HUD_VIEWBOX_W;
@@ -246,6 +262,36 @@ export const FighterHud = memo(function FighterHud({ v: raw, config, profile = '
               <line x1={0} y1={-17} x2={0} y2={-34} />
             </g>
           )}
+
+          {/* Swarm contacts: other fleet vehicles projected like the FPM
+              (azimuth/elevation relative to own nose). Clamped into the HUD
+              area; a clamped (off-boresight) contact dims and gains a chevron
+              pointing where it really is. */}
+          {w.swarm && v.contacts?.map((ct) => {
+            const rawDX = wrap180(ct.bearingRel) * PX_PER_DEG;
+            const rawDY = (v.pitch - ct.elevation) * PX_PER_DEG;
+            const dx = Math.max(-30 * PX_PER_DEG, Math.min(30 * PX_PER_DEG, rawDX));
+            const dy = Math.max(-15 * PX_PER_DEG, Math.min(15 * PX_PER_DEG, rawDY));
+            const clamped = dx !== rawDX || dy !== rawDY;
+            const distTxt = ct.distanceM >= 1000 ? `${(ct.distanceM / 1000).toFixed(1)}km` : `${Math.round(ct.distanceM)}m`;
+            const chevronAngle = (Math.atan2(rawDY - dy, rawDX - dx) * 180) / Math.PI;
+            return (
+              <g key={ct.key} transform={`translate(${CX + dx} ${CY + dy})`} opacity={clamped ? 0.55 : 0.95}>
+                <g strokeWidth={2.5 * lw} fill={ct.leader ? C : 'none'}>
+                  <polygon points="0,-11 11,0 0,11 -11,0" fillOpacity={ct.leader ? 0.35 : 0} />
+                  {ct.leader && <polygon points="0,-17 17,0 0,17 -17,0" fill="none" />}
+                </g>
+                {clamped && (
+                  <g transform={`rotate(${chevronAngle})`} strokeWidth={2.5 * lw} fill="none">
+                    <path d="M 16 -7 L 24 0 L 16 7" />
+                  </g>
+                )}
+                <text x={0} y={ct.leader ? 36 : 30} textAnchor="middle" fontSize={18} stroke="none" fill={C}>
+                  {ct.label} · {distTxt}
+                </text>
+              </g>
+            );
+          })}
 
           {w.bankArc && <BankArc roll={v.roll} c={C} lw={lw} />}
           {w.headingTape && <HeadingTape ticks={hdg} heading={v.heading} homeRel={v.homeDirection} c={C} lw={lw} />}

@@ -148,8 +148,7 @@ function FleetCard({ v, role }: { v: FleetVehicle; role?: 'leader' | 'wingman' }
 
 export function FleetStrip() {
   const vehicles = useFleetVehicles();
-  const formationLeaderKey = useActiveVehicleStore((s) => s.formationLeaderKey);
-  const formationMemberKeys = useActiveVehicleStore((s) => s.formationMemberKeys);
+  const formations = useActiveVehicleStore((s) => s.formations);
   const [collapsed, setCollapsed] = useState(false);
 
   // Single-vehicle (or none): render nothing, keep the classic layout.
@@ -175,11 +174,17 @@ export function FleetStrip() {
   }
 
   const sorted = [...vehicles].sort((a, b) => a.sysid - b.sysid);
-  const leader = formationLeaderKey ? vehicles.find((v) => v.key === formationLeaderKey) : undefined;
-  // Only actual formation members nest under the leader; everyone else stays a free,
-  // selectable card (so a subset can fly in formation while others do their own thing).
-  const wingmen = leader ? sorted.filter((v) => v.key !== leader.key && formationMemberKeys.includes(v.key)) : [];
-  const others = leader ? sorted.filter((v) => v.key !== leader.key && !formationMemberKeys.includes(v.key)) : sorted;
+  // One nested block per formation (leader card + its wingmen indented under it);
+  // vehicles in no formation stay free, selectable cards below the groups.
+  const inFormation = new Set(Object.values(formations).flat());
+  const groups = Object.entries(formations)
+    .map(([leaderKey, memberKeys]) => ({
+      leader: sorted.find((v) => v.key === leaderKey),
+      wingmen: sorted.filter((v) => v.key !== leaderKey && memberKeys.includes(v.key)),
+    }))
+    .filter((g): g is { leader: FleetVehicle; wingmen: FleetVehicle[] } => !!g.leader)
+    .sort((a, b) => a.leader.sysid - b.leader.sysid);
+  const others = sorted.filter((v) => !inFormation.has(v.key));
 
   return (
     <div className="shrink-0 w-52 border-r border-subtle bg-surface-nav flex flex-col text-content">
@@ -191,18 +196,18 @@ export function FleetStrip() {
       </div>
 
       <div className="flex-1 overflow-y-auto p-1.5 flex flex-col gap-1">
-        {leader && (
-          <>
-            <FleetCard v={leader} role="leader" />
-            {wingmen.length > 0 && (
+        {groups.map((g) => (
+          <div key={g.leader.key} className="flex flex-col gap-1">
+            <FleetCard v={g.leader} role="leader" />
+            {g.wingmen.length > 0 && (
               <div className="ml-1.5 border-l border-subtle pl-1.5 flex flex-col gap-1">
-                {wingmen.map((v) => (
+                {g.wingmen.map((v) => (
                   <FleetCard key={v.key} v={v} role="wingman" />
                 ))}
               </div>
             )}
-          </>
-        )}
+          </div>
+        ))}
         {others.map((v) => <FleetCard key={v.key} v={v} />)}
       </div>
 

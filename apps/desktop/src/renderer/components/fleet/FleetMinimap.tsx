@@ -42,7 +42,7 @@ function MinimapBlip({ v, x, y, isActive, isLeader }: { v: FleetVehicle; x: numb
 export function FleetMinimap(): JSX.Element | null {
   const vehicles = useFleetVehicles();
   const activeKey = useActiveVehicleStore((s) => s.activeVehicleKey);
-  const leaderKey = useActiveVehicleStore((s) => s.formationLeaderKey);
+  const formations = useActiveVehicleStore((s) => s.formations);
   const mapBounds = useTelemMapBoundsStore((s) => s.bounds);
   const currentView = useNavigationStore((s) => s.currentView);
   const x = useMinimapStore((s) => s.x);
@@ -126,7 +126,7 @@ export function FleetMinimap(): JSX.Element | null {
 
         {positioned.map((v) => {
           const p = project(v.position![0], v.position![1]);
-          return <MinimapBlip key={v.key} v={v} x={p.x} y={p.y} isActive={v.key === activeKey} isLeader={v.key === leaderKey} />;
+          return <MinimapBlip key={v.key} v={v} x={p.x} y={p.y} isActive={v.key === activeKey} isLeader={v.key in formations} />;
         })}
       </svg>
     </div>,
