@@ -25,7 +25,6 @@ import { LogsView } from './components/logs/LogsView';
 import { MavlinkInspectorView } from './components/inspector/MavlinkInspectorView';
 import { setupWorkspaceSync } from './stores/workspace-store';
 import { startInspector } from './stores/inspector-store';
-import { startPerfProbe, probeCount } from './lib/perf-probe';
 import { startSafetyMonitor, refreshContext as refreshSafetyMonitorContext } from './safety-monitor/source';
 import { useConnectionStore } from './stores/connection-store';
 import { useActiveVehicleSync } from './hooks/useActiveVehicleSync';
@@ -454,11 +453,7 @@ function App() {
     startInspector();
     startSafetyMonitor();
     const cleanup = setupWorkspaceSync();
-    // TEMP perf probe (diagnosing in-flight telemetry freeze). Counts the raw
-    // packet rate reaching this window; the [PERF] summary logs every 2s.
-    startPerfProbe('telemetry-win');
-    const unsubProbe = window.electronAPI?.onPacket?.(() => probeCount('pkt.rx'));
-    return () => { cleanup?.(); unsubProbe?.(); };
+    return () => { cleanup?.(); };
   }, []);
 
   // Show experience level dialog on first launch or version change

@@ -739,12 +739,9 @@ function MavlinkFlightControl({ mavTypeOverride }: { mavTypeOverride?: number })
       const relAlt = useTelemetryStore.getState().position?.relativeAlt ?? 0;
       const pilotMode = isPilotThrottleMode(vehicleClass, modeNum);
       const wantHold = !squadKeys && isSitl && flight.armed && relAlt > 2 && pilotMode;
-      // TEMP diagnostic (remove with perf-probe): why did / didn't the SITL hover-hold fire.
-      console.log(`[AUTOTUNE DIAG] setmode=${modeNum} vClass=${vehicleClass} isSitl=${isSitl} armed=${flight.armed} relAlt=${relAlt.toFixed(1)} pilotThrottle=${pilotMode} squad=${!!squadKeys} -> ${wantHold ? 'HOLD HOVER' : 'no hold'}`);
       if (!squadKeys && isSitl && flight.armed) {
         if (wantHold) {
-          const r = await window.electronAPI?.rcOverrideSet?.(1500, 1500, 1500, 1500);
-          console.log('[AUTOTUNE DIAG] rcOverrideSet ->', JSON.stringify(r));
+          await window.electronAPI?.rcOverrideSet?.(1500, 1500, 1500, 1500);
           startRcHold();
           setStatusMsg({ text: 'Holding hover (virtual RC)', type: 'info' });
           setTimeout(() => setStatusMsg(null), 3000);

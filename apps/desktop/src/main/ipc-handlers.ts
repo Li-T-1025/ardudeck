@@ -2670,8 +2670,6 @@ function parseTelemetry(mainWindow: BrowserWindow, packet: MAVLinkPacket): void 
       // MAV_RESULT: 0=ACCEPTED, 1=TEMPORARILY_REJECTED, 2=DENIED, 3=UNSUPPORTED, 4=FAILED, 5=IN_PROGRESS
       const MAV_RESULT_NAMES = ['ACCEPTED', 'TEMPORARILY_REJECTED', 'DENIED', 'UNSUPPORTED', 'FAILED', 'IN_PROGRESS'];
       const resultName = MAV_RESULT_NAMES[ackResult] ?? `UNKNOWN(${ackResult})`;
-      // TEMP DIAGNOSTIC (rover arm no-ack): surface every ACK we receive.
-      emitStatusText(mainWindow, 6, `[diag] ACK cmd=${ackCommand} result=${resultName} from sys=${packet.sysid}`);
 
       // Log arm/disarm command results prominently and forward to messages panel
       if (ackCommand === 400) {
@@ -6744,8 +6742,6 @@ export function setupIpcHandlers(mainWindow: BrowserWindow): void {
       connectionState.packetsSent++;
 
       sendLog(mainWindow, 'info', `Sent ${arm ? 'ARM' : 'DISARM'} command${force ? ' (FORCE)' : ''} to sysid ${target.sysid}`);
-      // TEMP DIAGNOSTIC (rover arm no-ack): confirm the packet + its target/version.
-      emitStatusText(mainWindow, 6, `[diag] wrote ${arm ? 'ARM' : 'DISARM'} -> sys=${target.sysid} comp=1 mavv=${detectedMavlinkVersion} force=${force ? 21196 : 0}`);
 
       // Watchdog: the FC always ACKs COMMAND 400. If none arrives, the command
       // isn't reaching the vehicle (wrong sysid, one-way link, mode reject) —

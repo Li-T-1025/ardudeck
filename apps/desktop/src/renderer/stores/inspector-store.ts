@@ -18,7 +18,6 @@ import { create } from 'zustand';
 // Vite externalizes that for the renderer producing a runtime error. The
 // registry subpath gives us just the decoders we need.
 import { getMessageInfo } from '@ardudeck/mavlink-ts/registry';
-import { probeTime } from '../lib/perf-probe';
 
 export interface PacketEvent {
   msgid: number;
@@ -371,8 +370,7 @@ export function startInspector(): void {
   // Live in the same renderer process means the subscription is per-window;
   // each window gets the broadcast directly from main and feeds its own copy
   // of the stats Map (each window has its own JS context).
-  // TEMP perf probe: attribute per-packet ingest cost (remove with perf-probe).
-  const unsubscribe = window.electronAPI?.onPacket?.((p) => probeTime('inspector', () => ingestPacket(p)));
+  const unsubscribe = window.electronAPI?.onPacket?.((p) => ingestPacket(p));
   tickHandle = setInterval(tickOnce, 250);
 
   // Cross-window sync of inspector state — when another window pauses or
