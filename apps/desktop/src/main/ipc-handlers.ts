@@ -6911,18 +6911,23 @@ export function setupIpcHandlers(mainWindow: BrowserWindow): void {
   // MAV_CMD_DO_REPOSITION (command 192) via COMMAND_INT - fly to a location in GUIDED mode.
   // Uses COMMAND_INT (msg 75) instead of COMMAND_LONG so lat/lon are int32 (degrees * 1e7)
   // which preserves full precision. COMMAND_LONG float32 truncates coordinates.
-  ipcMain.handle(IPC_CHANNELS.MAVLINK_GOTO, async (_, lat: number, lon: number, alt: number): Promise<boolean> => {
+  ipcMain.handle(IPC_CHANNELS.MAVLINK_GOTO, async (_, lat: number, lon: number, alt: number, frame?: number): Promise<boolean> => {
     const target = activeFlightTarget();
     if (!target) {
       sendLog(mainWindow, 'warn', 'Move command: no active vehicle to command');
       return false;
     }
 
+    // Altitude reference frame (COMMAND_INT *_INT variants): 6 = rel home
+    // (default, legacy behavior), 11 = terrain, 5 = AMSL. Guard to the three
+    // supported codes so a bad renderer value can't send a garbage frame.
+    const altFrame = frame === 11 || frame === 5 ? frame : 6;
+
     try {
       const payload = serializeCommandInt({
         targetSystem: target.sysid,
         targetComponent: 1,
-        frame: 6,           // MAV_FRAME_GLOBAL_RELATIVE_ALT_INT
+        frame: altFrame,    // MAV_FRAME_GLOBAL_{RELATIVE_ALT,TERRAIN_ALT,}_INT
         command: 192,       // MAV_CMD_DO_REPOSITION
         current: 0,
         autocontinue: 0,
@@ -6932,7 +6937,7 @@ export function setupIpcHandlers(mainWindow: BrowserWindow): void {
         param4: 0,          // yaw: 0 = north (NaN not reliable in float32)
         x: Math.round(lat * 1e7),  // latitude as int32 (degrees * 1e7)
         y: Math.round(lon * 1e7),  // longitude as int32 (degrees * 1e7)
-        z: alt,             // altitude (meters, relative to home)
+        z: alt,             // altitude (meters, relative to the frame above)
       });
 
       const packet = await sendMavlinkPacket(COMMAND_INT_ID, payload, COMMAND_INT_CRC_EXTRA);
@@ -6942,7 +6947,8 @@ export function setupIpcHandlers(mainWindow: BrowserWindow): void {
       // Mode + target sysid at send time: a FAILED ack with fence off means
       // either "not in GUIDED and the mode switch was refused" or the wrong
       // vehicle got the command - this line discriminates.
-      sendLog(mainWindow, 'info', `Sent DO_REPOSITION to ${lat.toFixed(7)}, ${lon.toFixed(7)}, alt=${alt.toFixed(1)}m (mode=${lastFlightModeName}, sysid=${target.sysid})`);
+      const frameName = altFrame === 11 ? 'terrain' : altFrame === 5 ? 'AMSL' : 'rel-home';
+      sendLog(mainWindow, 'info', `Sent DO_REPOSITION to ${lat.toFixed(7)}, ${lon.toFixed(7)}, alt=${alt.toFixed(1)}m ${frameName} (mode=${lastFlightModeName}, sysid=${target.sysid})`);
       return true;
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unknown error';
@@ -6956,18 +6962,21 @@ export function setupIpcHandlers(mainWindow: BrowserWindow): void {
   // radius positive = clockwise orbit, negative = counter-clockwise (when viewed from above).
   // Concrete numeric defaults are used instead of NaN because some ArduPilot
   // build configs reject NaN params for DO_ORBIT.
-  ipcMain.handle(IPC_CHANNELS.MAVLINK_ORBIT, async (_, lat: number, lon: number, alt: number, radius: number): Promise<boolean> => {
+  ipcMain.handle(IPC_CHANNELS.MAVLINK_ORBIT, async (_, lat: number, lon: number, alt: number, radius: number, frame?: number): Promise<boolean> => {
     const target = activeFlightTarget();
     if (!target) {
       sendLog(mainWindow, 'warn', 'ORBIT command skipped: no active vehicle');
       return false;
     }
 
+    // Altitude frame: 6 = rel home (default), 11 = terrain, 5 = AMSL.
+    const altFrame = frame === 11 || frame === 5 ? frame : 6;
+
     try {
       const payload = serializeCommandInt({
         targetSystem: target.sysid,
         targetComponent: 1,
-        frame: 6,           // MAV_FRAME_GLOBAL_RELATIVE_ALT_INT
+        frame: altFrame,    // MAV_FRAME_GLOBAL_{RELATIVE_ALT,TERRAIN_ALT,}_INT
         command: 34,        // MAV_CMD_DO_ORBIT
         current: 0,
         autocontinue: 0,

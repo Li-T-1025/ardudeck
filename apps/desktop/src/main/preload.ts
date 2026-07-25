@@ -235,11 +235,11 @@ const api = {
   mavlinkVtolTakeoff: (altitude: number): Promise<boolean> =>
     ipcRenderer.invoke(IPC_CHANNELS.MAVLINK_COMMAND_VTOL_TAKEOFF, altitude),
 
-  mavlinkGoto: (lat: number, lon: number, alt: number): Promise<boolean> =>
-    ipcRenderer.invoke(IPC_CHANNELS.MAVLINK_GOTO, lat, lon, alt),
+  mavlinkGoto: (lat: number, lon: number, alt: number, frame?: number): Promise<boolean> =>
+    ipcRenderer.invoke(IPC_CHANNELS.MAVLINK_GOTO, lat, lon, alt, frame),
 
-  mavlinkOrbit: (lat: number, lon: number, alt: number, radius: number): Promise<boolean> =>
-    ipcRenderer.invoke(IPC_CHANNELS.MAVLINK_ORBIT, lat, lon, alt, radius),
+  mavlinkOrbit: (lat: number, lon: number, alt: number, radius: number, frame?: number): Promise<boolean> =>
+    ipcRenderer.invoke(IPC_CHANNELS.MAVLINK_ORBIT, lat, lon, alt, radius, frame),
 
   mavlinkLand: (lat: number, lon: number): Promise<boolean> =>
     ipcRenderer.invoke(IPC_CHANNELS.MAVLINK_LAND, lat, lon),
