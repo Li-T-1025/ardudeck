@@ -3,7 +3,7 @@ use std::f64::consts::PI;
 use crate::math::Vec3;
 use crate::spec::{defaults_for, size_class_from_diagonal_mm, FrameGeomSpec, Masses, MotorStator, PlateSpec, PropSpec};
 use crate::tables::{motor_factors, FrameError};
-use crate::types::{EscLayout, FrameClass, FrameType};
+use crate::types::{FrameClass, FrameType};
 
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct SitlCustomFrameInput {

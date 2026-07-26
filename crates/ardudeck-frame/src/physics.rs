@@ -63,7 +63,8 @@ pub fn physics_geometry(spec: &FrameGeomSpec) -> PhysicsGeometry {
         };
         points.push(PointMass { pos: esc_pos, mass: spec.masses.per_esc_g / 1000.0 });
     }
-    // Frame plate + battery lumped at the stack center.
+    // Frame plate point-mass sits at the origin; the battery is offset to its
+    // configured CoG so shifting battery placement actually moves the CoM.
     points.push(PointMass { pos: Vec3::new(0.0, 0.0, 0.0), mass: spec.masses.frame_g / 1000.0 });
     points.push(PointMass { pos: Vec3::new(spec.cog_offset_mm.x / 1000.0, spec.cog_offset_mm.y / 1000.0, spec.cog_offset_mm.z / 1000.0), mass: spec.masses.battery_g / 1000.0 });
 

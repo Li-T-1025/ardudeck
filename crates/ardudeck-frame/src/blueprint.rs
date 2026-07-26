@@ -96,12 +96,25 @@ fn quat_yaw(yaw: f64) -> Quat {
     Quat { w: h.cos(), x: 0.0, y: 0.0, z: h.sin() }
 }
 
+// Half-extent per axis for a part's shape, ignoring rotation. Using the
+// axis-aligned half-extent (rather than the rotated one) over-approximates
+// the true footprint, which is fine: the goal is an AABB that is guaranteed
+// to enclose the part, not a tight fit.
+fn half_extent(dims: &PartDims) -> Vec3 {
+    match *dims {
+        PartDims::Box { l, w, h } => Vec3::new(l / 2.0, w / 2.0, h / 2.0),
+        PartDims::Tube { r, h } => Vec3::new(r, r, h / 2.0),
+        PartDims::Disc { r, thick } => Vec3::new(r, r, thick / 2.0),
+    }
+}
+
 fn compute_bounds(parts: &[Part]) -> Aabb {
     let mut min = Vec3::new(f64::MAX, f64::MAX, f64::MAX);
     let mut max = Vec3::new(f64::MIN, f64::MIN, f64::MIN);
     for p in parts {
-        min = Vec3::new(min.x.min(p.position.x), min.y.min(p.position.y), min.z.min(p.position.z));
-        max = Vec3::new(max.x.max(p.position.x), max.y.max(p.position.y), max.z.max(p.position.z));
+        let he = half_extent(&p.dims);
+        min = Vec3::new(min.x.min(p.position.x - he.x), min.y.min(p.position.y - he.y), min.z.min(p.position.z - he.z));
+        max = Vec3::new(max.x.max(p.position.x + he.x), max.y.max(p.position.y + he.y), max.z.max(p.position.z + he.z));
     }
     Aabb { min, max }
 }
@@ -145,6 +158,28 @@ mod tests {
             bells.remove(hit.unwrap());
         }
         assert!(bells.is_empty());
+    }
+
+    #[test]
+    fn bounds_enclose_prop_tips() {
+        // compute_bounds must expand past part centers by each part's
+        // half-extent, or the AABB clips prop discs at the outer edge of the
+        // frame - this proves it for the farthest-out prop.
+        let spec = from_preset(FrameClass::Quad, FrameType::X).unwrap();
+        let bp = build_blueprint(&spec);
+        let g = physics_geometry(&spec);
+        let prop_radius_m = spec.prop.radius_mm / 1000.0;
+        let epsilon = 1e-9;
+
+        let max_x = g.motors.iter().map(|m| m.position.x).fold(f64::MIN, f64::max);
+        let min_x = g.motors.iter().map(|m| m.position.x).fold(f64::MAX, f64::min);
+        let max_y = g.motors.iter().map(|m| m.position.y).fold(f64::MIN, f64::max);
+        let min_y = g.motors.iter().map(|m| m.position.y).fold(f64::MAX, f64::min);
+
+        assert!(bp.bounds.max.x >= max_x + prop_radius_m - epsilon);
+        assert!(bp.bounds.min.x <= min_x - prop_radius_m + epsilon);
+        assert!(bp.bounds.max.y >= max_y + prop_radius_m - epsilon);
+        assert!(bp.bounds.min.y <= min_y - prop_radius_m + epsilon);
     }
 
     #[test]
