@@ -1,0 +1,21 @@
+[package]
+name = "ardudeck-frame"
+version = "0.1.0"
+edition = "2021"
+description = "ArduDeck procedural frame generator (build spec -> blueprint + physics geometry)"
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+wasm-bindgen = { version = "0.2", optional = true }
+
+[features]
+default = []
+wasm = ["dep:wasm-bindgen"]
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+# Self-contained: the monorepo has no root Cargo.toml, so declare our own
+# workspace root here to avoid being pulled into an unexpected parent.
+[workspace]
