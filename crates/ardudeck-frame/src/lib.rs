@@ -6,5 +6,5 @@ pub mod tables;
 pub mod types;
 
 pub use math::{Mat3, Quat, Vec3};
-pub use tables::{motor_factors, FrameError};
+pub use tables::{frame_controls, motor_factors, FrameControls, FrameError, ServoMount, VaneMount};
 pub use types::{EscLayout, FrameClass, FrameType, MotorFactor, UpDown};

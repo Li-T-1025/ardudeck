@@ -1,4 +1,6 @@
+use crate::math::Vec3;
 use crate::types::{FrameClass, FrameType, MotorFactor, UpDown};
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum FrameError {
@@ -76,6 +78,29 @@ pub fn motor_factors(class: FrameClass, ftype: FrameType) -> Result<Vec<MotorFac
             (-162.0, -1.0), (-126.0, 1.0), (-90.0, -1.0), (-54.0, 1.0), (-18.0, -1.0),
         ]),
 
+        // SIM_Frame.cpp tri_motors (line 244-248): MOT_1 front-right 60 CCW, MOT_2 front-left
+        // -60 CW, MOT_4 rear 180 CCW. The rear motor's yaw comes from the AP_MOTORS_MOT_7
+        // tail-tilt servo (frame_controls' Tri ServoMount), not from its own spin direction -
+        // cross-checked against AP_MotorsTri.cpp (MOT_1=_thrust_right, MOT_2=_thrust_left,
+        // MOT_4=_thrust_rear, lines 105-107), which never differentiates MOT_4's yaw by spin.
+        (Tri, X) => Some(&[(60.0, 1.0), (-60.0, -1.0), (180.0, 1.0)]),
+
+        // AP_MotorsSingle.cpp (Copter-4.6.3, lines 97-98): both physical motors (MOT_5, MOT_6)
+        // are driven by the same _thrust_out with no yaw-differential term - the real hardware
+        // is a co-spinning coaxial pair, but the mixer treats it as a single thrust source with
+        // zero motor-yaw authority (all attitude control comes from the 4 vane servos, see
+        // frame_controls). Modeled here as one motor entry, angle 0 (on the centerline).
+        (SingleCopter, Plus) => Some(&[(0.0, 0.0)]),
+
+        // AP_MotorsTailsitter.cpp (Copter-4.6.3, lines 174-175 for thrust, 213-214 for tilt):
+        // _thrust_left/_thrust_right carry only throttle +- roll*0.5, no yaw term; yaw comes
+        // entirely from _tilt_left/_tilt_right servo deflection (frame_controls' BiCopter
+        // ServoMount). AP_MotorsTailsitter has no MotorFactor-style angle table (it drives
+        // SRV_Channel outputs directly), so the 90/-90 angles here are the left/right wingtip
+        // positions matching frame_controls' y = +-1 ServoMount placement, not a literal
+        // source-file angle constant.
+        (BiCopter, X) => Some(&[(90.0, 0.0), (-90.0, 0.0)]),
+
         _ => None,
     };
     if let Some(specs) = flat_specs {
@@ -134,12 +159,75 @@ pub fn motor_factors(class: FrameClass, ftype: FrameType) -> Result<Vec<MotorFac
             (180.0, 1.0, Up), (60.0, 1.0, Up), (-60.0, 1.0, Up),
             (180.0, -1.0, Down), (60.0, -1.0, Down), (-60.0, -1.0, Down),
         ]),
+
+        // AP_MotorsCoax.cpp (Copter-4.6.3, lines 190-191: _thrust_yt_ccw drives MOT_5,
+        // _thrust_yt_cw drives MOT_6; lines 94-95 confirm the MOT_5/MOT_6 wiring). Unlike
+        // SingleCopter, Coax has two independently-throttled, contra-rotating motors on the
+        // same coaxial centerline giving real differential-yaw authority. Up/Down assignment
+        // follows source declaration order (MOT_5 first = Up, MOT_6 second = Down), the same
+        // first-declared/second-declared convention already used for OctaQuad above - AP's
+        // source has no explicit top/bottom comment here.
+        (CoaxCopter, Plus) => Some(&[(0.0, 1.0, Up), (0.0, -1.0, Down)]),
+
         _ => None,
     };
     if let Some(specs) = stacked_specs {
         return Ok(stacked(specs));
     }
     Err(FrameError::UnsupportedCombo(class, ftype))
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub struct ServoMount {
+    /// Where the servo body sits, in the same normalized frame as motors
+    /// (multiplied by arm_len downstream). z up-positive.
+    pub position: Vec3,
+    /// Axis the servo tilts about.
+    pub tilt_axis: Vec3,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub struct VaneMount {
+    pub angle_deg: f64,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct FrameControls {
+    pub servos: Vec<ServoMount>,
+    pub vanes: Vec<VaneMount>,
+}
+
+// Motors for Tri/Single/Coax/BiCopter come from motor_factors above; this supplies the extra
+// actuated parts that don't fit MotorFactor (Tri tail servo, Single/Coax vanes, BiCopter tilt
+// servos) - see AP_MotorsTri.cpp AP_MOTORS_CH_TRI_YAW, AP_MotorsSingle.cpp/AP_MotorsCoax.cpp's
+// 4 flap servos (MOT_1-4), and AP_MotorsTailsitter.cpp's k_tiltMotorLeft/Right.
+pub fn frame_controls(class: FrameClass) -> FrameControls {
+    use FrameClass::*;
+    match class {
+        Tri => FrameControls {
+            servos: vec![ServoMount {
+                position: Vec3::new(-1.0, 0.0, 0.0),
+                tilt_axis: Vec3::new(0.0, 1.0, 0.0),
+            }],
+            vanes: vec![],
+        },
+        SingleCopter => FrameControls {
+            servos: vec![],
+            vanes: (0..4).map(|i| VaneMount { angle_deg: 90.0 * i as f64 }).collect(),
+        },
+        CoaxCopter => FrameControls {
+            servos: vec![],
+            vanes: (0..4).map(|i| VaneMount { angle_deg: 90.0 * i as f64 }).collect(),
+        },
+        BiCopter => FrameControls {
+            servos: vec![
+                ServoMount { position: Vec3::new(0.0, 1.0, 0.0), tilt_axis: Vec3::new(0.0, 1.0, 0.0) },
+                ServoMount { position: Vec3::new(0.0, -1.0, 0.0), tilt_axis: Vec3::new(0.0, 1.0, 0.0) },
+            ],
+            vanes: vec![],
+        },
+        _ => FrameControls { servos: vec![], vanes: vec![] },
+    }
 }
 
 #[cfg(test)]
@@ -286,6 +374,31 @@ mod tests {
         assert_eq!(m.iter().filter(|x| x.updown == UpDown::Up).count(), 3);
         assert_eq!(m.iter().filter(|x| x.updown == UpDown::Down).count(), 3);
         assert!(m.iter().any(|x| x.angle_deg == 60.0));
+    }
+
+    #[test]
+    fn tri_has_three_motors_and_a_tail_servo() {
+        let m = motor_factors(FrameClass::Tri, FrameType::X).unwrap();
+        assert_eq!(m.len(), 3);
+        let c = frame_controls(FrameClass::Tri);
+        assert_eq!(c.servos.len(), 1); // tail yaw servo
+        assert!(c.vanes.is_empty());
+    }
+
+    #[test]
+    fn singlecopter_has_one_motor_and_four_vanes() {
+        let m = motor_factors(FrameClass::SingleCopter, FrameType::Plus).unwrap();
+        assert_eq!(m.len(), 1);
+        let c = frame_controls(FrameClass::SingleCopter);
+        assert_eq!(c.vanes.len(), 4);
+    }
+
+    #[test]
+    fn bicopter_has_two_tilt_servos() {
+        let m = motor_factors(FrameClass::BiCopter, FrameType::X).unwrap();
+        assert_eq!(m.len(), 2);
+        let c = frame_controls(FrameClass::BiCopter);
+        assert_eq!(c.servos.len(), 2);
     }
 
     #[test]
