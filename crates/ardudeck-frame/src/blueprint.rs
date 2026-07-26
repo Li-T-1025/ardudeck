@@ -146,4 +146,13 @@ mod tests {
         }
         assert!(bells.is_empty());
     }
+
+    #[test]
+    fn blueprint_json_round_trips() {
+        let spec = from_preset(FrameClass::Quad, FrameType::X).unwrap();
+        let bp = build_blueprint(&spec);
+        let json = serde_json::to_string(&bp).unwrap();
+        let back: FrameBlueprint = serde_json::from_str(&json).unwrap();
+        assert_eq!(bp, back);
+    }
 }
