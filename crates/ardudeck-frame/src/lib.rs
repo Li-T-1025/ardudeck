@@ -3,12 +3,14 @@
 
 pub mod adapters;
 pub mod math;
+pub mod physics;
 pub mod spec;
 pub mod tables;
 pub mod types;
 
 pub use adapters::{from_preset, from_sitl_custom_frame, from_vehicle_profile, SitlCustomFrameInput, VehicleProfileInput};
 pub use math::{Mat3, Quat, Vec3};
+pub use physics::{physics_geometry, MotorMount, PhysicsGeometry};
 pub use spec::{defaults_for, size_class_from_diagonal_mm, FrameGeomSpec, Masses, MotorStator, PlateSpec, PropSpec, SizeClass, SpecDefaults};
 pub use tables::{frame_controls, motor_factors, FrameControls, FrameError, ServoMount, VaneMount};
 pub use types::{EscLayout, FrameClass, FrameType, MotorFactor, UpDown};
