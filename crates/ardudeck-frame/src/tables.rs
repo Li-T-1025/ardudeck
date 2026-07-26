@@ -12,71 +12,64 @@ fn flat(specs: &[(f64, f64)]) -> Vec<MotorFactor> {
         .collect()
 }
 
-// Porting note: cross-checking ArduPilot's own AP_MotorsMatrix.cpp case labels against
-// SIM_Frame.cpp's named presets shows that for Hexa and Octa, this crate's FrameType::X
-// (already locked by the quad/hexa/octa-X conformance test below, reproduced verbatim
-// from frame_geometry.rs) matches AP's `MOTOR_FRAME_TYPE_PLUS` case, not its `X` case.
-// (SIM_Frame's plain unlabeled "hexa"/"octa" presets - the ones that fed the existing
-// known-good values - are themselves built from AP_MotorsMatrix's PLUS case.) So
-// FrameType::Plus for Hexa/Octa below is deliberately assigned AP's `MOTOR_FRAME_TYPE_X`
-// values (SIM_Frame's "hexax" preset for Hexa; AP_MotorsMatrix's Octa X case, which has
-// no separate SIM_Frame preset name, for Octa) - the only other real source table for
-// those motor counts. Do not "fix" this by swapping angle sets to match AP's case names;
-// that would break the locked X conformance test. Quad and DodecaHexa have no such swap:
-// their X here matches AP's own X case directly.
+// Porting note: the old crates/ardudeck-sim-engine/src/frame_geometry.rs labeled its
+// "hexa X" / "octa X" constants with the angle sets that AP_MotorsMatrix.cpp's
+// setup_hexa_matrix / setup_octa_matrix actually assign to MOTOR_FRAME_TYPE_PLUS, not
+// MOTOR_FRAME_TYPE_X. FrameType::X here MUST return the real ArduPilot X layout (see
+// setup_hexa_matrix@792, setup_octa_matrix@874) and FrameType::Plus the real Plus layout
+// (setup_hexa_matrix@779, setup_octa_matrix@858) - do not swap these to make old code
+// byte-identical. Task 11 (ardudeck-sim-engine delegation) is responsible for mapping the
+// legacy 6/8-motor "X" call sites onto FrameType::Plus so the simulated engine keeps
+// producing identical physics; that mapping belongs there, not in this table.
 pub fn motor_factors(class: FrameClass, ftype: FrameType) -> Result<Vec<MotorFactor>, FrameError> {
     use FrameClass::*;
     use FrameType::*;
     let flat_specs: Option<&[(f64, f64)]> = match (class, ftype) {
-        // AP_MotorsMatrix.cpp setup_quad_matrix, case MOTOR_FRAME_TYPE_X (also SIM_Frame.cpp quad_x_motors).
+        // AP_MotorsMatrix.cpp setup_quad_matrix, case MOTOR_FRAME_TYPE_X (line 591).
         (Quad, X) => Some(&[(45.0, 1.0), (-135.0, 1.0), (-45.0, -1.0), (135.0, -1.0)]),
-        // AP_MotorsMatrix.cpp setup_quad_matrix, case MOTOR_FRAME_TYPE_PLUS (SIM_Frame.cpp quad_plus_motors).
+        // AP_MotorsMatrix.cpp setup_quad_matrix, case MOTOR_FRAME_TYPE_PLUS (line 580).
         (Quad, Plus) => Some(&[(90.0, 1.0), (-90.0, 1.0), (0.0, -1.0), (180.0, -1.0)]),
-        // AP_MotorsMatrix.cpp setup_quad_matrix, case MOTOR_FRAME_TYPE_H: same angles as X,
-        // yaw factors inverted (comment in source: "same as X but motors spin in opposite directions").
+        // AP_MotorsMatrix.cpp setup_quad_matrix, case MOTOR_FRAME_TYPE_H (line 688): same
+        // angles as X, yaw factors inverted (source comment: "same as X but motors spin in
+        // opposite directions").
         (Quad, H) => Some(&[(45.0, -1.0), (-135.0, -1.0), (-45.0, 1.0), (135.0, 1.0)]),
-        // AP_MotorsMatrix.cpp setup_quad_matrix, case MOTOR_FRAME_TYPE_V. Yaw factors are
-        // ArduPilot's own thrust-vectoring-derived constants (0.7981), not +-1; they still
-        // sum to zero. Do not round these to +-1.
+        // AP_MotorsMatrix.cpp setup_quad_matrix, case MOTOR_FRAME_TYPE_V (line 677). Yaw
+        // factors are ArduPilot's own thrust-vectoring-derived constants (0.7981), not
+        // +-1; they still sum to zero. Do not round these to +-1.
         (Quad, V) => Some(&[(45.0, 0.7981), (-135.0, 1.0), (-45.0, -0.7981), (135.0, -1.0)]),
-        // AP_MotorsMatrix.cpp setup_quad_matrix, case MOTOR_FRAME_TYPE_BF_X (SIM_Frame.cpp quad_bf_x_motors).
+        // AP_MotorsMatrix.cpp setup_quad_matrix, case MOTOR_FRAME_TYPE_BF_X (line 626).
         (Quad, BetaFlightX) => Some(&[(135.0, -1.0), (45.0, 1.0), (-135.0, 1.0), (-45.0, -1.0)]),
 
-        // AP_MotorsMatrix.cpp setup_hexa_matrix, case MOTOR_FRAME_TYPE_PLUS (SIM_Frame.cpp hexa_motors).
+        // AP_MotorsMatrix.cpp setup_hexa_matrix, case MOTOR_FRAME_TYPE_X (line 792).
         (Hexa, X) => Some(&[
-            (0.0, -1.0), (180.0, 1.0), (-120.0, -1.0),
-            (60.0, 1.0), (-60.0, 1.0), (120.0, -1.0),
-        ]),
-        // AP_MotorsMatrix.cpp setup_hexa_matrix, case MOTOR_FRAME_TYPE_X (SIM_Frame.cpp hexax_motors).
-        // See porting note above on why this is the "X"-labeled AP case despite being FrameType::Plus here.
-        (Hexa, Plus) => Some(&[
             (90.0, -1.0), (-90.0, 1.0), (-30.0, -1.0),
             (150.0, 1.0), (30.0, 1.0), (-150.0, -1.0),
         ]),
-
-        // AP_MotorsMatrix.cpp setup_octa_matrix, case MOTOR_FRAME_TYPE_PLUS (SIM_Frame.cpp octa_motors).
-        (Octa, X) => Some(&[
-            (0.0, -1.0), (180.0, -1.0), (45.0, 1.0), (135.0, 1.0),
-            (-45.0, 1.0), (-135.0, 1.0), (-90.0, -1.0), (90.0, -1.0),
+        // AP_MotorsMatrix.cpp setup_hexa_matrix, case MOTOR_FRAME_TYPE_PLUS (line 779).
+        (Hexa, Plus) => Some(&[
+            (0.0, -1.0), (180.0, 1.0), (-120.0, -1.0),
+            (60.0, 1.0), (-60.0, 1.0), (120.0, -1.0),
         ]),
-        // AP_MotorsMatrix.cpp setup_octa_matrix, case MOTOR_FRAME_TYPE_X. No separate
-        // SIM_Frame.cpp preset exists for this arrangement; AP_MotorsMatrix.cpp is
-        // authoritative (it is the table the flight controller actually runs).
-        // See porting note above on why this is the "X"-labeled AP case despite being FrameType::Plus here.
-        (Octa, Plus) => Some(&[
+
+        // AP_MotorsMatrix.cpp setup_octa_matrix, case MOTOR_FRAME_TYPE_X (line 874).
+        (Octa, X) => Some(&[
             (22.5, -1.0), (-157.5, -1.0), (67.5, 1.0), (157.5, 1.0),
             (-22.5, 1.0), (-112.5, 1.0), (-67.5, -1.0), (112.5, -1.0),
         ]),
+        // AP_MotorsMatrix.cpp setup_octa_matrix, case MOTOR_FRAME_TYPE_PLUS (line 858).
+        (Octa, Plus) => Some(&[
+            (0.0, -1.0), (180.0, -1.0), (45.0, 1.0), (135.0, 1.0),
+            (-45.0, 1.0), (-135.0, 1.0), (-90.0, -1.0), (90.0, -1.0),
+        ]),
 
         // AP_MotorsMatrix.cpp setup_deca_matrix, case MOTOR_FRAME_TYPE_X / MOTOR_FRAME_TYPE_CW_X
-        // (SIM_Frame.cpp deca_cw_x_motors). Matches AP's own X label directly, no swap.
+        // (line 1218; both frame types share this table).
         (Deca, X) => Some(&[
             (18.0, 1.0), (54.0, -1.0), (90.0, 1.0), (126.0, -1.0), (162.0, 1.0),
             (-162.0, -1.0), (-126.0, 1.0), (-90.0, -1.0), (-54.0, 1.0), (-18.0, -1.0),
         ]),
 
-        // AP_MotorsMatrix.cpp setup_dodecahexa_matrix, case MOTOR_FRAME_TYPE_X
-        // (SIM_Frame.cpp dodeca_hexa_motors). Matches AP's own X label directly, no swap.
+        // AP_MotorsMatrix.cpp setup_dodecahexa_matrix, case MOTOR_FRAME_TYPE_X (line 1118).
         (DodecaHexa, X) => Some(&[
             (30.0, 1.0), (30.0, -1.0), (90.0, -1.0), (90.0, 1.0), (150.0, 1.0), (150.0, -1.0),
             (-150.0, -1.0), (-150.0, 1.0), (-90.0, 1.0), (-90.0, -1.0), (-30.0, -1.0), (-30.0, 1.0),
@@ -112,8 +105,24 @@ mod tests {
     }
 
     #[test]
-    fn hexa_x_matches_stock_sitl() {
+    fn hexa_x_matches_ardupilot() {
+        // AP_MotorsMatrix.cpp setup_hexa_matrix, case MOTOR_FRAME_TYPE_X (line 792).
         let m = motor_factors(FrameClass::Hexa, FrameType::X).unwrap();
+        let expect = [
+            (90.0, -1.0), (-90.0, 1.0), (-30.0, -1.0),
+            (150.0, 1.0), (30.0, 1.0), (-150.0, -1.0),
+        ];
+        assert_eq!(m.len(), 6);
+        for (got, (a, y)) in m.iter().zip(expect) {
+            assert_eq!(got.angle_deg, a);
+            assert_eq!(got.yaw_factor, y);
+        }
+    }
+
+    #[test]
+    fn hexa_plus_matches_ardupilot() {
+        // AP_MotorsMatrix.cpp setup_hexa_matrix, case MOTOR_FRAME_TYPE_PLUS (line 779).
+        let m = motor_factors(FrameClass::Hexa, FrameType::Plus).unwrap();
         let expect = [
             (0.0, -1.0), (180.0, 1.0), (-120.0, -1.0),
             (60.0, 1.0), (-60.0, 1.0), (120.0, -1.0),
@@ -126,8 +135,24 @@ mod tests {
     }
 
     #[test]
-    fn octa_x_matches_stock_sitl() {
+    fn octa_x_matches_ardupilot() {
+        // AP_MotorsMatrix.cpp setup_octa_matrix, case MOTOR_FRAME_TYPE_X (line 874).
         let m = motor_factors(FrameClass::Octa, FrameType::X).unwrap();
+        let expect = [
+            (22.5, -1.0), (-157.5, -1.0), (67.5, 1.0), (157.5, 1.0),
+            (-22.5, 1.0), (-112.5, 1.0), (-67.5, -1.0), (112.5, -1.0),
+        ];
+        assert_eq!(m.len(), 8);
+        for (got, (a, y)) in m.iter().zip(expect) {
+            assert_eq!(got.angle_deg, a);
+            assert_eq!(got.yaw_factor, y);
+        }
+    }
+
+    #[test]
+    fn octa_plus_matches_ardupilot() {
+        // AP_MotorsMatrix.cpp setup_octa_matrix, case MOTOR_FRAME_TYPE_PLUS (line 858).
+        let m = motor_factors(FrameClass::Octa, FrameType::Plus).unwrap();
         let expect = [
             (0.0, -1.0), (180.0, -1.0), (45.0, 1.0), (135.0, 1.0),
             (-45.0, 1.0), (-135.0, 1.0), (-90.0, -1.0), (90.0, -1.0),
