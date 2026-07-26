@@ -19,13 +19,6 @@ fn stacked(specs: &[(f64, f64, UpDown)]) -> Vec<MotorFactor> {
         .collect()
 }
 
-// atan(2) in degrees. AP_MotorsMatrix::setup_y6_matrix's Y6B/Y6F tables use MotorDefRaw
-// (roll_fac, pitch_fac) instead of an angle: for a radially-placed motor these satisfy
-// roll_fac = -sin(angle), pitch_fac = cos(angle) (see AP_MotorsMatrix::add_motor's
-// cosf(radians(angle+90))/cosf(radians(angle)) construction), so angle = atan2(-roll_fac,
-// pitch_fac). Y6's front-arm pair has (roll=-+1.0, pitch=0.5): atan2(1.0, 0.5) = atan(2).
-const Y6_FRONT_ARM_DEG: f64 = 63.43494882292201;
-
 // Porting note: the old crates/ardudeck-sim-engine/src/frame_geometry.rs labeled its
 // "hexa X" / "octa X" constants with the angle sets that AP_MotorsMatrix.cpp's
 // setup_hexa_matrix / setup_octa_matrix actually assign to MOTOR_FRAME_TYPE_PLUS, not
@@ -115,26 +108,31 @@ pub fn motor_factors(class: FrameClass, ftype: FrameType) -> Result<Vec<MotorFac
             (-45.0, 1.0, Down), (45.0, -1.0, Down), (135.0, 1.0, Down), (-135.0, -1.0, Down),
         ]),
 
-        // AP_MotorsMatrix.cpp setup_y6_matrix, case MOTOR_FRAME_TYPE_Y6B (line 1150).
-        // Source comment: "Y6 motor definition with all top motors spinning clockwise, all
-        // bottom motors counter clockwise" - CW (yaw -1) = Up, CCW (yaw +1) = Down. Angles
-        // derived from MotorDefRaw (roll,pitch) via Y6_FRONT_ARM_DEG (see above); tail arm
-        // is roll=0,pitch=-1 => atan2(0,-1) = 180 deg.
+        // Angles: SIM_Frame.cpp `y6_motors[]` (line 265-273), the physical arm positions -
+        // NOT AP_MotorsMatrix.cpp's MotorDefRaw(roll_fac, pitch_fac), which are mixer
+        // authority weights (front pitch_fac 0.5 vs roll_fac 1.0 is a deliberate control
+        // over-weighting, not a unit-circle position; atan2 of those is not a geometric
+        // angle). Y6 arms are physically at 60/-60/180 degrees.
+        // Top/bottom: `y6_motors` MOT_1(60,CCW) pairs with MOT_5(60,CW), MOT_2(-60,CW) with
+        // MOT_3(-60,CCW), MOT_4(180,CW) with MOT_6(180,CCW) - matches
+        // AP_MotorsMatrix.cpp setup_y6_matrix Y6B (line 1150-1163) comment verbatim: "Y6
+        // motor definition with all top motors spinning clockwise, all bottom motors
+        // counter clockwise" - CW (yaw -1) = Up, CCW (yaw +1) = Down.
         (Y6, Y6B) => Some(&[
-            (Y6_FRONT_ARM_DEG, -1.0, Up), (Y6_FRONT_ARM_DEG, 1.0, Down),
+            (60.0, -1.0, Up), (60.0, 1.0, Down),
             (180.0, -1.0, Up), (180.0, 1.0, Down),
-            (-Y6_FRONT_ARM_DEG, -1.0, Up), (-Y6_FRONT_ARM_DEG, 1.0, Down),
+            (-60.0, -1.0, Up), (-60.0, 1.0, Down),
         ]),
 
-        // AP_MotorsMatrix.cpp setup_y6_matrix, case MOTOR_FRAME_TYPE_Y6F (line 1164), "Y6
-        // motor layout for FireFlyY6". No explicit top/bottom comment; inferred the same
-        // way as OctaQuad above (first three MotorDefRaw entries get motor_num 0-2, last
-        // three get 3-5), which for Y6F puts CCW (yaw +1) on top and CW (yaw -1) on bottom
-        // - the reverse of Y6B. This matches the real FireFly Y6 airframe, which is known
-        // to spin its top/bottom props opposite to a standard Y6.
+        // Angles: SIM_Frame.cpp `firefly_motors[]` (line 278-286), same physical arm
+        // positions as y6_motors (60/-60/180). No inline top/bottom comment for FireflyY6 in
+        // either source file, but `firefly_motors` orders MOT_1/2/3 (all CCW) before
+        // MOT_4/5/6 (all CW) - the same first-half/second-half motor-number split used for
+        // OctaQuad above - and FireFly Y6 hardware is well known to spin its top/bottom
+        // motors opposite to a standard Y6, so CCW (yaw +1) = Up, CW (yaw -1) = Down here.
         (Y6, Y6F) => Some(&[
-            (180.0, 1.0, Up), (Y6_FRONT_ARM_DEG, 1.0, Up), (-Y6_FRONT_ARM_DEG, 1.0, Up),
-            (180.0, -1.0, Down), (Y6_FRONT_ARM_DEG, -1.0, Down), (-Y6_FRONT_ARM_DEG, -1.0, Down),
+            (180.0, 1.0, Up), (60.0, 1.0, Up), (-60.0, 1.0, Up),
+            (180.0, -1.0, Down), (60.0, -1.0, Down), (-60.0, -1.0, Down),
         ]),
         _ => None,
     };
@@ -276,6 +274,9 @@ mod tests {
         assert_eq!(m.len(), 6);
         assert_eq!(m.iter().filter(|x| x.updown == UpDown::Up).count(), 3);
         assert_eq!(m.iter().filter(|x| x.updown == UpDown::Down).count(), 3);
+        // Physical Y6 arm angle per SIM_Frame.cpp y6_motors (line 265), not the AP_MotorsMatrix
+        // mixer's atan2(roll_fac, pitch_fac), which is not a geometric angle.
+        assert!(m.iter().any(|x| x.angle_deg == 60.0));
     }
 
     #[test]
@@ -284,6 +285,7 @@ mod tests {
         assert_eq!(m.len(), 6);
         assert_eq!(m.iter().filter(|x| x.updown == UpDown::Up).count(), 3);
         assert_eq!(m.iter().filter(|x| x.updown == UpDown::Down).count(), 3);
+        assert!(m.iter().any(|x| x.angle_deg == 60.0));
     }
 
     #[test]
