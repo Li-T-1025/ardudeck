@@ -2,6 +2,7 @@ use serde::{Deserialize, Serialize};
 use crate::math::{Quat, Vec3};
 use crate::physics::physics_geometry;
 use crate::spec::FrameGeomSpec;
+use crate::tables::frame_controls;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -84,6 +85,43 @@ pub fn build_blueprint(spec: &FrameGeomSpec) -> FrameBlueprint {
             position: Vec3::new(m.position.x, m.position.y, m.position.z + stator_h),
             rotation: Quat::identity(), material_hint: MaterialHint::PropTranslucent,
             spin: Some(Spin { axis: Vec3::new(0.0, 0.0, 1.0), dir: m.spin_dir }),
+        });
+    }
+
+    // Tri/SingleCopter/CoaxCopter/BiCopter carry actuated parts (yaw servo, tilt
+    // servos, flap vanes) that motor_factors doesn't model - without this they'd
+    // render as bare motors with no visible control surfaces.
+    let arm_len_m = spec.arm_len_mm / 1000.0;
+    let controls = frame_controls(spec.class);
+    for servo in &controls.servos {
+        let pos = servo.position.scale(arm_len_m);
+        parts.push(Part {
+            kind: PartKind::Box, role: PartRole::Servo,
+            dims: PartDims::Box { l: 0.02, w: 0.02, h: 0.015 },
+            position: pos, rotation: Quat::identity(),
+            material_hint: MaterialHint::PlasticDark, spin: None,
+        });
+        if spec.class == crate::types::FrameClass::Tri {
+            let len = (pos.x.powi(2) + pos.y.powi(2)).sqrt();
+            let yaw = pos.y.atan2(pos.x);
+            parts.push(Part {
+                kind: PartKind::Box, role: PartRole::Boom,
+                dims: PartDims::Box { l: len, w: arm_w, h: arm_t },
+                position: Vec3::new(pos.x * 0.5, pos.y * 0.5, 0.0),
+                rotation: quat_yaw(yaw), material_hint: MaterialHint::PlasticDark, spin: None,
+            });
+        }
+    }
+    // Vanes sit in the prop wash, so they're placed inboard (arm_len/2) and
+    // slightly below the plate rather than out at the motor radius.
+    let vane_radius_m = arm_len_m / 2.0;
+    for vane in &controls.vanes {
+        let rad = vane.angle_deg.to_radians();
+        parts.push(Part {
+            kind: PartKind::Vane, role: PartRole::Vane,
+            dims: PartDims::Box { l: 0.03, w: 0.015, h: 0.001 },
+            position: Vec3::new(vane_radius_m * rad.cos(), vane_radius_m * rad.sin(), -0.01),
+            rotation: quat_yaw(rad), material_hint: MaterialHint::PlasticDark, spin: None,
         });
     }
 
@@ -180,6 +218,32 @@ mod tests {
         assert!(bp.bounds.min.x <= min_x - prop_radius_m + epsilon);
         assert!(bp.bounds.max.y >= max_y + prop_radius_m - epsilon);
         assert!(bp.bounds.min.y <= min_y - prop_radius_m + epsilon);
+    }
+
+    #[test]
+    fn single_copter_blueprint_has_four_vanes() {
+        let spec = from_preset(FrameClass::SingleCopter, FrameType::Plus).unwrap();
+        let bp = build_blueprint(&spec);
+        let vanes = bp.parts.iter().filter(|p| p.role == PartRole::Vane).count();
+        assert_eq!(vanes, 4);
+    }
+
+    #[test]
+    fn tri_blueprint_has_a_servo_and_boom() {
+        let spec = from_preset(FrameClass::Tri, FrameType::X).unwrap();
+        let bp = build_blueprint(&spec);
+        let servos = bp.parts.iter().filter(|p| p.role == PartRole::Servo).count();
+        let booms = bp.parts.iter().filter(|p| p.role == PartRole::Boom).count();
+        assert_eq!(servos, 1);
+        assert_eq!(booms, 1);
+    }
+
+    #[test]
+    fn bicopter_blueprint_has_two_servos() {
+        let spec = from_preset(FrameClass::BiCopter, FrameType::X).unwrap();
+        let bp = build_blueprint(&spec);
+        let servos = bp.parts.iter().filter(|p| p.role == PartRole::Servo).count();
+        assert_eq!(servos, 2);
     }
 
     #[test]
