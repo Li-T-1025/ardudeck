@@ -12,6 +12,20 @@ fn flat(specs: &[(f64, f64)]) -> Vec<MotorFactor> {
         .collect()
 }
 
+fn stacked(specs: &[(f64, f64, UpDown)]) -> Vec<MotorFactor> {
+    specs
+        .iter()
+        .map(|&(angle_deg, yaw_factor, updown)| MotorFactor { angle_deg, yaw_factor, updown })
+        .collect()
+}
+
+// atan(2) in degrees. AP_MotorsMatrix::setup_y6_matrix's Y6B/Y6F tables use MotorDefRaw
+// (roll_fac, pitch_fac) instead of an angle: for a radially-placed motor these satisfy
+// roll_fac = -sin(angle), pitch_fac = cos(angle) (see AP_MotorsMatrix::add_motor's
+// cosf(radians(angle+90))/cosf(radians(angle)) construction), so angle = atan2(-roll_fac,
+// pitch_fac). Y6's front-arm pair has (roll=-+1.0, pitch=0.5): atan2(1.0, 0.5) = atan(2).
+const Y6_FRONT_ARM_DEG: f64 = 63.43494882292201;
+
 // Porting note: the old crates/ardudeck-sim-engine/src/frame_geometry.rs labeled its
 // "hexa X" / "octa X" constants with the angle sets that AP_MotorsMatrix.cpp's
 // setup_hexa_matrix / setup_octa_matrix actually assign to MOTOR_FRAME_TYPE_PLUS, not
@@ -69,15 +83,63 @@ pub fn motor_factors(class: FrameClass, ftype: FrameType) -> Result<Vec<MotorFac
             (-162.0, -1.0), (-126.0, 1.0), (-90.0, -1.0), (-54.0, 1.0), (-18.0, -1.0),
         ]),
 
-        // AP_MotorsMatrix.cpp setup_dodecahexa_matrix, case MOTOR_FRAME_TYPE_X (line 1118).
-        (DodecaHexa, X) => Some(&[
-            (30.0, 1.0), (30.0, -1.0), (90.0, -1.0), (90.0, 1.0), (150.0, 1.0), (150.0, -1.0),
-            (-150.0, -1.0), (-150.0, 1.0), (-90.0, 1.0), (-90.0, -1.0), (-30.0, -1.0), (-30.0, 1.0),
-        ]),
         _ => None,
     };
     if let Some(specs) = flat_specs {
         return Ok(flat(specs));
+    }
+
+    use UpDown::{Down, Up};
+    let stacked_specs: Option<&[(f64, f64, UpDown)]> = match (class, ftype) {
+        // AP_MotorsMatrix.cpp setup_dodecahexa_matrix, case MOTOR_FRAME_TYPE_X (line 1118).
+        // Each pair has an explicit "// ...-top" / "// ...-bottom" source comment; Task 3
+        // wrongly flattened this to UpDown::Flat, this corrects it.
+        (DodecaHexa, X) => Some(&[
+            (30.0, 1.0, Up), (30.0, -1.0, Down),
+            (90.0, -1.0, Up), (90.0, 1.0, Down),
+            (150.0, 1.0, Up), (150.0, -1.0, Down),
+            (-150.0, -1.0, Up), (-150.0, 1.0, Down),
+            (-90.0, 1.0, Up), (-90.0, -1.0, Down),
+            (-30.0, -1.0, Up), (-30.0, 1.0, Down),
+        ]),
+
+        // AP_MotorsMatrix.cpp setup_octaquad_matrix, case MOTOR_FRAME_TYPE_X (line 992).
+        // No inline top/bottom comment here (unlike DodecaHexa/Y6B), so Up/Down is inferred
+        // from add_motors' loop index i, which add_motors passes as the literal motor_num:
+        // the first four array entries become motor_num 0..3 (AP motors 1-4, top) and the
+        // last four become motor_num 4..7 (AP motors 5-8, bottom) - ArduPilot's own
+        // OctaQuad/X8 convention. Each arm's Up/Down entry is still an exact angle+yaw pair
+        // pulled straight from the source array below (unmodified).
+        (OctaQuad, X) => Some(&[
+            (45.0, 1.0, Up), (-45.0, -1.0, Up), (-135.0, 1.0, Up), (135.0, -1.0, Up),
+            (-45.0, 1.0, Down), (45.0, -1.0, Down), (135.0, 1.0, Down), (-135.0, -1.0, Down),
+        ]),
+
+        // AP_MotorsMatrix.cpp setup_y6_matrix, case MOTOR_FRAME_TYPE_Y6B (line 1150).
+        // Source comment: "Y6 motor definition with all top motors spinning clockwise, all
+        // bottom motors counter clockwise" - CW (yaw -1) = Up, CCW (yaw +1) = Down. Angles
+        // derived from MotorDefRaw (roll,pitch) via Y6_FRONT_ARM_DEG (see above); tail arm
+        // is roll=0,pitch=-1 => atan2(0,-1) = 180 deg.
+        (Y6, Y6B) => Some(&[
+            (Y6_FRONT_ARM_DEG, -1.0, Up), (Y6_FRONT_ARM_DEG, 1.0, Down),
+            (180.0, -1.0, Up), (180.0, 1.0, Down),
+            (-Y6_FRONT_ARM_DEG, -1.0, Up), (-Y6_FRONT_ARM_DEG, 1.0, Down),
+        ]),
+
+        // AP_MotorsMatrix.cpp setup_y6_matrix, case MOTOR_FRAME_TYPE_Y6F (line 1164), "Y6
+        // motor layout for FireFlyY6". No explicit top/bottom comment; inferred the same
+        // way as OctaQuad above (first three MotorDefRaw entries get motor_num 0-2, last
+        // three get 3-5), which for Y6F puts CCW (yaw +1) on top and CW (yaw -1) on bottom
+        // - the reverse of Y6B. This matches the real FireFly Y6 airframe, which is known
+        // to spin its top/bottom props opposite to a standard Y6.
+        (Y6, Y6F) => Some(&[
+            (180.0, 1.0, Up), (Y6_FRONT_ARM_DEG, 1.0, Up), (-Y6_FRONT_ARM_DEG, 1.0, Up),
+            (180.0, -1.0, Down), (Y6_FRONT_ARM_DEG, -1.0, Down), (-Y6_FRONT_ARM_DEG, -1.0, Down),
+        ]),
+        _ => None,
+    };
+    if let Some(specs) = stacked_specs {
+        return Ok(stacked(specs));
     }
     Err(FrameError::UnsupportedCombo(class, ftype))
 }
@@ -190,5 +252,54 @@ mod tests {
     #[test]
     fn unsupported_combo_errors() {
         assert!(motor_factors(FrameClass::Quad, FrameType::Y6B).is_err());
+    }
+
+    #[test]
+    fn octaquad_x_is_four_arms_stacked() {
+        let m = motor_factors(FrameClass::OctaQuad, FrameType::X).unwrap();
+        assert_eq!(m.len(), 8);
+        let ups = m.iter().filter(|x| x.updown == UpDown::Up).count();
+        let downs = m.iter().filter(|x| x.updown == UpDown::Down).count();
+        assert_eq!((ups, downs), (4, 4));
+        // Each arm has an Up+Down sharing the same angle with opposite spin.
+        for up in m.iter().filter(|x| x.updown == UpDown::Up) {
+            let mate = m.iter().find(|d| d.updown == UpDown::Down && d.angle_deg == up.angle_deg);
+            assert!(mate.is_some(), "no coax mate at {}", up.angle_deg);
+            assert_eq!(mate.unwrap().yaw_factor, -up.yaw_factor);
+        }
+        assert!(m.iter().map(|x| x.yaw_factor).sum::<f64>().abs() < 1e-9);
+    }
+
+    #[test]
+    fn y6b_has_three_arms_six_motors() {
+        let m = motor_factors(FrameClass::Y6, FrameType::Y6B).unwrap();
+        assert_eq!(m.len(), 6);
+        assert_eq!(m.iter().filter(|x| x.updown == UpDown::Up).count(), 3);
+        assert_eq!(m.iter().filter(|x| x.updown == UpDown::Down).count(), 3);
+    }
+
+    #[test]
+    fn y6f_has_three_arms_six_motors() {
+        let m = motor_factors(FrameClass::Y6, FrameType::Y6F).unwrap();
+        assert_eq!(m.len(), 6);
+        assert_eq!(m.iter().filter(|x| x.updown == UpDown::Up).count(), 3);
+        assert_eq!(m.iter().filter(|x| x.updown == UpDown::Down).count(), 3);
+    }
+
+    #[test]
+    fn dodecahexa_x_is_six_arms_stacked() {
+        // Task 3 wrongly left this Flat; DodecaHexa is coax (setup_dodecahexa_matrix@1118
+        // has explicit "// forward-right-top" / "// ...-bottom" comments per motor).
+        let m = motor_factors(FrameClass::DodecaHexa, FrameType::X).unwrap();
+        assert_eq!(m.len(), 12);
+        let ups = m.iter().filter(|x| x.updown == UpDown::Up).count();
+        let downs = m.iter().filter(|x| x.updown == UpDown::Down).count();
+        assert_eq!((ups, downs), (6, 6));
+        for up in m.iter().filter(|x| x.updown == UpDown::Up) {
+            let mate = m.iter().find(|d| d.updown == UpDown::Down && d.angle_deg == up.angle_deg);
+            assert!(mate.is_some(), "no coax mate at {}", up.angle_deg);
+            assert_eq!(mate.unwrap().yaw_factor, -up.yaw_factor);
+        }
+        assert!(m.iter().map(|x| x.yaw_factor).sum::<f64>().abs() < 1e-9);
     }
 }
