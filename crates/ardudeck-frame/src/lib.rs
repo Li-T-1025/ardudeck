@@ -11,7 +11,7 @@ pub mod types;
 #[cfg(feature = "wasm")]
 pub mod wasm;
 
-pub use adapters::{from_preset, from_sitl_custom_frame, from_vehicle_profile, SitlCustomFrameInput, VehicleProfileInput};
+pub use adapters::{from_build, from_preset, from_sitl_custom_frame, from_vehicle_profile, BuildInput, SitlCustomFrameInput, VehicleProfileInput};
 pub use blueprint::{build_blueprint, Aabb, FrameBlueprint, MaterialHint, Part, PartDims, PartKind, PartRole, Spin};
 pub use math::{Mat3, Quat, Vec3};
 pub use physics::{physics_geometry, MotorMount, PhysicsGeometry};

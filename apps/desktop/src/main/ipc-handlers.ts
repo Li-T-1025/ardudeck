@@ -4,8 +4,11 @@
  */
 
 import { ipcMain, BrowserWindow, dialog, app, shell, safeStorage } from 'electron';
-import { join } from 'path';
-import { existsSync } from 'fs';
+import { join, dirname } from 'path';
+import { existsSync, readFileSync } from 'fs';
+import { execFile as execFileCb } from 'node:child_process';
+import { promisify } from 'node:util';
+import { fileURLToPath } from 'node:url';
 import Store from 'electron-store';
 import {
   recordSigningEvent,
@@ -122,7 +125,7 @@ import {
   getAllMessageInfos,
   type ParamValue,
 } from '@ardudeck/mavlink-ts';
-import { IPC_CHANNELS, SEVERITY_LABELS, type ConnectOptions, type ConnectionState, type ConsoleLogEntry, type SavedLayout, type LayoutStoreSchema, type SettingsStoreSchema, type SigningStatus, type TelemetrySpeed, type TransportInfoIpc, type VehicleInfoIpc, type SetActiveSelectionPayload, type VehicleCommand, type MissionVehicleProgress, type OrchestrationIntentIpc, type OrchestrationStatusIpc, type OrchestratorSource, type OrchestratorStatus, type CameraSourceConfig, type GimbalCommand, type CameraCommand } from '../shared/ipc-channels.js';
+import { IPC_CHANNELS, SEVERITY_LABELS, type ConnectOptions, type ConnectionState, type ConsoleLogEntry, type SavedLayout, type LayoutStoreSchema, type SettingsStoreSchema, type SigningStatus, type TelemetrySpeed, type TransportInfoIpc, type VehicleInfoIpc, type SetActiveSelectionPayload, type VehicleCommand, type MissionVehicleProgress, type OrchestrationIntentIpc, type OrchestrationStatusIpc, type OrchestratorSource, type OrchestratorStatus, type CameraSourceConfig, type GimbalCommand, type CameraCommand, type FrameBlueprintResult, type FrameBlueprintRequest } from '../shared/ipc-channels.js';
 import { DEFAULT_USER_UNIT_PREFERENCES } from '../shared/user-units.js';
 import { initAutoUpdater, checkForUpdates, downloadUpdate, installUpdate } from './updater.js';
 import type { ParamValuePayload, ParameterProgress } from '../shared/parameter-types.js';
@@ -139,7 +142,7 @@ import type { MotorTestStartRequest, MotorTestResponse, EscTelemetryData, EscMot
 import { getBoardInfoFromVersion } from '../shared/board-ids.js';
 import { detectBoards, fetchFirmwareVersions, downloadFirmware, copyCustomFirmware, flashWithDfu, flashWithAvrdude, flashWithSerialBootloader, flashWithArduPilotBootloader, getArduPilotBoards, getArduPilotVersions, getBetaflightBoards, getBetaflightVersions, resolveBetaflightDownloadUrl, getInavBoards, getInavVersions, type BoardInfo, type VersionGroup } from './firmware/index.js';
 import { registerMspHandlers, tryMspDetection, startMspTelemetry, stopMspTelemetry, cleanupMspConnection, exitCliModeIfActive, autoConfigureSitlPlatform, getMspVehicleType, resetSitlAutoConfig } from './msp/index.js';
-import { initCalibrationHandlers, cleanupCalibrationHandlers, handleCalibrationStatusText, handleCalibrationCommandAck, handleIncomingCommandLong, isMavlinkCalibrationActive, cancelCalibration, type MavlinkCalibrationDeps } from './calibration/index.js';
+import { initCalibrationHandlers, cleanupCalibrationHandlers, handleCalibrationStatusText, handleCalibrationCommandAck, handleIncomingCommandLong, handleMagCalProgress, handleMagCalReport, isMavlinkCalibrationActive, cancelCalibration, type MavlinkCalibrationDeps } from './calibration/index.js';
 import { initMissionLibraryHandlers, cleanupMissionLibraryHandlers } from './mission-library/index.js';
 import { MavlinkFtpClient, parseParamPack, PARAM_PCK_PATH, parseFtpPayload } from './mavlink-ftp/index.js';
 import { ingestNamedValueFloat, getScriptHealth, resetHeartbeat, subscribeHealth } from './script-installer/heartbeat-tracker.js';
@@ -2135,6 +2138,10 @@ const MSG_ESC_TELEMETRY_9_TO_12 = 11032;
 // FTP message ID
 const MSG_FILE_TRANSFER_PROTOCOL = 110;
 
+// Compass calibration feedback (DO_START_MAG_CAL)
+const MSG_MAG_CAL_PROGRESS = 191;
+const MSG_MAG_CAL_REPORT = 192;
+
 // Fence message ID
 const MSG_FENCE_STATUS = 162;
 const MSG_LOG_ENTRY = 118;
@@ -2454,6 +2461,35 @@ function parseTelemetry(mainWindow: BrowserWindow, packet: MAVLinkPacket): void 
           vibration: { x, y, z, clip0, clip1, clip2, timestamp: Date.now() },
         });
       }
+      break;
+    }
+
+    case MSG_MAG_CAL_PROGRESS: {
+      // MAG_CAL_PROGRESS (191) wire order (floats first, then u8s):
+      //   direction_x(0) direction_y(4) direction_z(8) f32,
+      //   compass_id(12) cal_mask(13) cal_status(14) attempt(15) completion_pct(16) u8,
+      //   completion_mask[10](17).
+      // completion_pct (and low compass ids) are often 0 early on, so MAVLink v2
+      // truncates them; the OOB-safe reads below return 0, which is the real value.
+      const compassId = payload[12] ?? 0;
+      const calStatus = payload[14] ?? 0;
+      const completionPct = payload[16] ?? 0;
+      handleMagCalProgress(compassId, calStatus, completionPct);
+      break;
+    }
+
+    case MSG_MAG_CAL_REPORT: {
+      // MAG_CAL_REPORT (192) wire order (10 floats first, then u8s):
+      //   fitness(0) ofs_x(4) ofs_y(8) ofs_z(12) diag_x(16) diag_y(20) diag_z(24)
+      //   offdiag_x(28) offdiag_y(32) offdiag_z(36) f32,
+      //   compass_id(40) cal_mask(41) cal_status(42) autosaved(43) u8.
+      // cal_status is non-zero for SUCCESS(4)/FAILED(5+), so it is never truncated
+      // away; fitness sits at offset 0 and is always present.
+      const fitness = readFloat(payload, 0);
+      const compassId = payload[40] ?? 0;
+      const calMask = payload[41] ?? 0;
+      const calStatus = payload[42] ?? 0;
+      handleMagCalReport(compassId, calMask, calStatus, fitness);
       break;
     }
 
@@ -3496,6 +3532,17 @@ export function setupIpcHandlers(mainWindow: BrowserWindow): void {
     // so applying this is idempotent there.
     safeSend(mainWindow, IPC_CHANNELS.COMMS_ACTIVE_CHANGED, { transportId: payload.transportId, vehicleKey: payload.vehicleKey ?? null });
   });
+
+  // Fleet formations are renderer-only state; main caches the latest map and relays
+  // it to every window so the fleet strip and the 3D world pop-out show the same
+  // groups. The initiating window applies its own broadcast idempotently (guarded
+  // from re-emit); a window opening later hydrates the cache via COMMS_GET_FORMATIONS.
+  let lastFormations: Record<string, string[]> = {};
+  ipcMain.handle(IPC_CHANNELS.COMMS_SET_FORMATIONS, async (_, formations: Record<string, string[]>): Promise<void> => {
+    lastFormations = formations ?? {};
+    safeSend(mainWindow, IPC_CHANNELS.COMMS_FORMATIONS_CHANGED, lastFormations);
+  });
+  ipcMain.handle(IPC_CHANNELS.COMMS_GET_FORMATIONS, async (): Promise<Record<string, string[]>> => lastFormations);
 
   /** Close a background transport: notify of vehicle loss, then unregister. */
   const removeBackgroundTransport = async (transportId: TransportId): Promise<void> => {
@@ -11189,6 +11236,103 @@ export function setupIpcHandlers(mainWindow: BrowserWindow): void {
     }
   });
 
+  // ─── Procedural frame generator (ardudeck-frame crate) ──────────────────
+  // Shells out to a release-built Rust binary rather than reimplementing the
+  // motor-factor tables in TS/WASM, so the 3D sim frame and the crate's SITL
+  // physics model can never drift apart.
+  ipcMain.handle(IPC_CHANNELS.FRAME_GENERATE_BLUEPRINT, async (_event, args: FrameBlueprintRequest): Promise<FrameBlueprintResult> => {
+    console.log('[frame-blueprint] request', { frameClass: args.frameClass, frameType: args.frameType, customFramePath: args.customFramePath, hasProfile: !!args.profile });
+    const binaryPath = findFrameBlueprintBinary();
+    console.log('[frame-blueprint] resolved binary:', binaryPath ?? '(not found)');
+    if (!binaryPath) {
+      return { error: 'frame_blueprint binary not built' };
+    }
+
+    // Build the crate's snake_case BuildInput from the real launched frame +
+    // vehicle profile when either is present. With neither, fall back to the
+    // preset invocation (<class> <type>).
+    const spec = buildFrameSpecInput(args);
+    const cliArgs = spec ? ['--spec', JSON.stringify(spec)] : [args.frameClass, args.frameType];
+
+    try {
+      const execFile = promisify(execFileCb);
+      const { stdout } = await execFile(binaryPath, cliArgs, { maxBuffer: 4 * 1024 * 1024 });
+      const parsed = JSON.parse(stdout.trim()) as FrameBlueprintResult;
+      const partCount = parsed && 'blueprint' in parsed && (parsed.blueprint as { parts?: unknown[] })?.parts?.length;
+      console.log('[frame-blueprint] ok:', 'error' in parsed ? parsed.error : `${partCount} parts (${spec ? 'real build' : 'preset'})`);
+      return parsed;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      console.error('[frame-blueprint] invocation failed:', message);
+      return { error: `frame_blueprint invocation failed: ${message}` };
+    }
+  });
+
+}
+
+/**
+ * Assemble the crate's snake_case `BuildInput` from a blueprint request. Reads
+ * the launched SITL custom frame off disk (for real mass / disc area / motor
+ * count) and folds in the vehicle-profile subset. Returns null when neither
+ * source is available, signalling the caller to use the preset invocation.
+ */
+function buildFrameSpecInput(args: FrameBlueprintRequest): Record<string, unknown> | null {
+  let sitl: Record<string, number> | undefined;
+  if (args.customFramePath && existsSync(args.customFramePath)) {
+    try {
+      const raw = JSON.parse(readFileSync(args.customFramePath, 'utf8')) as Record<string, unknown>;
+      const mass = Number(raw.mass);
+      const diagonal = Number(raw.diagonal_size);
+      const disc = Number(raw.disc_area);
+      const motors = Number(raw.num_motors);
+      if (Number.isFinite(mass) && Number.isFinite(diagonal) && Number.isFinite(disc) && Number.isFinite(motors)) {
+        sitl = { mass, diagonal_size: diagonal, disc_area: disc, num_motors: Math.round(motors) };
+      }
+    } catch (e) {
+      console.warn('[frame-blueprint] could not read custom frame file:', e instanceof Error ? e.message : e);
+    }
+  }
+
+  let profile: Record<string, unknown> | undefined;
+  if (args.profile) {
+    const p = args.profile;
+    profile = {
+      weight_g: p.weightG,
+      frame_size_mm: p.frameSizeMm ?? null,
+      motor_count: p.motorCount != null ? Math.round(p.motorCount) : null,
+      motor_kv: p.motorKv ?? null,
+      prop_diameter_mm: p.propDiameterMm ?? null,
+      esc_rating_a: p.escRatingA ?? null,
+      battery_cells: Math.round(p.batteryCells),
+      cog_offset_mm: p.cogOffsetMm ?? null,
+    };
+  }
+
+  if (!sitl && !profile) return null;
+  return { sitl: sitl ?? null, profile: profile ?? null, class: args.frameClass, frame_type: args.frameType };
+}
+
+/**
+ * Locate the release-built `frame_blueprint` binary from the ardudeck-frame
+ * crate. `app.getAppPath()` isn't reliable in dev (it resolves inside
+ * apps/desktop, not the monorepo root), so instead walk up from this file's
+ * own location until we find a `crates/` directory, which only exists at the
+ * repo root.
+ */
+function findFrameBlueprintBinary(): string | null {
+  const here = dirname(fileURLToPath(import.meta.url));
+  let dir = here;
+  for (let i = 0; i < 10; i++) {
+    if (existsSync(join(dir, 'crates'))) {
+      const ext = process.platform === 'win32' ? '.exe' : '';
+      const binPath = join(dir, 'crates', 'ardudeck-frame', 'target', 'release', `frame_blueprint${ext}`);
+      return existsSync(binPath) ? binPath : null;
+    }
+    const parent = dirname(dir);
+    if (parent === dir) break;
+    dir = parent;
+  }
+  return null;
 }
 
 async function callAiProvider(
