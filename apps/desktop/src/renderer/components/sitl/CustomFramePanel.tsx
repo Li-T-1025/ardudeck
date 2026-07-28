@@ -7,7 +7,7 @@
  */
 
 import { useEffect, useState, useCallback } from 'react';
-import { Pencil, Trash2, Download, Upload, X, ChevronDown, ChevronRight } from 'lucide-react';
+import { Pencil, Copy, Trash2, Download, Upload, X, ChevronDown, ChevronRight } from 'lucide-react';
 import {
   SITL_FRAME_TEMPLATES,
   type SitlCustomFrame,
@@ -147,6 +147,31 @@ export function CustomFramePanel() {
         await refresh();
         setEditor({ kind: 'closed' });
         showToast('Saved');
+      }
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  // Duplicate a saved frame as a new, independently-editable copy. saveCustomFrame
+  // derives the on-disk id from slugify(name) and overwrites a colliding id, so we
+  // pick a "<name> copy [n]" that isn't already taken (case-insensitively).
+  const onDuplicate = async (id: string) => {
+    setBusy(true);
+    try {
+      const rec = await window.electronAPI?.ardupilotSitlCustomFrameLoad?.(id);
+      if (!rec) {
+        showToast('Failed to copy frame');
+        return;
+      }
+      const taken = new Set(list.map((f) => f.name.toLowerCase()));
+      let copyName = `${rec.name} copy`;
+      let n = 2;
+      while (taken.has(copyName.toLowerCase())) copyName = `${rec.name} copy ${n++}`;
+      const result = await window.electronAPI?.ardupilotSitlCustomFrameSave?.({ name: copyName, frame: rec.frame });
+      if (result) {
+        await refresh();
+        showToast(`Copied → "${copyName}"`);
       }
     } finally {
       setBusy(false);
@@ -361,6 +386,9 @@ export function CustomFramePanel() {
                     </button>
                     <button onClick={() => onEdit(item.id)} className="p-1 rounded hover:bg-surface text-content-secondary hover:text-blue-400" title="Edit">
                       <Pencil className="w-3.5 h-3.5" />
+                    </button>
+                    <button onClick={() => onDuplicate(item.id)} disabled={busy} className="p-1 rounded hover:bg-surface text-content-secondary hover:text-blue-400 disabled:opacity-50" title="Duplicate this frame">
+                      <Copy className="w-3.5 h-3.5" />
                     </button>
                     <button onClick={() => onExport(item.id)} className="p-1 rounded hover:bg-surface text-content-secondary hover:text-blue-400" title="Export JSON">
                       <Download className="w-3.5 h-3.5" />
