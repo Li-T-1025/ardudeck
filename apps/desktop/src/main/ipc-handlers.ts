@@ -8052,9 +8052,12 @@ export function setupIpcHandlers(mainWindow: BrowserWindow): void {
   });
 
   // Load parameters from file
-  ipcMain.handle(IPC_CHANNELS.MISSION_IMPORT_AREA, async (): Promise<{ success: boolean; error?: string; format?: 'kml' | 'geojson'; content?: string; fileName?: string }> => {
+  ipcMain.handle(IPC_CHANNELS.MISSION_IMPORT_AREA, async (event): Promise<{ success: boolean; error?: string; format?: 'kml' | 'geojson'; content?: string; fileName?: string }> => {
     try {
-      const result = await dialog.showOpenDialog(mainWindow, {
+      // Parent the dialog to the window that invoked it (the Area Editor is a
+      // separate window) so focus returns there, not to the main window.
+      const parentWindow = BrowserWindow.fromWebContents(event.sender) ?? mainWindow;
+      const result = await dialog.showOpenDialog(parentWindow, {
         title: 'Import Survey Area',
         filters: [
           { name: 'Boundary Files', extensions: ['kml', 'kmz', 'geojson', 'json', 'shp', 'zip'] },
