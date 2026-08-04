@@ -51,6 +51,8 @@ import { AppTourProvider } from './components/tours/AppTourProvider';
 import { useFlightControlStore } from './stores/flight-control-store';
 import { useCompanionStore } from './stores/companion-store';
 import { useMessagesStore } from './stores/messages-store';
+import { clearTargetsForSysid } from './stores/command-target-store';
+import { useTerrainStatusStore } from './stores/terrain-status-store';
 import { useSigningStore } from './stores/signing-store';
 import { useBoardProfileAssociation } from './hooks/useBoardProfileAssociation';
 import { SitlAutoApplyWatcher } from './components/settings/vehicle-profile/SitlAutoApplyWatcher';
@@ -632,6 +634,36 @@ function App() {
     });
     return () => { unsubscribe?.(); };
   }, [addStatusMessage]);
+
+  // TERRAIN_REPORT per vehicle: feeds the terrain-relative command gate.
+  useEffect(() => {
+    const unsubscribe = window.electronAPI?.onTerrainStatus?.(({ sysid, loaded, pending, spacing }) => {
+      useTerrainStatusStore.getState().setStatus(sysid, { loaded, pending, spacing });
+    });
+    return () => { unsubscribe?.(); };
+  }, []);
+
+  // FC refused a nav command (goto/orbit/land): drop that vehicle's optimistic
+  // target overlay so the map never shows a destination the FC declined. A
+  // terrain-frame goto refusal while Terrain is the stored default also resets
+  // the default to Home: the persisted default is proven unusable for this
+  // vehicle and would silently fail every future fly command.
+  useEffect(() => {
+    const unsubscribe = window.electronAPI?.onCommandRejected?.(({ command, sysid, frame }) => {
+      clearTargetsForSysid(sysid);
+      if (command === 192 && frame === 11) {
+        const settings = useSettingsStore.getState();
+        if (settings.defaultCommandAltFrame === 'terrain') {
+          settings.setDefaultCommandAltFrame('relative');
+          useMessagesStore.getState().addMessage(
+            6, 'INFO',
+            'Default altitude reference reset to Home (terrain-relative was refused by the vehicle).',
+          );
+        }
+      }
+    });
+    return () => { unsubscribe?.(); };
+  }, []);
 
   // Parameter events
   useEffect(() => {

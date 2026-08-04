@@ -47,7 +47,7 @@
   --dv-tab-active: #1f2937;
   --dv-tab-inactive: #111827;
   --dv-tab-text-active: #f3f4f6;
-  --dv-tab-text-dim: #9ca3af;
+  --dv-tab-text-dim: #cbd5e1;
   --dv-divider: #374151;
 
   /* Leaflet */
@@ -80,6 +80,25 @@
   --status-warn:    #fbbf24;  --status-warn-fg:    #fcd34d;  --status-warn-bg:    rgba(245, 158, 11, 0.15);
   --status-danger:  #f87171;  --status-danger-fg:  #fca5a5;  --status-danger-bg:  rgba(239, 68, 68, 0.15);
   --status-info:    #60a5fa;  --status-info-fg:    #93c5fd;  --status-info-bg:    rgba(59, 130, 246, 0.15);
+
+  /* Map instrument (RoundGauge/strip) palette. Max contrast per theme: dark
+     faces with white markings here, white faces with near-black markings in
+     the .light override. Markings must never be mid-grey in either theme. */
+  --gauge-bezel: #1b2230;
+  --gauge-bezel-2: #0b0e14;
+  --gauge-bezel-edge: #374151;
+  --gauge-face: #16181d;
+  --gauge-tick-major: #e5e7eb;
+  --gauge-tick-minor: #6b7280;
+  --gauge-text: #ffffff;
+  --gauge-text-dim: #b6bcc6;
+  --gauge-needle: #ffffff;
+  --gauge-green: #34d399;
+  --gauge-amber: #f59e0b;
+  --gauge-red: #f87171;
+  --gauge-lamp-off: linear-gradient(180deg, rgba(0, 0, 0, 0.4), rgba(0, 0, 0, 0.2));
+  --gauge-lamp-off-border: rgba(0, 0, 0, 0.35);
+  --gauge-lamp-off-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.5);
 }
 
 .light {
@@ -122,7 +141,7 @@
   --dv-tab-active: #ffffff;
   --dv-tab-inactive: #e5e7eb;
   --dv-tab-text-active: #111827;
-  --dv-tab-text-dim: #6b7280;
+  --dv-tab-text-dim: #4b5563;
   --dv-divider: #d1d5db;
 
   /* Leaflet */
@@ -151,6 +170,29 @@
   --status-warn:    #d97706;  --status-warn-fg:    #b45309;  --status-warn-bg:    rgba(217, 119, 6, 0.12);
   --status-danger:  #dc2626;  --status-danger-fg:  #b91c1c;  --status-danger-bg:  rgba(220, 38, 38, 0.10);
   --status-info:    #2563eb;  --status-info-fg:    #1d4ed8;  --status-info-bg:    rgba(37, 99, 235, 0.10);
+
+  /* Light instruments: white faces with near-BLACK markings at full weight
+     (printed-chart contrast). The first light pass failed because markings
+     were grey, not because faces were light; never use pale greys here. */
+  --gauge-bezel: #f5f6f8;
+  --gauge-bezel-2: #c3c9d3;
+  --gauge-bezel-edge: #a6adba;
+  --gauge-face: #fbfbfd;
+  --gauge-tick-major: #111827;
+  --gauge-tick-minor: #6b7280;
+  --gauge-text: #0b0e14;
+  --gauge-text-dim: #374151;
+  --gauge-needle: #111827;
+  /* Status colors stay VIVID on white (traffic-light saturation), not the
+     dark "readable" variants: the user reads these at a glance in the field. */
+  --gauge-green: #059669;
+  --gauge-amber: #f59e0b;
+  --gauge-red: #ef4444;
+  /* Off annunciator lamps: recessed LIGHT cells on the white face (a dark
+     lamp window on white reads as dirty grey). */
+  --gauge-lamp-off: linear-gradient(180deg, #e2e5ea, #eef0f4);
+  --gauge-lamp-off-border: #c9ced8;
+  --gauge-lamp-off-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.12);
 }
 
 @layer base {
@@ -163,6 +205,16 @@
     color: var(--text-primary);
     @apply antialiased;
     font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  }
+
+  /* Chromium's native number-input spinner is a light widget that glows on the
+     dark theme and shows/hides on hover, making identical inputs render
+     differently. The app provides its own steppers where stepping matters;
+     arrow keys still work. */
+  input[type='number']::-webkit-outer-spin-button,
+  input[type='number']::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
   }
 
   /* Theme-aware native select dropdowns */
@@ -351,6 +403,16 @@ select,
   animation: data-pulse 0.3s ease-in-out;
 }
 
+/* Lit red annunciator lamps breathe like a master warning light. */
+@keyframes annun-pulse {
+  0%, 100% { filter: brightness(1); }
+  50% { filter: brightness(1.45); }
+}
+
+.annun-pulse {
+  animation: annun-pulse 1.2s ease-in-out infinite;
+}
+
 /* Dockview theme customization - reads from theme tokens */
 .dockview-theme-dark,
 .dockview-theme-light {
@@ -377,23 +439,24 @@ select,
   --dv-drag-over-border-color: rgba(59, 130, 246, 0.5);
 }
 
-.dockview-theme-dark .tab,
-.dockview-theme-light .tab {
+/* dockview 4.x renamed inner classes to dv-* (.tab -> .dv-tab etc.) */
+.dockview-theme-dark .dv-tab,
+.dockview-theme-light .dv-tab {
   border-radius: 4px 4px 0 0;
 }
 
-.dockview-theme-dark .groupview > .content-container,
-.dockview-theme-light .groupview > .content-container {
+.dockview-theme-dark .dv-groupview > .dv-content-container,
+.dockview-theme-light .dv-groupview > .dv-content-container {
   background: var(--dv-panel-bg);
 }
 
 /* Compact dockview for log explorer */
-.log-explorer-dock .tabs-and-actions-container {
+.log-explorer-dock .dv-tabs-and-actions-container {
   height: 26px !important;
   min-height: 26px !important;
 }
 
-.log-explorer-dock .tab {
+.log-explorer-dock .dv-tab {
   height: 24px !important;
   font-size: 11px !important;
   padding: 0 8px !important;
@@ -500,6 +563,11 @@ select,
    hovered, so the cluster stays clean - hover brings the full readout back. */
 .tvi-grouped .tactical-info-label { display: none; }
 .tvi-grouped:hover .tactical-info-label { display: block; }
+
+/* Dot-tier marker (density LOD): the full label is built but hidden, same hover-reveal
+   as grouped followers, so a packed formation is dots until you point at one. */
+.tvi-dot .tactical-info-label { display: none; }
+.tvi-dot:hover .tactical-info-label { display: block; }
 
 .tactical-selection-ring {
   animation: tactical-ring-spin 2s linear infinite;

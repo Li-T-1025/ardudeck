@@ -18,7 +18,7 @@ import { batteryParams, airspeedParams, commonSafetyParams, simPhysicsParams, ma
 export const vtolTailsitterDeltaDuo: VehicleTemplate = {
   slug: 'vtol-tailsitter-delta-duo',
   name: 'Tailsitter Delta Duo',
-  description: '2-motor delta-wing tailsitter — compact and efficient',
+  description: '2-motor delta-wing tailsitter, compact and efficient',
   icon: Triangle,
   vehicleType: 'vtol',
   category: 'vtol',

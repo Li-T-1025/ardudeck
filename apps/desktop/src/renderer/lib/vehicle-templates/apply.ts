@@ -45,10 +45,10 @@ export function prepareApply(args: {
     return { ok: false, code: 'not-connected', reason: 'No vehicle connected' };
   }
   if (armed) {
-    return { ok: false, code: 'armed', reason: 'Vehicle is armed — disarm before applying' };
+    return { ok: false, code: 'armed', reason: 'Vehicle is armed, disarm before applying' };
   }
   if (args.currentParams.size === 0) {
-    return { ok: false, code: 'no-params', reason: 'Parameters not loaded yet — fetch them first' };
+    return { ok: false, code: 'no-params', reason: 'Parameters not loaded yet, fetch them first' };
   }
 
   const isSitl = !!connectionState.isSitl;
@@ -73,7 +73,7 @@ export function prepareApply(args: {
   });
 
   if (diff.changes.length === 0) {
-    return { ok: false, code: 'nothing-to-apply', reason: 'Vehicle already matches profile — nothing to change' };
+    return { ok: false, code: 'nothing-to-apply', reason: 'Vehicle already matches profile, nothing to change' };
   }
 
   const fileDiffs: FileParamDiff[] = diff.changes.map(c => ({

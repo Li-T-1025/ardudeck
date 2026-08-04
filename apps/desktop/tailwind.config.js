@@ -1,9 +1,15 @@
 /** @type {import('tailwindcss').Config} */
 export default {
   content: ['./src/renderer/**/*.{html,tsx,ts}'],
+  // The app toggles `.light` on <html>; without this, `dark:` variants would
+  // track the OS prefers-color-scheme instead of the in-app theme.
+  darkMode: ['variant', '&:where(:root:not(.light) *)'],
   theme: {
     extend: {
       colors: {
+        // Divider color matching border-subtle so `bg-subtle` works for
+        // w-px/h-px separator elements.
+        subtle: 'var(--border-subtle)',
         surface: {
           base: 'var(--bg-base)',
           DEFAULT: 'var(--bg-surface)',

@@ -36,7 +36,7 @@ function GaugeRing({ value, label, detail, color }: { value: number; label: stri
         {/* Background ring */}
         <circle
           cx="45" cy="45" r={radius}
-          fill="none" stroke="#1e293b" strokeWidth="6"
+          fill="none" stroke="var(--bg-inset)" strokeWidth="6"
         />
         {/* Value ring */}
         <circle

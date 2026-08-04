@@ -25,7 +25,7 @@ const PresetCard: React.FC<PresetCardProps> = ({ preset, onSelect }) => {
     >
       <div className="flex items-start gap-4">
         {/* Large icon */}
-        <div className="w-12 h-12 rounded-xl bg-white/10 flex items-center justify-center">
+        <div className="w-12 h-12 rounded-xl bg-surface-overlay-subtle flex items-center justify-center">
           <IconComponent className="w-6 h-6 text-content" />
         </div>
 
@@ -39,7 +39,7 @@ const PresetCard: React.FC<PresetCardProps> = ({ preset, onSelect }) => {
             {preset.wizardModes.slice(0, 4).map((boxId, idx) => (
               <span
                 key={idx}
-                className="px-2 py-0.5 text-xs bg-white/10 rounded-full text-white"
+                className="px-2 py-0.5 text-xs bg-surface-overlay-subtle rounded-full text-content"
               >
                 {MODE_INFO[boxId]?.name ?? `Mode ${boxId}`}
               </span>
@@ -52,7 +52,7 @@ const PresetCard: React.FC<PresetCardProps> = ({ preset, onSelect }) => {
       </div>
 
       {/* Tip */}
-      <div className="mt-4 pt-3 border-t border-white/10">
+      <div className="mt-4 pt-3 border-t border-subtle">
         <p className="text-xs text-content-secondary italic flex items-center gap-1.5">
           <Lightbulb className="w-3.5 h-3.5" />
           {preset.tip}

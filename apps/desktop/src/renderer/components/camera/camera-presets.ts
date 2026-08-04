@@ -85,7 +85,7 @@ export const CAMERA_PRESETS: CameraPreset[] = [
     id: 'uvc',
     label: 'USB / HDMI capture device',
     kind: 'uvc',
-    note: 'Analog-FPV-to-USB dongle or capture card on this machine. Played locally — the only path suitable for piloting.',
+    note: 'Analog-FPV-to-USB dongle or capture card on this machine. Played locally: the only path suitable for piloting.',
   },
 ];
 

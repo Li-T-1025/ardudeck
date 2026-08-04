@@ -109,7 +109,9 @@ export function ModuleDock() {
     }
   };
 
-  const anchor = pos ? { left: pos.x, top: pos.y } : { right: 16, bottom: 16 };
+  // Default clears the bottom status strips (mission "Ready to upload" bar,
+  // console line); user drags override via pos.
+  const anchor = pos ? { left: pos.x, top: pos.y } : { right: 16, bottom: 52 };
   // Keep the popover on-screen: align to the button's left edge when the button
   // sits near the left of the viewport, otherwise to its right edge.
   const alignLeft = pos != null && pos.x < 320;

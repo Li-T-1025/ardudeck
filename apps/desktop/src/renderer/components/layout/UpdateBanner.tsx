@@ -27,7 +27,7 @@ export function UpdateBanner() {
   if (dismissed && status !== 'downloading') return null;
 
   const versionLabel = latestVersion ? `v${latestVersion}` : 'new version';
-  const nameLabel = releaseName && releaseName !== `v${latestVersion}` ? ` — ${releaseName}` : '';
+  const nameLabel = releaseName && releaseName !== `v${latestVersion}` ? `: ${releaseName}` : '';
 
   // Available state (blue) — shows for both signed and unsigned apps
   if (status === 'available') {

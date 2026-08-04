@@ -4,6 +4,7 @@ import { useMissionLibraryStore } from '../../stores/mission-library-store';
 import { useSettingsStore } from '../../stores/settings-store';
 import type { MissionItem } from '../../../shared/mission-types';
 import { calculateMissionDistance } from '../../../shared/mission-types';
+import { formatDistanceFromMeters } from '../../../shared/user-units.js';
 import { TagInput } from '../ui/TagInput';
 
 interface SaveMissionModalProps {
@@ -19,6 +20,7 @@ export function SaveMissionModal({ onClose, onSaved, importedItems, importedHome
   const missionStore = useMissionStore();
   const { saveMission, error: storeError } = useMissionLibraryStore();
   const { activeVehicleId } = useSettingsStore();
+  const distanceUnit = useSettingsStore((s) => s.unitPreferences.distance);
 
   // Use imported data if provided, otherwise fall back to mission store
   const items = importedItems ?? missionStore.missionItems;
@@ -125,10 +127,7 @@ export function SaveMissionModal({ onClose, onSaved, importedItems, importedHome
           {/* Summary */}
           <div className="flex items-center gap-4 text-xs text-content-secondary bg-surface-raised rounded-lg px-3 py-2">
             <span>{items.length} waypoints</span>
-            <span>{distance < 1000
-              ? `${Math.round(distance)}m`
-              : `${(distance / 1000).toFixed(1)} km`
-            }</span>
+            <span>{formatDistanceFromMeters(distance, distanceUnit)}</span>
             {homePosition && <span>Home set</span>}
           </div>
 

@@ -9,7 +9,7 @@ import { batteryParams, commonSafetyParams, simPhysicsParams, matches } from '..
 export const copterQuadX: VehicleTemplate = {
   slug: 'copter-quad-x',
   name: 'Quadcopter (X)',
-  description: 'Four motors in an X pattern — the classic multirotor',
+  description: 'Four motors in an X pattern, the classic multirotor',
   icon: Zap,
   vehicleType: 'copter',
   category: 'multirotor',

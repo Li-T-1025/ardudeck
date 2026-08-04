@@ -7,7 +7,7 @@
  * theme. Renders nothing for a single vehicle.
  */
 
-import { useState, useRef } from 'react';
+import { useState, useRef, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { useFleetVehicles, selectActiveVehicle, deselectActiveVehicle, type FleetVehicle } from '../../hooks/useFleet';
 import { useActiveVehicleStore } from '../../stores/active-vehicle-store';
@@ -34,6 +34,18 @@ function BatteryPip({ pct }: { pct: number | null }) {
         <div className="h-full rounded-full" style={{ width: `${Math.max(0, Math.min(100, pct))}%`, background: color }} />
       </div>
       <span className="font-mono text-[10px] font-semibold" style={{ color }}>{Math.round(pct)}</span>
+    </div>
+  );
+}
+
+/** Indented container for a formation's wingmen. The rail carries the LEADER's
+    identity colour so each wingman block is visually tied to its leader - the
+    old hairline border-subtle rail was invisible against the nav background. */
+function WingmenRail({ leaderKey, leaderSysid, children }: { leaderKey: string; leaderSysid: number; children: ReactNode }) {
+  const leaderColor = useVehicleColor(leaderKey, leaderSysid);
+  return (
+    <div className="ml-4 pl-2 border-l-2 flex flex-col gap-1" style={{ borderColor: leaderColor }}>
+      {children}
     </div>
   );
 }
@@ -72,7 +84,7 @@ function FleetCard({ v, role, count = 0 }: { v: FleetVehicle; role?: 'leader' | 
           if (r) setSwatchPos({ top: r.bottom + 4, left: r.left });
           setSwatchOpen((o) => !o);
         }}
-        className="relative shrink-0 grid place-items-center w-6 h-6 rounded"
+        className={`relative shrink-0 grid place-items-center rounded ${role === 'wingman' ? 'w-5 h-5' : 'w-6 h-6'}`}
         style={{
           color: identityColor,
           background: 'var(--bg-inset)',
@@ -80,7 +92,7 @@ function FleetCard({ v, role, count = 0 }: { v: FleetVehicle; role?: 'leader' | 
         }}
         data-tip={`${airframeLabel(v.mavType)} - ${v.state} (click to set identity colour)`}
       >
-        <AirframeIcon mavType={v.mavType} size={16} />
+        <AirframeIcon mavType={v.mavType} size={role === 'wingman' ? 13 : 16} />
       </button>
       {swatchOpen && swatchPos &&
         createPortal(
@@ -95,7 +107,7 @@ function FleetCard({ v, role, count = 0 }: { v: FleetVehicle; role?: 'leader' | 
                 <button
                   key={c}
                   onClick={() => { setColor(v.key, c); setSwatchOpen(false); }}
-                  className={`w-5 h-5 rounded transition-transform hover:scale-110 ${c === identityColor ? 'ring-2 ring-white' : ''}`}
+                  className={`w-5 h-5 rounded transition-transform hover:scale-110 ${c === identityColor ? 'ring-2 ring-blue-500' : ''}`}
                   style={{ backgroundColor: c }}
                   aria-label={`Set colour ${c}`}
                 />
@@ -105,12 +117,22 @@ function FleetCard({ v, role, count = 0 }: { v: FleetVehicle; role?: 'leader' | 
           document.body,
         )}
 
-      {/* Identity */}
+      {/* Identity. Wingmen collapse to a single row so the leader's two-row card
+          visibly outranks them - the flat "everything same size" list made the
+          formation structure invisible at a glance. */}
+      {role === 'wingman' ? (
+        <div className="min-w-0 flex-1 flex items-center gap-1.5">
+          <span className="font-mono text-[10px] font-semibold text-content truncate">{v.label}</span>
+          <BatteryPip pct={v.batteryPct} />
+          <span className="ml-auto font-mono text-[10px] font-semibold truncate" style={{ color: getModeCategoryVar(v.mode) }}>{v.mode}</span>
+          <HeartbeatDot lastUpdate={v.lastUpdate} className="scale-75 origin-right" />
+        </div>
+      ) : (
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-1.5">
           <span className="font-mono text-[11px] font-semibold text-content truncate">{v.label}</span>
           {role === 'leader' && (
-            <span className="text-[7px] font-bold uppercase tracking-wide px-1 rounded-sm bg-cyan-500/15 text-cyan-300 border border-cyan-500/30">Lead</span>
+            <span className="text-[10px] font-bold uppercase tracking-wide px-1 rounded-sm bg-cyan-500/15 text-cyan-600 dark:text-cyan-300 border border-cyan-500/30">Lead</span>
           )}
           {role === 'leader' && count > 0 && (
             <span className="text-[9px] font-mono text-content-tertiary">+{count}</span>
@@ -119,10 +141,11 @@ function FleetCard({ v, role, count = 0 }: { v: FleetVehicle; role?: 'leader' | 
         </div>
         <div className="flex items-center gap-1.5 mt-0.5">
           <BatteryPip pct={v.batteryPct} />
-          <span className="text-[8px] uppercase tracking-wide text-content-tertiary">{airframeLabel(v.mavType)}</span>
+          <span className="text-[9px] uppercase tracking-wide text-content-tertiary">{airframeLabel(v.mavType)}</span>
           <HeartbeatDot lastUpdate={v.lastUpdate} className="ml-auto scale-75 origin-right" />
         </div>
       </div>
+      )}
 
       {/* Multi-select - surfaces on hover (or when selected); hidden for wingmen. */}
       {!role && (
@@ -244,14 +267,14 @@ export function FleetStrip() {
                 <div className="flex-1 min-w-0"><FleetCard v={g.leader} role="leader" count={g.wingmen.length} /></div>
               </div>
               {expanded && (
-                <div className="ml-2.5 border-l border-subtle pl-1.5 flex flex-col gap-1">
+                <WingmenRail leaderKey={g.leader.key} leaderSysid={g.leader.sysid}>
                   {g.wingmen.map((v) => (
                     <FleetCard key={v.key} v={v} role="wingman" />
                   ))}
                   {g.wingmen.length === 0 && (
-                    <span className="text-[8px] uppercase tracking-wide text-content-tertiary italic py-0.5">Drag a vehicle here</span>
+                    <span className="text-[9px] uppercase tracking-wide text-content-tertiary italic py-0.5">Drag a vehicle here</span>
                   )}
-                </div>
+                </WingmenRail>
               )}
             </div>
           );
@@ -265,11 +288,11 @@ export function FleetStrip() {
           }`}
         >
           {groups.length > 0 && others.length > 0 && (
-            <span className="text-[8px] uppercase tracking-[0.14em] text-content-tertiary px-1 pt-1">Unassigned</span>
+            <span className="text-[9px] uppercase tracking-[0.14em] text-content-tertiary px-1 pt-1">Unassigned</span>
           )}
           {others.map((v) => <FleetCard key={v.key} v={v} />)}
           {groups.length > 0 && others.length === 0 && dropZone === FREE_ZONE && (
-            <span className="text-[8px] uppercase tracking-wide text-content-tertiary italic py-1 px-1">Drop to remove from fleet</span>
+            <span className="text-[9px] uppercase tracking-wide text-content-tertiary italic py-1 px-1">Drop to remove from fleet</span>
           )}
         </div>
       </div>

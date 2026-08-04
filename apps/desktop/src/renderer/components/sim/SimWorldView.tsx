@@ -33,6 +33,7 @@ import { FleetChevron, FleetCountHeader } from '../fleet/FleetDisclosure';
 import { FleetContextMenu } from '../fleet/FleetContextMenu';
 import { startVehicleDrag, readVehicleDrag, allowVehicleDrop, FREE_ZONE } from '../fleet/fleet-dnd';
 import { getVehicleClass } from '../../../shared/telemetry-types';
+import type { VehicleInfoIpc } from '../../../shared/ipc-channels';
 import { latLngToLocal, localToLatLng } from '../survey/geo-math';
 import { loadElevationGrid, buildTerrainGeometry, sampleElevation } from '../camera/svt/svt-terrain';
 import type { SimFence } from './sim-world-scene';
@@ -186,6 +187,10 @@ export default function SimWorldView() {
 
   const [cameraMode, setCameraMode] = useState<SimCameraMode>('orbit');
   const [showTerrain, setShowTerrain] = useState(false);
+  // Terrain toggle feedback: pending while the DEM downloads, and a brief
+  // inline note when the toggle has to revert (fetch failed / no GPS origin).
+  const [terrainPending, setTerrainPending] = useState(false);
+  const [terrainError, setTerrainError] = useState<string | null>(null);
   // Reference grid (spatial-perception aid over ground + SVT terrain). Default on.
   const [showGrid, setShowGrid] = useState(true);
   // Conformal 3D waypoint markers (billboard target reticles). Default on.
@@ -295,23 +300,44 @@ export default function SimWorldView() {
 
       if (engine.size > 0) {
         // Preferred source: the ArduDeck Sim engine (own physics, multi-vehicle).
-        frames = Array.from(engine.values()).map((m) => ({
-          id: m.id,
-          position: m.position,
-          quaternion: m.quaternion,
-          euler: m.euler,
-          // The engine streams normalized motor output; use it to spin the props
-          // (and treat any real throttle as "active" so they turn while flying).
-          throttle01: m.throttle,
-          armed: (m.throttle ?? 0) > 0.02,
-          motorCount: m.motors?.length,
-          // Physics X-ray internals (engine-only; sticky in the store).
-          diagnostics: m.diagnostics,
-          // Slung-load cable + payload (engine-only).
-          load: m.load,
-        }));
+        // Identity parity with the fleet path below: engine ids ("v1") are not
+        // fleet keys, so match to the connected fleet by the id's trailing index
+        // (the engine numbers vehicles 1..N like SITL sysids). When no fleet row
+        // matches, the parsed index still yields a stable distinct colour.
+        const engOverrides = useVehicleAppearanceStore.getState().overrides;
+        const engActiveKey = useActiveVehicleStore.getState().activeVehicleKey;
+        const engMulti = engine.size > 1;
+        let engActivePrimary: SimStateMessage | null = null;
+        let engIdx = 0;
+        frames = Array.from(engine.values()).map((m) => {
+          engIdx += 1;
+          const num = /(\d+)\s*$/.exec(m.id);
+          const sysid = num ? parseInt(num[1]!, 10) : engIdx;
+          const kv = known.find((k) => k.sysid === sysid);
+          const isActive = !!kv && kv.key === engActiveKey;
+          if (isActive) engActivePrimary = m;
+          return {
+            id: m.id,
+            position: m.position,
+            quaternion: m.quaternion,
+            euler: m.euler,
+            // The engine streams normalized motor output; use it to spin the props
+            // (and treat any real throttle as "active" so they turn while flying).
+            throttle01: m.throttle,
+            armed: (m.throttle ?? 0) > 0.02,
+            color: resolveVehicleColor(engOverrides, kv?.key ?? m.id, sysid),
+            label: engMulti ? `SYS ${sysid}` : '',
+            active: isActive && engMulti,
+            vehicleClass: kv ? getVehicleClass(kv.mavType, { qEnable: qEnableRef.current }) : undefined,
+            motorCount: m.motors?.length,
+            // Physics X-ray internals (engine-only; sticky in the store).
+            diagnostics: m.diagnostics,
+            // Slung-load cable + payload (engine-only).
+            load: m.load,
+          };
+        });
         const first = engine.values().next();
-        primary = first.done ? null : first.value;
+        primary = engActivePrimary ?? (first.done ? null : first.value);
       } else if (known.length > 0) {
         // Fleet path: render EVERY known vehicle that has a fix, against one
         // shared geo origin, each tinted with its identity colour and labelled
@@ -538,6 +564,7 @@ export default function SimWorldView() {
     const scene = sceneRef.current;
     if (!scene) return;
     if (!showTerrain) {
+      setTerrainPending(false);
       if (terrainOriginRef.current !== null) {
         scene.setTerrain(null);
         terrainOriginRef.current = null;
@@ -545,11 +572,19 @@ export default function SimWorldView() {
       return;
     }
     const origin = geoOriginRef.current;
-    if (!origin) return; // no fix yet; fixSignal re-runs this when one arrives
+    if (!origin) {
+      // Nothing to anchor the DEM to: revert the toggle with a note instead of
+      // silently arming it.
+      setShowTerrain(false);
+      setTerrainError('Terrain needs a GPS origin - wait for a position fix');
+      return;
+    }
     const key = `${origin.lat.toFixed(4)},${origin.lon.toFixed(4)}`;
     if (terrainOriginRef.current === key) return;
     terrainOriginRef.current = key;
     let cancelled = false;
+    setTerrainPending(true);
+    setTerrainError(null);
     void (async () => {
       try {
         const grid = await loadElevationGrid(origin.lat, origin.lon, 8000, 64);
@@ -557,7 +592,13 @@ export default function SimWorldView() {
         const homeElev = sampleElevation(grid, origin.lat, origin.lon);
         sceneRef.current?.setTerrain(buildTerrainGeometry(grid), -homeElev);
       } catch {
-        if (!cancelled) terrainOriginRef.current = null; // allow a later retry
+        if (!cancelled) {
+          terrainOriginRef.current = null; // allow a later retry
+          setShowTerrain(false);
+          setTerrainError('Terrain elevation fetch failed - check the network and retry');
+        }
+      } finally {
+        if (!cancelled) setTerrainPending(false);
       }
     })();
     return () => {
@@ -565,12 +606,23 @@ export default function SimWorldView() {
     };
   }, [showTerrain, fixSignal]);
 
-  // ─── Pointer / wheel handlers (orbit interaction) ────────────────────────────
+  // The revert note is transient: clear it after a few seconds.
+  useEffect(() => {
+    if (!terrainError) return;
+    const t = setTimeout(() => setTerrainError(null), 5000);
+    return () => clearTimeout(t);
+  }, [terrainError]);
+
+  // ─── Pointer / wheel handlers (orbit interaction + click-select) ─────────────
+  // Down position for the click-vs-drag test behind vehicle click-select.
+  const clickRef = useRef<{ x: number; y: number; consumed: boolean } | null>(null);
   const onPointerDown = useCallback((e: React.PointerEvent) => {
+    clickRef.current = { x: e.clientX, y: e.clientY, consumed: false };
     // Obstacle placement mode: a ground click drops a new obstacle.
     const obStore = useSimObstaclesStore.getState();
     const origin = geoOriginRef.current;
     if (obStore.placing && origin) {
+      clickRef.current.consumed = true;
       const canvas = canvasRef.current;
       const scene = sceneRef.current;
       if (canvas && scene) {
@@ -592,7 +644,40 @@ export default function SimWorldView() {
   const onPointerMove = useCallback((e: React.PointerEvent) => {
     sceneRef.current?.onPointerMove(e.clientX, e.clientY);
   }, []);
-  const onPointerUp = useCallback(() => {
+  const onPointerUp = useCallback((e: React.PointerEvent) => {
+    sceneRef.current?.onPointerUp();
+    // A press-and-release without a drag is a click: raycast the vehicles and
+    // select/deselect exactly like the picker-rail pills do.
+    const c = clickRef.current;
+    clickRef.current = null;
+    if (!c || c.consumed) return;
+    if (Math.hypot(e.clientX - c.x, e.clientY - c.y) > 5) return;
+    const canvas = canvasRef.current;
+    const scene = sceneRef.current;
+    if (!canvas || !scene) return;
+    const rect = canvas.getBoundingClientRect();
+    const ndcX = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+    const ndcY = -(((e.clientY - rect.top) / rect.height) * 2 - 1);
+    const id = scene.pickVehicle(ndcX, ndcY);
+    if (!id) return;
+    // Scene ids are fleet keys on the fleet path; engine ids ("v1") map to
+    // fleet rows by their trailing index = sysid.
+    const st = useActiveVehicleStore.getState();
+    let kv: VehicleInfoIpc | undefined = st.knownVehicles[id];
+    if (!kv) {
+      const num = /(\d+)\s*$/.exec(id);
+      if (num) {
+        const sysid = parseInt(num[1]!, 10);
+        kv = Object.values(st.knownVehicles).find((k) => k.sysid === sysid);
+      }
+    }
+    if (!kv) return;
+    if (st.activeVehicleKey === kv.key) deselectActiveVehicle();
+    else selectActiveVehicle(kv.key, kv.transportId);
+  }, []);
+  // Leaving the canvas ends any drag but must never count as a click.
+  const onPointerCancel = useCallback(() => {
+    clickRef.current = null;
     sceneRef.current?.onPointerUp();
   }, []);
   const onWheel = useCallback((e: React.WheelEvent) => {
@@ -610,6 +695,20 @@ export default function SimWorldView() {
   const isConnected = useConnectionStore((s) => s.connectionState.isConnected);
   const activeVehicleKey = useActiveVehicleStore((s) => s.activeVehicleKey);
   const hasFix = useTelemetryStore((s) => s.position.lat !== 0 || s.position.lon !== 0);
+  const knownCount = useActiveVehicleStore((s) => Object.keys(s.knownVehicles).length);
+
+  // The geo origin locks on the first fix; if it stayed locked forever,
+  // restarting SITL at a different home in the same window would render
+  // kilometres off. Once nothing is connected and no vehicles are known, drop
+  // the origin (and the per-site obstacle/terrain latches) so the next fix
+  // re-seeds everything.
+  useEffect(() => {
+    if (!isConnected && knownCount === 0) {
+      geoOriginRef.current = null;
+      siteLoadedRef.current = false;
+      terrainOriginRef.current = null;
+    }
+  }, [isConnected, knownCount]);
   const engineConnected = status === 'connected';
   const live = engineConnected || hud !== null;
   const pillLabel = engineConnected
@@ -617,7 +716,7 @@ export default function SimWorldView() {
     : hud
       ? 'Vehicle Live'
       : isConnected
-        ? 'Connected — waiting for GPS'
+        ? 'Connected, waiting for GPS'
         : status === 'connecting'
           ? 'Connecting...'
           : 'Waiting for SITL';
@@ -632,7 +731,7 @@ export default function SimWorldView() {
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
-        onPointerLeave={onPointerUp}
+        onPointerLeave={onPointerCancel}
         onWheel={onWheel}
       />
 
@@ -648,12 +747,15 @@ export default function SimWorldView() {
       <div className="absolute top-3 right-3 z-10 flex items-center gap-2">
         <button
           onClick={() => setShowTerrain((v) => !v)}
+          disabled={terrainPending}
           data-tip="Show real elevation terrain (synthetic vision) under the vehicles"
           className={`rounded-lg border border-subtle px-3 py-1.5 text-xs font-medium shadow-lg transition-colors ${
-            showTerrain ? 'bg-blue-600 text-white' : 'bg-surface-raised text-content-secondary hover:text-content'
+            terrainPending
+              ? 'bg-surface-raised text-content-tertiary opacity-60 cursor-wait'
+              : showTerrain ? 'bg-blue-600 text-white' : 'bg-surface-raised text-content-secondary hover:text-content'
           }`}
         >
-          Terrain
+          {terrainPending ? 'Terrain…' : 'Terrain'}
         </button>
         <button
           onClick={() => setShowXray((v) => !v)}
@@ -666,7 +768,7 @@ export default function SimWorldView() {
         </button>
         <button
           onClick={() => setShowGrid((v) => !v)}
-          data-tip="Reference grid — a spatial-perception aid that stays visible over both the flat ground and the SVT terrain"
+          data-tip="Reference grid: a spatial-perception aid that stays visible over both the flat ground and the SVT terrain"
           className={`rounded-lg border border-subtle px-3 py-1.5 text-xs font-medium shadow-lg transition-colors ${
             showGrid ? 'bg-blue-600 text-white' : 'bg-surface-raised text-content-secondary hover:text-content'
           }`}
@@ -675,7 +777,7 @@ export default function SimWorldView() {
         </button>
         <button
           onClick={() => setShowWaypoints((v) => !v)}
-          data-tip="Conformal 3D waypoint markers — target reticles floating at each waypoint's true position + altitude, with number and live slant-range"
+          data-tip="Conformal 3D waypoint markers: target reticles floating at each waypoint's true position + altitude, with number and live slant-range"
           className={`rounded-lg border border-subtle px-3 py-1.5 text-xs font-medium shadow-lg transition-colors ${
             showWaypoints ? 'bg-blue-600 text-white' : 'bg-surface-raised text-content-secondary hover:text-content'
           }`}
@@ -686,7 +788,7 @@ export default function SimWorldView() {
           onClick={() => setShowHud((v) => !v)}
           disabled={!hudSupported}
           data-tip={hudSupported
-            ? 'FPV HUD overlay — boresight, pitch/roll horizon ladder, airspeed/altitude, heading and climb rate (FPV & Chase views)'
+            ? 'FPV HUD overlay: boresight, pitch/roll horizon ladder, airspeed/altitude, heading and climb rate (FPV & Chase views)'
             : 'HUD is only available in FPV & Chase views'}
           className={`rounded-lg border border-subtle px-3 py-1.5 text-xs font-medium shadow-lg transition-colors ${
             !hudSupported
@@ -715,6 +817,13 @@ export default function SimWorldView() {
           ))}
         </div>
       </div>
+
+      {/* Transient terrain-toggle revert note (fetch failed / no GPS origin). */}
+      {terrainError && (
+        <div className="absolute top-14 right-3 z-10 rounded-md border border-rose-500/30 bg-rose-500/10 px-2.5 py-1 text-[11px] text-rose-300 pointer-events-none">
+          {terrainError}
+        </div>
+      )}
 
       {/* X-ray force-arrow legend: a single compact row (dot + label per force),
           not a card, so it reads at a glance without covering the view. Tucked
@@ -846,12 +955,12 @@ export default function SimWorldView() {
               {isConnected
                 ? hasFix
                   ? 'Acquiring vehicle state…'
-                  : 'Connected — waiting for GPS fix'
+                  : 'Connected, waiting for GPS fix'
                 : 'No vehicle connected'}
             </div>
             <div className="text-content-tertiary text-xs mb-4">
               {isConnected
-                ? 'The vehicle will appear here once it has a position fix. Any connected SITL or aircraft works — the ArduDeck sim engine is optional.'
+                ? 'The vehicle will appear here once it has a position fix. Any connected SITL or aircraft works. The ArduDeck sim engine is optional.'
                 : 'Connect to SITL (or a vehicle) from the main window and it will appear here.'}
             </div>
             <button
@@ -1175,7 +1284,23 @@ function HudTile({ label, value, unit, tip, accent }: { label: string; value: st
  * overlay above the canvas, below the controls; ignores pointer events.
  */
 function SimFighterHud({ hud }: { hud: SimStateMessage }) {
-  const t = useTelemetryStore();
+  // Per-field selectors: subscribing to the whole telemetry store re-rendered
+  // this overlay on every MAVLink message, not just when a read field changed.
+  const gpsLat = useTelemetryStore((s) => s.gps.lat);
+  const gpsLon = useTelemetryStore((s) => s.gps.lon);
+  const posLat = useTelemetryStore((s) => s.position.lat);
+  const posLon = useTelemetryStore((s) => s.position.lon);
+  const gpsSats = useTelemetryStore((s) => s.gps.satellites);
+  const gpsHdop = useTelemetryStore((s) => s.gps.hdop);
+  const battVoltage = useTelemetryStore((s) => s.battery.voltage);
+  const battRemaining = useTelemetryStore((s) => s.battery.remaining);
+  const battCurrent = useTelemetryStore((s) => s.battery.current);
+  const flightMode = useTelemetryStore((s) => s.flight.mode);
+  const flightArmed = useTelemetryStore((s) => s.flight.armed);
+  const windSpeed = useTelemetryStore((s) => s.wind?.speed);
+  const wpDistance = useTelemetryStore((s) => s.navController?.wpDist);
+  const xtrackError = useTelemetryStore((s) => s.navController?.xtrackError);
+  const steerPwm = useTelemetryStore((s) => s.servoOutput?.outputs[0]);
   const home = useMissionStore((s) => s.homePosition);
   const config = useHudStore((s) => s.config);
   const mavType = useConnectionStore((s) => s.connectionState.mavType);
@@ -1189,8 +1314,8 @@ function SimFighterHud({ hud }: { hud: SimStateMessage }) {
 
   // Home arrow + distance from the real telemetry fix (as the Vision panel does),
   // taken relative to the sim heading the compass tape actually shows.
-  const lat = t.gps.lat || t.position.lat;
-  const lon = t.gps.lon || t.position.lon;
+  const lat = gpsLat || posLat;
+  const lon = gpsLon || posLon;
   let distance = 0;
   let homeDirection = 0;
   if (home && (lat || lon)) {
@@ -1200,7 +1325,6 @@ function SimFighterHud({ hud }: { hud: SimStateMessage }) {
 
   // Rover steering (mirror LiveFighterHud) so a ground-profile sim reads right.
   let steer: number | undefined;
-  const steerPwm = t.servoOutput?.outputs[0];
   if (steerPwm && steerPwm >= 800 && steerPwm <= 2200) {
     steer = Math.max(-100, Math.min(100, ((steerPwm - 1500) / 500) * 100));
   }
@@ -1219,23 +1343,23 @@ function SimFighterHud({ hud }: { hud: SimStateMessage }) {
     vy: hud.velocity[1],
     vz: hud.velocity[2],
     // ─ Everything sim-state lacks: the real telemetry store (like Vision panel).
-    batteryVoltage: hud.batteryVoltage ?? t.battery.voltage,
-    batteryPercent: t.battery.remaining,
-    current: t.battery.current,
-    mode: t.flight.mode,
-    armed: t.flight.armed,
+    batteryVoltage: hud.batteryVoltage ?? battVoltage,
+    batteryPercent: battRemaining,
+    current: battCurrent,
+    mode: flightMode,
+    armed: flightArmed,
     distance,
     homeDirection,
-    gpsSats: t.gps.satellites,
-    hdop: t.gps.hdop,
+    gpsSats,
+    hdop: gpsHdop,
     lat,
     lon,
-    windSpeed: t.wind?.speed,
+    windSpeed,
     linkHistory,
     linkLabel: 'RC LINK',
     steer,
-    wpDistance: t.navController?.wpDist,
-    xtrackError: t.navController?.xtrackError,
+    wpDistance,
+    xtrackError,
   };
 
   return (

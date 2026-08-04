@@ -233,18 +233,23 @@ export default function ArduPilotSitlTab() {
     });
   }, []);
 
-  // One-click: start standard SITL if it isn't already running (which auto-connects
-  // MAVLink via the connection panel's retry), then open the telemetry-driven 3D
-  // world window. The 3D world reads MAVLink, so it works whether physics is the
-  // built-in model or the ArduDeck engine.
-  // EXACTLY the connection screen's working quick-start (handleSitlQuickStart):
-  // start SITL, and on success arm the auto-connect. Then open the 3D window.
-  // No extra guards — do the same thing that works.
+  // One-click: start standard SITL if nothing is simulating yet (which
+  // auto-connects MAVLink via the connection panel's retry), then open the
+  // telemetry-driven 3D world window. The 3D world reads MAVLink, so it works
+  // whether physics is the built-in model or the ArduDeck engine. With SITL or
+  // a swarm already running, just open the window; a fresh start only opens it
+  // on success (a failed launch has nothing to show).
   const launchSim = useCallback(async () => {
+    if (isRunning || swarmRunning) {
+      openSimWindow();
+      return;
+    }
     const success = await start();
-    if (success) setPendingSitlSwitch(true);
-    openSimWindow();
-  }, [start, setPendingSitlSwitch, openSimWindow]);
+    if (success) {
+      setPendingSitlSwitch(true);
+      openSimWindow();
+    }
+  }, [isRunning, swarmRunning, start, setPendingSitlSwitch, openSimWindow]);
 
   // Initialize listeners and check status on mount
   useEffect(() => {
@@ -398,7 +403,7 @@ export default function ArduPilotSitlTab() {
                     The <span className="font-mono text-content">{crashRecovery.failedTrack}</span> binary
                     doesn't run <span className="font-mono text-content">{crashRecovery.model}</span> on
                     this platform. The <span className="font-mono text-content">{crashRecovery.suggestedTrack}</span> track
-                    is rebuilt nightly and ships fixes that haven't landed yet —
+                    is rebuilt nightly and ships fixes that haven't landed yet -
                     same SITL, just a newer build.
                   </p>
                   <div className="mt-3 flex items-center gap-2">
@@ -421,7 +426,7 @@ export default function ArduPilotSitlTab() {
                 <>
                   <p className="text-xs text-content-secondary mt-1 leading-snug">
                     Both stable and dev binaries crash on{' '}
-                    <span className="font-mono text-content">{crashRecovery.failedModel}</span> for this platform —
+                    <span className="font-mono text-content">{crashRecovery.failedModel}</span> for this platform -
                     looks like an upstream physics bug specific to that frame.
                     Try <span className="font-mono text-content">{crashRecovery.suggestedModel}</span> instead;
                     it's the safe-default frame for this vehicle and is well-tested across builds.
@@ -598,13 +603,13 @@ export default function ArduPilotSitlTab() {
               <button
                 onClick={launchSim}
                 disabled={isStarting}
-                data-tip={isRunning ? 'Open the 3D sim world window' : 'Start SITL, connect, and open the 3D world'}
+                data-tip={isRunning || swarmRunning ? 'Open the 3D sim world window' : 'Start SITL, connect, and open the 3D world'}
                 className="mt-3 w-full py-2 text-sm font-medium text-indigo-300 bg-indigo-500/10 hover:bg-indigo-500/20 border border-indigo-500/30 rounded-lg transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
               >
                 <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M14 3h7m0 0v7m0-7L10 14M19 14v5a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h5" />
                 </svg>
-                {isRunning ? 'Open 3D World' : isStarting ? 'Starting…' : 'Start SITL & Open 3D World'}
+                {isRunning || swarmRunning ? 'Open 3D World' : isStarting ? 'Starting…' : 'Start SITL & Open 3D World'}
               </button>
 
               {/* FlightGear viewer — the other "watch it" surface, so both live in
@@ -775,7 +780,7 @@ export default function ArduPilotSitlTab() {
             </div>
           </div>
           <div className="mt-3 flex items-center justify-between gap-2">
-            <p className="text-xs text-content-tertiary">Default: San Francisco Bay Area</p>
+            <p className="text-xs text-content-tertiary">Default: CMAC (Canberra Model Aircraft Club)</p>
             <div className="flex items-center gap-2">
               <button
                 onClick={() => void matchTerrainElevation()}
@@ -1103,6 +1108,9 @@ export default function ArduPilotSitlTab() {
                     <div className="text-[10px] text-content-tertiary font-mono truncate">
                       tcp {inst.tcpPort} · {style.label}
                     </div>
+                    {inst.state === 'error' && inst.error && (
+                      <div className="text-[10px] text-rose-400 truncate">{inst.error}</div>
+                    )}
                   </div>
                 </div>
               );
@@ -1123,7 +1131,20 @@ export default function ArduPilotSitlTab() {
           </svg>
           <div className="text-sm text-blue-300">
             <span className="font-medium">SITL is running!</span>{' '}
-            Connect via TCP — <code className="px-1.5 py-0.5 bg-blue-500/20 rounded text-blue-200 font-mono">127.0.0.1:5760</code>
+            Connect via TCP - <code className="px-1.5 py-0.5 bg-blue-500/20 rounded text-blue-200 font-mono">127.0.0.1:5760</code>
+          </div>
+        </div>
+      )}
+
+      {/* Swarm connection hint */}
+      {swarmRunning && !connectionState.isConnected && (
+        <div className="flex items-center gap-3 px-4 py-3 bg-purple-500/10 border border-purple-500/30 rounded-lg">
+          <svg className="w-5 h-5 text-purple-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+          <div className="text-sm text-purple-300">
+            <span className="font-medium">Swarm is running!</span>{' '}
+            Start the multi-vehicle engine from the connection screen to fly the whole fleet together.
           </div>
         </div>
       )}
@@ -1390,7 +1411,7 @@ function FrameDefaultsHint({ frame }: { frame: ArduPilotFrameInfo | null }) {
   if (frame.defaultParamFiles.length === 0) {
     return (
       <p className="mt-1.5 text-[10px] text-content-tertiary leading-tight">
-        No upstream defaults — ArduDeck baseline only.
+        No upstream defaults - ArduDeck baseline only.
       </p>
     );
   }

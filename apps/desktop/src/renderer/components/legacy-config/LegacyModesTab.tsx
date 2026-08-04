@@ -105,7 +105,7 @@ function RangeSlider({
 
         {/* Start handle */}
         <div
-          className="absolute top-1/2 -translate-y-1/2 w-4 h-6 rounded cursor-ew-resize border-2 border-white/50 bg-surface-raised hover:bg-surface-raised transition-colors"
+          className="absolute top-1/2 -translate-y-1/2 w-4 h-6 rounded cursor-ew-resize border-2 border-strong bg-surface-raised hover:bg-surface-raised transition-colors"
           style={{ left: `calc(${startPercent}% - 8px)` }}
           onMouseDown={(e) => {
             const bar = e.currentTarget.parentElement!;
@@ -126,7 +126,7 @@ function RangeSlider({
 
         {/* End handle */}
         <div
-          className="absolute top-1/2 -translate-y-1/2 w-4 h-6 rounded cursor-ew-resize border-2 border-white/50 bg-surface-raised hover:bg-surface-raised transition-colors"
+          className="absolute top-1/2 -translate-y-1/2 w-4 h-6 rounded cursor-ew-resize border-2 border-strong bg-surface-raised hover:bg-surface-raised transition-colors"
           style={{ left: `calc(${endPercent}% - 8px)` }}
           onMouseDown={(e) => {
             const bar = e.currentTarget.parentElement!;

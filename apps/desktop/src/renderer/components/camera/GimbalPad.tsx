@@ -85,7 +85,7 @@ export function GimbalPad({ vehicleKey, maxRate = 30 }: GimbalPadProps) {
         ref={padRef}
         onMouseDown={(e) => { if (!disabled) { setActive(true); handleMove(e.clientX, e.clientY); } }}
         className={`relative h-16 w-16 rounded-lg border border-default bg-surface-base ${disabled ? 'opacity-40' : 'cursor-crosshair'}`}
-        title={readOnly ? 'RC-driven mount — control it from your transmitter' : isMount ? 'Drag to aim gimbal (holds position)' : 'Drag to slew gimbal · release to stop'}
+        title={readOnly ? 'RC-driven mount, control it from your transmitter' : isMount ? 'Drag to aim gimbal (holds position)' : 'Drag to slew gimbal · release to stop'}
       >
         <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
           <div className="absolute h-full w-px bg-border opacity-40" />

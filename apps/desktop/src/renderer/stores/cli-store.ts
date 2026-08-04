@@ -424,14 +424,12 @@ export const useCliStore = create<CliStore>((set, get) => ({
   parseDump: (dumpOutput: string) => {
     const parameters = parseDumpOutput(dumpOutput);
     set({ parameters, hasDumpData: true });
-    console.log(`[CLI Store] Parsed ${parameters.size} parameters from dump`);
   },
 
   parseHelp: (helpOutput: string) => {
     const commands = parseHelpOutput(helpOutput);
     if (commands.length > 0) {
       set({ availableCommands: commands });
-      console.log(`[CLI Store] Parsed ${commands.length} commands from help`);
     }
   },
 
@@ -472,7 +470,6 @@ export const useCliStore = create<CliStore>((set, get) => ({
   handleSaveCommand: async () => {
     const { setRebootState, setRebootError, clearRebootState } = get();
 
-    console.log('[CLI Store] Starting save command flow...');
 
     try {
       // Step 1: Saving
@@ -483,7 +480,6 @@ export const useCliStore = create<CliStore>((set, get) => ({
 
       // Step 2: Rebooting - poll for reconnection
       setRebootState('rebooting', 'Board is rebooting...');
-      console.log('[CLI Store] Save command sent, waiting for auto-reconnect...');
 
       // Poll connectionState until reconnected (max 12s)
       const pollStart = Date.now();
@@ -506,10 +502,8 @@ export const useCliStore = create<CliStore>((set, get) => ({
 
       if (reconnected) {
         setRebootState('done', 'Configuration saved! Board reconnected.');
-        console.log('[CLI Store] Save complete, board reconnected');
       } else {
         setRebootState('done', 'Configuration saved! Reconnecting...');
-        console.log('[CLI Store] Save complete, reconnect still in progress');
       }
 
       // Auto-clear after 2 seconds
@@ -588,17 +582,13 @@ export function cleanupCliDataListener(): void {
 useConnectionStore.subscribe((state, prevState) => {
   // When auto-reconnect completes, reset CLI state (board rebooted, no longer in CLI)
   if (prevState.connectionState.isReconnecting && !state.connectionState.isReconnecting && state.connectionState.isConnected) {
-    console.log('[CLI Store] Auto-reconnect completed, resetting CLI state');
     useCliStore.getState().reset();
     return;
   }
 
   // If we just disconnected, reset CLI state — but NOT during auto-reconnect
   if (prevState.connectionState.isConnected && !state.connectionState.isConnected) {
-    if (state.connectionState.isReconnecting) {
-      console.log('[CLI Store] Connection lost during auto-reconnect, keeping CLI state');
-    } else {
-      console.log('[CLI Store] Connection lost, resetting CLI state');
+    if (!state.connectionState.isReconnecting) {
       useCliStore.getState().reset();
     }
   }

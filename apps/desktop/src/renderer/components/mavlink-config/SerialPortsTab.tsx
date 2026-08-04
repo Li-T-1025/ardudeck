@@ -223,7 +223,7 @@ const SerialPortsTab: React.FC = () => {
             <HelpCircle className="w-4 h-4 text-sky-400 shrink-0 mt-0.5" />
             <p className="text-xs text-content leading-relaxed">
               <span className="font-semibold text-sky-300">How this works: </span>
-              Each row is a serial port on your flight controller. Set the protocol to match what's physically wired to that port — like <span className="text-content">RCIN</span> for your receiver or <span className="text-content">GPS</span> for a GPS module.
+              Each row is a serial port on your flight controller. Set the protocol to match what's physically wired to that port, like <span className="text-content">RCIN</span> for your receiver or <span className="text-content">GPS</span> for a GPS module.
             </p>
           </div>
         )}

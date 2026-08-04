@@ -3414,7 +3414,7 @@ export const GRAPH_TEMPLATES: GraphTemplate[] = [
   {
     id: 'camera-trigger-watchdog',
     name: 'Camera Trigger Watchdog',
-    description: 'Warn on the GCS with the current waypoint when a distance-triggered camera stops actually taking photos (e.g. it overheats). Catches the hotshoe pulse with a hardware interrupt — polling gpio:read misses the 1-2 ms pulse.',
+    description: 'Warn on the GCS with the current waypoint when a distance-triggered camera stops actually taking photos (e.g. it overheats). Catches the hotshoe pulse with a hardware interrupt: polling gpio:read misses the 1-2 ms pulse.',
     category: 'Safety',
     graph: {
       version: 1,

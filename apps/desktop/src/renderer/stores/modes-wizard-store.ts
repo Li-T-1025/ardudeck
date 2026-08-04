@@ -401,7 +401,6 @@ export const useModesWizardStore = create<ModesWizardState>((set, get) => ({
     get().stopRcPolling();
 
     try {
-      console.log('[ModesWizard] Saving modes to FC...');
 
       // First, clear existing modes by setting empty ranges
       // We need to clear up to 20 mode slots
@@ -420,7 +419,6 @@ export const useModesWizardStore = create<ModesWizardState>((set, get) => ({
       // Set new modes
       for (let i = 0; i < pendingModes.length; i++) {
         const mode = pendingModes[i]!;
-        console.log(`[ModesWizard] Setting mode ${i}: boxId=${mode.boxId} aux=${mode.auxChannel} range=${mode.rangeStart}-${mode.rangeEnd}`);
         const success = await window.electronAPI?.mspSetModeRange(i, mode);
         if (!success) {
           throw new Error(`Failed to set mode ${i}`);
@@ -428,13 +426,11 @@ export const useModesWizardStore = create<ModesWizardState>((set, get) => ({
       }
 
       // Save to EEPROM
-      console.log('[ModesWizard] Saving to EEPROM...');
       const eepromSuccess = await window.electronAPI?.mspSaveEeprom();
       if (!eepromSuccess) {
         throw new Error('Modes sent but EEPROM save failed');
       }
 
-      console.log('[ModesWizard] Modes saved successfully');
       set({
         isSaving: false,
         originalModes: [...pendingModes],

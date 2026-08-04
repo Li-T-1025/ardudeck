@@ -5,7 +5,7 @@ import { batteryParams, commonSafetyParams, simPhysicsParams, matches } from '..
 export const copterHexPlus: VehicleTemplate = {
   slug: 'copter-hex-plus',
   name: 'Hexacopter (+)',
-  description: 'Six motors in + — classic heavy-lift layout',
+  description: 'Six motors in +, classic heavy-lift layout',
   icon: Hexagon,
   vehicleType: 'copter',
   category: 'multirotor',

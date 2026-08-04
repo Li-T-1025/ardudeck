@@ -5,7 +5,7 @@
  * Beginner-friendly cards with proper icons (no emojis).
  */
 
-import React, { useMemo, useCallback } from 'react';
+import React, { useMemo, useCallback, useState, useRef } from 'react';
 import {
   Shield,
   Scale,
@@ -21,6 +21,7 @@ import {
   Lightbulb,
 } from 'lucide-react';
 import { useParameterStore } from '../../stores/parameter-store';
+import { formatParamValue } from '../../../shared/parameter-types';
 import { DraggableSlider } from '../ui/DraggableSlider';
 import { InfoCard } from '../ui/InfoCard';
 import { PresetSelector, type Preset } from '../ui/PresetSelector';
@@ -57,11 +58,24 @@ const PRESET_SELECTOR_PRESETS: Record<string, Preset> = {
   },
 };
 
+type ConfirmAction = { type: 'preset'; key: string } | { type: 'no-checks' };
+
 const SafetyTab: React.FC = () => {
   const { parameters, setParameter, modifiedCount, fetchParameters, isLoading } = useParameterStore();
 
   // Check if parameters are loaded
   const hasParameters = parameters.size > 0;
+
+  // Transient inline error for failed parameter writes (no toast reachable from this tab)
+  const [writeError, setWriteError] = useState<string | null>(null);
+  const writeErrorTimer = useRef<number | null>(null);
+  const reportWriteError = useCallback((message: string) => {
+    setWriteError(message);
+    if (writeErrorTimer.current) window.clearTimeout(writeErrorTimer.current);
+    writeErrorTimer.current = window.setTimeout(() => setWriteError(null), 8000);
+  }, []);
+
+  const [confirmAction, setConfirmAction] = useState<ConfirmAction | null>(null);
 
   // Get current safety values
   const safetyValues = useMemo(() => ({
@@ -88,15 +102,19 @@ const SafetyTab: React.FC = () => {
     armingCheck: parameters.get('ARMING_CHECK')?.value ?? 1,
   }), [parameters]);
 
-  // Apply preset
-  const applyPreset = useCallback(async (presetKey: string) => {
+  // Apply preset (after confirmation)
+  const applyPresetConfirmed = useCallback(async (presetKey: string) => {
     const preset = SAFETY_PRESETS[presetKey];
-    if (preset) {
-      for (const [param, value] of Object.entries(preset.params)) {
-        await setParameter(param, value);
-      }
+    if (!preset) return;
+    const failed: string[] = [];
+    for (const [param, value] of Object.entries(preset.params)) {
+      const ok = await setParameter(param, value);
+      if (!ok) failed.push(param);
     }
-  }, [setParameter]);
+    if (failed.length > 0) {
+      reportWriteError(`Failed to set ${failed.join(', ')}`);
+    }
+  }, [setParameter, reportWriteError]);
 
   // Individual arming check entries (exclude bit 1 "All" which is a special flag)
   const armingCheckEntries = useMemo(() =>
@@ -115,10 +133,15 @@ const SafetyTab: React.FC = () => {
 
   const isCustomMode = safetyValues.armingCheck !== 1 && safetyValues.armingCheck !== 0;
 
+  const writeArmingCheck = useCallback(async (value: number) => {
+    const ok = await setParameter('ARMING_CHECK', value);
+    if (!ok) reportWriteError('Failed to set ARMING_CHECK');
+  }, [setParameter, reportWriteError]);
+
   const toggleArmingCheck = useCallback((bit: number) => {
     const newValue = safetyValues.armingCheck ^ bit;
-    setParameter('ARMING_CHECK', newValue);
-  }, [safetyValues.armingCheck, setParameter]);
+    writeArmingCheck(newValue);
+  }, [safetyValues.armingCheck, writeArmingCheck]);
 
   const modified = modifiedCount();
 
@@ -126,7 +149,7 @@ const SafetyTab: React.FC = () => {
     <div className="p-6 space-y-6">
       {/* Parameters not loaded warning */}
       {!hasParameters && (
-        <div className="bg-amber-500/10 rounded-xl border-amber-500/30 p-4 flex items-center justify-between">
+        <div className="bg-amber-500/10 rounded-xl border border-amber-500/30 p-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-lg bg-amber-500/20 flex items-center justify-center">
               <Lightbulb className="w-5 h-5 text-amber-400" />
@@ -146,6 +169,14 @@ const SafetyTab: React.FC = () => {
         </div>
       )}
 
+      {/* Write failure banner */}
+      {writeError && (
+        <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-3 flex items-center gap-2">
+          <XCircle className="w-4 h-4 text-red-400 shrink-0" />
+          <p className="text-sm text-red-400">{writeError}</p>
+        </div>
+      )}
+
       {/* Help Card */}
       <InfoCard title="Safety Features" variant="info">
         Configure what happens when things go wrong. Failsafes can save your aircraft
@@ -155,9 +186,9 @@ const SafetyTab: React.FC = () => {
       {/* Safety Presets */}
       <PresetSelector
         presets={PRESET_SELECTOR_PRESETS}
-        onApply={applyPreset}
+        onApply={(key) => setConfirmAction({ type: 'preset', key })}
         label="Safety Presets"
-        hint="Click to apply all settings"
+        hint="Click to review and apply all settings"
       />
 
       {/* Failsafe Settings Grid */}
@@ -263,6 +294,10 @@ const SafetyTab: React.FC = () => {
                 <option value={0}>Disabled</option>
                 <option value={1}>Land Immediately</option>
                 <option value={2}>RTL - Return to Launch</option>
+                <option value={3}>SmartRTL or RTL</option>
+                <option value={4}>SmartRTL or Land</option>
+                <option value={5}>Terminate</option>
+                <option value={6}>Auto DO_LAND_START or RTL</option>
               </select>
             </div>
 
@@ -313,6 +348,10 @@ const SafetyTab: React.FC = () => {
                 <option value={0}>Disabled</option>
                 <option value={1}>Land Immediately</option>
                 <option value={2}>RTL - Return to Launch</option>
+                <option value={3}>SmartRTL or RTL</option>
+                <option value={4}>SmartRTL or Land</option>
+                <option value={5}>Terminate</option>
+                <option value={6}>Auto DO_LAND_START or RTL</option>
               </select>
             </div>
 
@@ -360,7 +399,10 @@ const SafetyTab: React.FC = () => {
               </div>
             </div>
             <button
-              onClick={() => setParameter('FENCE_ENABLE', safetyValues.fenceEnable ? 0 : 1)}
+              onClick={async () => {
+                const ok = await setParameter('FENCE_ENABLE', safetyValues.fenceEnable ? 0 : 1);
+                if (!ok) reportWriteError('Failed to set FENCE_ENABLE');
+              }}
               className={`relative w-12 h-6 rounded-full transition-colors ${
                 safetyValues.fenceEnable ? 'bg-blue-500' : 'bg-surface-raised'
               }`}
@@ -451,9 +493,9 @@ const SafetyTab: React.FC = () => {
           <select
             value={safetyValues.armingCheck === 1 ? 'all' : safetyValues.armingCheck === 0 ? 'none' : 'custom'}
             onChange={(e) => {
-              if (e.target.value === 'all') setParameter('ARMING_CHECK', 1);
-              else if (e.target.value === 'none') setParameter('ARMING_CHECK', 0);
-              else if (e.target.value === 'custom') setParameter('ARMING_CHECK', allBitsValue);
+              if (e.target.value === 'all') writeArmingCheck(1);
+              else if (e.target.value === 'none') setConfirmAction({ type: 'no-checks' });
+              else if (e.target.value === 'custom') writeArmingCheck(allBitsValue);
             }}
             className="px-3 py-2 bg-surface-raised border rounded-lg text-sm text-content focus:outline-none focus:border-blue-500"
           >
@@ -464,7 +506,7 @@ const SafetyTab: React.FC = () => {
         </div>
 
         {safetyValues.armingCheck === 0 && (
-          <div className="bg-red-500/10 border-red-500/30 rounded-lg p-3 flex items-center gap-2">
+          <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-3 flex items-center gap-2">
             <XCircle className="w-4 h-4 text-red-400 shrink-0" />
             <p className="text-xs text-red-400">
               <span className="font-medium">Warning:</span> Disabling arming checks is dangerous!
@@ -502,11 +544,106 @@ const SafetyTab: React.FC = () => {
 
       {/* Save Reminder */}
       {modified > 0 && (
-        <div className="bg-amber-500/10 rounded-xl border-amber-500/30 p-4 flex items-center gap-3">
+        <div className="bg-amber-500/10 rounded-xl border border-amber-500/30 p-4 flex items-center gap-3">
           <Save className="w-5 h-5 text-amber-400" />
           <p className="text-sm text-amber-400">
-            You have unsaved changes. Click <span className="font-medium">"Write to Flash"</span> in the header to save.
+            You have unsaved changes. Click <span className="font-medium">"Save All Changes"</span> in the header to save.
           </p>
+        </div>
+      )}
+
+      {/* Confirmation Modal (preset apply / disable arming checks) */}
+      {confirmAction && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-surface border rounded-xl shadow-2xl max-w-lg w-full mx-4 max-h-[80vh] flex flex-col">
+            {confirmAction.type === 'preset' ? (
+              <>
+                <div className="px-6 py-4 border-b border-subtle">
+                  <h3 className="text-lg font-semibold text-content">
+                    Apply "{SAFETY_PRESETS[confirmAction.key]?.name}" Preset
+                  </h3>
+                  <p className="text-sm text-content-secondary mt-1">
+                    The following parameters will be changed on the vehicle.
+                  </p>
+                </div>
+                <div className="flex-1 min-h-0 overflow-auto px-6 py-4">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="text-left text-xs text-content-secondary uppercase">
+                        <th className="pb-2">Parameter</th>
+                        <th className="pb-2 text-right">Current</th>
+                        <th className="pb-2 text-center px-2">→</th>
+                        <th className="pb-2">New</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-subtle">
+                      {Object.entries(SAFETY_PRESETS[confirmAction.key]?.params ?? {}).map(([param, value]) => {
+                        const current = parameters.get(param);
+                        return (
+                          <tr key={param}>
+                            <td className="py-2 font-mono text-content">{param}</td>
+                            <td className="py-2 text-right font-mono text-content-secondary">
+                              {current ? formatParamValue(current.value) : '?'}
+                            </td>
+                            <td className="py-2 text-center text-content-tertiary">→</td>
+                            <td className="py-2 font-mono text-amber-400">{formatParamValue(value)}</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+                <div className="px-6 py-4 border-t border-subtle flex justify-end gap-3">
+                  <button
+                    onClick={() => setConfirmAction(null)}
+                    className="px-4 py-2 text-sm text-content-secondary hover:text-content transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={() => {
+                      const key = confirmAction.key;
+                      setConfirmAction(null);
+                      void applyPresetConfirmed(key);
+                    }}
+                    className="px-4 py-2 bg-green-500/20 hover:bg-green-500/30 text-green-400 rounded-lg text-sm font-medium transition-colors"
+                  >
+                    Apply Preset
+                  </button>
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="px-6 py-4">
+                  <h3 className="text-lg font-semibold text-content flex items-center gap-2">
+                    <AlertTriangle className="w-5 h-5 text-red-400 shrink-0" />
+                    Disable all arming checks?
+                  </h3>
+                  <p className="text-sm text-content-secondary mt-2">
+                    ARMING_CHECK will be set to 0. The vehicle will arm without validating
+                    sensors, GPS lock, or calibration. This can lead to flyaways and crashes.
+                  </p>
+                </div>
+                <div className="px-6 py-4 flex justify-end gap-3">
+                  <button
+                    onClick={() => setConfirmAction(null)}
+                    className="px-4 py-2 text-sm text-content-secondary hover:text-content transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={() => {
+                      setConfirmAction(null);
+                      void writeArmingCheck(0);
+                    }}
+                    className="px-4 py-2 bg-red-500/20 hover:bg-red-500/30 text-red-400 rounded-lg text-sm font-medium transition-colors"
+                  >
+                    Disable Checks
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
         </div>
       )}
     </div>

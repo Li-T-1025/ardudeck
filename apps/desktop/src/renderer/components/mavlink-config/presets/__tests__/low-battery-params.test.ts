@@ -34,7 +34,7 @@ describe('issue #50 - low battery parameters use correct ArduPilot names', () =>
       for (const [key, preset] of Object.entries(SAFETY_PRESETS)) {
         expect(
           preset.params,
-          `preset "${key}" still uses deprecated "${deprecated}" — should use BATT_* equivalent`,
+          `preset "${key}" still uses deprecated "${deprecated}", should use BATT_* equivalent`,
         ).not.toHaveProperty(deprecated);
       }
     },
@@ -99,7 +99,7 @@ describe('issue #50 - low and critical battery params are consistent', () => {
       if (crtAct > 0) {
         expect(
           lowAct,
-          `preset "${key}" has critical battery enabled but low battery disabled — this is likely a misconfiguration`,
+          `preset "${key}" has critical battery enabled but low battery disabled, this is likely a misconfiguration`,
         ).toBeGreaterThan(0);
       }
     }

@@ -48,16 +48,16 @@ const CATEGORY_ACCENT: Record<CalibrationCategory, { ring: string; text: string;
 };
 
 function formatValue(v: number | undefined): string {
-  if (v === undefined) return '—';
+  if (v === undefined) return '-';
   if (Number.isInteger(v)) return String(v);
   return String(parseFloat(v.toPrecision(7)));
 }
 
 /** Human-readable reason a category can't be applied. Returns null if it can. */
 function getBlockedReason(v: CategoryValidation): string | null {
-  if (!v.hasCalData) return 'No calibration data — all offsets in the file are zero';
+  if (!v.hasCalData) return 'No calibration data: all offsets in the file are zero';
   if (v.idStatus === 'mismatch') return 'Sensor IDs do not match this flight controller';
-  if (v.idStatus === 'missing') return 'File contains no sensor IDs — cannot verify the source board';
+  if (v.idStatus === 'missing') return 'File contains no sensor IDs, cannot verify the source board';
   return null;
 }
 
@@ -400,7 +400,7 @@ function ResultView({ result, onDone }: ResultViewProps) {
     try {
       const ok = await window.electronAPI?.mavlinkReboot();
       if (!ok) {
-        setRebootError('Reboot command failed — check the connection and try again, or reboot from the connection panel.');
+        setRebootError('Reboot command failed. Check the connection and try again, or reboot from the connection panel.');
         setIsRebooting(false);
         return;
       }
@@ -437,7 +437,7 @@ function ResultView({ result, onDone }: ResultViewProps) {
         )}
         {applied === 0 && failed === 0 && (
           <div className="text-sm text-content-secondary">
-            Nothing to apply — the selected calibration params already match the vehicle.
+            Nothing to apply: the selected calibration params already match the vehicle.
           </div>
         )}
         {rebootRecommended && (

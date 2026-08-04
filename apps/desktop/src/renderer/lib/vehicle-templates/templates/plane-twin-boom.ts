@@ -9,7 +9,7 @@ import { batteryParams, airspeedParams, commonSafetyParams, simPhysicsParams, ma
 export const planeTwinBoom: VehicleTemplate = {
   slug: 'plane-twin-boom',
   name: 'Twin-Boom Plane',
-  description: 'Two tail booms — great for pushers and cameras',
+  description: 'Two tail booms, great for pushers and cameras',
   icon: Plane,
   vehicleType: 'plane',
   category: 'fixed-wing',

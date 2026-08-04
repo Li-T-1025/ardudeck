@@ -10,6 +10,8 @@
  */
 import { useMemo } from 'react';
 import { useMissionStore } from '../../stores/mission-store';
+import { useSettingsStore } from '../../stores/settings-store';
+import { formatDistanceFromMeters } from '../../../shared/user-units.js';
 import {
   calculateMissionDistance,
   estimateMissionTime,
@@ -32,6 +34,7 @@ export function UploadPreviewModal({ open, onClose, onConfirm }: UploadPreviewMo
   const groups = useMissionStore((s) => s.groups);
   const missionItems = useMissionStore((s) => s.missionItems);
   const getUploadItems = useMissionStore((s) => s.getUploadItems);
+  const distanceUnit = useSettingsStore((s) => s.unitPreferences.distance);
 
   const summary = useMemo(() => {
     const uploadItems = getUploadItems();
@@ -65,7 +68,7 @@ export function UploadPreviewModal({ open, onClose, onConfirm }: UploadPreviewMo
   if (!open) return null;
 
   const wpCount = summary.uploadItems.length;
-  const distKm = (summary.distance / 1000).toFixed(2);
+  const distanceLabel = formatDistanceFromMeters(summary.distance, distanceUnit);
   const etaMin = (summary.eta / 60).toFixed(1);
   const blocked = summary.jumpIssues.length > 0 || summary.overCeiling;
 
@@ -83,7 +86,7 @@ export function UploadPreviewModal({ open, onClose, onConfirm }: UploadPreviewMo
           {/* Top-line summary */}
           <div className="grid grid-cols-3 gap-3">
             <Stat label="Waypoints" value={String(wpCount)} />
-            <Stat label="Distance" value={`${distKm} km`} />
+            <Stat label="Distance" value={distanceLabel} />
             <Stat label="ETA @ planned speed" value={`${etaMin} min`} />
           </div>
 

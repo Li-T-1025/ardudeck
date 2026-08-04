@@ -225,7 +225,7 @@ export const useReceiverStore = create<ReceiverState>((set, get) => ({
           originalDeadbandThrottle: deadband.deadbandThrottle,
         });
       } else {
-        console.warn('[ReceiverStore] RC deadband fetch returned null — FC may not support MSP_RC_DEADBAND or transport closed');
+        console.warn('[ReceiverStore] RC deadband fetch returned null: FC may not support MSP_RC_DEADBAND or transport closed');
       }
       set({ configLoaded: true });
     } catch (error) {

@@ -718,7 +718,7 @@ export const useOsdStore = create<OsdStore>((set, get) => ({
           busy: false,
           progress: null,
           message: res.success
-            ? `Font uploaded (${res.written} chars) — reboot the FC to apply`
+            ? `Font uploaded (${res.written} chars), reboot the FC to apply`
             : `Font upload failed: ${res.error ?? 'unknown error'}`,
           error: !res.success,
         },

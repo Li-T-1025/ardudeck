@@ -9,7 +9,7 @@ import { batteryParams, commonSafetyParams, simPhysicsParams, matches } from '..
 export const roverOmni: VehicleTemplate = {
   slug: 'rover-omni',
   name: 'Omni Rover',
-  description: 'Omni-directional wheels — can translate sideways',
+  description: 'Omni-directional wheels, can translate sideways',
   icon: Car,
   vehicleType: 'rover',
   category: 'rover',

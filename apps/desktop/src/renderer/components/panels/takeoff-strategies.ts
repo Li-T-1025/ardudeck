@@ -103,7 +103,7 @@ export function presentTakeoff(vehicleClass: ArduPilotVehicleClass): TakeoffPres
         buttonLabel: 'Auto-Launch…',
         buttonHint:  'Set TKOFF_ALT, switch to TAKEOFF mode, hand-launch / runway',
         dialogPrompt: 'Auto-launch and climb to',
-        dialogNote:  'Plane goes into TAKEOFF mode — needs hand-launch, runway, or catapult to start the roll.',
+        dialogNote:  'Plane goes into TAKEOFF mode. Needs hand-launch, runway, or catapult to start the roll.',
       };
     case 'vtol':
       return {
@@ -116,13 +116,13 @@ export function presentTakeoff(vehicleClass: ArduPilotVehicleClass): TakeoffPres
       return {
         buttonLabel: 'Takeoff (n/a)',
         buttonHint:  'Rover does not support takeoff',
-        dialogPrompt: '—',
+        dialogPrompt: '-',
       };
     case 'sub':
       return {
         buttonLabel: 'Takeoff (n/a)',
         buttonHint:  'Sub does not use a takeoff command',
-        dialogPrompt: '—',
+        dialogPrompt: '-',
       };
   }
 }
@@ -170,7 +170,7 @@ async function ensureGpsReady(ctx: TakeoffContext): Promise<TakeoffOutcome> {
       lastShown = waited;
       const g = ctx.getGps();
       ctx.setStatus({
-        text: `Waiting for GPS/EKF (${waited}s) — fix=${g.fixType} sats=${g.satellites} hdop=${g.hdop.toFixed(1)}`,
+        text: `Waiting for GPS/EKF (${waited}s): fix=${g.fixType} sats=${g.satellites} hdop=${g.hdop.toFixed(1)}`,
         type: 'info',
       });
     }
@@ -179,7 +179,7 @@ async function ensureGpsReady(ctx: TakeoffContext): Promise<TakeoffOutcome> {
   clearInterval(tick);
   return ok
     ? { ok: true }
-    : { ok: false, reason: 'GPS/EKF not ready — check sats/HDOP' };
+    : { ok: false, reason: 'GPS/EKF not ready, check sats/HDOP' };
 }
 
 /** Switch to a target mode with one retry. Used for the pre-arm prep phase
@@ -205,11 +205,11 @@ async function armIfNeeded(ctx: TakeoffContext): Promise<TakeoffOutcome> {
   if (ctx.getFlight().armed) return { ok: true };
   ctx.setStatus({ text: 'Arming...', type: 'info' });
   const sent = await ctx.api.mavlinkArmDisarm(true, ctx.forceArm);
-  if (!sent) return { ok: false, reason: 'Arm failed — not connected' };
+  if (!sent) return { ok: false, reason: 'Arm failed: not connected' };
   const armed = await ctx.waitForState(() => ctx.getFlight().armed, ARM_TIMEOUT_MS);
   return armed
     ? { ok: true }
-    : { ok: false, reason: 'Arm timed out — check pre-arm' };
+    : { ok: false, reason: 'Arm timed out, check pre-arm' };
 }
 
 // =============================================================================
@@ -236,7 +236,7 @@ async function takeoffCopter(ctx: TakeoffContext): Promise<TakeoffOutcome> {
   if (!guided.ok) return guided;
 
   if (!ctx.getFlight().armed) {
-    return { ok: false, reason: 'Auto-disarmed before takeoff — retry' };
+    return { ok: false, reason: 'Auto-disarmed before takeoff, retry' };
   }
 
   ctx.setStatus({ text: `Taking off to ${takeoffAltitudeLabel(ctx)}...`, type: 'info' });
@@ -261,7 +261,7 @@ async function takeoffPlane(ctx: TakeoffContext): Promise<TakeoffOutcome> {
 
   const cap = ctx.capabilities.takeoff;
   if (cap.method !== 'mode' || cap.modeNum === undefined) {
-    return { ok: false, reason: 'Plane takeoff misconfigured — no TAKEOFF mode set' };
+    return { ok: false, reason: 'Plane takeoff misconfigured: no TAKEOFF mode set' };
   }
 
   if (cap.altParam) {
@@ -333,7 +333,7 @@ async function takeoffVtolRealHw(ctx: TakeoffContext): Promise<TakeoffOutcome> {
   }
 
   if (!ctx.getFlight().armed) {
-    return { ok: false, reason: 'Auto-disarmed before takeoff — retry' };
+    return { ok: false, reason: 'Auto-disarmed before takeoff, retry' };
   }
 
   ctx.setStatus({ text: `Vertical takeoff to ${takeoffAltitudeLabel(ctx)}…`, type: 'info' });
@@ -381,7 +381,7 @@ async function takeoffVtolSitl(ctx: TakeoffContext): Promise<TakeoffOutcome> {
   if (!qhover.ok) return qhover;
 
   if (!ctx.getFlight().armed) {
-    return { ok: false, reason: 'Auto-disarmed before takeoff — retry' };
+    return { ok: false, reason: 'Auto-disarmed before takeoff, retry' };
   }
 
   // Climb. ~0.7 normalized = ~1850 PWM = strong climb command in QHOVER.
@@ -404,7 +404,7 @@ async function takeoffVtolSitl(ctx: TakeoffContext): Promise<TakeoffOutcome> {
   if (!reached) {
     return {
       ok: false,
-      reason: `Did not reach ${takeoffAltitudeLabel(ctx)} — vehicle still armed in QHover, take RC control`,
+      reason: `Did not reach ${takeoffAltitudeLabel(ctx)}: vehicle still armed in QHover, take RC control`,
     };
   }
   return { ok: true };

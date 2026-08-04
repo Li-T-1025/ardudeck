@@ -227,7 +227,7 @@ function ModuleCard({
           }`}
         >
           <span
-            className={`absolute left-0 top-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform ${
+            className={`absolute left-0 top-0.5 w-4 h-4 rounded-full bg-white border border-strong shadow-sm transition-transform ${
               isEnabled ? 'translate-x-[18px]' : 'translate-x-0.5'
             }`}
           />

@@ -691,7 +691,7 @@ export const useCalibrationStore = create<CalibrationState>((set, get) => ({
             set({
               verification: result,
               calibrationSuccess: false,
-              error: 'Flight controller reported success, but the calibration parameters did not change. The calibration silently failed — please try again.',
+              error: 'Flight controller reported success, but the calibration parameters did not change. The calibration silently failed, please try again.',
             });
           } else {
             set({ verification: result });

@@ -523,6 +523,22 @@ const api = {
     return () => ipcRenderer.removeListener(IPC_CHANNELS.MAVLINK_STATUSTEXT, handler);
   },
 
+  // TERRAIN_REPORT per vehicle: loaded=blocks in FC memory, pending=blocks it
+  // is still missing. loaded > 0 means terrain-relative commands can work.
+  onTerrainStatus: (callback: (msg: { sysid: number; loaded: number; pending: number; spacing: number }) => void) => {
+    const handler = (_: unknown, msg: { sysid: number; loaded: number; pending: number; spacing: number }) => callback(msg);
+    ipcRenderer.on(IPC_CHANNELS.MAVLINK_TERRAIN_STATUS, handler);
+    return () => ipcRenderer.removeListener(IPC_CHANNELS.MAVLINK_TERRAIN_STATUS, handler);
+  },
+
+  // FC refused an operator nav command (goto/orbit/land): map drops the target overlay.
+  // frame is the COMMAND_INT alt frame of the refused goto (11 = terrain), when known.
+  onCommandRejected: (callback: (msg: { command: number; result: number; sysid: number; frame?: number }) => void) => {
+    const handler = (_: unknown, msg: { command: number; result: number; sysid: number; frame?: number }) => callback(msg);
+    ipcRenderer.on(IPC_CHANNELS.MAVLINK_COMMAND_REJECTED, handler);
+    return () => ipcRenderer.removeListener(IPC_CHANNELS.MAVLINK_COMMAND_REJECTED, handler);
+  },
+
   // Telemetry stream rate control (MAVLink only)
   setTelemetryStreamRate: (speed: TelemetrySpeed): Promise<{ success: boolean }> =>
     ipcRenderer.invoke(IPC_CHANNELS.TELEMETRY_SET_STREAM_RATE, speed),

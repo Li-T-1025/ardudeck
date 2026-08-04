@@ -62,7 +62,7 @@ export function PhysicsAdvanced({ vehicle, onUpdate }: PhysicsAdvancedProps) {
           unit=""
           placeholder="0.3"
           onChange={v => onUpdate({ dragCoefficient: v })}
-          hint="SIM_DRAG_COEF (0.1–1.5 typical)"
+          hint="SIM_DRAG_COEF (0.1-1.5 typical)"
         />
         <NumField
           label="Servo Speed"

@@ -9,7 +9,7 @@ import { batteryParams, commonSafetyParams, simPhysicsParams, matches } from '..
 export const subVectored6: VehicleTemplate = {
   slug: 'sub-vectored-6',
   name: 'Vectored 6-Thruster',
-  description: 'BlueROV2-style — 4 vectored + 2 vertical thrusters',
+  description: 'BlueROV2-style: 4 vectored + 2 vertical thrusters',
   icon: Waves,
   vehicleType: 'sub',
   category: 'sub',

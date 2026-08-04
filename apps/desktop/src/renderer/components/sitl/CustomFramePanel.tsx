@@ -58,7 +58,7 @@ const FIELD_HINTS: Partial<Record<SitlNumericFieldKey, string>> = {
   refCurrent: 'A',
   refTempC: '°C',
   refRotRate: 'deg/s',
-  hoverThrOut: '0–1',
+  hoverThrOut: '0-1',
   num_motors: '4 / 6 / 8',
 };
 
@@ -129,7 +129,7 @@ export function CustomFramePanel() {
     const stillExists = list.some((f) => f.path === customFramePath);
     if (!stillExists) {
       setCustomFrame(undefined, undefined);
-      showToast('Active custom frame is missing — cleared');
+      showToast('Active custom frame is missing - cleared');
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [customFramePath, list]);

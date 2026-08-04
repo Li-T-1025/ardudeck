@@ -315,21 +315,18 @@ export const useFirmwareStore = create<FirmwareStore>((set, get) => ({
       const { sourceExplicitlySet } = get();
 
       if (sourceExplicitlySet) {
-        console.log('[FirmwareStore] Source explicitly set by user, skipping auto-select');
+        // keep the user's explicit choice
       } else if (detectionMethod === 'msp') {
         // Use fcVariant to pick the right source: INAV → inav, BTFL/CLFL → betaflight
         if (detectedFcVariant === 'INAV') {
-          console.log('[FirmwareStore] iNav detected - switching to iNav source');
           targetSource = 'inav';
         } else {
-          console.log('[FirmwareStore] Betaflight detected - switching to Betaflight source');
           targetSource = 'betaflight';
         }
         set({ selectedSource: targetSource });
         await get().fetchBoards();
       } else if (detectionMethod === 'mavlink') {
         // MAVLink = ArduPilot/PX4 boards - keep ArduPilot
-        console.log('[FirmwareStore] MAVLink detected - keeping ArduPilot source');
         targetSource = 'ardupilot';
         if (get().selectedSource !== 'ardupilot') {
           set({ selectedSource: targetSource });
@@ -341,8 +338,6 @@ export const useFirmwareStore = create<FirmwareStore>((set, get) => ({
       // Prefer targetName (full build target like "JHEF405PRO") for exact matching
       const { availableBoards } = get();
       const matchTarget = detectedTargetName || board.boardId;
-      console.log('[FirmwareStore] Detected board:', matchTarget, '(target:', detectedTargetName, ', boardId:', board.boardId, ')');
-      console.log('[FirmwareStore] Available boards:', availableBoards.length, 'Source:', targetSource);
 
       if (matchTarget && matchTarget !== 'unknown' && availableBoards.length > 0) {
         const targetUpper = matchTarget.toUpperCase();
@@ -359,11 +354,8 @@ export const useFirmwareStore = create<FirmwareStore>((set, get) => ({
         });
 
         if (matchingBoard) {
-          console.log('[FirmwareStore] Auto-selected board:', matchingBoard.name);
           set({ selectedBoard: matchingBoard });
           get().fetchVersions();
-        } else {
-          console.log('[FirmwareStore] No matching board found for:', matchTarget);
         }
       }
     } catch (error) {
@@ -602,10 +594,8 @@ export const useFirmwareStore = create<FirmwareStore>((set, get) => ({
 
       // Drop stale response: user may have changed source/vehicle since we asked.
       if (reqId !== fetchBoardsSeq) {
-        console.log('[FirmwareStore] fetchBoards: dropping stale response for', reqSource, reqVehicleType);
         return;
       }
-      console.log('[FirmwareStore] fetchBoards result:', result);
 
       if (result?.success && result.boards) {
         set({
@@ -619,12 +609,10 @@ export const useFirmwareStore = create<FirmwareStore>((set, get) => ({
         if (pendingBoardMatch && currentSource === 'inav') {
           const matchingBoard = findMatchingInavBoard(pendingBoardMatch, result.boards);
           if (matchingBoard) {
-            console.log(`[FirmwareStore] Auto-selected iNav board "${matchingBoard.name}" for Betaflight "${pendingBoardMatch}"`);
             set({ selectedBoard: { ...matchingBoard, category: '' }, pendingBoardMatch: null, unmatchedBoardWarning: null });
             // Fetch versions for the matched board
             get().fetchVersions();
           } else {
-            console.log(`[FirmwareStore] No iNav board found for Betaflight "${pendingBoardMatch}"`);
             // Clear pending match, set search query so user can find manually, and show warning
             set({
               pendingBoardMatch: null,
@@ -679,10 +667,8 @@ export const useFirmwareStore = create<FirmwareStore>((set, get) => ({
       // newer selection. That's how Copter firmware ended up flashed for users
       // who clicked Rover — the earlier Copter request finished last.
       if (reqId !== fetchVersionsSeq) {
-        console.log('[FirmwareStore] fetchVersions: dropping stale response for', reqSource, reqVehicleType, reqBoardId);
         return;
       }
-      console.log('[FirmwareStore] fetchVersions result:', result);
 
       if (result?.success && result.groups) {
         set({
@@ -791,7 +777,6 @@ export const useFirmwareStore = create<FirmwareStore>((set, get) => ({
         if (url.endsWith('.apj')) {
           const crossFlashUrl = url.replace(/\.apj$/, '_with_bl.hex');
           versionToDownload = { ...selectedVersion, downloadUrl: crossFlashUrl };
-          console.log(`[FirmwareStore] Cross-flash: rewrote URL to ${crossFlashUrl}`);
         }
       }
 
@@ -947,7 +932,6 @@ export const useFirmwareStore = create<FirmwareStore>((set, get) => ({
 
         connected = await tryConnect();
         if (connected) {
-          console.log(`[PostFlash] Connected on attempt ${attempt}`);
           break;
         }
 
@@ -977,7 +961,6 @@ export const useFirmwareStore = create<FirmwareStore>((set, get) => ({
         throw new Error('Failed to read iNav mixer config');
       }
 
-      console.log('[PostFlash] Current platformType:', mixerConfig.platformType);
 
       // platformType: 0=MULTIROTOR, 1=AIRPLANE
       if (mixerConfig.platformType === 1) {

@@ -19,9 +19,15 @@
  */
 import { create } from 'zustand';
 import type { ActiveCommandTarget } from '../components/map/map-command-types';
+import { useActiveVehicleStore } from './active-vehicle-store';
 
-/** Stable id used until multi-vehicle support lands. */
+/** Fallback slot when no fleet vehicle key exists (bare primary connection). */
 export const SELF_VEHICLE_ID = 'self';
+
+/** The slot map commands read/write: the active fleet vehicle, else SELF. */
+export function commandTargetKey(): string {
+  return useActiveVehicleStore.getState().activeVehicleKey ?? SELF_VEHICLE_ID;
+}
 
 interface CommandTargetStore {
   /** vehicleId → currently-active target (null while idle / undefined if never set). */
@@ -43,6 +49,27 @@ export const useCommandTargetStore = create<CommandTargetStore>((set, get) => ({
   clearAll: () => set({ targets: {} }),
 }));
 
-/** Convenience selector: subscribe to the SELF vehicle's active target. */
-export const useSelfActiveTarget = () =>
-  useCommandTargetStore((s) => s.targets[SELF_VEHICLE_ID] ?? null);
+/** Subscribe to the ACTIVE vehicle's target (SELF slot when no fleet key). */
+export const useActiveVehicleTarget = (): ActiveCommandTarget | null => {
+  const key = useActiveVehicleStore((s) => s.activeVehicleKey) ?? SELF_VEHICLE_ID;
+  return useCommandTargetStore((s) => s.targets[key] ?? null);
+};
+
+/**
+ * Drop targets belonging to a sysid after the FC refused the command: the
+ * overlay was drawn optimistically at send time and would otherwise promise
+ * a flight that will never happen. Clears the SELF slot too when the sysid
+ * matches no known fleet vehicle (bare primary connection).
+ */
+export function clearTargetsForSysid(sysid: number): void {
+  const { knownVehicles } = useActiveVehicleStore.getState();
+  const store = useCommandTargetStore.getState();
+  const keys = Object.entries(knownVehicles)
+    .filter(([, v]) => v.sysid === sysid)
+    .map(([k]) => k);
+  if (keys.length === 0) {
+    store.setTarget(SELF_VEHICLE_ID, null);
+    return;
+  }
+  for (const k of keys) store.setTarget(k, null);
+}

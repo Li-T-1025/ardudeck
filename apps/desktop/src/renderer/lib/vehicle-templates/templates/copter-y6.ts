@@ -5,7 +5,7 @@ import { batteryParams, commonSafetyParams, simPhysicsParams, matches } from '..
 export const copterY6: VehicleTemplate = {
   slug: 'copter-y6',
   name: 'Y6 (coaxial tri)',
-  description: 'Three arms, two motors each (coaxial) — compact redundancy',
+  description: 'Three arms, two motors each (coaxial), compact redundancy',
   icon: Triangle,
   vehicleType: 'copter',
   category: 'multirotor',

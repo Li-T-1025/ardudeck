@@ -136,7 +136,6 @@ export default function LegacyRatesTab() {
     const updated = { ...rates, ...preset.rates };
     updateRates(updated);
 
-    console.log('[LegacyRatesTab] Applying preset:', preset.name);
 
     // Send all CLI commands with delays
     await window.electronAPI.cliSendCommand(`set rc_rate = ${preset.rates.rcRate}`);
@@ -151,7 +150,6 @@ export default function LegacyRatesTab() {
     await new Promise(r => setTimeout(r, 50));
     await window.electronAPI.cliSendCommand(`set rc_yaw_expo = ${preset.rates.rcYawExpo}`);
 
-    console.log('[LegacyRatesTab] Preset applied');
   };
 
   const saveCurrentAsProfile = () => {
@@ -188,7 +186,6 @@ export default function LegacyRatesTab() {
     const updated = { ...rates, ...data };
     updateRates(updated);
 
-    console.log('[LegacyRatesTab] Loading profile');
 
     await window.electronAPI.cliSendCommand(`set rc_rate = ${data.rcRate}`);
     await new Promise(r => setTimeout(r, 50));
@@ -202,7 +199,6 @@ export default function LegacyRatesTab() {
     await new Promise(r => setTimeout(r, 50));
     await window.electronAPI.cliSendCommand(`set rc_yaw_expo = ${data.rcYawExpo}`);
 
-    console.log('[LegacyRatesTab] Profile loaded');
   };
 
   const axisColors = {

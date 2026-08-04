@@ -67,7 +67,7 @@ describe('issue #50 - complete ArduPilot battery parameter set', () => {
     (param) => {
       expect(
         safetyTabSource,
-        `SafetyTab.tsx is missing reference to "${param}" — one of the 6 correct battery params from issue #50`,
+        `SafetyTab.tsx is missing reference to "${param}", one of the 6 correct battery params from issue #50`,
       ).toContain(param);
     },
   );

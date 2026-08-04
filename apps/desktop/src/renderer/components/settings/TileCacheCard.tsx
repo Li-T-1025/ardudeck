@@ -16,12 +16,55 @@ function formatBytes(bytes: number): string {
   return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`;
 }
 
+// Draft/commit input: committing on every keystroke snaps in-progress edits
+// (e.g. "51.") to 0, so hold the raw string and commit on blur/Enter.
+function BoundsInput({ label, value, placeholder, onCommit }: {
+  label: string;
+  value: number;
+  placeholder: string;
+  onCommit: (v: number) => void;
+}) {
+  const [draft, setDraft] = useState(value ? String(value) : '');
+  useEffect(() => { setDraft(value ? String(value) : ''); }, [value]);
+  const commit = () => onCommit(parseFloat(draft) || 0);
+  return (
+    <div>
+      <label className="text-[10px] text-content-secondary block mb-0.5">{label}</label>
+      <input
+        type="number"
+        step="0.001"
+        value={draft}
+        onChange={(e) => setDraft(e.target.value)}
+        onBlur={commit}
+        onKeyDown={(e) => { if (e.key === 'Enter') commit(); }}
+        className="w-full px-2 py-1 text-xs bg-surface-input border border-subtle rounded text-content focus:border-blue-500/50 focus:outline-none"
+        placeholder={placeholder}
+      />
+    </div>
+  );
+}
+
 export function TileCacheCard() {
   const [stats, setStats] = useState<TileCacheStats | null>(null);
   const [settings, setSettings] = useState<TileCacheSettings | null>(null);
   const [showPerLayer, setShowPerLayer] = useState(false);
   const [clearing, setClearing] = useState(false);
   const [clearLayer, setClearLayer] = useState<string | null>(null);
+  // Two-step delete confirmation: clearing can wipe GBs of offline tiles
+  const [confirmClearAll, setConfirmClearAll] = useState(false);
+  const [confirmLayer, setConfirmLayer] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!confirmClearAll) return;
+    const t = setTimeout(() => setConfirmClearAll(false), 4000);
+    return () => clearTimeout(t);
+  }, [confirmClearAll]);
+
+  useEffect(() => {
+    if (confirmLayer === null) return;
+    const t = setTimeout(() => setConfirmLayer(null), 4000);
+    return () => clearTimeout(t);
+  }, [confirmLayer]);
 
   // Download region state
   const [showDownload, setShowDownload] = useState(false);
@@ -195,16 +238,29 @@ export function TileCacheCard() {
                     <span className="text-content-secondary font-mono">
                       {data.tiles.toLocaleString()} tiles / {formatBytes(data.bytes)}
                     </span>
-                    <button
-                      onClick={() => handleClearLayer(layer)}
-                      disabled={clearLayer === layer}
-                      className="text-red-400/60 hover:text-red-400 transition-colors disabled:opacity-50"
-                      title={`Clear ${layer} cache`}
-                    >
-                      <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                      </svg>
-                    </button>
+                    {confirmLayer === layer ? (
+                      <button
+                        onClick={() => {
+                          setConfirmLayer(null);
+                          handleClearLayer(layer);
+                        }}
+                        disabled={clearLayer === layer}
+                        className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-red-600 text-white hover:bg-red-500 transition-colors disabled:opacity-50"
+                      >
+                        Delete {formatBytes(data.bytes)}?
+                      </button>
+                    ) : (
+                      <button
+                        onClick={() => setConfirmLayer(layer)}
+                        disabled={clearLayer === layer}
+                        className="text-red-400/60 hover:text-red-400 transition-colors disabled:opacity-50"
+                        title={`Clear ${layer} cache (${formatBytes(data.bytes)})`}
+                      >
+                        <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                        </svg>
+                      </button>
+                    )}
                   </div>
                 </div>
               ))}
@@ -216,11 +272,26 @@ export function TileCacheCard() {
       {/* Actions */}
       <div className="flex items-center gap-2 mb-4">
         <button
-          onClick={handleClearAll}
+          onClick={() => {
+            if (confirmClearAll) {
+              setConfirmClearAll(false);
+              handleClearAll();
+            } else {
+              setConfirmClearAll(true);
+            }
+          }}
           disabled={clearing || !stats || stats.totalTiles === 0}
-          className="px-3 py-1.5 text-xs rounded bg-red-600/20 text-red-400 hover:bg-red-600/30 border border-red-600/30 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          className={`px-3 py-1.5 text-xs rounded border transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
+            confirmClearAll
+              ? 'bg-red-600 text-white border-red-600 hover:bg-red-500'
+              : 'bg-red-600/20 text-red-400 hover:bg-red-600/30 border-red-600/30'
+          }`}
         >
-          {clearing ? 'Clearing...' : 'Clear All Cache'}
+          {clearing
+            ? 'Clearing...'
+            : confirmClearAll
+              ? `Delete ${stats ? formatBytes(stats.totalSizeBytes) : ''}?`
+              : 'Clear All Cache'}
         </button>
         <button
           onClick={() => setShowDownload(!showDownload)}
@@ -247,50 +318,30 @@ export function TileCacheCard() {
 
           {/* Bounding box inputs */}
           <div className="grid grid-cols-2 gap-2">
-            <div>
-              <label className="text-[10px] text-content-secondary block mb-0.5">North Lat</label>
-              <input
-                type="number"
-                step="0.001"
-                value={dlBounds.north || ''}
-                onChange={(e) => setDlBounds((b) => ({ ...b, north: parseFloat(e.target.value) || 0 }))}
-                className="w-full px-2 py-1 text-xs bg-surface-input border border-subtle rounded text-content focus:border-blue-500/50 focus:outline-none"
-                placeholder="e.g. 51.52"
-              />
-            </div>
-            <div>
-              <label className="text-[10px] text-content-secondary block mb-0.5">South Lat</label>
-              <input
-                type="number"
-                step="0.001"
-                value={dlBounds.south || ''}
-                onChange={(e) => setDlBounds((b) => ({ ...b, south: parseFloat(e.target.value) || 0 }))}
-                className="w-full px-2 py-1 text-xs bg-surface-input border border-subtle rounded text-content focus:border-blue-500/50 focus:outline-none"
-                placeholder="e.g. 51.49"
-              />
-            </div>
-            <div>
-              <label className="text-[10px] text-content-secondary block mb-0.5">West Lon</label>
-              <input
-                type="number"
-                step="0.001"
-                value={dlBounds.west || ''}
-                onChange={(e) => setDlBounds((b) => ({ ...b, west: parseFloat(e.target.value) || 0 }))}
-                className="w-full px-2 py-1 text-xs bg-surface-input border border-subtle rounded text-content focus:border-blue-500/50 focus:outline-none"
-                placeholder="e.g. -0.12"
-              />
-            </div>
-            <div>
-              <label className="text-[10px] text-content-secondary block mb-0.5">East Lon</label>
-              <input
-                type="number"
-                step="0.001"
-                value={dlBounds.east || ''}
-                onChange={(e) => setDlBounds((b) => ({ ...b, east: parseFloat(e.target.value) || 0 }))}
-                className="w-full px-2 py-1 text-xs bg-surface-input border border-subtle rounded text-content focus:border-blue-500/50 focus:outline-none"
-                placeholder="e.g. -0.07"
-              />
-            </div>
+            <BoundsInput
+              label="North Lat"
+              value={dlBounds.north}
+              placeholder="e.g. 51.52"
+              onCommit={(v) => setDlBounds((b) => ({ ...b, north: v }))}
+            />
+            <BoundsInput
+              label="South Lat"
+              value={dlBounds.south}
+              placeholder="e.g. 51.49"
+              onCommit={(v) => setDlBounds((b) => ({ ...b, south: v }))}
+            />
+            <BoundsInput
+              label="West Lon"
+              value={dlBounds.west}
+              placeholder="e.g. -0.12"
+              onCommit={(v) => setDlBounds((b) => ({ ...b, west: v }))}
+            />
+            <BoundsInput
+              label="East Lon"
+              value={dlBounds.east}
+              placeholder="e.g. -0.07"
+              onCommit={(v) => setDlBounds((b) => ({ ...b, east: v }))}
+            />
           </div>
 
           {/* Layer selection */}
@@ -431,11 +482,11 @@ export function TileCacheCard() {
             <button
               onClick={() => handleSettingChange('enableAutoCache', !settings.enableAutoCache)}
               className={`relative w-8 h-4 rounded-full transition-colors ${
-                settings.enableAutoCache ? 'bg-blue-600' : 'bg-surface-raised'
+                settings.enableAutoCache ? 'bg-blue-600' : 'bg-surface-inset'
               }`}
             >
               <div
-                className={`absolute top-0.5 w-3 h-3 rounded-full bg-white transition-transform ${
+                className={`absolute top-0.5 w-3 h-3 rounded-full bg-white border border-strong shadow-sm transition-transform ${
                   settings.enableAutoCache ? 'translate-x-4' : 'translate-x-0.5'
                 }`}
               />
@@ -463,7 +514,7 @@ export function TileCacheCard() {
 }
 
 function formatBounds(b: TileCacheDownloadRegion['bounds']): string {
-  return `${b.south.toFixed(3)}, ${b.west.toFixed(3)} — ${b.north.toFixed(3)}, ${b.east.toFixed(3)}`;
+  return `${b.south.toFixed(3)}, ${b.west.toFixed(3)} to ${b.north.toFixed(3)}, ${b.east.toFixed(3)}`;
 }
 
 function SavedRegions() {

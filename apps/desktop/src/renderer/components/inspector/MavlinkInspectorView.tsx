@@ -89,7 +89,7 @@ function GraphHeaderActions(props: IDockviewHeaderActionsProps): JSX.Element | n
     // tabs in main, the user closes them explicitly via the tab's X.
     window.electronAPI.openDetachedWindow({
       componentId: 'inspector-graphs',
-      title: `Inspector — ${specs.length} graph${specs.length === 1 ? '' : 's'}`,
+      title: `Inspector: ${specs.length} graph${specs.length === 1 ? '' : 's'}`,
       initialBounds: { width: 1000, height: 700 },
       props: { initialGraphs: specs, initialSamples },
     });
@@ -125,7 +125,7 @@ function GraphsWatermark(): JSX.Element {
         <div className="text-sm font-medium text-content mb-1">Graph a field to start plotting</div>
         <div className="text-xs text-content-secondary leading-relaxed">
           Expand a message in the tree on the left, then click the graph icon on any numeric field.
-          Each graph becomes a tab here — pop them out to separate windows, or drag tabs together
+          Each graph becomes a tab here. Pop them out to separate windows, or drag tabs together
           to build a multi-graph view.
         </div>
       </div>
@@ -270,7 +270,7 @@ export function MavlinkInspectorView(): JSX.Element {
                   {formatBps(totalRate.bps)}
                 </>
               ) : (
-                'Not connected — waiting for packets'
+                'Not connected, waiting for packets'
               )}
             </div>
           </div>
@@ -420,7 +420,7 @@ function MessageRow({
         <div className="bg-surface-inset/40 border-t border-subtle px-3 py-2">
           {fields.length === 0 ? (
             <div className="text-xs text-content-tertiary italic px-2 py-1">
-              No decoder registered for msgid {stats.msgid} — raw payload only.
+              No decoder registered for msgid {stats.msgid}, raw payload only.
             </div>
           ) : (
             <table className="w-full text-xs font-mono">
@@ -521,7 +521,7 @@ function EmptyState({
 }
 
 function formatFieldValue(value: unknown): string {
-  if (value === null || value === undefined) return '—';
+  if (value === null || value === undefined) return '-';
   if (typeof value === 'number') {
     if (Number.isInteger(value)) return value.toString();
     return value.toFixed(4).replace(/\.?0+$/, '');

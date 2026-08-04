@@ -6,9 +6,10 @@ interface TourPromptProps {
   onAccept: () => void;
   onDecline: () => void;
   onLater: () => void;
+  onDisableAll: () => void;
 }
 
-export function TourPrompt({ tour, onAccept, onDecline, onLater }: TourPromptProps) {
+export function TourPrompt({ tour, onAccept, onDecline, onLater, onDisableAll }: TourPromptProps) {
   return (
     <div
       className="fixed bottom-6 right-6 z-[9999] w-[22rem] rounded-xl overflow-hidden animate-in slide-in-from-bottom-4"
@@ -67,6 +68,15 @@ export function TourPrompt({ tour, onAccept, onDecline, onLater }: TourPromptPro
           style={{ background: 'rgb(37 99 235)', color: '#fff' }}
         >
           Show me
+        </button>
+      </div>
+      <div className="px-5 pb-3 -mt-1">
+        <button
+          onClick={onDisableAll}
+          className="text-[11px] underline underline-offset-2 transition-colors hover:opacity-80"
+          style={{ color: 'var(--text-tertiary)' }}
+        >
+          Don't offer tours again
         </button>
       </div>
     </div>

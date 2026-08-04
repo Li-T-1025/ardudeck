@@ -106,10 +106,10 @@ export function FieldGraph(propsIn: Record<string, unknown>): JSX.Element {
 
       {/* Stats strip */}
       <div className="grid grid-cols-5 gap-px bg-surface-inset/40 border-b border-subtle">
-        <Stat label="Current" value={latest !== null ? formatNumber(latest) : '—'} accent="text-blue-400" />
-        <Stat label="Min" value={stats.min !== null ? formatNumber(stats.min) : '—'} />
-        <Stat label="Max" value={stats.max !== null ? formatNumber(stats.max) : '—'} />
-        <Stat label="Avg" value={stats.avg !== null ? formatNumber(stats.avg) : '—'} />
+        <Stat label="Current" value={latest !== null ? formatNumber(latest) : '-'} accent="text-blue-400" />
+        <Stat label="Min" value={stats.min !== null ? formatNumber(stats.min) : '-'} />
+        <Stat label="Max" value={stats.max !== null ? formatNumber(stats.max) : '-'} />
+        <Stat label="Avg" value={stats.avg !== null ? formatNumber(stats.avg) : '-'} />
         <Stat label="Samples" value={samples.length.toString()} />
       </div>
 

@@ -52,6 +52,19 @@ export function contactColor(c: TrafficContact, tier: ProximityTier, band: Altit
   return ALT_STATE_COLOR[altitudeColorState(c, band)];
 }
 
+/** Plain-language category names: shown in the contact popup so an operator
+ *  does not have to decode ICAO type designators (B412, C172, ...). */
+export const CATEGORY_LABEL: Record<TrafficCategory, string> = {
+  powered: 'Aircraft',
+  jet: 'Jet',
+  helicopter: 'Helicopter',
+  glider: 'Glider',
+  balloon: 'Balloon',
+  uav: 'UAV',
+  ground: 'Ground vehicle',
+  unknown: 'Unknown type',
+};
+
 /** SVG inner markup for a 20x20 viewBox, pointing "up" (north) before rotation. */
 export function glyphSvg(category: TrafficCategory, color: string): string {
   switch (category) {
@@ -59,7 +72,12 @@ export function glyphSvg(category: TrafficCategory, color: string): string {
       // long thin wings
       return `<path d="M10 3 L11 12 L18 13 L11 14 L10 17 L9 14 L2 13 L9 12 Z" fill="${color}"/>`;
     case 'helicopter':
-      return `<circle cx="10" cy="10" r="3.2" fill="${color}"/><path d="M3 4 H17 M3 16 H17" stroke="${color}" stroke-width="1.4" stroke-linecap="round"/>`;
+      // Top-down heli: rotor X across the disc, fuselage, tail boom with tail
+      // rotor. The old circle + side bars read as a satellite once rotated.
+      return `<path d="M4.5 3.5 L15.5 14.5 M15.5 3.5 L4.5 14.5" stroke="${color}" stroke-width="1.6" stroke-linecap="round"/>`
+        + `<ellipse cx="10" cy="8.5" rx="2.6" ry="3.4" fill="${color}"/>`
+        + `<path d="M9.3 11.5 H10.7 L10.4 17 H9.6 Z" fill="${color}"/>`
+        + `<path d="M8 16.4 H12" stroke="${color}" stroke-width="1.3" stroke-linecap="round"/>`;
     case 'balloon':
       return `<circle cx="10" cy="8" r="5" fill="${color}"/><path d="M8 13 H12 L11 16 H9 Z" fill="${color}"/>`;
     case 'ground':

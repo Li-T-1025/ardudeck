@@ -16,6 +16,7 @@ import { RallyMapOverlay } from '../rally/RallyMapOverlay';
 
 // Terrain elevation overlay
 import { TerrainOverlayLayer, type ElevationRange } from '../map/TerrainOverlayLayer';
+import { SmoothWheelZoom } from '../map/SmoothWheelZoom';
 import { ElevationLegend } from '../map/ElevationLegend';
 import { useFenceStore } from '../../stores/fence-store';
 import { useRallyStore } from '../../stores/rally-store';
@@ -637,14 +638,11 @@ function MapBoundsTracker({ onBoundsChange }: { onBoundsChange: (b: { north: num
   return null;
 }
 
-// GPS warning component - checks GPS on mount
+// GPS warning banner; subscribes so it clears live once a fix is acquired
 function GpsWarning() {
-  const [hasGps, setHasGps] = useState(false);
-
-  useEffect(() => {
-    const gps = useTelemetryStore.getState().gps;
-    setHasGps(gps.fixType >= 2 && gps.lat !== 0 && gps.lon !== 0);
-  }, []);
+  const hasGps = useTelemetryStore(
+    (s) => s.gps.fixType >= 2 && s.gps.lat !== 0 && s.gps.lon !== 0
+  );
 
   if (hasGps) return null;
 
@@ -1066,9 +1064,11 @@ function MissionMapPanel2D({ readOnly = false }: MissionMapPanelProps) {
         center={defaultCenter}
         zoom={effectiveZoom}
         maxZoom={layer.maxZoom}
+        zoomSnap={0}
         className="h-full w-full"
         zoomControl={false}
       >
+        <SmoothWheelZoom />
         <ViewportSync />
         <MapResizeHandler />
         <MapBoundsTracker onBoundsChange={handleBoundsChange} />
@@ -1598,7 +1598,7 @@ function MissionMapPanel2D({ readOnly = false }: MissionMapPanelProps) {
           the area users are trying to click. */}
       {activeMode === 'mission' && isSettingHome && !readOnly && (
         <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-[500]">
-          <div className="bg-surface border border-subtle shadow-lg px-6 py-4 rounded-xl text-center">
+          <div className="bg-surface-solid border border-subtle shadow-lg px-6 py-4 rounded-xl text-center">
             <div className="text-emerald-400 text-sm mb-2">Click anywhere on the map</div>
             <div className="text-content-secondary text-xs">to set your Home position</div>
           </div>
@@ -1608,7 +1608,7 @@ function MissionMapPanel2D({ readOnly = false }: MissionMapPanelProps) {
       {/* ReadOnly empty state */}
       {waypoints.length === 0 && readOnly && (
         <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-[500]">
-          <div className="bg-surface border border-subtle shadow-lg px-6 py-4 rounded-xl text-center">
+          <div className="bg-surface-solid border border-subtle shadow-lg px-6 py-4 rounded-xl text-center">
             <div className="text-content-secondary text-sm">No mission loaded</div>
           </div>
         </div>
@@ -1676,9 +1676,10 @@ function MissionMapPanel2D({ readOnly = false }: MissionMapPanelProps) {
             onClick={handleCloseContextMenu}
             onContextMenu={(e) => { e.preventDefault(); handleCloseContextMenu(); }}
           />
-          {/* Menu */}
+          {/* Menu. bg-surface is 50% alpha in dark theme (meant for stacked
+              panels), so floating menus over the map must use bg-surface-solid. */}
           <div
-            className="absolute z-[1200] bg-surface border border-default rounded-lg shadow-xl py-1 min-w-[200px]"
+            className="absolute z-[1200] bg-surface-solid border border-subtle rounded-lg shadow-xl py-1 min-w-[200px]"
             style={{ left: contextMenu.x, top: contextMenu.y }}
           >
             {contextMenu.kind === 'path' ? (

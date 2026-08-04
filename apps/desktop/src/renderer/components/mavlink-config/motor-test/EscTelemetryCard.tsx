@@ -95,7 +95,7 @@ export const EscTelemetryCard: React.FC<EscTelemetryCardProps> = ({ layout }) =>
                   <div className="flex items-baseline justify-between">
                     <span className="text-[10px] text-content-secondary">PWM</span>
                     <span className={`text-sm font-mono font-semibold ${hasPwm ? pwmColor(pwm) : 'text-content-tertiary'}`}>
-                      {hasPwm ? `${pwm}` : '—'}
+                      {hasPwm ? `${pwm}` : '-'}
                       {hasPwm && <span className="text-[9px] text-content-tertiary ml-0.5">µs</span>}
                     </span>
                   </div>

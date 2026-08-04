@@ -59,6 +59,15 @@ export function FleetForensicsPanel() {
   const [history, setHistory] = useState<VehicleFlightHistory[]>([]);
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  // Clearing wipes accumulated trend history, so the trash button is armed on
+  // first click and only clears on a second click within the timeout.
+  const [confirmClear, setConfirmClear] = useState(false);
+
+  useEffect(() => {
+    if (!confirmClear) return;
+    const t = setTimeout(() => setConfirmClear(false), 3000);
+    return () => clearTimeout(t);
+  }, [confirmClear]);
 
   const refresh = async (): Promise<void> => {
     setLoading(true);
@@ -119,8 +128,22 @@ export function FleetForensicsPanel() {
             <button onClick={() => void refresh()} className="text-content-tertiary hover:text-content p-1" title="Refresh">
               <RefreshCw className="w-3.5 h-3.5" />
             </button>
-            <button onClick={() => void clearAll()} className="text-content-tertiary hover:text-red-400 p-1" title="Clear all fleet history">
+            <button
+              onClick={() => {
+                if (confirmClear) {
+                  setConfirmClear(false);
+                  void clearAll();
+                } else {
+                  setConfirmClear(true);
+                }
+              }}
+              className={confirmClear
+                ? 'flex items-center gap-1 px-1.5 py-1 rounded bg-red-500/15 text-red-400 text-[11px] font-medium'
+                : 'text-content-tertiary hover:text-red-400 p-1'}
+              title={confirmClear ? 'Click again to permanently clear all fleet history' : 'Clear all fleet history'}
+            >
               <Trash2 className="w-3.5 h-3.5" />
+              {confirmClear && <span>Clear all?</span>}
             </button>
           </div>
         </div>
@@ -186,10 +209,10 @@ export function FleetForensicsPanel() {
             {/* Trends */}
             <div className="grid grid-cols-2 gap-3">
               <div className="rounded-lg border border-subtle bg-surface p-3">
-                <div className="text-xs text-content-secondary mb-2">Peak vibration (m/s2)</div>
+                <div className="text-xs text-content-secondary mb-2">Peak vibration (m/s²)</div>
                 <TrendBars
                   values={[...selected.flights].reverse().map((f) => f.maxVibe)}
-                  unit="m/s2"
+                  unit="m/s²"
                   color="bg-amber-500/70"
                 />
               </div>

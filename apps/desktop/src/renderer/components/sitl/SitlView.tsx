@@ -774,11 +774,11 @@ export default function SitlView() {
                   }}
                   disabled={!connectionState.isConnected}
                   className={`relative w-10 h-5 rounded-full transition-colors ${
-                    gpsSenderEnabled ? 'bg-green-500' : 'bg-surface-raised'
+                    gpsSenderEnabled ? 'bg-green-500' : 'bg-surface-inset'
                   } ${!connectionState.isConnected ? 'opacity-50 cursor-not-allowed' : ''}`}
                 >
                   <span
-                    className={`absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full transition-transform ${
+                    className={`absolute top-0.5 left-0.5 w-4 h-4 bg-white border border-strong shadow-sm rounded-full transition-transform ${
                       gpsSenderEnabled ? 'translate-x-5' : ''
                     }`}
                   />
@@ -796,7 +796,7 @@ export default function SitlView() {
             </svg>
             <div className="text-sm text-blue-300">
               <span className="font-medium">SITL is running!</span>{' '}
-              Connect via TCP in the sidebar — <code className="px-1.5 py-0.5 bg-blue-500/20 rounded text-blue-200 font-mono">127.0.0.1:5760</code>
+              Connect via TCP in the sidebar - <code className="px-1.5 py-0.5 bg-blue-500/20 rounded text-blue-200 font-mono">127.0.0.1:5760</code>
             </div>
           </div>
         )}

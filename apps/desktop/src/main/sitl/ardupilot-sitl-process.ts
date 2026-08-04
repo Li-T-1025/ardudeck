@@ -136,6 +136,26 @@ const DEFAULT_MODELS: Record<ArduPilotVehicleType, string> = {
   sub: 'vectored',
 };
 
+/**
+ * The value SITL is launched with as `-M<...>`.
+ *
+ * `JSON` means SITL takes its physics from an external process over UDP 9002
+ * rather than simulating internally, which is what makes the physics handover
+ * to the Trainer game possible at all.
+ */
+export function simModelFor(config: ArduPilotSitlConfig): string {
+  if (config.useArduDeckSim) return 'JSON:127.0.0.1';
+  // Custom frame JSON overrides the built-in -M model when provided. SITL
+  // expects `<frame>:<absolute path>`. The JSON carries mass / prop / battery
+  // numbers but NOT the motor layout, so the layout still comes from this
+  // frame name and must stay paired with the FRAME_TYPE that
+  // generateDefaultParams writes for the same name.
+  if (config.customFramePath && config.customFrameMotors) {
+    return `${sitlFrameForMotorCount(config.customFrameMotors)}:${config.customFramePath}`;
+  }
+  return config.model || DEFAULT_MODELS[config.vehicleType];
+}
+
 // Model → FRAME_CLASS / FRAME_TYPE now lives in shared/sitl-frame-geometry.ts,
 // which pairs each SITL physics frame with the mixer that matches it and is
 // machine-verified against shared/ap-motor-layouts.json. See that file for why
@@ -326,6 +346,13 @@ class ArduPilotSitlProcessManager {
   private _isRunning = false;
   private mainWindow: BrowserWindow | null = null;
   private _currentConfig: ArduPilotSitlConfig | null = null;
+  /**
+   * False while an external owner (the Trainer game) holds UDP 9002. Every
+   * simEngineProcess start/stop this manager would normally do is suppressed,
+   * otherwise a SITL relaunch would silently steal the FDM port back from the
+   * process that is actually flying the aircraft.
+   */
+  private _engineManaged = true;
 
   get isRunning(): boolean {
     return this._isRunning;
@@ -333,6 +360,44 @@ class ArduPilotSitlProcessManager {
 
   get currentConfig(): ArduPilotSitlConfig | null {
     return this._currentConfig;
+  }
+
+  get engineManaged(): boolean {
+    return this._engineManaged;
+  }
+
+  setEngineManaged(managed: boolean): void {
+    this._engineManaged = managed;
+  }
+
+  /**
+   * The frame name SITL is currently running with ("JSON", "quad", ...), or
+   * null when it is not running. The `-M` argument's `:suffix` (FDM address or
+   * custom frame path) is dropped; callers care about the model, not the path.
+   */
+  get simModel(): string | null {
+    if (!this._currentConfig) return null;
+    return simModelFor(this._currentConfig).split(':')[0] ?? null;
+  }
+
+  /**
+   * Relaunch SITL at a new simulated origin.
+   *
+   * This exists because `-O` on SITL's command line outranks the SIM_OPOS_*
+   * parameters: SITL reboots by re-exec'ing its own argv, so a PARAM_SET plus
+   * an FC reboot re-applies the ORIGINAL `-O` and the origin never moves. Only
+   * a relaunch with a new `-O` actually takes. Verified experimentally, see
+   * sim-handover-server.ts.
+   */
+  async relaunchWithHome(home: { lat: number; lng: number; alt: number; heading: number }): Promise<{ success: boolean; error?: string }> {
+    const cfg = this._currentConfig;
+    if (!cfg) return { success: false, error: 'SITL is not running' };
+    const next: ArduPilotSitlConfig = { ...cfg, homeLocation: home };
+    await this.stopAndWait(5000);
+    // Brief pause for the OS to fully release the bound TCP port (5760).
+    await new Promise<void>((r) => setTimeout(r, 1000));
+    const res = await this.start(next);
+    return { success: res.success, error: res.error };
   }
 
   setMainWindow(window: BrowserWindow): void {
@@ -366,22 +431,7 @@ class ArduPilotSitlProcessManager {
   private buildArgs(config: ArduPilotSitlConfig): string[] {
     const args: string[] = [];
 
-    // ArduDeck in-app simulator: SITL uses our headless engine as its external
-    // flight dynamics model. The engine binds UDP 9002 and runs our 6DOF
-    // physics; SITL just streams servo PWM to it and reads state back.
-    if (config.useArduDeckSim) {
-      args.push('-MJSON:127.0.0.1');
-    } else if (config.customFramePath && config.customFrameMotors) {
-      // Custom frame JSON overrides the built-in -M model when provided. SITL
-      // expects `<frame>:<absolute path>`. The JSON carries mass / prop / battery
-      // numbers but NOT the motor layout, so the layout still comes from this
-      // frame name and must stay paired with the FRAME_TYPE that
-      // generateDefaultParams writes for the same name.
-      args.push(`-M${sitlFrameForMotorCount(config.customFrameMotors)}:${config.customFramePath}`);
-    } else {
-      const model = config.model || DEFAULT_MODELS[config.vehicleType];
-      args.push(`-M${model}`);
-    }
+    args.push(`-M${simModelFor(config)}`);
 
     const { lat, lng, alt, heading } = config.homeLocation;
     args.push(`-O${lat},${lng},${alt},${heading}`);
@@ -427,7 +477,9 @@ class ArduPilotSitlProcessManager {
     // Use the ArduDeck physics engine only when explicitly requested AND its
     // binary is actually present; otherwise fall back to built-in physics so a
     // missing engine can never strand SITL waiting for a dead FDM.
-    if (config.useArduDeckSim && !simEngineProcess.isBinaryAvailable()) {
+    // While the engine is externally owned the FDM is guaranteed by that owner,
+    // so a missing local binary is not a reason to downgrade.
+    if (config.useArduDeckSim && this._engineManaged && !simEngineProcess.isBinaryAvailable()) {
       console.warn('[SITL] ArduDeck engine requested but binary not found; using built-in physics.');
       config = { ...config, useArduDeckSim: false };
     }
@@ -563,7 +615,7 @@ class ArduPilotSitlProcessManager {
       // SITL so its JSON FDM UDP socket is bound when SITL connects. The engine
       // (not SITL) consumes the custom frame, so we skip SITL-side frame staging
       // and pass the original frame path straight to the engine.
-      if (config.useArduDeckSim) {
+      if (config.useArduDeckSim && this._engineManaged) {
         const engineKind =
           config.vehicleType === 'plane' ? 'plane' :
           config.vehicleType === 'rover' ? 'rover' : 'copter';
@@ -676,7 +728,7 @@ class ArduPilotSitlProcessManager {
         this.process = null;
         this._currentConfig = null;
         // If SITL dies, tear down the sim engine too so it isn't orphaned.
-        simEngineProcess.stop();
+        if (this._engineManaged) simEngineProcess.stop();
         // Early-crash detection: an exit within the first few seconds with
         // a fatal signal (or a non-zero code, since some crashes don't
         // surface a signal on Windows) almost always means the binary can't
@@ -752,7 +804,7 @@ class ArduPilotSitlProcessManager {
 
   stop(): void {
     // Tear down the in-app sim engine alongside SITL (no-op if not running).
-    simEngineProcess.stop();
+    if (this._engineManaged) simEngineProcess.stop();
     // Capture the child in a LOCAL so the SIGKILL escalation still targets it
     // after we null `this.process` below. Reading `this.process` inside the
     // timer was always null by the time it fired, so SITL (which routinely
@@ -787,7 +839,7 @@ class ArduPilotSitlProcessManager {
    * SITL silently fails to bind.
    */
   async stopAndWait(timeoutMs: number = 5000): Promise<void> {
-    simEngineProcess.stop();
+    if (this._engineManaged) simEngineProcess.stop();
     const proc = this.process;
     if (!proc) return;
     return new Promise<void>((resolve) => {

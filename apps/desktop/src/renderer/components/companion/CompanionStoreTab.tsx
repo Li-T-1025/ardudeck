@@ -60,7 +60,7 @@ function BoardSelectionView({ onSelectBoard }: { onSelectBoard: (board: BoardFam
   return (
     <div className="max-w-3xl mx-auto p-8 space-y-6">
       <div className="text-center space-y-2">
-        <h2 className="text-lg font-semibold text-content">Companion Board Store</h2>
+        <h2 className="text-lg font-semibold text-content">Board Templates</h2>
         <p className="text-xs text-content-secondary">
           Select your board to browse pre-configured firmware and software templates.
         </p>

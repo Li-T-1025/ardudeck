@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { useNavigationStore } from '../../stores/navigation-store';
 import { useConnectionStore } from '../../stores/connection-store';
 import { useToursStore, isTourEligible } from '../../stores/tours-store';
+import { useSettingsStore } from '../../stores/settings-store';
 import { useTelemetryLayoutStore } from '../../stores/telemetry-layout-store';
 import { getToursForView, getTourById } from '../../feature-tours';
 import type { FeatureTour } from '../../feature-tours';
@@ -45,8 +46,11 @@ export function TourManager() {
   const setGateTour = useToursStore((s) => s.setGateTour);
   const setPanelGateTour = useToursStore((s) => s.setPanelGateTour);
 
+  const tourPromptsEnabled = useSettingsStore((s) => s.tourPromptsEnabled);
+
   // Schedule a prompt for the first eligible tour on this view.
   useEffect(() => {
+    if (!tourPromptsEnabled) return;
     const candidates = getToursForView(currentView);
     if (candidates.length === 0) return;
     const state = useToursStore.getState();
@@ -59,7 +63,7 @@ export function TourManager() {
     if (state.activeTourId || state.gateTourId || state.panelGateTourId) return;
     const timer = setTimeout(() => showPrompt(next.id), PROMPT_DELAY_MS);
     return () => clearTimeout(timer);
-  }, [currentView, showPrompt]);
+  }, [currentView, showPrompt, tourPromptsEnabled]);
 
   // Auto-start tour when connection comes up (user chose "use my own FC").
   useEffect(() => {
@@ -124,6 +128,13 @@ export function TourManager() {
   const handleLater = () => {
     if (!promptTour) return;
     skipForSession(promptTour.id);
+    dismissPrompt();
+  };
+
+  // Kill switch on the prompt itself: the moment of annoyance is the only
+  // place users look for the off button, not a Settings row.
+  const handleDisableAll = () => {
+    useSettingsStore.getState().setTourPromptsEnabled(false);
     dismissPrompt();
   };
 
@@ -196,6 +207,7 @@ export function TourManager() {
           onAccept={handleAccept}
           onDecline={handleDecline}
           onLater={handleLater}
+          onDisableAll={handleDisableAll}
         />
       )}
       {gateTour && (

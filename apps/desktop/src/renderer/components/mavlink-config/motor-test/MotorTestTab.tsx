@@ -264,7 +264,7 @@ export const MotorTestTab: React.FC = () => {
                 }}
                 className="flex-1 px-4 py-2.5 bg-red-500/80 hover:bg-red-500 text-white font-semibold rounded-lg transition-colors"
               >
-                I Confirm — Props Removed
+                I Confirm - Props Removed
               </button>
             </div>
           </div>
@@ -287,7 +287,7 @@ export const MotorTestTab: React.FC = () => {
         <div className="bg-amber-500/10 border-amber-500/30 rounded-lg p-3 flex items-center gap-3">
           <AlertTriangle className="w-4 h-4 text-amber-400 flex-shrink-0" />
           <div className="text-xs text-amber-300">
-            High throttle ({throttle}%) — ensure props are removed and the frame is secured.
+            High throttle ({throttle}%): ensure props are removed and the frame is secured.
           </div>
         </div>
       )}

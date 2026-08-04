@@ -84,7 +84,7 @@ const VehicleCard: React.FC<VehicleCardProps> = ({
           <h3 className="text-xl font-semibold text-content">{title}</h3>
           <p className="text-sm text-content-secondary mt-1">{description}</p>
           <div className="mt-3">
-            <span className="px-2.5 py-1 text-xs bg-white/10 rounded-full text-white">
+            <span className="px-2.5 py-1 text-xs bg-surface-overlay-subtle rounded-full text-content">
               {presetCount} presets available
             </span>
           </div>
@@ -176,7 +176,7 @@ const PresetCard: React.FC<PresetCardProps> = ({ preset, onSelect, needsPlatform
       </div>
 
       {/* Tip */}
-      <div className="mt-4 pt-3 border-t border-white/10">
+      <div className="mt-4 pt-3 border-t border-subtle">
         <p className="text-xs text-content-secondary italic">{preset.tip}</p>
       </div>
     </button>

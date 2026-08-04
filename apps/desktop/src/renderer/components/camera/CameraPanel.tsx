@@ -140,7 +140,7 @@ export function CameraPanel() {
           <button
             onClick={() => store.setLockedVehicle(lockedVehicleKey ? null : activeVehicleKey)}
             className={`rounded px-1.5 py-0.5 text-[11px] ${lockedVehicleKey ? 'bg-blue-500/20 text-blue-300' : 'text-content-secondary hover:bg-surface-raised'}`}
-            title={lockedVehicleKey ? 'Locked to this vehicle — click to follow active' : 'Lock this panel to the current vehicle'}
+            title={lockedVehicleKey ? 'Locked to this vehicle, click to follow active' : 'Lock this panel to the current vehicle'}
           >{lockedVehicleKey ? 'Locked' : 'Follow'}</button>
         )}
 

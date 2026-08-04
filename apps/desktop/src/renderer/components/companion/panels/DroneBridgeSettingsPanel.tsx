@@ -14,7 +14,7 @@ function Toggle({ checked, onChange }: { checked: boolean; onChange: (v: boolean
         checked ? 'bg-blue-600' : 'bg-gray-600'
       }`}
     >
-      <div className={`w-4 h-4 rounded-full bg-white absolute top-0.5 transition-all ${
+      <div className={`w-4 h-4 rounded-full bg-white border border-strong shadow-sm absolute top-0.5 transition-all ${
         checked ? 'left-[18px]' : 'left-0.5'
       }`} />
     </button>
@@ -155,7 +155,7 @@ export function DroneBridgeSettingsPanel() {
       }
 
       if (!cancelled) {
-        setError('Could not load settings — device may still be booting');
+        setError('Could not load settings, device may still be booting');
         setLoading(false);
       }
     };

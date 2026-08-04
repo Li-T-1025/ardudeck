@@ -5,7 +5,7 @@ import { batteryParams, airspeedParams, commonSafetyParams, simPhysicsParams, ma
 export const vtolQuadplaneHex: VehicleTemplate = {
   slug: 'vtol-quadplane-hex',
   name: 'Hexplane (6 lift)',
-  description: 'Fixed-wing plane with 6 vertical lift motors — heavy-lift VTOL',
+  description: 'Fixed-wing plane with 6 vertical lift motors, heavy-lift VTOL',
   icon: Plane,
   vehicleType: 'vtol',
   category: 'vtol',

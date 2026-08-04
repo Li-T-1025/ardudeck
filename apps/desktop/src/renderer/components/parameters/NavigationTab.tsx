@@ -47,7 +47,7 @@ const NAV_RTH_ALT_MODE = {
 } as const;
 
 const NAV_RTH_ALT_MODE_NAMES: Record<number, { name: string; description: string }> = {
-  0: { name: 'Current', description: 'Stay at current height — could hit obstacles!' },
+  0: { name: 'Current', description: 'Stay at current height, could hit obstacles!' },
   1: { name: 'Extra', description: 'Climb higher by RTH Altitude before returning' },
   2: { name: 'Fixed', description: 'Always return at exactly RTH Altitude' },
   3: { name: 'Maximum', description: 'Use higher of current or RTH Altitude' },
@@ -263,16 +263,16 @@ export default function NavigationTab({ modified, setModified }: Props) {
       <div className="bg-blue-500/10 rounded-xl border-blue-500/30 p-4 flex items-start gap-4">
         <Compass className="w-6 h-6 text-blue-400" />
         <div>
-          <p className="text-blue-400 font-medium">Navigation Settings (iNav) — Autonomous Flight</p>
+          <p className="text-blue-400 font-medium">Navigation Settings (iNav): Autonomous Flight</p>
           <p className="text-sm text-content-secondary mt-1">
-            These settings control what happens when your aircraft flies <strong className="text-content">without your input</strong> —
+            These settings control what happens when your aircraft flies <strong className="text-content">without your input</strong>,
             like flying home automatically or following a mission.
           </p>
           <div className="mt-3 grid grid-cols-2 gap-x-6 gap-y-1 text-xs text-content-secondary">
-            <p><span className="text-green-400 inline-flex items-center gap-1"><Home className="w-3.5 h-3.5" /> RTH</span> — "Return To Home" flies back to where it took off</p>
-            <p><span className="text-purple-400 inline-flex items-center gap-1"><MapPin className="w-3.5 h-3.5" /> Waypoints</span> — Pre-planned GPS points the aircraft will fly to</p>
-            <p><span className="text-amber-400 inline-flex items-center gap-1"><PlaneLanding className="w-3.5 h-3.5" /> Landing</span> — How fast/slow it comes down after RTH</p>
-            <p><span className="text-blue-400 inline-flex items-center gap-1"><Satellite className="w-3.5 h-3.5" /> GPS</span> — Satellite settings (usually leave on Auto)</p>
+            <p><span className="text-green-400 inline-flex items-center gap-1"><Home className="w-3.5 h-3.5" /> RTH</span>: "Return To Home" flies back to where it took off</p>
+            <p><span className="text-purple-400 inline-flex items-center gap-1"><MapPin className="w-3.5 h-3.5" /> Waypoints</span>: Pre-planned GPS points the aircraft will fly to</p>
+            <p><span className="text-amber-400 inline-flex items-center gap-1"><PlaneLanding className="w-3.5 h-3.5" /> Landing</span>: How fast/slow it comes down after RTH</p>
+            <p><span className="text-blue-400 inline-flex items-center gap-1"><Satellite className="w-3.5 h-3.5" /> GPS</span>: Satellite settings (usually leave on Auto)</p>
           </div>
         </div>
       </div>

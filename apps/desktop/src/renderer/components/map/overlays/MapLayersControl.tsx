@@ -1,5 +1,5 @@
 /**
- * MapLayersControl — single "Layers" dropdown that consolidates base-map
+ * MapLayersControl: single "Layers" dropdown that consolidates base-map
  * selection, data overlays, and (optionally) the terrain/height toggle into one
  * button, freeing the map corner. Used on both the Mission Planning and
  * Telemetry maps so their layer controls stay consistent (mirrors the Area
@@ -62,18 +62,21 @@ export function MapLayersControl({
 
   return (
     <div className="relative select-none">
+      {/* w-full: sibling toolbar buttons stretch to the flex column's width;
+          without it this inline-flex button renders narrower when the "(n)"
+          suffix is absent. */}
       <button
         ref={btnRef}
         type="button"
         onClick={() => setOpen((v) => !v)}
         data-tip="Map layers & overlays"
-        className="h-8 px-2.5 inline-flex items-center gap-2 rounded-md bg-surface-solid border border-subtle text-content-secondary hover:text-content shadow-sm transition-colors"
+        className="w-full justify-center px-2 py-1 inline-flex items-center gap-1.5 rounded text-xs bg-surface text-content hover:bg-surface-raised shadow-lg transition-colors"
       >
-        <svg className="w-[18px] h-[18px]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+        <svg className="w-3.5 h-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
           <path d="M12 2l9 5-9 5-9-5 9-5z" />
           <path d="M3 12l9 5 9-5M3 17l9 5 9-5" />
         </svg>
-        <span className="text-xs font-medium">Layers{overlayCount > 0 ? ` (${overlayCount})` : ''}</span>
+        <span className="font-medium">Layers{overlayCount > 0 ? ` (${overlayCount})` : ''}</span>
       </button>
 
       {open && pos &&
@@ -87,7 +90,8 @@ export function MapLayersControl({
             >
               <div className="overflow-y-auto">
                 <div className="px-3 py-2 text-[11px] uppercase tracking-wide text-content-tertiary border-b border-subtle">Base map</div>
-                <div className="p-1">
+                {/* space-y keeps adjacent selected rows from merging into one slab */}
+                <div className="p-1 space-y-0.5">
                   {baseLayers.map((key) => (
                     <button key={key} type="button" onClick={() => onSelectLayer(key)} className={row(activeLayer === key)}>
                       <LayerIcon layerKey={key} />
@@ -97,7 +101,7 @@ export function MapLayersControl({
                 </div>
 
                 <div className="px-3 py-2 text-[11px] uppercase tracking-wide text-content-tertiary border-y border-subtle">Overlays</div>
-                <div className="p-1">
+                <div className="p-1 space-y-0.5">
                   {OVERLAYS.map(({ id, label, icon }) => {
                     if (id === 'dipul' && !dipulAvailable) return null;
                     return (

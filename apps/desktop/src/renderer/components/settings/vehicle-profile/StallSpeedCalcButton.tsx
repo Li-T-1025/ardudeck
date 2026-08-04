@@ -71,7 +71,7 @@ function StallExplanation({ vehicle, estimate }: { vehicle: VehicleProfile; esti
       </div>
 
       <div className="text-[10px] text-content-tertiary leading-snug pt-1 border-t border-subtle">
-        Theoretical clean-stall — real-world stall can be lower with flaps, higher in turns or heavier loading.
+        Theoretical clean-stall: real-world stall can be lower with flaps, higher in turns or heavier loading.
       </div>
     </div>
   );

@@ -3,10 +3,6 @@ import { create } from 'zustand';
 const STORAGE_KEY = 'ardudeck:tours:seen';
 
 function loadSeen(): Set<string> {
-  if (import.meta.env.DEV) {
-    // Always start dev sessions fresh so every app run re-prompts.
-    return new Set();
-  }
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return new Set();
@@ -18,11 +14,9 @@ function loadSeen(): Set<string> {
   }
 }
 
+// Persisted in dev too: the always-re-prompt dev behaviour made every dev session start
+// with a wall of tour prompts. To re-test a tour, use the replay/reset path in settings.
 function persist(seen: Set<string>) {
-  if (import.meta.env.DEV) {
-    // Skip persistence in dev so restarts always re-prompt.
-    return;
-  }
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify([...seen]));
   } catch {

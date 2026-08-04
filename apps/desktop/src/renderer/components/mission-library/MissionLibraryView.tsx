@@ -8,6 +8,7 @@ import { MissionDetailPanel } from './MissionDetailPanel';
 import { SaveMissionModal } from './SaveMissionModal';
 import type { MissionSortField } from '../../../shared/mission-library-types';
 import type { MissionItem } from '../../../shared/mission-types';
+import { formatDistanceFromMeters } from '../../../shared/user-units.js';
 
 const SORT_OPTIONS: { value: MissionSortField; label: string }[] = [
   { value: 'updatedAt', label: 'Last Modified' },
@@ -23,6 +24,7 @@ export function MissionLibraryView() {
   const missionStore = useMissionStore();
   const { setView } = useNavigationStore();
   const { vehicles } = useSettingsStore();
+  const distanceUnit = useSettingsStore((s) => s.unitPreferences.distance);
 
   const [searchInput, setSearchInput] = useState('');
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
@@ -246,7 +248,7 @@ export function MissionLibraryView() {
             </div>
             <h3 className="text-sm font-medium text-content mb-1">No missions saved yet</h3>
             <p className="text-xs text-content-secondary max-w-xs mb-4">
-              Save plans here for reuse. Build them in the Mission Planner, or draw survey areas in the Area Editor.
+              Save plans here for reuse. Build them in Mission Planning, or draw survey areas in the Area Editor.
             </p>
             <div className="flex items-center gap-2">
               <button
@@ -256,7 +258,7 @@ export function MissionLibraryView() {
                 <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
                 </svg>
-                Mission Planner
+                Open Mission Planning
               </button>
               <button
                 onClick={() => { window.electronAPI?.openAreaEditor?.().catch(() => undefined); }}
@@ -280,6 +282,7 @@ export function MissionLibraryView() {
                   key={m.id}
                   mission={m}
                   isSelected={store.selectedMission?.id === m.id}
+                  confirmDelete={confirmDeleteId === m.id}
                   onClick={() => store.selectMission(store.selectedMission?.id === m.id ? null : m.id)}
                   onLoad={() => handleLoadToEditor(m.id)}
                   onDuplicate={() => handleDuplicate(m.id, m.name)}
@@ -355,7 +358,7 @@ export function MissionLibraryView() {
                         <td className="px-4 py-2.5 text-content-secondary">{vehicle?.name ?? '--'}</td>
                         <td className="px-4 py-2.5 text-content-secondary text-right">{m.waypointCount}</td>
                         <td className="px-4 py-2.5 text-content-secondary text-right">
-                          {m.totalDistanceMeters < 1000 ? `${Math.round(m.totalDistanceMeters)}m` : `${(m.totalDistanceMeters / 1000).toFixed(1)}km`}
+                          {formatDistanceFromMeters(m.totalDistanceMeters, distanceUnit)}
                         </td>
                         <td className="px-4 py-2.5 text-content-secondary">
                           {m.flightCount > 0 ? (

@@ -234,10 +234,10 @@ export default function AutoLaunchTab({ modified, setModified }: Props) {
             When enabled via a switch, the FC detects the launch and automatically climbs to a safe altitude.
           </p>
           <div className="mt-3 grid grid-cols-2 gap-x-6 gap-y-1 text-xs text-content-secondary">
-            <p><span className="text-orange-400"><Target className="w-3 h-3 inline mr-1" />Detection</span> — Acceleration/angle thresholds to detect launch</p>
-            <p><span className="text-blue-400"><Zap className="w-3 h-3 inline mr-1" />Motor</span> — Idle, delay, and throttle settings</p>
-            <p><span className="text-green-400"><TrendingUp className="w-3 h-3 inline mr-1" />Climb</span> — Pitch angle and target altitude</p>
-            <p><span className="text-purple-400"><Settings2 className="w-3 h-3 inline mr-1" />Exit</span> — Transition to normal flight</p>
+            <p><span className="text-orange-400"><Target className="w-3 h-3 inline mr-1" />Detection</span>: Acceleration/angle thresholds to detect launch</p>
+            <p><span className="text-blue-400"><Zap className="w-3 h-3 inline mr-1" />Motor</span>: Idle, delay, and throttle settings</p>
+            <p><span className="text-green-400"><TrendingUp className="w-3 h-3 inline mr-1" />Climb</span>: Pitch angle and target altitude</p>
+            <p><span className="text-purple-400"><Settings2 className="w-3 h-3 inline mr-1" />Exit</span>: Transition to normal flight</p>
           </div>
         </div>
       </div>
@@ -495,7 +495,7 @@ export default function AutoLaunchTab({ modified, setModified }: Props) {
       </div>
 
       {/* Safety Warning */}
-      <div className="bg-amber-500/10 rounded-xl border-amber-500/30 p-4 flex items-start gap-4">
+      <div className="bg-amber-500/10 rounded-xl border border-amber-500/30 p-4 flex items-start gap-4">
         <AlertTriangle className="w-6 h-6 text-amber-400 flex-shrink-0 mt-0.5" />
         <div>
           <p className="text-amber-400 font-medium">Important Safety Notes</p>

@@ -307,15 +307,16 @@ export const MavlinkConfigView: React.FC = () => {
   const [showWriteConfirm, setShowWriteConfirm] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
   const [rebooting, setRebooting] = useState(false);
+  const [showRebootConfirm, setShowRebootConfirm] = useState(false);
   const [toast, setToast] = useState<Toast | null>(null);
   const [rebootRequiredParams, setRebootRequiredParams] = useState<string[]>([]);
   // Tracks whether we initiated a reboot from the banner and should auto-refresh params
   const pendingParamRefresh = useRef(false);
 
-  // Auto-hide toast after 3 seconds
+  // Auto-hide toast: errors stay long enough to actually be read.
   const showToast = useCallback((message: string, type: ToastType) => {
     setToast({ message, type });
-    setTimeout(() => setToast(null), 3000);
+    setTimeout(() => setToast(null), type === 'error' ? 8000 : 3000);
   }, []);
 
   // Load parameters on mount if not loaded
@@ -495,7 +496,7 @@ export const MavlinkConfigView: React.FC = () => {
             </button>
 
             <button
-              onClick={handleReboot}
+              onClick={() => setShowRebootConfirm(true)}
               disabled={rebooting}
               className="px-4 py-2 text-sm rounded-lg flex items-center gap-2 bg-surface-raised hover:bg-surface text-content border border-subtle"
               title="Reboot flight controller"
@@ -668,6 +669,39 @@ export const MavlinkConfigView: React.FC = () => {
       <div className="flex-1 overflow-auto">
         {renderTabContent()}
       </div>
+
+      {/* Reboot Confirmation Modal: one misclick next to Refresh must not
+          restart a live flight controller. */}
+      {showRebootConfirm && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-surface border rounded-xl shadow-2xl max-w-sm w-full mx-4">
+            <div className="px-6 py-4 border-b border-subtle">
+              <h3 className="text-lg font-semibold text-content flex items-center gap-2">
+                <AlertTriangle className="w-5 h-5 text-amber-400 shrink-0" />
+                Reboot flight controller?
+              </h3>
+              <p className="text-sm text-content-secondary mt-2">
+                The vehicle must be disarmed. The link will drop and reconnect automatically.
+              </p>
+            </div>
+            <div className="px-6 py-4 flex justify-end gap-3">
+              <button
+                onClick={() => setShowRebootConfirm(false)}
+                className="px-4 py-2 text-sm text-content-secondary hover:text-content transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => { setShowRebootConfirm(false); void handleReboot(); }}
+                className="px-4 py-2 bg-amber-500/20 hover:bg-amber-500/30 text-amber-400 rounded-lg text-sm font-medium transition-colors flex items-center gap-1.5"
+              >
+                <RotateCw className="w-3.5 h-3.5" />
+                Reboot
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Write to Flash Confirmation Modal */}
       {showWriteConfirm && (

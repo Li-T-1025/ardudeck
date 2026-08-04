@@ -36,7 +36,7 @@ export function GpsPanel() {
         <GpsReadout gps={gps} label={gps2 ? 'GPS 1' : undefined} />
         {gps2 && (
           <>
-            <div className="border-t border-white/5" />
+            <div className="border-t border-subtle" />
             <GpsReadout gps={gps2} label="GPS 2" />
           </>
         )}

@@ -9,7 +9,7 @@ import { batteryParams, airspeedParams, commonSafetyParams, simPhysicsParams, ma
 export const vtolTiltrotorDual: VehicleTemplate = {
   slug: 'vtol-tiltrotor-dual',
   name: 'Tiltrotor (dual)',
-  description: 'Two motors tilt from hover to cruise — Osprey-style',
+  description: 'Two motors tilt from hover to cruise, Osprey-style',
   icon: RotateCw,
   vehicleType: 'vtol',
   category: 'vtol',

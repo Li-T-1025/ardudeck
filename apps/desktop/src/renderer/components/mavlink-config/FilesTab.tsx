@@ -265,7 +265,7 @@ export const FilesTab: React.FC = () => {
                     <span className="font-mono truncate">{entry.name}</span>
                   </button>
                   <div className="text-right font-mono text-content-secondary">
-                    {entry.kind === 'file' ? formatSize(entry.size ?? 0) : '—'}
+                    {entry.kind === 'file' ? formatSize(entry.size ?? 0) : '-'}
                   </div>
                   <RowActions
                     entry={entry}

@@ -216,7 +216,7 @@ export function SyntheticVisionView({ vehicle, isPrimary, osd, onActivate }: Syn
       )}
       {position && terrainStatus === 'error' && (
         <div className="absolute bottom-2 left-2 rounded bg-black/55 px-2 py-1 text-[11px] text-amber-300">
-          Terrain data unavailable — check the internet connection.
+          Terrain data unavailable, check the internet connection.
         </div>
       )}
     </div>

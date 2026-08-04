@@ -62,6 +62,11 @@ const MODEL_DEFS: Record<ModelKey, ModelDef> = {
 const ACTIVE_MODELS: ModelKey[] = Array.from(new Set<ModelKey>([FALLBACK_MODEL, ...(Object.values(CLASS_MODEL) as ModelKey[])]));
 /** Target largest-horizontal span in metres (exaggerated so it reads at distance). */
 const MODEL_TARGET_SPAN = 3.0;
+/** Reduced span when more than one vehicle is in the scene, so a close formation
+    does not render as a mid-air collision. Applied as a per-frame rescale of the
+    (exaggerated) GLB/procedural frames; blueprint frames are already true metric
+    scale and keep scale 1. */
+const MODEL_MULTI_SPAN = 1.2;
 
 export type SimCameraMode = 'chase' | 'orbit' | 'topdown' | 'fpv';
 
@@ -164,6 +169,9 @@ export interface SimWorldScene {
   onWheel: (deltaY: number) => void;
   /** Raycast a normalized device coord onto the ground; returns [north, east] m. */
   pickGround: (ndcX: number, ndcY: number) => [number, number] | null;
+  /** Raycast a normalized device coord against the vehicle meshes; returns the
+      hit vehicle's id (the frame id, i.e. the fleet key on the fleet path). */
+  pickVehicle: (ndcX: number, ndcY: number) => string | null;
   dispose: () => void;
 }
 
@@ -207,6 +215,8 @@ function nedGroundToThree(north: number, east: number, out: THREE.Vector3): THRE
 }
 
 interface VehicleObjects {
+  /** Frame id this vehicle was created for (fleet key / engine id). */
+  id: string;
   group: THREE.Group;
   /** Sub-group holding the frame visual (model or primitives); child of `group`. */
   frame: THREE.Group;
@@ -238,6 +248,10 @@ interface VehicleObjects {
   labelTexture: THREE.CanvasTexture;
   labelCanvas: HTMLCanvasElement;
   labelText: string;
+  /** Base label height (world y) set each update; render() adds the stagger. */
+  labelBaseY: number;
+  /** Stable per-update index used to stagger co-located labels vertically. */
+  labelIndex: number;
   /** Identity colour applied to body + trail + label, as a hex string. */
   colorHex: string;
   /** Ground ring drawn only under the active/selected vehicle. */
@@ -979,10 +993,10 @@ export function createSimWorldScene(canvas: HTMLCanvasElement): SimWorldScene {
     scene.add(selRing);
 
     const v: VehicleObjects = {
-      group, frame, usesModel, usesBlueprint: false, modelKey, spinAxis, bodyMat, ledMat, props, propDiscMats: [], shadow,
+      id, group, frame, usesModel, usesBlueprint: false, modelKey, spinAxis, bodyMat, ledMat, props, propDiscMats: [], shadow,
       trail, trailGeom, trailPositions, trailCount: 0, trailMat,
       dropLine, dropGeom,
-      labelSprite, labelTexture, labelCanvas, labelText: label, colorHex,
+      labelSprite, labelTexture, labelCanvas, labelText: label, labelBaseY: 0, labelIndex: 0, colorHex,
       selRing,
       disposables: [bodyMat, ledMat, shadowMat, shadow.geometry, trailMat, dropMat, trailGeom, dropGeom,
         labelMat, labelTexture, selRingGeom, selRingMat],
@@ -1091,6 +1105,25 @@ export function createSimWorldScene(canvas: HTMLCanvasElement): SimWorldScene {
     }
   }
 
+  // update() runs every rAF frame but the overlay data changes rarely; rebuilding
+  // disposed and re-created every fence/obstacle geometry 60 times a second (GC
+  // churn). The caller re-allocates the arrays each frame, so cache on a cheap
+  // content signature (mirroring the waypoint cache in SimWorldView) and rebuild
+  // only when it changes.
+  let overlaySig: string | null = null;
+  function overlaySignature(data: SimWorldUpdate): string {
+    let sig = '';
+    for (const f of data.fences ?? []) {
+      let acc = 0;
+      for (const [n, e] of f.points) acc += n + e;
+      sig += `F${f.id}|${f.kind}|${f.points.length}|${acc.toFixed(2)};`;
+    }
+    for (const o of data.obstacles ?? []) {
+      sig += `O${o.id}|${o.shape}|${o.center[0].toFixed(2)},${o.center[1].toFixed(2)}|${o.radius}|${o.height};`;
+    }
+    return sig;
+  }
+
   function rebuildOverlay(data: SimWorldUpdate): void {
     clearOverlay();
 
@@ -1142,6 +1175,14 @@ export function createSimWorldScene(canvas: HTMLCanvasElement): SimWorldScene {
   const tmp = new THREE.Vector3();
   const tmpForward = new THREE.Vector3();
 
+  // Followed-point smoothing: when the follow target changes (selection change,
+  // the followed vehicle disappearing), glide the camera reference to the new
+  // vehicle over a few frames instead of hard-teleporting. While settled the
+  // reference tracks the vehicle exactly (no follow lag).
+  let followId: string | null = null;
+  let followSettled = false;
+  const followPos = new THREE.Vector3();
+
   function primaryVehicle(): VehicleObjects | null {
     if (activeId) {
       const a = vehicles.get(activeId);
@@ -1154,7 +1195,20 @@ export function createSimWorldScene(canvas: HTMLCanvasElement): SimWorldScene {
   function updateCamera(): void {
     const v = primaryVehicle();
     if (!v) return;
-    const p = v.group.position;
+    const vp = v.group.position;
+    if (followId !== v.id) {
+      // First-ever target snaps; subsequent target changes glide.
+      followSettled = followId === null;
+      followId = v.id;
+      if (followSettled) followPos.copy(vp);
+    }
+    if (followSettled) {
+      followPos.copy(vp);
+    } else {
+      followPos.lerp(vp, 0.12);
+      if (followPos.distanceToSquared(vp) < 0.04) followSettled = true;
+    }
+    const p = followPos;
     orbitTarget.copy(p);
 
     if (cameraMode === 'orbit') {
@@ -1202,6 +1256,11 @@ export function createSimWorldScene(canvas: HTMLCanvasElement): SimWorldScene {
     update(data: SimWorldUpdate) {
       const seen = new Set<string>();
       activeId = null;
+      // Exaggerated (non-blueprint) frames shrink when more than one vehicle is
+      // on screen so formation spacing reads truthfully; blueprint frames are
+      // true metric scale and keep scale 1.
+      const frameScale = data.vehicles.length > 1 ? MODEL_MULTI_SPAN / MODEL_TARGET_SPAN : 1;
+      let frameIndex = 0;
       for (const f of data.vehicles) {
         seen.add(f.id);
         const colorHex = f.color ?? '#38bdf8';
@@ -1262,10 +1321,15 @@ export function createSimWorldScene(canvas: HTMLCanvasElement): SimWorldScene {
         nedToThree(f.position, posVec);
         v.group.position.copy(posVec);
         v.group.rotation.set(f.euler.pitch, -f.euler.yaw, -f.euler.roll);
+        v.frame.scale.setScalar(v.usesBlueprint ? 1 : frameScale);
 
         // Label hovers above the vehicle (sprite ignores rotation, faces camera).
-        v.labelSprite.position.set(posVec.x, posVec.y + QUAD_SCALE * 1.6, posVec.z);
+        // render() applies the distance scale + per-index stagger on top of this.
+        v.labelIndex = frameIndex;
+        v.labelBaseY = posVec.y + QUAD_SCALE * 1.6;
+        v.labelSprite.position.set(posVec.x, v.labelBaseY, posVec.z);
         v.labelSprite.visible = v.labelText.length > 0;
+        frameIndex += 1;
         // Active ground ring tracks x/z.
         v.selRing.position.set(posVec.x, 0.06, posVec.z);
         v.selRing.visible = !!f.active;
@@ -1320,7 +1384,11 @@ export function createSimWorldScene(canvas: HTMLCanvasElement): SimWorldScene {
         }
       }
 
-      rebuildOverlay(data);
+      const sig = overlaySignature(data);
+      if (sig !== overlaySig) {
+        overlaySig = sig;
+        rebuildOverlay(data);
+      }
 
       // Conformal waypoint markers: the shared module rebuilds only when the
       // mission changes and refreshes captions with live slant-range from the
@@ -1361,6 +1429,16 @@ export function createSimWorldScene(canvas: HTMLCanvasElement): SimWorldScene {
         }
       }
       updateCamera();
+      // Labels: scale with camera distance (approx constant screen size, so they
+      // neither stack into an unreadable pile up close nor shrink to dots far
+      // out), plus a small per-vehicle stagger separating co-located labels.
+      for (const v of vehicles.values()) {
+        if (!v.labelSprite.visible) continue;
+        const dist = camera.position.distanceTo(v.labelSprite.position);
+        const s = Math.min(60, Math.max(2.2, dist * 0.16));
+        v.labelSprite.scale.set(s, s * 0.5, 1);
+        v.labelSprite.position.y = v.labelBaseY + v.labelIndex * s * 0.28;
+      }
       renderer.render(scene, camera);
     },
 
@@ -1406,6 +1484,22 @@ export function createSimWorldScene(canvas: HTMLCanvasElement): SimWorldScene {
       if (!hit) return null;
       // three.x = east, three.z = -north
       return [-pickHit.z, pickHit.x];
+    },
+
+    pickVehicle(ndcX: number, ndcY: number): string | null {
+      pickNdc.set(ndcX, ndcY);
+      raycaster.setFromCamera(pickNdc, camera);
+      const groups: THREE.Object3D[] = [];
+      for (const v of vehicles.values()) groups.push(v.group);
+      const hit = raycaster.intersectObjects(groups, true)[0];
+      if (!hit) return null;
+      // Walk the hit object up to its owning vehicle group.
+      for (const [id, v] of vehicles) {
+        for (let o: THREE.Object3D | null = hit.object; o; o = o.parent) {
+          if (o === v.group) return id;
+        }
+      }
+      return null;
     },
 
     dispose() {

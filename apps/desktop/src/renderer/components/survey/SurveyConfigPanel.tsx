@@ -77,7 +77,7 @@ const CORRIDOR_MODE_OPTIONS: { id: CorridorMode; label: string; description: str
 
 const GROUND_PATTERN_OPTIONS: { id: GroundPattern; label: string; description: string }[] = [
   { id: 'boustrophedon', label: 'Zigzag', description: 'U-turn at line ends (skid-steer rovers)' },
-  { id: 'reverse-alternating', label: 'Reverse', description: 'Drive forward then reverse — no U-turns (Ackermann/car-like rovers, needs ArduRover DO_SET_REVERSE support)' },
+  { id: 'reverse-alternating', label: 'Reverse', description: 'Drive forward then reverse: no U-turns (Ackermann/car-like rovers, needs ArduRover DO_SET_REVERSE support)' },
 ];
 
 const ALT_REF_OPTIONS: { id: AltitudeReference; label: string; description: string }[] = [
@@ -290,11 +290,11 @@ export function SurveyConfigPanel() {
     setLastSurveyPresetId(preset.id);
   }, [applyPresetConfig, isManualCamera, config.pattern, setPattern, setLastSurveyPresetId]);
 
-  const handleSavePreset = useCallback(() => {
-    // Simple prompt for the name — full dialog is overkill for this. If the
-    // user cancels we bail; empty names are also rejected.
-    const name = window.prompt('Name this preset:', `My preset ${userPresets.length + 1}`);
-    if (!name || !name.trim()) return;
+  // Inline preset naming (Electron has no window.prompt); null = closed.
+  const [presetNameDraft, setPresetNameDraft] = useState<string | null>(null);
+
+  const handleSavePreset = useCallback((name: string) => {
+    if (!name.trim()) return;
     const preset = makeUserPreset(
       name.trim(),
       captureCurrentAsPresetConfig({ ...config, polygon: [] }),
@@ -313,7 +313,8 @@ export function SurveyConfigPanel() {
       ...(preset.camera ? { camera: preset.camera as unknown as Record<string, unknown> } : {}),
     });
     setLastSurveyPresetId(preset.id);
-  }, [config, isCustomCamera, isManualCamera, userPresets.length, saveSurveyPreset, setLastSurveyPresetId]);
+    setPresetNameDraft(null);
+  }, [config, isCustomCamera, isManualCamera, saveSurveyPreset, setLastSurveyPresetId]);
 
   const handleDeletePreset = useCallback((id: string) => {
     if (!window.confirm('Delete this preset?')) return;
@@ -463,8 +464,8 @@ export function SurveyConfigPanel() {
           />
         </div>
         <button
-          onClick={handleSavePreset}
-          className="p-1.5 text-content-secondary hover:text-purple-400 transition-colors"
+          onClick={() => setPresetNameDraft((d) => (d === null ? `My preset ${userPresets.length + 1}` : null))}
+          className={`p-1.5 transition-colors ${presetNameDraft !== null ? 'text-purple-400' : 'text-content-secondary hover:text-purple-400'}`}
           title="Save current settings as a preset"
         >
           <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -521,6 +522,36 @@ export function SurveyConfigPanel() {
           </button>
         )}
       </div>
+
+      {/* Inline preset naming row (Electron has no window.prompt) */}
+      {presetNameDraft !== null && (
+        <div className="flex items-center gap-2 px-3 py-2 border-b border-subtle bg-surface-raised flex-shrink-0">
+          <input
+            autoFocus
+            value={presetNameDraft}
+            onChange={(e) => setPresetNameDraft(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') handleSavePreset(presetNameDraft);
+              else if (e.key === 'Escape') setPresetNameDraft(null);
+            }}
+            placeholder="Preset name"
+            className="flex-1 min-w-0 bg-surface-input text-content text-xs px-2 py-1 rounded border border-default focus:border-purple-500 focus:outline-none"
+          />
+          <button
+            onClick={() => handleSavePreset(presetNameDraft)}
+            disabled={!presetNameDraft.trim()}
+            className="px-2 py-1 text-xs rounded bg-purple-600 text-white hover:bg-purple-500 disabled:opacity-40 transition-colors"
+          >
+            Save
+          </button>
+          <button
+            onClick={() => setPresetNameDraft(null)}
+            className="px-2 py-1 text-xs rounded text-content-secondary hover:text-content transition-colors"
+          >
+            Cancel
+          </button>
+        </div>
+      )}
 
       {showFleetSplit && <FleetSurveyPanel onClose={() => setShowFleetSplit(false)} />}
 
@@ -833,7 +864,7 @@ export function SurveyConfigPanel() {
                   />
                   <span className="text-[11px] text-content-secondary leading-snug">
                     <span className="text-content">Terrain follow</span> - sample ground
-                    elevation at every waypoint and hold {config.altitude}m above it (bakes
+                    elevation at every waypoint and hold {formatAltitudeFromMeters(config.altitude, altitudeUnit)} above it (bakes
                     absolute MSL altitudes, no onboard terrain data needed).
                     {terrainFollowStatus && (
                       <span className="text-purple-300"> {terrainFollowStatus}</span>
@@ -1515,21 +1546,54 @@ function SpeedSliderInput({
   );
 }
 
+// Keeps a string draft while focused so partial input (typing "4" on the way
+// to "4000" in a min-100 field) never snaps back mid-keystroke. Clamps and
+// commits on blur/Enter, Escape reverts.
 function NumberInput({
   label, value, onChange, min, max, step,
 }: {
   label: string; value: number; onChange: (v: number) => void;
   min: number; max: number; step: number;
 }) {
+  const [draft, setDraft] = useState(() => String(value));
+  const [focused, setFocused] = useState(false);
+  const skipBlurCommitRef = useRef(false);
+
+  useEffect(() => {
+    if (!focused) setDraft(String(value));
+  }, [value, focused]);
+
   return (
     <div>
       <label className="text-[10px] text-content-secondary">{label}</label>
       <input
         type="number"
-        value={value}
-        onChange={(e) => {
-          const v = Number(e.target.value);
-          if (v >= min && v <= max) onChange(v);
+        value={draft}
+        onFocus={() => setFocused(true)}
+        onChange={(e) => setDraft(e.target.value)}
+        onBlur={() => {
+          setFocused(false);
+          if (skipBlurCommitRef.current) {
+            skipBlurCommitRef.current = false;
+            setDraft(String(value));
+            return;
+          }
+          const parsed = Number(draft);
+          if (draft.trim() === '' || !Number.isFinite(parsed)) {
+            setDraft(String(value));
+            return;
+          }
+          const clamped = Math.min(max, Math.max(min, parsed));
+          setDraft(String(clamped));
+          if (clamped !== value) onChange(clamped);
+        }}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') {
+            e.currentTarget.blur();
+          } else if (e.key === 'Escape') {
+            skipBlurCommitRef.current = true;
+            e.currentTarget.blur();
+          }
         }}
         min={min}
         max={max}

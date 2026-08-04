@@ -382,7 +382,7 @@ function ModeChip({
         ${isActive
           ? 'bg-blue-500 text-white shadow-md shadow-blue-500/30'
           : isConfigured
-            ? 'bg-surface-raised text-content hover:bg-surface-raised'
+            ? 'bg-surface-raised text-content hover:bg-surface-solid'
             : 'bg-surface text-content-secondary'
         }
       `}
@@ -539,6 +539,10 @@ function MavlinkFlightControl({ mavTypeOverride }: { mavTypeOverride?: number })
   const missionItems = useMissionStore((s) => s.missionItems);
   const currentSeq = useMissionStore((s) => s.currentSeq);
   const fetchMission = useMissionStore((s) => s.fetchMission);
+  // True when the local plan differs from what the vehicle is known to hold
+  // (never uploaded this session, or edited since upload/download).
+  const missionDirty = useMissionStore((s) => s.isDirty);
+  const uploadMissionToFc = useMissionStore((s) => s.uploadMission);
   const altitudeUnit = useSettingsStore((s) => s.unitPreferences.altitude);
   const missionLoaded = missionItems.length > 0;
   const missionModes = MISSION_MODES[vehicleClass];
@@ -583,6 +587,8 @@ function MavlinkFlightControl({ mavTypeOverride }: { mavTypeOverride?: number })
   const [pickerOpen, setPickerOpen] = useState(false);
   const modeAnchorRef = useRef<HTMLDivElement>(null);
   const [showTakeoffDialog, setShowTakeoffDialog] = useState(false);
+  const [showMissionUploadGate, setShowMissionUploadGate] = useState(false);
+  const [uploadingMission, setUploadingMission] = useState(false);
   const [takeoffAlt, setTakeoffAlt] = useState(10);
   const takeoffAltitudePrecision = altitudeUnit === 'km' ? 3 : altitudeUnit === 'm' ? 0 : 1;
   const takeoffAltitudeDisplay = Number(altitudeValueFromMeters(takeoffAlt, altitudeUnit).toFixed(takeoffAltitudePrecision));
@@ -775,6 +781,27 @@ function MavlinkFlightControl({ mavTypeOverride }: { mavTypeOverride?: number })
   }, [squadKeys, connectionState.isSitl, sitlIsRunning, flight.armed, vehicleClass, startRcHold, stopRcHold]);
 
   const mode = useModeRequest(vehicleClass, flight.modeNum, sendMode);
+
+  // Start-mission gate: switching to AUTO while the local plan was never
+  // uploaded (or edited since) flies nothing or a stale mission; the map and
+  // planner still SHOW the local plan, which is exactly how pilots get
+  // confused. Intercept and offer upload-and-start.
+  const startMissionAuto = useCallback(() => {
+    mode.requestMode(missionModes.auto, { skipConfirm: true });
+  }, [mode, missionModes.auto]);
+  const handleStartMission = useCallback(() => {
+    if (missionDirty) setShowMissionUploadGate(true);
+    else startMissionAuto();
+  }, [missionDirty, startMissionAuto]);
+  const handleUploadAndStart = useCallback(async () => {
+    setUploadingMission(true);
+    const ok = await uploadMissionToFc();
+    setUploadingMission(false);
+    if (ok) {
+      setShowMissionUploadGate(false);
+      startMissionAuto();
+    }
+  }, [uploadMissionToFc, startMissionAuto]);
   const { requestMode, confirmCommit, cancelCommit } = mode;
   // Memoised so the portaled picker (React.memo) doesn't reconcile on every
   // telemetry frame - that per-frame churn is what made it flicker over the
@@ -1090,14 +1117,14 @@ function MavlinkFlightControl({ mavTypeOverride }: { mavTypeOverride?: number })
                 title="Force ARM bypasses pre-arm safety checks"
               >
                 <span className={`text-[10px] font-medium ${forceArm ? 'text-[color:var(--status-warn-fg)]' : 'text-content-secondary'}`}>Force</span>
-                <div className={`w-7 h-3.5 rounded-full transition-colors relative ${forceArm ? 'bg-[var(--status-warn)]' : 'bg-surface-raised'}`}>
-                  <div className={`absolute top-0.5 w-2.5 h-2.5 rounded-full bg-white shadow transition-transform ${forceArm ? 'translate-x-3.5' : 'translate-x-0.5'}`} />
+                <div className={`w-7 h-3.5 rounded-full transition-colors relative ${forceArm ? 'bg-[var(--status-warn)]' : 'bg-surface-inset'}`}>
+                  <div className={`absolute top-0.5 w-2.5 h-2.5 rounded-full bg-white border border-strong shadow-sm transition-transform ${forceArm ? 'translate-x-3.5' : 'translate-x-0.5'}`} />
                 </div>
               </button>
 
             </div>
 
-            <div className="w-px self-stretch bg-subtle/60 shrink-0 my-2" />
+            <div className="w-px self-stretch bg-subtle shrink-0 my-2" />
 
             {/* MODE — the hero readout; grows to fill the free space */}
             <div className="flex-1 min-w-[200px] max-w-[480px]" style={{ height: controlH }}>{renderModeControl(true)}</div>
@@ -1156,7 +1183,7 @@ function MavlinkFlightControl({ mavTypeOverride }: { mavTypeOverride?: number })
                 </button>
               )}
 
-              <div className="w-px self-stretch bg-subtle/60 shrink-0 my-0.5" />
+              <div className="w-px self-stretch bg-subtle shrink-0 my-0.5" />
 
               {/* Mission — one row: status, reload, Start/Pause/Resume */}
               <div className="h-full flex items-center gap-2 px-2.5 rounded-lg bg-surface border border-subtle">
@@ -1164,8 +1191,8 @@ function MavlinkFlightControl({ mavTypeOverride }: { mavTypeOverride?: number })
                   {missionLoaded
                     ? <>{missionItems.length} wp
                         <span className="text-content-tertiary"> · </span>
-                        <span className="font-mono text-content-secondary">
-                          {currentSeq != null ? `→ ${currentSeq + 1}/${missionItems.length}` : (isInAuto ? 'starting…' : 'idle')}
+                        <span className={`font-mono ${missionDirty && currentSeq == null ? 'text-[color:var(--status-warn-fg)]' : 'text-content-secondary'}`}>
+                          {currentSeq != null ? `→ ${currentSeq + 1}/${missionItems.length}` : (isInAuto ? 'starting…' : missionDirty ? 'not uploaded' : 'idle')}
                         </span>
                       </>
                     : <span className="text-content-secondary">No mission</span>}
@@ -1174,10 +1201,10 @@ function MavlinkFlightControl({ mavTypeOverride }: { mavTypeOverride?: number })
                 {missionLoaded && (
                   <div className="flex items-center gap-1">
                     <button
-                      onClick={() => mode.requestMode(missionModes.auto, { skipConfirm: true })}
+                      onClick={handleStartMission}
                       disabled={!flight.armed || isInAuto}
                       className="px-2.5 py-1 text-[11px] font-medium rounded bg-[var(--status-success-bg)] border border-subtle hover:border-[color:var(--status-success)] disabled:opacity-40 disabled:cursor-not-allowed text-[color:var(--status-success-fg)] transition-all"
-                      title={!flight.armed ? 'Arm first' : 'Switch to AUTO'}
+                      title={!flight.armed ? 'Arm first' : missionDirty ? 'Mission not uploaded to the vehicle yet' : 'Switch to AUTO'}
                     >{isInAuto ? 'Running' : 'Start'}</button>
                     {isInAuto ? (
                       <button
@@ -1193,7 +1220,7 @@ function MavlinkFlightControl({ mavTypeOverride }: { mavTypeOverride?: number })
                         title={isInPause ? `Resume from ${missionModes.pauseLabel}` : `Pause first`}
                       >Resume</button>
                     )}
-                    <div className="w-px self-stretch bg-subtle/60 mx-0.5 my-0.5" />
+                    <div className="w-px self-stretch bg-subtle mx-0.5 my-0.5" />
                     {renderMissionExtras()}
                   </div>
                 )}
@@ -1296,10 +1323,10 @@ function MavlinkFlightControl({ mavTypeOverride }: { mavTypeOverride?: number })
               {missionLoaded && (
                 <div className="flex gap-1">
                   <button
-                    onClick={() => mode.requestMode(missionModes.auto, { skipConfirm: true })}
+                    onClick={handleStartMission}
                     disabled={!flight.armed || isInAuto}
                     className="flex-1 px-2 py-1 text-[11px] font-medium rounded bg-[var(--status-success-bg)] border border-subtle hover:border-[color:var(--status-success)] disabled:opacity-40 disabled:cursor-not-allowed text-[color:var(--status-success-fg)] transition-all"
-                    title={!flight.armed ? 'Arm first' : 'Switch to AUTO'}
+                    title={!flight.armed ? 'Arm first' : missionDirty ? 'Mission not uploaded to the vehicle yet' : 'Switch to AUTO'}
                   >
                     {isInAuto ? 'Running' : 'Start'}
                   </button>
@@ -1422,7 +1449,7 @@ function MavlinkFlightControl({ mavTypeOverride }: { mavTypeOverride?: number })
 
             <button
               onClick={() => setForceArm(!forceArm)}
-              title="Bypass pre-arm checks — use only when the failing check is known-safe."
+              title="Bypass pre-arm checks. Use only when the failing check is known-safe."
               className={`flex items-center justify-between w-full px-2.5 py-1.5 rounded-lg transition-all
                 ${forceArm
                   ? 'bg-[var(--status-warn-bg)] border border-subtle'
@@ -1434,12 +1461,55 @@ function MavlinkFlightControl({ mavTypeOverride }: { mavTypeOverride?: number })
                 </svg>
                 <span className={`text-[11px] font-medium ${forceArm ? 'text-[color:var(--status-warn-fg)]' : 'text-content'}`}>Force ARM</span>
               </div>
-              <div className={`w-7 h-3.5 rounded-full transition-colors relative ${forceArm ? 'bg-[var(--status-warn)]' : 'bg-surface-raised'}`}>
-                <div className={`absolute top-0.5 w-2.5 h-2.5 rounded-full bg-white shadow transition-transform ${forceArm ? 'translate-x-3.5' : 'translate-x-0.5'}`} />
+              <div className={`w-7 h-3.5 rounded-full transition-colors relative ${forceArm ? 'bg-[var(--status-warn)]' : 'bg-surface-inset'}`}>
+                <div className={`absolute top-0.5 w-2.5 h-2.5 rounded-full bg-white border border-strong shadow-sm transition-transform ${forceArm ? 'translate-x-3.5' : 'translate-x-0.5'}`} />
               </div>
             </button>
 
             <div className="flex-1" />
+          </div>
+        )}
+
+        {/* Upload gate for Start: the vehicle does not have the plan shown on
+            the map/planner, so starting AUTO now would fly nothing (or a
+            stale mission). */}
+        {showMissionUploadGate && (
+          <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center" onClick={() => !uploadingMission && setShowMissionUploadGate(false)}>
+            <div className="bg-surface-solid border border-subtle rounded-xl shadow-2xl w-[340px] p-4" onClick={(e) => e.stopPropagation()}>
+              <div className="flex items-center gap-2 mb-2">
+                <svg className="w-4 h-4 text-amber-500 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v4m0 4h.01M10.3 3.86l-8.02 13.89A2 2 0 004 21h16a2 2 0 001.73-3.25L13.7 3.86a2 2 0 00-3.4 0z" />
+                </svg>
+                <span className="text-sm font-semibold text-content">Mission not on vehicle</span>
+              </div>
+              <p className="text-xs text-content-secondary leading-relaxed mb-3">
+                The planned mission ({missionItems.length} waypoints) has not been uploaded to the
+                flight controller, so starting AUTO now would not fly it.
+              </p>
+              <div className="flex justify-end gap-2">
+                <button
+                  onClick={() => setShowMissionUploadGate(false)}
+                  disabled={uploadingMission}
+                  className="px-3 py-1.5 text-xs text-content-secondary hover:text-content transition-colors disabled:opacity-40"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => { setShowMissionUploadGate(false); startMissionAuto(); }}
+                  disabled={uploadingMission}
+                  className="px-3 py-1.5 text-xs rounded-lg bg-surface-raised hover:bg-surface text-content border border-subtle transition-colors disabled:opacity-40"
+                >
+                  Start anyway
+                </button>
+                <button
+                  onClick={() => { void handleUploadAndStart(); }}
+                  disabled={uploadingMission}
+                  className="px-3 py-1.5 text-xs font-medium rounded-lg bg-blue-600 hover:bg-blue-500 text-white transition-colors disabled:opacity-60"
+                >
+                  {uploadingMission ? 'Uploading…' : 'Upload & Start'}
+                </button>
+              </div>
+            </div>
           </div>
         )}
       </div>

@@ -277,7 +277,7 @@ const sensorNodes: NodeDefinition[] = [
   {
     type: 'sensor-gpio-read',
     label: 'Read GPIO Pin',
-    description: 'Read the digital level of a GPIO pin. Wire a Pin input to set it from a parameter, or use the Pin property. Polled once per tick: pulses shorter than the run interval are missed — use Pulse Input (interrupt) for those.',
+    description: 'Read the digital level of a GPIO pin. Wire a Pin input to set it from a parameter, or use the Pin property. Polled once per tick: pulses shorter than the run interval are missed, use Pulse Input (interrupt) for those.',
     category: 'sensors',
     inputs: [
       { id: 'pin', label: 'Pin', type: 'number', direction: 'input' },
@@ -368,7 +368,7 @@ const logicNodes: NodeDefinition[] = [
   {
     type: 'logic-and',
     label: 'AND',
-    description: 'Logical AND — true only if both inputs are true',
+    description: 'Logical AND: true only if both inputs are true',
     category: 'logic',
     inputs: [
       { id: 'a', label: 'A', type: 'boolean', direction: 'input' },
@@ -382,7 +382,7 @@ const logicNodes: NodeDefinition[] = [
   {
     type: 'logic-or',
     label: 'OR',
-    description: 'Logical OR — true if either input is true',
+    description: 'Logical OR: true if either input is true',
     category: 'logic',
     inputs: [
       { id: 'a', label: 'A', type: 'boolean', direction: 'input' },
@@ -844,7 +844,7 @@ const timingNodes: NodeDefinition[] = [
   {
     type: 'timing-debounce',
     label: 'Debounce',
-    description: 'Suppress rapid changes — only pass through after value is stable',
+    description: 'Suppress rapid changes: only pass through after value is stable',
     category: 'timing',
     inputs: [
       { id: 'input', label: 'Input', type: 'boolean', direction: 'input' },
@@ -914,7 +914,7 @@ const timingNodes: NodeDefinition[] = [
   {
     type: 'timing-latch',
     label: 'Latch / Toggle',
-    description: 'Set/Reset flip-flop — Set turns output on, Reset turns it off',
+    description: 'Set/Reset flip-flop: Set turns output on, Reset turns it off',
     category: 'timing',
     inputs: [
       { id: 'set', label: 'Set', type: 'boolean', direction: 'input' },
@@ -986,7 +986,7 @@ const flowNodes: NodeDefinition[] = [
   {
     type: 'flow-comment',
     label: 'Comment',
-    description: 'A text comment for documentation purposes — no effect on code',
+    description: 'A text comment for documentation purposes, no effect on code',
     category: 'flow',
     inputs: [],
     outputs: [],

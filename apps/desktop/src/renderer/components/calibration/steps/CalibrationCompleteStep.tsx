@@ -17,7 +17,7 @@ const ROTATION_NAMES: Record<number, string> = {
   5: 'Yaw 225', 6: 'Yaw 270', 7: 'Yaw 315', 8: 'Roll 180', 12: 'Pitch 180',
 };
 function rotationName(o: number | null): string {
-  if (o == null) return '—';
+  if (o == null) return '-';
   return ROTATION_NAMES[o] ?? `Rotation ${o}`;
 }
 // ArduPilot compass fitness is RMS milligauss residual: < 2 good, < 3.5 usable,
@@ -81,7 +81,7 @@ export function CalibrationCompleteStep() {
     try {
       const ok = await window.electronAPI?.mavlinkReboot();
       if (!ok) {
-        setRebootError('Reboot command failed — reboot from the connection panel instead.');
+        setRebootError('Reboot command failed, reboot from the connection panel instead.');
         setIsRebooting(false);
         return;
       }

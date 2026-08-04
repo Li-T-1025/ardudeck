@@ -140,7 +140,7 @@ export function useProfileApply(profile: VehicleProfile) {
       applyStore.getState().clear();
       applyStore.getState().setToast({
         kind: 'info',
-        message: 'Apply cancelled — no parameters were changed',
+        message: 'Apply cancelled, no parameters were changed',
         createdAt: Date.now(),
       });
       return;
@@ -184,8 +184,8 @@ export function useProfileApply(profile: VehicleProfile) {
     const failMsg = failedCount > 0 ? ` (${failedCount} failed)` : '';
     const flashNote =
       flashed ? ' and saved to flash'
-      : gate.target.isSitl ? ' (SITL — flash not required)'
-      : ' (not saved to flash — will reset on reboot)';
+      : gate.target.isSitl ? ' (SITL, flash not required)'
+      : ' (not saved to flash, will reset on reboot)';
     applyStore.getState().setStatus('done', profile.id);
     applyStore.getState().setToast({
       kind: 'success',
@@ -211,7 +211,7 @@ export function useProfileApply(profile: VehicleProfile) {
         applyStore.getState().clear();
         applyStore.getState().setToast({
           kind: 'error',
-          message: 'Backup failed — apply aborted',
+          message: 'Backup failed, apply aborted',
           createdAt: Date.now(),
         });
         return;

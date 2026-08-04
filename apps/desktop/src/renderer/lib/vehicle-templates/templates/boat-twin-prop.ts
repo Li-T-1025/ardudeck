@@ -5,7 +5,7 @@ import { batteryParams, commonSafetyParams, simPhysicsParams, matches } from '..
 export const boatTwinProp: VehicleTemplate = {
   slug: 'boat-twin-prop',
   name: 'Twin-Prop Boat',
-  description: 'Two motors — differential thrust steering (no rudder)',
+  description: 'Two motors, differential thrust steering (no rudder)',
   icon: Anchor,
   vehicleType: 'boat',
   category: 'boat',

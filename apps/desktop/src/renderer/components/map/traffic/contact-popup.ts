@@ -9,7 +9,7 @@
 
 import type { TrafficContact } from '../../../../shared/traffic-types';
 import type { ProximityResult } from './proximity';
-import { ALT_STATE_COLOR, altitudeColorState, type AltitudeBand } from './contact-style';
+import { ALT_STATE_COLOR, CATEGORY_LABEL, altitudeColorState, type AltitudeBand } from './contact-style';
 
 function row(label: string, value: string): string {
   return `<div style="display:flex;justify-content:space-between;gap:14px;line-height:1.7">
@@ -29,7 +29,11 @@ export function buildContactPopup(
   band: AltitudeBand,
 ): string {
   const title = c.callsign || c.registration || c.id;
-  const sub = [c.source === 'ogn' ? 'Glider (OGN)' : 'ADS-B', c.model, c.registration].filter(Boolean).join(' • ');
+  // Lead with what the thing IS in plain words; the raw type code and data
+  // source come after (B412 alone means nothing to most operators).
+  const sourceLabel = c.source === 'ogn' ? 'OGN' : c.source === 'remoteid' ? 'Remote ID' : 'ADS-B';
+  const sub = [CATEGORY_LABEL[c.category], c.model, c.registration, sourceLabel]
+    .filter(Boolean).join(' • ');
   const color = ALT_STATE_COLOR[altitudeColorState(c, band)];
 
   const rows: string[] = [];

@@ -156,6 +156,13 @@ export const IPC_CHANNELS = {
 
   // MAVLink Status Messages (STATUSTEXT)
   MAVLINK_STATUSTEXT: 'mavlink:statustext',
+  // COMMAND_ACK refusal for an operator-issued nav command (goto/orbit/land):
+  // lets the map drop the optimistic target overlay instead of drawing a
+  // destination the vehicle refused.
+  MAVLINK_COMMAND_REJECTED: 'mavlink:command-rejected',
+  // TERRAIN_REPORT (136) per vehicle: whether the FC actually holds terrain
+  // data. Gates terrain-relative commands in the UI before they get refused.
+  MAVLINK_TERRAIN_STATUS: 'mavlink:terrain-status',
 
   // Layout management
   LAYOUT_GET_ALL: 'layout:get-all',

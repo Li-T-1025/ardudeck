@@ -162,7 +162,7 @@ function DetachedChrome({ title }: { title: string }): JSX.Element {
             : 'text-content-tertiary hover:text-content hover:bg-surface-raised'
         }`}
         style={{ ['WebkitAppRegion' as never]: 'no-drag' as never }}
-        title={pinned ? 'Pinned on top — click to unpin' : 'Keep this window on top of ArduDeck'}
+        title={pinned ? 'Pinned on top, click to unpin' : 'Keep this window on top of ArduDeck'}
         aria-label="Toggle always on top"
       >
         {pinned ? (

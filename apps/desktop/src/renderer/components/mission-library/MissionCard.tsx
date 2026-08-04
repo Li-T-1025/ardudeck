@@ -49,13 +49,14 @@ function formatRelativeDate(iso: string): string {
 interface MissionCardProps {
   mission: MissionSummary;
   isSelected: boolean;
+  confirmDelete: boolean;
   onClick: () => void;
   onLoad: () => void;
   onDuplicate: () => void;
   onDelete: () => void;
 }
 
-export function MissionCard({ mission, isSelected, onClick, onLoad, onDuplicate, onDelete }: MissionCardProps) {
+export function MissionCard({ mission, isSelected, confirmDelete, onClick, onLoad, onDuplicate, onDelete }: MissionCardProps) {
   const { vehicles } = useSettingsStore();
   const distanceUnit = useSettingsStore((s) => s.unitPreferences.distance);
   const vehicle = vehicles.find(v => v.id === mission.vehicleProfileId);
@@ -133,8 +134,8 @@ export function MissionCard({ mission, isSelected, onClick, onLoad, onDuplicate,
         </div>
       )}
 
-      {/* Hover actions */}
-      <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1">
+      {/* Hover actions; stay visible while a delete is armed so the confirm state can't hide */}
+      <div className={`absolute top-2 right-2 transition-opacity flex items-center gap-1 ${confirmDelete ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}>
         <button
           onClick={(e) => { e.stopPropagation(); onLoad(); }}
           className="p-1.5 rounded-md bg-blue-600/20 hover:bg-blue-600/40 text-blue-400 transition-colors"
@@ -155,8 +156,12 @@ export function MissionCard({ mission, isSelected, onClick, onLoad, onDuplicate,
         </button>
         <button
           onClick={(e) => { e.stopPropagation(); onDelete(); }}
-          className="p-1.5 rounded-md bg-red-600/20 hover:bg-red-600/40 text-red-400 transition-colors"
-          title="Delete"
+          className={`p-1.5 rounded-md transition-colors ${
+            confirmDelete
+              ? 'bg-red-600/40 text-red-400 ring-1 ring-red-500/60'
+              : 'bg-red-600/20 hover:bg-red-600/40 text-red-400'
+          }`}
+          title={confirmDelete ? 'Click again to confirm' : 'Delete'}
         >
           <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />

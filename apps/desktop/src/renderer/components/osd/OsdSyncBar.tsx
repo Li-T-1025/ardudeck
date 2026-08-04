@@ -83,7 +83,7 @@ export function OsdSyncBar() {
         </button>
         <UploadButton offline={offline} busy={fc.busy} onUpload={uploadToFc} label="Upload layout" confirmLabel="Confirm layout" tip={offline ? 'Connect a flight controller first' : 'Write the element layout to the FC and save'} />
         {target === 'msp' && (
-          <UploadButton offline={offline} busy={fc.busy} onUpload={uploadFontToFc} label="Upload font" confirmLabel="Confirm font" tip="Write the current font to the FC's character NVM (analog/MAX7456) — reboot to apply" />
+          <UploadButton offline={offline} busy={fc.busy} onUpload={uploadFontToFc} label="Upload font" confirmLabel="Confirm font" tip="Write the current font to the FC's character NVM (analog/MAX7456), reboot to apply" />
         )}
       </div>
 

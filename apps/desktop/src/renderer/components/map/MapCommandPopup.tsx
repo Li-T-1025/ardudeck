@@ -12,6 +12,7 @@ import { useActiveVehicleStore, formationOf } from '../../stores/active-vehicle-
 import { mavTypeToTacticalClass, type TacticalVehicleClass } from './tactical-icon-pool';
 import { ScriptInstallModal } from '../script-installer/ScriptInstallModal';
 import { fenceWarningForPoint } from '../../utils/fence-check';
+import { useTerrainAvailable } from '../../stores/terrain-status-store';
 import type { AltReferenceFrame } from '../../../shared/mission-types.js';
 import {
   altitudeValueFromMeters,
@@ -158,7 +159,11 @@ export const MapCommandPopup: React.FC<MapCommandPopupProps> = ({
   const [altFrame, setAltFrame] = useState<AltReferenceFrame>(defaultCommandAltFrame);
   const chooseAltFrame = useCallback((f: AltReferenceFrame) => {
     setAltFrame(f);
-    setDefaultCommandAltFrame(f);
+    // Terrain never becomes the sticky default from here: most vehicles carry
+    // no terrain data (ArduDeck cannot upload it) and reject every terrain-frame
+    // command, so one exploratory click would silently break all future fly
+    // commands. Wanting terrain as the default is a deliberate Settings choice.
+    if (f !== 'terrain') setDefaultCommandAltFrame(f);
   }, [setDefaultCommandAltFrame]);
 
   const [installModalOpen, setInstallModalOpen] = useState(false);
@@ -240,6 +245,19 @@ export const MapCommandPopup: React.FC<MapCommandPopupProps> = ({
     [usesClickedPoint, lat, lon],
   );
 
+  // Terrain-relative gate. The FC refuses terrain-frame commands outright
+  // unless it holds terrain data (TERRAIN_REPORT loaded > 0), so a send that
+  // is certain to be refused is blocked here instead of failing after the
+  // fact. Script-path orbit ignores the frame field, so it stays sendable.
+  const terrainAvailable = useTerrainAvailable(targetSysid);
+  const terrainBlocks = useCallback(
+    (id: CommandId) =>
+      altFrame === 'terrain' && terrainAvailable !== true &&
+      (id === 'fly' || (id === 'orbit' && !scriptHealthy)),
+    [altFrame, terrainAvailable, scriptHealthy],
+  );
+  const sendBlockedByTerrain = terrainBlocks(meta.id);
+
   // ── unit display helpers ──────────────────────────────────────────────────
   const distanceStep = distanceUnit === 'm' || distanceUnit === 'ft' ? 5 : 0.01;
   const distanceLabel = UNIT_LABELS.distance[distanceUnit];
@@ -277,6 +295,7 @@ export const MapCommandPopup: React.FC<MapCommandPopupProps> = ({
   const send = useCallback((id: CommandId) => {
     const a = ACTIONS.find(x => x.id === id);
     if (!a || (a.script === 'required' && !scriptHealthy)) return;
+    if (terrainBlocks(id)) return;
     const signedRadius = direction === 'cw' ? radius : -radius;
     const signedYawRate = direction === 'cw' ? Math.abs(yawRate) : -Math.abs(yawRate);
     switch (id) {
@@ -325,7 +344,7 @@ export const MapCommandPopup: React.FC<MapCommandPopupProps> = ({
     lat, lon, altitude, altFrame, radius, direction, revolutions, spiralTargetAlt, climbRate,
     yawRate, climbRtlAlt, revealPullback, revealClimb, revealSpeed,
     strafeOffset, strafeLength, strafeSpeed, currentAltAgl, scriptHealthy,
-    onConfirm, onSetRoi,
+    onConfirm, onSetRoi, terrainBlocks,
   ]);
 
   const handleTileClick = useCallback((a: ActionMeta) => {
@@ -547,7 +566,10 @@ export const MapCommandPopup: React.FC<MapCommandPopupProps> = ({
               <button
                 type="button"
                 onClick={() => send(meta.id)}
-                className={`flex-1 rounded-lg px-3 py-2 text-xs font-semibold text-white transition-colors ${ACCENT[meta.accent].btn}`}
+                disabled={sendBlockedByTerrain}
+                className={`flex-1 rounded-lg px-3 py-2 text-xs font-semibold text-white transition-colors ${
+                  sendBlockedByTerrain ? 'cursor-not-allowed bg-surface-input !text-content-tertiary' : ACCENT[meta.accent].btn
+                }`}
               >
                 {meta.go}
               </button>
@@ -581,9 +603,24 @@ export const MapCommandPopup: React.FC<MapCommandPopupProps> = ({
             )}
 
             {altFrameSelectable && altFrame === 'terrain' && (
-              <div className="mt-1.5 text-[9.5px] text-content-tertiary">
-                Terrain-relative needs terrain data (TERRAIN_ENABLE) or a rangefinder, or the vehicle will reject the command.
-              </div>
+              sendBlockedByTerrain ? (
+                <div className="mt-1.5 flex items-center justify-between gap-2 rounded-md border border-rose-500/40 bg-rose-500/10 px-2 py-1.5">
+                  <span className="text-[11px] leading-snug font-medium text-rose-500">
+                    {targetLabel ?? 'Vehicle'} has no terrain data: it will reject this command.
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => chooseAltFrame('relative')}
+                    className="shrink-0 rounded-md bg-rose-600 px-2.5 py-1 text-[10.5px] font-semibold text-white hover:bg-rose-500"
+                  >
+                    Use Home
+                  </button>
+                </div>
+              ) : terrainAvailable === true ? (
+                <div className="mt-1.5 text-[9.5px] text-content-tertiary">
+                  Vehicle reports terrain data on board.
+                </div>
+              ) : null
             )}
           </>
         )}

@@ -31,6 +31,7 @@ interface InstanceSpectrum {
 export function SpectrumPanel() {
   const currentLog = useLogStore((s) => s.currentLog);
   const syncedXRange = useLogStore((s) => s.syncedXRange);
+  const syncZoomEnabled = useLogStore((s) => s.syncZoomEnabled);
   const isLight = useResolvedTheme() === 'light';
 
   const [msgType, setMsgType] = useState<string | null>(null);
@@ -66,7 +67,7 @@ export function SpectrumPanel() {
     ? field
     : (TYPE_PREFERENCE.find((p) => p.type === effectiveType && fieldsForType.includes(p.field))?.field ?? fieldsForType[0] ?? null);
 
-  const xWindow = followZoom ? syncedXRange : null;
+  const xWindow = followZoom && syncZoomEnabled ? syncedXRange : null;
 
   const spectra = useMemo<InstanceSpectrum[]>(() => {
     if (!currentLog || !effectiveType || !effectiveField) return [];
@@ -143,7 +144,7 @@ export function SpectrumPanel() {
       series: [
         { label: 'Hz' },
         ...spectra.map((s, i) => ({
-          label: s.inst !== null ? `${effectiveType}[${s.inst}]` : `${effectiveType}.${effectiveField}`,
+          label: s.inst !== null ? `${effectiveType}[${s.inst}].${effectiveField}` : `${effectiveType}.${effectiveField}`,
           stroke: SERIES_COLORS[i % SERIES_COLORS.length]!,
           width: 1.5,
           points: { show: false },
@@ -212,12 +213,15 @@ export function SpectrumPanel() {
         </select>
         <button
           onClick={() => setFollowZoom(!followZoom)}
+          disabled={!syncZoomEnabled}
           className={`text-[10px] px-2 py-0.5 rounded border transition-colors ${
-            followZoom
-              ? 'bg-blue-500/15 text-blue-400 border-blue-500/30'
-              : 'bg-surface text-content-tertiary border-subtle hover:text-content-secondary'
+            !syncZoomEnabled
+              ? 'bg-surface text-content-tertiary border-subtle opacity-50 cursor-not-allowed'
+              : followZoom
+                ? 'bg-blue-500/15 text-blue-400 border-blue-500/30'
+                : 'bg-surface text-content-tertiary border-subtle hover:text-content-secondary'
           }`}
-          data-tip="Analyse only the time window the charts are zoomed to"
+          data-tip={syncZoomEnabled ? 'Analyse only the time window the charts are zoomed to' : 'Enable chart sync to follow zoom'}
         >
           Follow zoom
         </button>

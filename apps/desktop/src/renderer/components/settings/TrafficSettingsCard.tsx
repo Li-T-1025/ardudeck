@@ -27,9 +27,9 @@ function Toggle({ on, onChange }: { on: boolean; onChange: (v: boolean) => void 
   return (
     <button
       onClick={() => onChange(!on)}
-      className={`w-9 h-5 rounded-full transition-colors relative flex-shrink-0 ${on ? 'bg-blue-600' : 'bg-surface-raised'}`}
+      className={`w-9 h-5 rounded-full transition-colors relative flex-shrink-0 ${on ? 'bg-blue-600' : 'bg-surface-inset'}`}
     >
-      <div className={`w-4 h-4 rounded-full bg-white absolute top-0.5 transition-all ${on ? 'left-[18px]' : 'left-0.5'}`} />
+      <div className={`w-4 h-4 rounded-full bg-white border border-strong shadow-sm absolute top-0.5 transition-all ${on ? 'left-[18px]' : 'left-0.5'}`} />
     </button>
   );
 }
@@ -85,7 +85,7 @@ export function TrafficSettingsCard() {
         </div>
         <div>
           <h3 className="text-sm font-medium text-content">Traffic & Gliders</h3>
-          <p className="text-xs text-content-secondary">ADS-B and OGN sources — toggle a layer on the map to go live</p>
+          <p className="text-xs text-content-secondary">ADS-B and OGN sources: toggle a layer on the map to go live</p>
         </div>
       </div>
 
@@ -248,7 +248,7 @@ export function TrafficSettingsCard() {
         <div className="bg-surface-input rounded-lg p-3 space-y-2">
           <div className="text-sm text-content font-medium">Altitude filter</div>
           <p className="text-xs text-content-secondary">
-            Your operating band (MSL), used as the default on the map. Below the floor is hidden; above the ceiling fades out (or is hidden, below). These are defaults — the on-map control governs the live view.
+            Your operating band (MSL), used as the default on the map. Below the floor is hidden; above the ceiling fades out (or is hidden, below). These are defaults. The on-map control governs the live view.
           </p>
           <div className="grid grid-cols-2 gap-2">
             <Field label="Floor (m)">

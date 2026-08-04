@@ -5,7 +5,7 @@ import { batteryParams, commonSafetyParams, simPhysicsParams, matches } from '..
 export const copterOctoPlus: VehicleTemplate = {
   slug: 'copter-octo-plus',
   name: 'Octocopter (+)',
-  description: 'Eight motors in + — symmetrical heavy lift',
+  description: 'Eight motors in +, symmetrical heavy lift',
   icon: Octagon,
   vehicleType: 'copter',
   category: 'multirotor',

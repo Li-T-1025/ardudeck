@@ -9,7 +9,7 @@ import { useState } from 'react';
 import { useActiveVehicleStore } from '../../stores/active-vehicle-store';
 import type { VehicleCommand } from '../../../shared/ipc-channels';
 
-type PendingConfirm = { label: string; cmd: VehicleCommand } | null;
+type PendingConfirm = { message: string; cmd: VehicleCommand } | null;
 
 export function FleetGroupActions() {
   const selected = useActiveVehicleStore((s) => s.selectedVehicleKeys);
@@ -29,7 +29,8 @@ export function FleetGroupActions() {
     }
   };
 
-  const confirmThen = (label: string, cmd: VehicleCommand) => setPending({ label, cmd });
+  const confirmThen = (message: string, cmd: VehicleCommand) => setPending({ message, cmd });
+  const noun = selected.length === 1 ? 'vehicle' : 'vehicles';
 
   const btn = 'px-2 py-1 text-[11px] rounded bg-surface-raised hover:bg-surface-solid text-content transition-colors disabled:opacity-50';
 
@@ -40,13 +41,13 @@ export function FleetGroupActions() {
           {selected.length} selected
         </span>
         <button onClick={() => setSelected([])} className="text-[10px] text-content-tertiary hover:text-content">
-          clear
+          Clear
         </button>
       </div>
 
       {pending ? (
         <div className="flex flex-col gap-1.5 rounded bg-surface p-2 border border-subtle">
-          <span className="text-[11px] text-content">{pending.label} {selected.length} vehicles?</span>
+          <span className="text-[11px] text-content">{pending.message}</span>
           <div className="flex gap-1.5">
             <button disabled={busy} onClick={() => fanOut(pending.cmd)} className={`${btn} bg-red-600/80 hover:bg-red-600 text-white`}>
               Confirm
@@ -56,10 +57,10 @@ export function FleetGroupActions() {
         </div>
       ) : (
         <div className="grid grid-cols-2 gap-1.5">
-          <button disabled={busy} className={btn} onClick={() => confirmThen('Arm', { kind: 'arm' })}>Arm</button>
-          <button disabled={busy} className={btn} onClick={() => confirmThen('Disarm', { kind: 'disarm' })}>Disarm</button>
-          <button disabled={busy} className={btn} onClick={() => confirmThen('RTL', { kind: 'rtl' })}>RTL</button>
-          <button disabled={busy} className={btn} onClick={() => confirmThen('Start mission on', { kind: 'mission-start' })}>Start</button>
+          <button disabled={busy} className={btn} onClick={() => confirmThen(`Arm ${selected.length} ${noun}?`, { kind: 'arm' })}>Arm</button>
+          <button disabled={busy} className={btn} onClick={() => confirmThen(`Disarm ${selected.length} ${noun}?`, { kind: 'disarm' })}>Disarm</button>
+          <button disabled={busy} className={btn} onClick={() => confirmThen(`Send ${selected.length} ${noun} home (RTL)?`, { kind: 'rtl' })}>RTL</button>
+          <button disabled={busy} className={btn} onClick={() => confirmThen(`Start mission on ${selected.length} ${noun}?`, { kind: 'mission-start' })}>Start</button>
         </div>
       )}
     </div>

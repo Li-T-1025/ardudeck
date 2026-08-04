@@ -1317,7 +1317,7 @@ function SensorCard({
             } ${isEnabled ? 'bg-emerald-500' : 'bg-gray-600'}`}
             title={isEnabled ? `Disable ${name} feature` : `Enable ${name} feature`}
           >
-            <div className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform ${
+            <div className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white border border-strong shadow-sm transition-transform ${
               isEnabled ? 'translate-x-5' : 'translate-x-0'
             }`} />
           </button>

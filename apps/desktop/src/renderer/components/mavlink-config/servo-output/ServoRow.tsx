@@ -92,7 +92,7 @@ export const ServoRow: React.FC<ServoRowProps> = React.memo(
             style={{ width: `${pct}%` }}
           />
           <div className="absolute inset-0 flex items-center justify-center text-xs font-mono text-content">
-            {liveVal > 0 ? liveVal : '—'}
+            {liveVal > 0 ? liveVal : '-'}
           </div>
         </div>
 

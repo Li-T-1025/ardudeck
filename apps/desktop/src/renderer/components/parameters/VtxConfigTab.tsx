@@ -106,7 +106,6 @@ export default function VtxConfigTab({ modified, setModified }: Props) {
       const data = await window.electronAPI.mspGetVtxConfig();
       if (data) {
         setConfig(data as VtxConfig);
-        console.log('[VtxConfig] Loaded:', data);
       } else {
         setError('VTX configuration not available');
       }
@@ -147,7 +146,6 @@ export default function VtxConfigTab({ modified, setModified }: Props) {
     setError(null);
     setSuccess(null);
     try {
-      console.log('[VtxConfig] Saving:', config);
       const saveSuccess = await window.electronAPI.mspSetVtxConfig(config);
       if (!saveSuccess) {
         setError('Failed to send VTX config');
@@ -155,14 +153,12 @@ export default function VtxConfigTab({ modified, setModified }: Props) {
       }
 
       // Save to EEPROM
-      console.log('[VtxConfig] Saving to EEPROM...');
       const eepromSuccess = await window.electronAPI.mspSaveEeprom();
       if (!eepromSuccess) {
         setError('Config sent but EEPROM save failed - changes may not persist');
         return;
       }
 
-      console.log('[VtxConfig] Saved successfully');
       setSuccess('VTX configuration saved');
       setModified(false);
     } catch (err) {
@@ -482,11 +478,11 @@ export default function VtxConfigTab({ modified, setModified }: Props) {
             <div
               onClick={() => updateConfig({ pitMode: !config.pitMode })}
               className={`w-11 h-6 rounded-full transition-colors cursor-pointer relative ${
-                config.pitMode ? 'bg-yellow-500' : 'bg-surface-raised'
+                config.pitMode ? 'bg-yellow-500' : 'bg-surface-inset'
               }`}
             >
               <div
-                className={`absolute w-4 h-4 bg-white rounded-full top-1 transition-transform ${
+                className={`absolute w-4 h-4 bg-white border border-strong shadow-sm rounded-full top-1 transition-transform ${
                   config.pitMode ? 'translate-x-6' : 'translate-x-1'
                 }`}
               />

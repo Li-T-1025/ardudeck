@@ -38,6 +38,7 @@ export function LogsView() {
                   : 'text-content-secondary hover:text-content hover:bg-surface'
             }`}
             disabled={tab.disabled}
+            data-tip={tab.disabled ? 'Open a log first' : undefined}
           >
             {tab.label}
             {tab.id === 'ai' && aiMessages.length > 0 && (

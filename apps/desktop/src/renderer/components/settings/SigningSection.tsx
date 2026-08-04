@@ -145,8 +145,8 @@ export function SigningSection() {
         <div className="rounded-lg border border-red-500/20 bg-red-500/5 px-3 py-2.5">
           <p className="text-xs text-red-400 font-medium mb-1">Signing key mismatch</p>
           <p className="text-xs text-content-secondary">
-            Your signing key doesn't match the vehicle/proxy key. Paste the base64 key from Mission Planner,
-            or enter the same passphrase used on the proxy.
+            Your signing key doesn't match the vehicle/proxy key. Paste the base64 key the vehicle was
+            set up with, or enter the same passphrase used on the proxy.
           </p>
         </div>
       )}
@@ -156,7 +156,7 @@ export function SigningSection() {
         <div className="rounded-lg border border-blue-500/20 bg-blue-500/5 px-3 py-2.5">
           <p className="text-xs text-content-secondary">
             Connected over {connectionState.connectionType === 'tcp' ? 'TCP' : 'UDP'}.
-            If using a proxy (UDPProxy/mavproxy), enter the same passphrase or paste the base64 key from Mission Planner.
+            If using a proxy (UDPProxy/mavproxy), enter the same passphrase or paste its base64 key.
             All saved keys are tried automatically on connect.
           </p>
         </div>
@@ -203,7 +203,7 @@ export function SigningSection() {
             <p className="text-xs text-content-secondary mb-2">
               {hasKey
                 ? 'Add another passphrase, base64, or hex key.'
-                : 'Enter a passphrase, or paste a base64/hex key from Mission Planner.'}
+                : 'Enter a passphrase, or paste a base64/hex key from another GCS.'}
             </p>
             <div className="flex gap-2">
               <div className="relative flex-1">
@@ -321,9 +321,9 @@ export function SigningSection() {
             <button
               onClick={handleToggleSigning}
               disabled={loading}
-              className={`relative w-10 h-5 rounded-full transition-colors shrink-0 ${enabled ? 'bg-emerald-500' : 'bg-surface-raised'}`}
+              className={`relative w-10 h-5 rounded-full transition-colors shrink-0 ${enabled ? 'bg-emerald-500' : 'bg-surface-inset'}`}
             >
-              <div className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-transform ${enabled ? 'translate-x-5' : 'translate-x-0.5'}`} />
+              <div className={`absolute top-0.5 w-4 h-4 rounded-full bg-white border border-strong shadow-sm transition-transform ${enabled ? 'translate-x-5' : 'translate-x-0.5'}`} />
             </button>
           </div>
 

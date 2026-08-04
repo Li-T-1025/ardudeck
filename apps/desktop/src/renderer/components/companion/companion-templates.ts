@@ -202,7 +202,7 @@ export const COMPANION_TEMPLATES: CompanionTemplate[] = [
   {
     id: 'openhd-air',
     name: 'OpenHD Air Unit',
-    description: 'Digital FPV system — HD video + telemetry + RC over WiFi broadcast. Up to 50km range.',
+    description: 'Digital FPV system: HD video + telemetry + RC over WiFi broadcast. Up to 50km range.',
     board: 'raspberry-pi',
     boardVariants: ['Pi Zero 2 W', 'Pi 3B+', 'Pi 4'],
     category: 'Video',

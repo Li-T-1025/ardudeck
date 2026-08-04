@@ -64,7 +64,7 @@ const QUICK_PRESETS = [
   { label: 'EKF', desc: 'Innovation test ratios', types: ['NKF4'], fields: { NKF4: ['SV', 'SP', 'SH'] } },
   { label: 'Power', desc: 'Board voltage', types: ['POWR'], fields: { POWR: ['Vcc'] } },
   { label: 'Motor Outputs', desc: 'PWM out per motor (RCOU)', types: ['RCOU'], fields: { RCOU: ['C1', 'C2', 'C3', 'C4', 'C5', 'C6', 'C7', 'C8'] } },
-  { label: 'ESC RPM', desc: 'RPM per motor — split by instance', types: ['ESC'], fields: { ESC: ['RPM'] } },
+  { label: 'ESC RPM', desc: 'RPM per motor: split by instance', types: ['ESC'], fields: { ESC: ['RPM'] } },
   { label: 'ESC Temp', desc: 'Temperature per ESC', types: ['ESC'], fields: { ESC: ['Temp'] } },
   { label: 'ESC Power', desc: 'Voltage & current per ESC', types: ['ESC'], fields: { ESC: ['Volt', 'Curr'] } },
   { label: 'Position', desc: 'Desired vs actual XY position', types: ['PSCN', 'PSCE'], fields: { PSCN: ['DPN', 'PN'], PSCE: ['DPE', 'PE'] } },
@@ -935,7 +935,7 @@ function ChartPanel({ chartId }: { chartId: string }) {
         onMouseDown={() => { if (!isActive) setActiveChartId(chartId); }}
       >
         <div className={`text-[10px] uppercase tracking-wider ${isActive ? 'text-blue-400 font-semibold' : 'text-content-tertiary'}`}>
-          Chart {chartIndex + 1}{isActive ? ' • picker target' : ' • click to target'}
+          Chart {chartIndex + 1}{chartIds.length > 1 ? (isActive ? ' • picker target' : ' • click to target') : ''}
         </div>
         <div className="text-content-secondary text-sm">Pick a quick plot or select fields</div>
         <div className="flex flex-wrap justify-center gap-2">
@@ -997,7 +997,7 @@ function ChartPanel({ chartId }: { chartId: string }) {
             {/* Header row — chart label + summary + expand/collapse */}
             <div className="flex items-center gap-2 px-3 py-1 text-[10px] min-h-[22px]">
               <span className={`uppercase tracking-wider shrink-0 ${isActive ? 'text-blue-400 font-semibold' : 'text-content-tertiary'}`}>
-                Chart {chartIndex + 1}{isActive ? ' • picker target' : ''}
+                Chart {chartIndex + 1}{chartIds.length > 1 && isActive ? ' • picker target' : ''}
               </span>
               {seriesCount === 0 ? (
                 <span className="text-content-tertiary italic">no fields selected</span>
@@ -1138,9 +1138,9 @@ function ChartPanel({ chartId }: { chartId: string }) {
                           <span className="w-3 h-[3px] rounded-full shrink-0" style={{ backgroundColor: it.color }} />
                           <span className="text-content-secondary truncate">{it.field}</span>
                         </span>
-                        <span className="text-right tabular-nums text-content-tertiary">{it.stats ? fmtStat(it.stats.min) : '—'}</span>
-                        <span className="text-right tabular-nums text-content">{it.stats ? fmtStat(it.stats.avg) : '—'}</span>
-                        <span className="text-right tabular-nums text-content-tertiary">{it.stats ? fmtStat(it.stats.max) : '—'}</span>
+                        <span className="text-right tabular-nums text-content-tertiary">{it.stats ? fmtStat(it.stats.min) : '-'}</span>
+                        <span className="text-right tabular-nums text-content">{it.stats ? fmtStat(it.stats.avg) : '-'}</span>
+                        <span className="text-right tabular-nums text-content-tertiary">{it.stats ? fmtStat(it.stats.max) : '-'}</span>
                       </div>
                     ))}
                   </div>
@@ -1731,9 +1731,11 @@ function FieldPickerPanel() {
           {search && (
             <button
               onClick={() => setSearch('')}
-              className="absolute right-1.5 top-1/2 -translate-y-1/2 text-content-secondary hover:text-content text-xs"
+              className="absolute right-1.5 top-1/2 -translate-y-1/2 text-content-secondary hover:text-content"
             >
-              x
+              <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+              </svg>
             </button>
           )}
         </div>
@@ -1780,7 +1782,7 @@ function FieldPickerPanel() {
                 onClick={() => toggleExpanded(type)}
                 className={`flex items-center gap-2 text-xs w-full rounded px-2 py-1.5 transition-colors hover:bg-surface-overlay-subtle`}
                 style={{ backgroundColor: hasSelection ? `${groupColor}${isLightTheme ? '20' : '18'}` : undefined, opacity: hasSelection ? 1 : (isLightTheme ? 0.6 : 0.45) }}
-                title={instanceCount ? `${instanceCount} instances — pick the field for all, or expand to pick a specific instance` : undefined}
+                title={instanceCount ? `${instanceCount} instances: pick the field for all, or expand to pick a specific instance` : undefined}
               >
                 <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: groupColor }} />
                 <span className={hasSelection ? 'font-semibold' : 'font-medium'} style={{ color: groupColor }}>{type}</span>
@@ -1827,7 +1829,7 @@ function FieldPickerPanel() {
                             checked={isChecked}
                             onChange={() => handleFieldToggle(type, field)}
                             className="rounded border bg-surface-raised text-blue-500 w-3 h-3 cursor-pointer"
-                            title={isEvent ? 'Event marker — renders as vertical line on chart' : showInstancePicker ? 'Plot all instances on the same chart' : undefined}
+                            title={isEvent ? 'Event marker, renders as vertical line on chart' : showInstancePicker ? 'Plot all instances on the same chart' : undefined}
                           />
                           {isChecked && !isEvent && lineColor && (
                             <span className="w-3 h-[3px] rounded-full flex-shrink-0" style={{ backgroundColor: lineColor }} />

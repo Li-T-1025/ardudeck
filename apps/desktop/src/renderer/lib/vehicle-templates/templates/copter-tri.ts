@@ -8,7 +8,7 @@ import { batteryParams, commonSafetyParams, simPhysicsParams, matches } from '..
 export const copterTri: VehicleTemplate = {
   slug: 'copter-tri',
   name: 'Tricopter',
-  description: 'Three motors + yaw servo — efficient and quirky',
+  description: 'Three motors + yaw servo, efficient and quirky',
   icon: Triangle,
   vehicleType: 'copter',
   category: 'multirotor',

@@ -66,7 +66,7 @@ export function BatteryPanel() {
         <div className={`inline-flex items-center gap-1.5 ${tone.text}`}>
           <LevelIcon level={level} unknown={unknown} />
           <span className="font-mono text-sm font-semibold">
-            {unknown ? '—' : `${level}%`}
+            {unknown ? '-' : `${level}%`}
           </span>
         </div>
       </div>

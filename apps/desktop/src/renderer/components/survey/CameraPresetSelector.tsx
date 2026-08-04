@@ -147,7 +147,7 @@ export function CameraPresetSelector({ value, onChange }: CameraPresetSelectorPr
               className={`w-full px-3 py-1.5 text-left text-xs hover:bg-purple-600/20 transition-colors ${
                 isCustom ? 'text-purple-300 bg-purple-600/10' : 'text-content-secondary'
               }`}
-              title="Camera not in presets — enter sensor/focal specs to compute the footprint"
+              title="Camera not in presets: enter sensor/focal specs to compute the footprint"
             >
               <div className="font-medium">Custom camera...</div>
               <div className="text-[10px] text-content-tertiary">Enter sensor + focal length</div>
@@ -157,7 +157,7 @@ export function CameraPresetSelector({ value, onChange }: CameraPresetSelectorPr
               className={`w-full px-3 py-1.5 text-left text-xs hover:bg-purple-600/20 transition-colors ${
                 isManual ? 'text-purple-300 bg-purple-600/10' : 'text-content-secondary'
               }`}
-              title="No camera — set the line spacing directly (e.g. rover/lawnmower deck width)"
+              title="No camera: set the line spacing directly (e.g. rover/lawnmower deck width)"
             >
               <div className="font-medium">No camera (manual width)...</div>
               <div className="text-[10px] text-content-tertiary">Set corridor width directly (rover/mower)</div>

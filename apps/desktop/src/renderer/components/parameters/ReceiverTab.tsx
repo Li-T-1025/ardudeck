@@ -428,7 +428,7 @@ export default function ReceiverTab({ isInav, modified, setModified, onNavigateT
         <div className="mt-4 space-y-4">
           <InfoBanner>
             Your transmitter sends stick commands to a small receiver wired to your flight controller.
-            Select the protocol that matches your receiver — check the label on your receiver if unsure.
+            Select the protocol that matches your receiver. Check the label on your receiver if unsure.
           </InfoBanner>
           {isInav ? (
             <>

@@ -7,7 +7,7 @@
  * Supports both MSP boards (modern) and CLI boards (legacy).
  */
 
-import React, { useEffect } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useQuickSetupStore } from '../../stores/quick-setup-store';
 import PresetSelectionStep from './steps/PresetSelectionStep';
 import TransmitterCheckStep from './steps/TransmitterCheckStep';
@@ -31,18 +31,31 @@ export const QuickSetupWizard: React.FC = () => {
     stopRcPolling,
   } = useQuickSetupStore();
 
+  // Close guard: past the first step, one Escape/X press arms the confirm, a second discards
+  const [confirmClose, setConfirmClose] = useState(false);
+  const confirmCloseTimer = useRef<number | null>(null);
+
   // Stop RC polling when closed
   useEffect(() => {
     if (!isOpen) {
       stopRcPolling();
+      setConfirmClose(false);
     }
   }, [isOpen, stopRcPolling]);
 
   // Handle close
-  const handleClose = () => {
+  const handleClose = useCallback(() => {
+    if (currentStep !== 'welcome' && !confirmClose) {
+      setConfirmClose(true);
+      if (confirmCloseTimer.current) window.clearTimeout(confirmCloseTimer.current);
+      confirmCloseTimer.current = window.setTimeout(() => setConfirmClose(false), 4000);
+      return;
+    }
+    if (confirmCloseTimer.current) window.clearTimeout(confirmCloseTimer.current);
+    setConfirmClose(false);
     stopRcPolling();
     closeWizard();
-  };
+  }, [currentStep, confirmClose, stopRcPolling, closeWizard]);
 
   // Handle escape key
   useEffect(() => {
@@ -54,7 +67,7 @@ export const QuickSetupWizard: React.FC = () => {
 
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [isOpen]);
+  }, [isOpen, handleClose]);
 
   if (!isOpen) return null;
 
@@ -76,19 +89,28 @@ export const QuickSetupWizard: React.FC = () => {
               <p className="text-xs text-content-secondary">Configure everything in one go</p>
             </div>
           </div>
-          <button
-            onClick={handleClose}
-            className="p-2 text-content-secondary hover:text-content hover:bg-surface-raised rounded-lg transition-colors"
-          >
-            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M6 18L18 6M6 6l12 12"
-              />
-            </svg>
-          </button>
+          <div className="flex items-center gap-2">
+            {confirmClose && (
+              <span className="text-xs text-amber-400">Press again to discard setup</span>
+            )}
+            <button
+              onClick={handleClose}
+              className={`p-2 rounded-lg transition-colors ${
+                confirmClose
+                  ? 'text-amber-400 bg-amber-500/20 hover:bg-amber-500/30'
+                  : 'text-content-secondary hover:text-content hover:bg-surface-raised'
+              }`}
+            >
+              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M6 18L18 6M6 6l12 12"
+                />
+              </svg>
+            </button>
+          </div>
         </div>
 
         {/* Progress indicator */}

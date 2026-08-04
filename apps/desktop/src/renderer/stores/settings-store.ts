@@ -314,6 +314,10 @@ interface SettingsStore {
   defaultCommandAltFrame: AltReferenceFrame;
   setDefaultCommandAltFrame: (frame: AltReferenceFrame) => void;
 
+  /** Offer feature-tour prompts when opening views. Off = tours never self-promote. */
+  tourPromptsEnabled: boolean;
+  setTourPromptsEnabled: (enabled: boolean) => void;
+
   // Console
   showDebugLogs: boolean;
   setShowDebugLogs: (enabled: boolean) => void;
@@ -775,6 +779,11 @@ export const useSettingsStore = create<SettingsStore>()(
     set({ defaultCommandAltFrame: frame });
   },
 
+  tourPromptsEnabled: true,
+  setTourPromptsEnabled: (enabled: boolean) => {
+    set({ tourPromptsEnabled: enabled });
+  },
+
   showDebugLogs: false,
   setShowDebugLogs: (enabled: boolean) => {
     set({ showDebugLogs: enabled });
@@ -948,6 +957,7 @@ export const useSettingsStore = create<SettingsStore>()(
           defaultCommandAltFrame: (['relative', 'terrain', 'asl'].includes(settingsRecord.defaultCommandAltFrame as string)
             ? settingsRecord.defaultCommandAltFrame as AltReferenceFrame
             : 'relative'),
+          tourPromptsEnabled: settingsRecord.tourPromptsEnabled !== false,
           showDebugLogs: !!settingsRecord.showDebugLogs,
           aiProvider: (settingsRecord.aiProvider as 'claude' | 'openai' | 'gemini' | null) ?? null,
           aiWarningDismissed: !!settingsRecord.aiWarningDismissed,
@@ -994,6 +1004,7 @@ export const useSettingsStore = create<SettingsStore>()(
         companionUnlocked: state.companionUnlocked,
         advancedCommandsUnlocked: state.advancedCommandsUnlocked,
         defaultCommandAltFrame: state.defaultCommandAltFrame,
+        tourPromptsEnabled: state.tourPromptsEnabled,
         showDebugLogs: state.showDebugLogs,
         aiProvider: state.aiProvider,
         aiWarningDismissed: state.aiWarningDismissed,

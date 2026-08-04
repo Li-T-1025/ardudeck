@@ -4,19 +4,19 @@
  * draws the rest of the fleet so the whole picture is on one map. Clicking a fleet marker
  * makes that vehicle active.
  *
- * GROUPING (declutter): when vehicles overlap on screen - which is what happens as you zoom
- * OUT, or when they share a spot like SITL at one home - their markers and labels pile into
- * an unreadable stack. We detect overlapping groups in screen space and pull the members in
- * around a MAIN vehicle:
- *   - the main is the formation leader (if a formation is active), else the active/selected
- *     vehicle, else the lowest sysid. It stays full size at its true position with its full
- *     label; everyone else is drawn smaller and tucked in close around it.
- *   - followers sit at their REAL bearing from the main, so the cluster resembles the actual
- *     formation (a vee stays a vee). When the group is genuinely stacked on one point (no
- *     real geometry, e.g. SITL home) we fall back to an even ring.
- * Each follower gets a thin leader line back to its true position and a COMPACT label (just
- * the SYS id, expanding to the full readout on hover). Zoomed in, vehicles separate in pixels
- * so nothing groups - you see real positions at full size.
+ * DENSITY LOD (declutter): every marker renders at its TRUE map position so a formation
+ * reads as its actual shape; what shrinks is the marker itself. Each vehicle's tier comes
+ * from its nearest neighbor in screen pixels (see marker-tier.ts):
+ *   - full: plenty of room, the usual 52px icon and label
+ *   - medium: neighbors closing in, a half-size disc with just the SYS id chip
+ *   - dot: packed tight, a small identity-colour dot with a heading tick, label on hover
+ * Formation leaders never drop below medium, keeping the gold ring + LEAD chip visible.
+ * A 6px hysteresis band stops markers flickering between tiers while vehicles jitter.
+ *
+ * The ONLY case that still fans out on a ring is a group genuinely stacked on one point
+ * (within MIN_SPREAD_M, e.g. SITL vehicles sharing a home): the main stays full size and
+ * the rest tuck onto a 32px ring with leader lines, since there is no real geometry to
+ * preserve. Groups with real spread are never ring-tucked - that destroyed the formation.
  *
  * Rendered inside the telemetry MapContainer.
  */
@@ -31,27 +31,25 @@ import { useFormationStore } from '../../stores/formation-store';
 import { useVehicleColor } from '../../stores/vehicle-appearance-store';
 import { useSettingsStore } from '../../stores/settings-store';
 import { formatAltitudeFromMeters, formatSpeedFromMetersPerSecond } from '../../../shared/user-units.js';
+import { tierFromDistance, type MarkerTier } from './marker-tier';
 
 const ICON_SIZE = 52;
 const ICON_CENTER = ICON_SIZE / 2;
-/** Markers whose centres are closer than this (px) are treated as overlapping. */
+/** Markers whose centres are closer than this (px) can ring-tuck when stacked. */
 const OVERLAP_PX = 46;
-/** Hard cap on how far apart (m) two vehicles can be and still group. Pixels alone aren't
- *  enough: when zoomed way out, a vehicle a kilometre away can fall within OVERLAP_PX and get
- *  wrongly tucked into a cluster it isn't part of. Grouping means "actually near", not just
- *  "near on screen". Well above any real formation spread, well below a strayed vehicle. */
-const MAX_CLUSTER_SPREAD_M = 250;
 /** Followers are drawn at this scale so the main vehicle reads as the focus. */
 const FOLLOWER_SCALE = 0.6;
 /** Distance (px) from the main to each follower's centre - tight, so they almost touch. */
 const RING_RADIUS = 32;
-/** Below this real separation (m) a group is "stacked on one point" -> even ring fallback. */
+/** Below this real separation (m) a group is "stacked on one point" (SITL home) and gets
+ *  the ring-tuck; anything with real spread keeps true positions and relies on tiers. */
 const MIN_SPREAD_M = 2;
 /** The main's info label box sits to its right (east). Reserve this sector (deg, ±around
  *  east) so followers never tuck in behind the box - they're pushed to the arc edge. */
 const LABEL_KEEPOUT_DEG = 65;
 
 type Offset = { dx: number; dy: number; scale: number; main: boolean };
+type MarkerLod = { tier: MarkerTier; offset?: Offset };
 
 /** Approx ground distance between two [lat,lon] points, metres (equirectangular). */
 function geoDistM(a: [number, number], b: [number, number]): number {
@@ -61,28 +59,18 @@ function geoDistM(a: [number, number], b: [number, number]): number {
   return Math.sqrt(dLat * dLat + dLon * dLon) * 6371000;
 }
 
-/** Screen-space bearing (radians) from one [lat,lon] to another: 0 = east, -PI/2 = north.
- *  Derived from lat/lon (not pixels), so the fan arrangement is identical at every zoom. */
-function screenBearing(from: [number, number], to: [number, number]): number {
-  const lat = (from[0] * Math.PI) / 180;
-  const dNorth = to[0] - from[0];
-  const dEast = (to[1] - from[1]) * Math.cos(lat);
-  return Math.atan2(-dNorth, dEast);
-}
-
 /**
- * Screen-space grouping offsets. Projects every vehicle to layer points, greedily groups the
- * ones that overlap, picks each group's main (leader > active > lowest sysid), keeps the main
- * at its true point, and rings the followers in close around it - at their true bearing when
- * the group has real spread, else evenly. Offsets are screen px (constant across zoom),
- * recomputed on zoom/pan and whenever positions change.
+ * Per-vehicle level of detail. Projects every vehicle to layer points, ring-tucks only the
+ * groups genuinely stacked on one point, then assigns everyone else a size tier from their
+ * nearest-neighbor screen distance. Recomputed on zoom/pan and whenever positions change;
+ * distances are screen px, so zooming in naturally promotes markers back to full size.
  */
-function useFanOffsets(
+function useMarkerLod(
   vehicles: FleetVehicle[],
   map: L.Map,
   leaderKeys: ReadonlySet<string>,
   activeKey: string | null,
-): Record<string, Offset> {
+): Record<string, MarkerLod> {
   const [tick, setTick] = useState(0);
   useEffect(() => {
     const bump = () => setTick((t) => t + 1);
@@ -94,6 +82,9 @@ function useFanOffsets(
     };
   }, [map]);
 
+  // Last tier per key, so tierFromDistance can hold a marker's tier through jitter.
+  const lastTierRef = useRef<Record<string, MarkerTier>>({});
+
   return useMemo(() => {
     const pts = vehicles
       .filter((v) => v.position)
@@ -102,7 +93,10 @@ function useFanOffsets(
         return { v, x: p.x, y: p.y, used: false };
       });
 
-    const offsets: Record<string, Offset> = {};
+    const lod: Record<string, MarkerLod> = {};
+
+    // Pass 1: ring-tuck ONLY groups stacked on one point (e.g. SITL sharing a home). A
+    // formation with real spread must keep true positions - shrinking (pass 2) handles it.
     for (let i = 0; i < pts.length; i++) {
       const a = pts[i];
       if (!a || a.used) continue;
@@ -112,8 +106,8 @@ function useFanOffsets(
         const b = pts[j];
         if (!b || b.used) continue;
         const nearOnScreen = Math.hypot(a.x - b.x, a.y - b.y) < OVERLAP_PX;
-        const nearOnGround = geoDistM(a.v.position as [number, number], b.v.position as [number, number]) < MAX_CLUSTER_SPREAD_M;
-        if (nearOnScreen && nearOnGround) {
+        const stacked = geoDistM(a.v.position as [number, number], b.v.position as [number, number]) < MIN_SPREAD_M;
+        if (nearOnScreen && stacked) {
           b.used = true;
           members.push(b);
         }
@@ -129,33 +123,46 @@ function useFanOffsets(
       if (!main) continue;
 
       const anchor = main;
-      const anchorPos = anchor.v.position as [number, number];
       const followers = members.filter((m) => m !== anchor);
       const span = 360 - 2 * LABEL_KEEPOUT_DEG; // arc available once the label sector is reserved
       followers.forEach((f, idx) => {
-        // Real bearing from the main when the group has actual geometry (zoom-invariant);
-        // an even ring only when the vehicles are genuinely stacked on one point (SITL home).
-        const apart = geoDistM(anchorPos, f.v.position as [number, number]) > MIN_SPREAD_M;
-        let deg: number;
-        if (apart) {
-          deg = (screenBearing(anchorPos, f.v.position as [number, number]) * 180) / Math.PI; // 0=east
-          // Nudge an east-pointing follower out of the label box's sector (keeps it visible).
-          if (Math.abs(deg) < LABEL_KEEPOUT_DEG) deg = deg >= 0 ? LABEL_KEEPOUT_DEG : -LABEL_KEEPOUT_DEG;
-        } else {
-          // Even ring across the arc that avoids the label box (east).
-          deg = LABEL_KEEPOUT_DEG + ((idx + 0.5) / followers.length) * span;
-        }
+        // Even ring across the arc that avoids the label box (east) - a stacked group has
+        // no geometry worth preserving.
+        const deg = LABEL_KEEPOUT_DEG + ((idx + 0.5) / followers.length) * span;
         const ang = (deg * Math.PI) / 180;
-        offsets[f.v.key] = {
-          dx: anchor.x + RING_RADIUS * Math.cos(ang) - f.x,
-          dy: anchor.y + RING_RADIUS * Math.sin(ang) - f.y,
-          scale: FOLLOWER_SCALE,
-          main: false,
+        lod[f.v.key] = {
+          tier: 'full',
+          offset: {
+            dx: anchor.x + RING_RADIUS * Math.cos(ang) - f.x,
+            dy: anchor.y + RING_RADIUS * Math.sin(ang) - f.y,
+            scale: FOLLOWER_SCALE,
+            main: false,
+          },
         };
+        lastTierRef.current[f.v.key] = 'full';
       });
-      offsets[anchor.v.key] = { dx: 0, dy: 0, scale: 1, main: true };
+      lod[anchor.v.key] = { tier: 'full', offset: { dx: 0, dy: 0, scale: 1, main: true } };
+      lastTierRef.current[anchor.v.key] = 'full';
     }
-    return offsets;
+
+    // Pass 2: density tier for everyone else. Nearest neighbor includes ring-tucked
+    // vehicles - a marker brushing against a stack should still step down.
+    for (const p of pts) {
+      if (lod[p.v.key]) continue;
+      let nearest = Infinity;
+      for (const q of pts) {
+        if (q === p) continue;
+        const d = Math.hypot(p.x - q.x, p.y - q.y);
+        if (d < nearest) nearest = d;
+      }
+      let tier = tierFromDistance(nearest, lastTierRef.current[p.v.key]);
+      lastTierRef.current[p.v.key] = tier;
+      // Leaders stay recognisable: never below medium, so the gold ring + LEAD chip and
+      // designation survive any density.
+      if (tier === 'dot' && leaderKeys.has(p.v.key)) tier = 'medium';
+      lod[p.v.key] = { tier };
+    }
+    return lod;
   }, [vehicles, map, tick, leaderKeys, activeKey]);
 }
 
@@ -165,11 +172,13 @@ function useFanOffsets(
  * rebuild is what made the icon flicker. Heading/speed/altitude are this vehicle's OWN live
  * values, applied by DOM mutation so every fleet icon shows its own telemetry, not zeros.
  */
-function FleetMarker({ v, isLeader, offset }: { v: FleetVehicle; isLeader: boolean; offset?: Offset }) {
+function FleetMarker({ v, isLeader, lod }: { v: FleetVehicle; isLeader: boolean; lod?: MarkerLod }) {
   const markerRef = useRef<L.Marker | null>(null);
   const identityColor = useVehicleColor(v.key, v.sysid);
   const altitudeUnit = useSettingsStore((s) => s.unitPreferences.altitude);
   const speedUnit = useSettingsStore((s) => s.unitPreferences.speed);
+  const offset = lod?.offset;
+  const tier = lod?.tier ?? 'full';
   const isMain = offset?.main ?? false;
   const icon = useMemo(
     () => createTacticalVehicleIcon({
@@ -180,10 +189,12 @@ function FleetMarker({ v, isLeader, offset }: { v: FleetVehicle; isLeader: boole
       designation: v.label,
       isLeader,
       bodyColor: identityColor,
-      // The group's main shows its full label; everyone else collapses to the SYS id chip.
+      // A stacked group's main shows its full label; everyone else collapses to the SYS id
+      // chip (medium/dot tiers restrict the label further in the factory).
       compact: !isMain,
+      tier,
     }),
-    [v.vehicleClass, v.state, v.mode, v.label, isLeader, identityColor, isMain],
+    [v.vehicleClass, v.state, v.mode, v.label, isLeader, identityColor, isMain, tier],
   );
 
   useEffect(() => {
@@ -264,14 +275,14 @@ export function FleetMarkers() {
   const activeVehicleKey = useActiveVehicleStore((s) => s.activeVehicleKey);
   const map = useMap();
   const leaderKeys = useMemo(() => new Set(Object.keys(formations)), [formations]);
-  const offsets = useFanOffsets(vehicles, map, leaderKeys, activeVehicleKey);
+  const lod = useMarkerLod(vehicles, map, leaderKeys, activeVehicleKey);
 
   return (
     <>
       {vehicles
         .filter((v) => !v.isActive && v.position !== null)
         .map((v) => (
-          <FleetMarker key={v.key} v={v} isLeader={leaderKeys.has(v.key)} offset={offsets[v.key]} />
+          <FleetMarker key={v.key} v={v} isLeader={leaderKeys.has(v.key)} lod={lod[v.key]} />
         ))}
     </>
   );

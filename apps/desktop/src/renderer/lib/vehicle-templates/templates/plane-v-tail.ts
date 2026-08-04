@@ -11,7 +11,7 @@ import {
 export const planeVTail: VehicleTemplate = {
   slug: 'plane-v-tail',
   name: 'V-Tail Plane',
-  description: 'Two combined pitch/yaw surfaces — cleaner drag profile',
+  description: 'Two combined pitch/yaw surfaces, cleaner drag profile',
   icon: Plane,
   vehicleType: 'plane',
   category: 'fixed-wing',

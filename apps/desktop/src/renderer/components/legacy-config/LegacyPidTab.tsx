@@ -119,7 +119,6 @@ export default function LegacyPidTab() {
     const updated = { ...pid, ...preset.pids };
     updatePid(updated);
 
-    console.log('[LegacyPidTab] Applying preset:', preset.name, 'for', platformType);
 
     // Send all CLI commands with correct iNav parameter names
     // For fixed-wing: fw_p_roll, fw_i_roll, fw_ff_roll (note: ff not d!)
@@ -135,7 +134,6 @@ export default function LegacyPidTab() {
       await new Promise(r => setTimeout(r, 50));
     }
 
-    console.log('[LegacyPidTab] Preset applied');
   };
 
   const saveCurrentAsProfile = () => {
@@ -162,7 +160,6 @@ export default function LegacyPidTab() {
     const updated = { ...pid, ...data };
     updatePid(updated);
 
-    console.log('[LegacyPidTab] Loading profile for', platformType);
 
     // Send all CLI commands with correct iNav parameter names
     for (const axis of ['roll', 'pitch', 'yaw'] as const) {
@@ -175,7 +172,6 @@ export default function LegacyPidTab() {
       await new Promise(r => setTimeout(r, 50));
     }
 
-    console.log('[LegacyPidTab] Profile loaded');
   };
 
   const axisColors = {

@@ -174,7 +174,7 @@ export function RelativeWaypointPopover({
       />
 
       <div
-        className="fixed z-[2001] bg-surface border border-default rounded-xl shadow-2xl"
+        className="fixed z-[2001] bg-surface-solid border border-subtle rounded-lg shadow-xl"
         style={{ left: position.left, top: position.top, width: POPOVER_WIDTH }}
         onKeyDown={handleKeyDown}
         onClick={(e) => e.stopPropagation()}
@@ -217,7 +217,7 @@ export function RelativeWaypointPopover({
             <label className="block text-[11px] text-content-secondary mb-1">Bearing</label>
             <div className="flex items-center gap-2">
               <CompassDial bearing={bearing} />
-              <div className="flex-1 flex items-center bg-surface-raised border border-subtle rounded-lg overflow-hidden">
+              <div className="flex-1 h-8 flex items-stretch bg-surface-input border border-default rounded overflow-hidden">
                 <input
                   ref={bearingInputRef}
                   type="number"
@@ -228,17 +228,17 @@ export function RelativeWaypointPopover({
                     const v = Number(e.target.value);
                     if (Number.isFinite(v)) setBearing(((v % 360) + 360) % 360);
                   }}
-                  className="flex-1 bg-transparent px-2 py-1.5 text-sm text-content outline-none"
+                  className="flex-1 min-w-0 bg-transparent px-2 text-sm text-content outline-none"
                 />
-                <span className="px-2 text-xs text-content-secondary">°</span>
+                <span className="px-2 self-center text-xs text-content-secondary">°</span>
                 <div className="flex flex-col border-l border-subtle">
                   <button
                     onClick={() => stepBearing(15)}
-                    className="px-2 text-[10px] text-content-secondary hover:bg-surface hover:text-content"
+                    className="flex-1 px-2 text-[9px] leading-none text-content-secondary hover:bg-surface-raised hover:text-content"
                   >+15</button>
                   <button
                     onClick={() => stepBearing(-15)}
-                    className="px-2 text-[10px] text-content-secondary hover:bg-surface hover:text-content border-t border-subtle"
+                    className="flex-1 px-2 text-[9px] leading-none text-content-secondary hover:bg-surface-raised hover:text-content border-t border-subtle"
                   >-15</button>
                 </div>
               </div>
@@ -266,10 +266,10 @@ export function RelativeWaypointPopover({
           {/* Distance row */}
           <div>
             <label className="block text-[11px] text-content-secondary mb-1">Distance</label>
-            <div className="flex items-center bg-surface-raised border border-subtle rounded-lg overflow-hidden">
+            <div className="h-8 flex items-stretch bg-surface-input border border-default rounded overflow-hidden">
               <button
                 onClick={() => stepDistance(-distanceStep)}
-                className="px-2 py-1.5 text-content-secondary hover:bg-surface hover:text-content border-r border-subtle"
+                className="px-2.5 text-content-secondary hover:bg-surface-raised hover:text-content border-r border-subtle"
               >-</button>
               <input
                 type="number"
@@ -308,12 +308,12 @@ export function RelativeWaypointPopover({
                     e.currentTarget.blur();
                   }
                 }}
-                className="flex-1 bg-transparent px-2 py-1.5 text-sm text-content outline-none text-center"
+                className="flex-1 min-w-0 bg-transparent px-2 text-sm text-content outline-none text-center"
               />
-              <span className="px-1 text-xs text-content-secondary">{UNIT_LABELS.distance[distanceUnit]}</span>
+              <span className="px-1 self-center text-xs text-content-secondary">{UNIT_LABELS.distance[distanceUnit]}</span>
               <button
                 onClick={() => stepDistance(distanceStep)}
-                className="px-2 py-1.5 text-content-secondary hover:bg-surface hover:text-content border-l border-subtle"
+                className="px-2.5 text-content-secondary hover:bg-surface-raised hover:text-content border-l border-subtle"
               >+</button>
             </div>
           </div>
@@ -321,7 +321,7 @@ export function RelativeWaypointPopover({
           {/* Insert position */}
           <div>
             <label className="block text-[11px] text-content-secondary mb-1">Insert</label>
-            <div className="flex items-center rounded-lg overflow-hidden border border-subtle">
+            <div className="flex items-center rounded overflow-hidden border border-subtle">
               <InsertButton
                 active={where === 'before'}
                 disabled={refSeq === 0}

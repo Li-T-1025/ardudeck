@@ -254,7 +254,7 @@ const ReceiverTab: React.FC = () => {
         <div className="space-y-4">
           <InfoBanner>
             Your transmitter sends stick commands to a receiver wired to your flight controller.
-            Select the protocol that matches your receiver — check the label on your receiver if unsure. Auto-Detect works for most setups.
+            Select the protocol that matches your receiver. Check the label on your receiver if unsure. Auto-Detect works for most setups.
           </InfoBanner>
           {/* Quick select buttons */}
           <div>
@@ -383,7 +383,7 @@ const ReceiverTab: React.FC = () => {
           </div>
         </div>
         <InfoBanner color="blue">
-          These are the min/max/center values your flight controller learned during RC calibration. If your sticks don't reach full range or center is off, recalibrate in Mission Planner or via the RC_CAL parameters.
+          These are the min/max/center values your flight controller learned during RC calibration. If your sticks don't reach full range or center is off, redo the radio calibration with full stick deflections, or adjust the RCn_MIN/MAX/TRIM parameters directly.
         </InfoBanner>
         <div className="mt-4 rounded-lg border-subtle overflow-hidden">
           <table className="w-full text-xs">

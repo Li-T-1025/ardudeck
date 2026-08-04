@@ -9,7 +9,7 @@ import { batteryParams, airspeedParams, commonSafetyParams, simPhysicsParams, ma
 export const vtolTailsitterConventional: VehicleTemplate = {
   slug: 'vtol-tailsitter-conventional',
   name: 'Tailsitter (conventional)',
-  description: 'Sits on its tail, tilts to fly forward — elevons for hover control',
+  description: 'Sits on its tail, tilts to fly forward, elevons for hover control',
   icon: RotateCcw,
   vehicleType: 'vtol',
   category: 'vtol',

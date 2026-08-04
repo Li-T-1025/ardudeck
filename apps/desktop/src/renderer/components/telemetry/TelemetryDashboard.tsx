@@ -12,6 +12,7 @@ import {
 import 'dockview-react/dist/styles/dockview.css';
 
 import { useTelemetryStore } from '../../stores/telemetry-store';
+import { useActiveVehicleStore } from '../../stores/active-vehicle-store';
 import { FleetStrip } from '../fleet/FleetStrip';
 import { DraggableFleetActions } from '../fleet/DraggableFleetActions';
 import { useLayoutStore } from '../../stores/layout-store';
@@ -51,6 +52,7 @@ import {
   PANEL_COMPONENTS,
 } from '../panels';
 import { useArduPilotSitlStore } from '../../stores/ardupilot-sitl-store';
+import { useMapInstrumentsStore, resolveInstrumentVisible } from '../../stores/map-instruments-store';
 import type { IDockviewHeaderActionsProps } from 'dockview-react';
 
 // Panel component wrapper for dockview. Plain — no decoration. The pop-out
@@ -91,15 +93,38 @@ const PANEL_ID_TO_DETACHED: Record<string, { componentId: string; defaultBounds?
  * and the popped window ends up unstyled. Native Electron windows with IPC-
  * driven state are the only reliable path here.
  */
+/**
+ * Panels that have a floating map-instrument counterpart. The attitude panel
+ * is deliberately absent: the attitude ball is MapPanel-local useState, not
+ * reachable from this header.
+ */
+const PANEL_ID_TO_INSTRUMENT: Record<string, string> = {
+  battery: 'battery',
+  gps: 'gps',
+  altitude: 'altitude',
+  speed: 'speed',
+  position: 'flight-data',
+  flightMode: 'flight-mode',
+  safetyMonitor: 'annunciator',
+};
+
 function PanelHeaderActions(props: IDockviewHeaderActionsProps): JSX.Element | null {
   const active = props.activePanel;
-  if (!active) return null;
   // Preset panels use the bare id ("map"); panels added via the Add Panel menu
   // get a unique "<id>-<timestamp>". Match either so menu-added panels (e.g.
   // Camera, which is never in a preset) still get a Pop out button.
-  const baseId = Object.keys(PANEL_ID_TO_DETACHED).find(
-    (k) => active.id === k || active.id.startsWith(`${k}-`),
+  const baseId = active
+    ? Object.keys(PANEL_ID_TO_DETACHED).find(
+        (k) => active.id === k || active.id.startsWith(`${k}-`),
+      )
+    : undefined;
+  const instrumentId = baseId ? PANEL_ID_TO_INSTRUMENT[baseId] : undefined;
+  // Hooks stay above the early returns so their order never changes.
+  const instrumentVisible = useMapInstrumentsStore((s) =>
+    instrumentId ? resolveInstrumentVisible(s.visible, instrumentId) : false,
   );
+  const toggleInstrument = useMapInstrumentsStore((s) => s.toggle);
+  if (!active) return null;
   const mapping = baseId ? PANEL_ID_TO_DETACHED[baseId] : undefined;
   if (!mapping) return null;
   const title = active.title ?? active.id;
@@ -113,17 +138,35 @@ function PanelHeaderActions(props: IDockviewHeaderActionsProps): JSX.Element | n
   };
 
   return (
-    <button
-      onClick={handleClick}
-      className="h-7 px-2 mx-0.5 rounded-md inline-flex items-center gap-1.5 text-xs transition-colors text-content-secondary hover:text-content hover:bg-surface-raised"
-      title={`Open ${title} in new window`}
-    >
-      <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-          d="M14 3h7m0 0v7m0-7L10 14M5 5h4M5 19h14a0 0 0 010 0v-4" />
-      </svg>
-      <span>Pop out</span>
-    </button>
+    <>
+      {instrumentId && (
+        <button
+          onClick={() => toggleInstrument(instrumentId)}
+          className={`h-7 w-7 mx-0.5 rounded-md inline-flex items-center justify-center transition-colors ${
+            instrumentVisible
+              ? 'text-blue-500 bg-blue-500/10'
+              : 'text-content-secondary hover:text-content hover:bg-surface-raised'
+          }`}
+          data-tip={instrumentVisible ? 'Hide map instrument' : 'Show as instrument on the map'}
+        >
+          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M3.6 15a8.4 8.4 0 1116.8 0" />
+            <path strokeLinecap="round" d="M12 15l3.5-4.5" />
+          </svg>
+        </button>
+      )}
+      <button
+        onClick={handleClick}
+        className="h-7 px-2 mx-0.5 rounded-md inline-flex items-center gap-1.5 text-xs transition-colors text-content-secondary hover:text-content hover:bg-surface-raised"
+        title={`Open ${title} in new window`}
+      >
+        <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+            d="M14 3h7m0 0v7m0-7L10 14M5 5h4M5 19h14a0 0 0 010 0v-4" />
+        </svg>
+        <span>Pop out</span>
+      </button>
+    </>
   );
 }
 
@@ -651,7 +694,7 @@ function LayoutToolbar({
           </button>
           <button
             onClick={() => setShowSaveDialog(false)}
-            className="px-2 py-1 bg-surface-raised hover:bg-surface-raised text-content text-xs rounded transition-colors"
+            className="px-2 py-1 bg-surface-raised hover:bg-surface-solid text-content text-xs rounded transition-colors"
           >
             Cancel
           </button>
@@ -660,13 +703,13 @@ function LayoutToolbar({
         <>
           <button
             onClick={() => setShowSaveDialog(true)}
-            className="px-2 py-1 bg-surface-raised hover:bg-surface-raised text-content text-xs rounded transition-colors"
+            className="px-2 py-1 bg-surface-raised hover:bg-surface-solid text-content text-xs rounded transition-colors"
           >
             Save As...
           </button>
           <button
             onClick={onReset}
-            className="px-2 py-1 bg-surface-raised hover:bg-surface-raised text-content text-xs rounded transition-colors"
+            className="px-2 py-1 bg-surface-raised hover:bg-surface-solid text-content text-xs rounded transition-colors"
           >
             Reset
           </button>
@@ -681,7 +724,7 @@ function LayoutToolbar({
           onClick={() => setCacheActive(!cacheActive)}
           data-tip="Select an area on the map to save for offline use"
           className={`px-2 py-1 text-xs rounded border transition-colors flex items-center gap-1.5 shrink-0 ${
-            cacheActive ? 'bg-emerald-600 text-white border-emerald-500' : 'bg-surface-raised text-content border-default hover:bg-surface-raised'
+            cacheActive ? 'bg-emerald-600 text-white border-emerald-500' : 'bg-surface-raised text-content border-default hover:bg-surface-solid'
           }`}
         >
           <svg className="w-3.5 h-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -759,7 +802,7 @@ function AddPanelDropdown({ onAddPanel, supportsMissionPlanning, isMavlink, isSi
       <button
         onClick={() => setIsOpen(!isOpen)}
         data-tour="add-panel"
-        className="px-2 py-1 bg-surface-raised hover:bg-surface-raised text-content text-xs rounded transition-colors flex items-center gap-1"
+        className="px-2 py-1 bg-surface-raised hover:bg-surface-solid text-content text-xs rounded transition-colors flex items-center gap-1"
       >
         <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
@@ -825,11 +868,19 @@ function QuickStatsBar() {
   const setTelemetrySpeed = useSettingsStore((s) => s.setTelemetrySpeed);
   const altitudeUnit = useSettingsStore((s) => s.unitPreferences.altitude);
   const speedUnit = useSettingsStore((s) => s.unitPreferences.speed);
-  const batteryColor = battery.remaining < 0 ? 'text-content-secondary' : battery.remaining > 30 ? 'text-emerald-400' : battery.remaining > 15 ? 'text-yellow-400' : 'text-red-400';
   const isMavlink = connectionState.protocol === 'mavlink';
+  // Without a link the store holds zero-defaults; painting those red reads as
+  // a failing vehicle instead of "not connected", so show neutral dashes.
+  // Fleet/swarm links never set connectionState.isConnected (background
+  // transports), so mirror App's "fleet exists = connected" rule; otherwise the
+  // bar would dash out live fleet telemetry.
+  const fleetVehicleCount = useActiveVehicleStore((s) => Object.keys(s.knownVehicles).length);
+  const connected = connectionState.isConnected || fleetVehicleCount > 0;
+  const batteryColor = !connected || battery.remaining < 0 ? 'text-content-secondary' : battery.remaining > 30 ? 'text-emerald-400' : battery.remaining > 15 ? 'text-amber-500' : 'text-red-400';
 
   // GPS satellite color
-  const satColor = gps.fixType >= 3 ? 'text-emerald-400' : gps.fixType >= 2 ? 'text-yellow-400' : 'text-red-400';
+  const satColor = !connected ? 'text-content-secondary' : gps.fixType >= 3 ? 'text-emerald-400' : gps.fixType >= 2 ? 'text-amber-500' : 'text-red-400';
+  const stat = (v: string) => (connected ? v : '--');
 
   // Unhealthy sensors from SYS_STATUS
   const unhealthySensors: string[] = [];
@@ -858,36 +909,38 @@ function QuickStatsBar() {
     }`}>
       <div className="flex items-center gap-3">
         <span className={`px-2.5 py-1 rounded text-xs font-bold uppercase tracking-wide ${
-          flight.armed ? 'bg-red-500 text-white' : 'bg-surface-raised text-content-secondary'
+          flight.armed && connected ? 'bg-red-500 text-white' : 'bg-surface-raised text-content-secondary'
         }`}>
-          {flight.armed ? 'Armed' : 'Disarmed'}
+          {!connected ? 'No Link' : flight.armed ? 'Armed' : 'Disarmed'}
         </span>
-        <span className="text-lg font-medium text-content">{flight.mode}</span>
+        <span className={`text-lg font-medium ${connected ? 'text-content' : 'text-content-tertiary'}`}>
+          {connected ? flight.mode : 'Not connected'}
+        </span>
       </div>
       <div className="flex items-center gap-6 text-xs">
         <div className="flex items-baseline gap-1.5">
           <span className="text-content-secondary">HDG</span>
-          <span className="font-mono text-sm text-content">{vfrHud.heading.toFixed(0)}°</span>
+          <span className="font-mono text-sm text-content">{stat(`${vfrHud.heading.toFixed(0)}°`)}</span>
         </div>
         <div className="flex items-baseline gap-1.5">
           <span className="text-content-secondary">ALT</span>
-          <span className="font-mono text-sm text-content">{formatAltitudeFromMeters(vfrHud.alt, altitudeUnit)}</span>
+          <span className="font-mono text-sm text-content">{stat(formatAltitudeFromMeters(vfrHud.alt, altitudeUnit))}</span>
         </div>
         <div className="flex items-baseline gap-1.5">
           <span className="text-content-secondary">SPD</span>
-          <span className="font-mono text-sm text-content">{formatSpeedFromMetersPerSecond(vfrHud.groundspeed, speedUnit)}</span>
+          <span className="font-mono text-sm text-content">{stat(formatSpeedFromMetersPerSecond(vfrHud.groundspeed, speedUnit))}</span>
         </div>
         <div className="flex items-baseline gap-1.5">
           <span className="text-content-secondary">THR</span>
-          <span className="font-mono text-sm text-content">{vfrHud.throttle}%</span>
+          <span className="font-mono text-sm text-content">{stat(`${vfrHud.throttle}%`)}</span>
         </div>
         <div className="flex items-baseline gap-1.5">
           <span className="text-content-secondary">BAT</span>
-          <span className={`font-mono text-sm ${batteryColor}`}>{battery.voltage.toFixed(1)}V</span>
+          <span className={`font-mono text-sm ${batteryColor}`}>{stat(`${battery.voltage.toFixed(1)}V`)}</span>
         </div>
         <div className="flex items-baseline gap-1.5">
           <span className="text-content-secondary">SAT</span>
-          <span className={`font-mono text-sm ${satColor}`}>{gps.satellites}</span>
+          <span className={`font-mono text-sm ${satColor}`}>{stat(String(gps.satellites))}</span>
         </div>
         {unhealthySensors.length > 0 && (
           <SensorHealthWarning sensors={unhealthySensors} />

@@ -103,14 +103,14 @@ export function InspectorGraphsView(propsIn: Record<string, unknown>): JSX.Eleme
               ? 'bg-amber-500/15 border-amber-500/40 text-amber-500 hover:bg-amber-500/25'
               : 'bg-surface border-subtle text-content-secondary hover:bg-surface-raised hover:text-content'
           }`}
-          title={paused ? 'Resume graph sampling' : 'Pause graph sampling — graphs freeze, packets keep arriving'}
+          title={paused ? 'Resume graph sampling' : 'Pause graph sampling: graphs freeze, packets keep arriving'}
         >
           {paused ? 'Resume' : 'Pause'}
         </button>
         <button
           onClick={resetStats}
           className="px-2.5 py-1 text-xs rounded-md bg-surface border border-subtle text-content-secondary hover:bg-surface-raised hover:text-content transition-colors"
-          title="Clear inspector stats — graphs reset their sample buffers on the next packet"
+          title="Clear inspector stats: graphs reset their sample buffers on the next packet"
         >
           Clear
         </button>

@@ -8,9 +8,9 @@ interface ConfigSelectorsProps {
 const WING_SHAPES: Array<{ value: WingShape; label: string; hint: string }> = [
   { value: 'standard',     label: 'Standard',      hint: 'Traditional fuselage with separate elevator/rudder/ailerons' },
   { value: 'delta',        label: 'Delta',         hint: 'Triangular wing, elevons combine pitch+roll' },
-  { value: 'flying-wing',  label: 'Flying Wing',   hint: 'No tail, wing-only — elevons for control' },
+  { value: 'flying-wing',  label: 'Flying Wing',   hint: 'No tail, wing-only: elevons for control' },
   { value: 'v-tail',       label: 'V-Tail',        hint: 'Two surfaces mix pitch and yaw' },
-  { value: 'biplane',      label: 'Biplane',       hint: 'Two wings stacked — rare, nostalgic' },
+  { value: 'biplane',      label: 'Biplane',       hint: 'Two wings stacked: rare, nostalgic' },
   { value: 'inverted-v',   label: 'Inverted V',    hint: 'Inverted-V tail' },
 ];
 
@@ -95,7 +95,7 @@ function Selector<T extends string>({ label, value, options, onChange }: Selecto
         onChange={e => onChange(e.target.value as T)}
         className="w-full px-3 py-2 bg-surface-input border border-border rounded-lg text-content focus:outline-none focus:border-blue-500"
       >
-        <option value="">— select —</option>
+        <option value="">- select -</option>
         {options.map(o => (
           <option key={o.value} value={o.value}>{o.label}</option>
         ))}

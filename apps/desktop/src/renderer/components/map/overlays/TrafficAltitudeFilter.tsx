@@ -43,7 +43,7 @@ export function TrafficAltitudeFilterCard({ className }: { className?: string })
           className="flex items-center gap-1.5 h-8 px-2.5 bg-surface-overlay backdrop-blur-sm rounded-lg border border-subtle shadow-lg text-xs font-medium text-content hover:border-strong transition-colors"
         >
           <AltIcon className="w-3.5 h-3.5 text-content-secondary" />
-          <span className="tabular-nums">{band.floorMeters}–{band.ceilingMeters} m</span>
+          <span className="tabular-nums">{band.floorMeters}-{band.ceilingMeters} m</span>
         </button>
       </div>
     );
@@ -95,8 +95,8 @@ export function TrafficAltitudeFilterCard({ className }: { className?: string })
         className="mt-2.5 flex items-center justify-between w-full text-left"
       >
         <span className="text-[11px] text-content-secondary">Hide traffic above ceiling</span>
-        <span className={`w-8 h-[18px] rounded-full transition-colors relative flex-shrink-0 ${band.hardCeiling ? 'bg-sky-500' : 'bg-surface-raised'}`}>
-          <span className={`w-3.5 h-3.5 rounded-full bg-white absolute top-0.5 transition-all ${band.hardCeiling ? 'left-[14px]' : 'left-0.5'}`} />
+        <span className={`w-8 h-[18px] rounded-full transition-colors relative flex-shrink-0 ${band.hardCeiling ? 'bg-sky-500' : 'bg-surface-inset'}`}>
+          <span className={`w-3.5 h-3.5 rounded-full bg-white border border-strong shadow-sm absolute top-0.5 transition-all ${band.hardCeiling ? 'left-[14px]' : 'left-0.5'}`} />
         </span>
       </button>
       <p className="text-[10px] text-content-tertiary mt-1.5 leading-snug">

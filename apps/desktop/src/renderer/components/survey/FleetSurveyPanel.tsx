@@ -109,7 +109,7 @@ export function FleetSurveyPanel({ onClose }: { onClose: () => void }) {
                 type="number"
                 value={altStep}
                 onChange={(e) => setAltStep(Number(e.target.value) || 0)}
-                className="w-20 bg-input border border-subtle rounded px-2 py-1 font-mono text-right"
+                className="w-20 bg-surface-input border border-subtle rounded px-2 py-1 font-mono text-right"
               />
             </label>
 

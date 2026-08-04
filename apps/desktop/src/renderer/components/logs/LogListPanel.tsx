@@ -140,6 +140,9 @@ export function LogListPanel() {
   const [openingRecent, setOpeningRecent] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const [errorToast, setErrorToast] = useState<string | null>(null);
+  // Raw byte counts for the active download; total is 0 when the FC did not
+  // report a size, in which case the bar renders as indeterminate.
+  const [downloadStats, setDownloadStats] = useState<{ received: number; total: number } | null>(null);
   const [filter, setFilter] = useState('');
   const [recentsCollapsed, toggleRecents] = useCollapsed('logs.recents.collapsed');
   const [fcCollapsed, toggleFc] = useCollapsed('logs.fc.collapsed');
@@ -191,6 +194,7 @@ export function LogListPanel() {
 
   useEffect(() => {
     const cleanupProgress = window.electronAPI.onLogDownloadProgress((progress) => {
+      setDownloadStats({ received: progress.received, total: progress.total });
       useLogStore.getState().setDownloadProgress(
         progress.total > 0 ? (progress.received / progress.total) * 100 : 0,
       );
@@ -199,11 +203,14 @@ export function LogListPanel() {
     const cleanupComplete = window.electronAPI.onLogDownloadComplete(() => {
       useLogStore.getState().setDownloadingLogId(null);
       useLogStore.getState().setDownloadProgress(0);
+      setDownloadStats(null);
     });
 
-    const cleanupError = window.electronAPI.onLogDownloadError(() => {
+    const cleanupError = window.electronAPI.onLogDownloadError(({ error }) => {
       useLogStore.getState().setDownloadingLogId(null);
       useLogStore.getState().setDownloadProgress(0);
+      setDownloadStats(null);
+      setErrorToast(`Download failed: ${error}`);
     });
 
     const cleanupParseProgress = window.electronAPI.onLogParseProgress((progress) => {
@@ -234,6 +241,7 @@ export function LogListPanel() {
   const handleDownload = async (log: LogListEntry) => {
     useLogStore.getState().setDownloadingLogId(log.id);
     useLogStore.getState().setDownloadProgress(0);
+    setDownloadStats(null);
 
     const savedPath = await window.electronAPI.logDownload(log.id, log.size);
     useLogStore.getState().setDownloadingLogId(null);
@@ -286,6 +294,7 @@ export function LogListPanel() {
     window.electronAPI.logDownloadCancel();
     useLogStore.getState().setDownloadingLogId(null);
     useLogStore.getState().setDownloadProgress(0);
+    setDownloadStats(null);
   };
 
   return (
@@ -337,6 +346,15 @@ export function LogListPanel() {
         <div className="bg-surface rounded-xl border border-subtle p-6 text-center">
           <p className="text-content-secondary text-sm">
             Connect to a flight controller to download logs, or open a .bin file from disk.
+          </p>
+        </div>
+      )}
+
+      {/* Connected over a non-MAVLink protocol: FC log listing is unavailable */}
+      {isConnected && !isMavlink && availableLogs.length === 0 && recentLogs.length === 0 && !isParsingLog && (
+        <div className="bg-surface rounded-xl border border-subtle p-6 text-center">
+          <p className="text-content-secondary text-sm">
+            Listing logs from the flight controller needs a MAVLink connection; the current connection uses a different protocol. You can still open a .bin file from disk.
           </p>
         </div>
       )}
@@ -482,9 +500,25 @@ export function LogListPanel() {
                     <td className="px-4 py-3 text-right">
                       {downloadingLogId === log.id ? (
                         <div className="flex items-center justify-end gap-2">
-                          <div className="w-24 bg-surface-inset rounded-full h-1.5">
-                            <div className="bg-blue-500 h-1.5 rounded-full transition-all" style={{ width: `${downloadProgress}%` }} />
-                          </div>
+                          {downloadStats && downloadStats.total > 0 ? (
+                            <>
+                              <span className="text-xs text-content-secondary tabular-nums whitespace-nowrap">
+                                {downloadProgress.toFixed(0)}% &middot; {formatBytes(downloadStats.received)} / {formatBytes(downloadStats.total)}
+                              </span>
+                              <div className="w-24 bg-surface-inset rounded-full h-1.5">
+                                <div className="bg-blue-500 h-1.5 rounded-full transition-all" style={{ width: `${downloadProgress}%` }} />
+                              </div>
+                            </>
+                          ) : (
+                            <>
+                              <span className="text-xs text-content-secondary tabular-nums whitespace-nowrap">
+                                Downloading...{downloadStats && downloadStats.received > 0 ? ` ${formatBytes(downloadStats.received)}` : ''}
+                              </span>
+                              <div className="w-24 bg-surface-inset rounded-full h-1.5 overflow-hidden">
+                                <div className="w-1/3 bg-blue-500/70 h-1.5 rounded-full animate-pulse" />
+                              </div>
+                            </>
+                          )}
                           <button onClick={handleCancel} className="text-xs text-red-400 hover:text-red-300">
                             Cancel
                           </button>
@@ -502,9 +536,12 @@ export function LogListPanel() {
                             onClick={() => handleDownload(log)}
                             disabled={downloadingLogId !== null}
                             title="Re-download from FC"
-                            className="text-xs px-2 py-1 text-content-secondary hover:text-content disabled:opacity-50 rounded-md transition-colors"
+                            aria-label={`Re-download log ${log.id} from flight controller`}
+                            className="text-xs w-7 h-7 inline-flex items-center justify-center text-content-secondary hover:text-content hover:bg-surface-overlay-subtle disabled:opacity-50 rounded-md transition-colors"
                           >
-                            ↻
+                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99" />
+                            </svg>
                           </button>
                         </div>
                       ) : (

@@ -30,7 +30,23 @@ interface Toast {
 // Column widths kept in one place so header and rows stay aligned.
 const PARAM_GRID_COLUMNS = 'minmax(220px, 260px) minmax(140px, 200px) minmax(220px, 320px) minmax(0, 1fr) 140px';
 
-// Group colors now come from PARAMETER_GROUPS[].color
+// Group tab colors keyed by PARAMETER_GROUPS[].color. Literal class strings so
+// Tailwind's content scan keeps them; runtime-built `bg-${c}-500/20` strings get purged.
+const GROUP_TAB_COLORS: Record<string, { active: string; icon: string; badge: string }> = {
+  blue: { active: 'bg-blue-500/20 text-blue-400 border-blue-500/30', icon: 'text-blue-400', badge: 'bg-blue-500/30 text-blue-300' },
+  green: { active: 'bg-green-500/20 text-green-400 border-green-500/30', icon: 'text-green-400', badge: 'bg-green-500/30 text-green-300' },
+  orange: { active: 'bg-orange-500/20 text-orange-400 border-orange-500/30', icon: 'text-orange-400', badge: 'bg-orange-500/30 text-orange-300' },
+  red: { active: 'bg-red-500/20 text-red-400 border-red-500/30', icon: 'text-red-400', badge: 'bg-red-500/30 text-red-300' },
+  purple: { active: 'bg-purple-500/20 text-purple-400 border-purple-500/30', icon: 'text-purple-400', badge: 'bg-purple-500/30 text-purple-300' },
+  cyan: { active: 'bg-cyan-500/20 text-cyan-400 border-cyan-500/30', icon: 'text-cyan-400', badge: 'bg-cyan-500/30 text-cyan-300' },
+  emerald: { active: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30', icon: 'text-emerald-400', badge: 'bg-emerald-500/30 text-emerald-300' },
+  indigo: { active: 'bg-indigo-500/20 text-indigo-400 border-indigo-500/30', icon: 'text-indigo-400', badge: 'bg-indigo-500/30 text-indigo-300' },
+  teal: { active: 'bg-teal-500/20 text-teal-400 border-teal-500/30', icon: 'text-teal-400', badge: 'bg-teal-500/30 text-teal-300' },
+  yellow: { active: 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30', icon: 'text-yellow-400', badge: 'bg-yellow-500/30 text-yellow-300' },
+  sky: { active: 'bg-sky-500/20 text-sky-400 border-sky-500/30', icon: 'text-sky-400', badge: 'bg-sky-500/30 text-sky-300' },
+  amber: { active: 'bg-amber-500/20 text-amber-400 border-amber-500/30', icon: 'text-amber-400', badge: 'bg-amber-500/30 text-amber-300' },
+};
+const DEFAULT_TAB_COLOR = GROUP_TAB_COLORS.blue!;
 
 // Sort indicator component
 function SortIndicator({ column, currentColumn, direction }: {
@@ -208,10 +224,10 @@ const ParameterTable: React.FC = () => {
     return () => document.removeEventListener('mousedown', handleClick);
   }, [colorPickerOpen]);
 
-  // Auto-hide toast after 3 seconds
+  // Auto-hide toast: errors linger longer so they can be read
   const showToast = useCallback((message: string, type: ToastType) => {
     setToast({ message, type });
-    setTimeout(() => setToast(null), 3000);
+    setTimeout(() => setToast(null), type === 'error' ? 8000 : 3000);
   }, []);
 
   const handleRefresh = useCallback(() => {
@@ -404,7 +420,7 @@ const ParameterTable: React.FC = () => {
     }
   }, [fileApplyResult, setPendingRetryParams, clearFileApplyResult, closeCompareModal, markAllAsSaved, showToast]);
 
-  // Handle "Close" on summary dialog — dismiss and show reboot banner if needed
+  // Handle "Close" on summary dialog: dismiss and show reboot banner if needed
   const handleSummaryClose = useCallback(() => {
     if (fileApplyResult?.rebootRequired && fileApplyResult.rebootRequired.length > 0) {
       setRebootRequiredParams(fileApplyResult.rebootRequired);
@@ -569,13 +585,13 @@ const ParameterTable: React.FC = () => {
             </svg>
           </div>
 
-          {/* File operations — split Save button with dropdown */}
+          {/* File operations: split Save button with dropdown */}
           <div className="relative" ref={saveDropdownRef}>
             <div className="flex">
               <button
                 onClick={() => handleSaveToFile(false)}
                 disabled={isSavingFile || paramCount === 0}
-                className="px-3 py-2 bg-surface-raised hover:bg-surface-raised disabled:bg-surface text-content disabled:text-content-tertiary rounded-l-lg text-sm font-medium transition-colors flex items-center gap-2"
+                className="px-3 py-2 bg-surface-raised hover:bg-surface disabled:bg-surface text-content disabled:text-content-tertiary rounded-l-lg text-sm font-medium transition-colors flex items-center gap-2"
                 title="Save all parameters to file"
               >
                 <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -586,7 +602,7 @@ const ParameterTable: React.FC = () => {
               <button
                 onClick={() => setSaveDropdownOpen(prev => !prev)}
                 disabled={isSavingFile || paramCount === 0}
-                className="px-1.5 py-2 bg-surface-raised hover:bg-surface-raised disabled:bg-surface text-content disabled:text-content-tertiary rounded-r-lg border-l border/30 text-sm transition-colors"
+                className="px-1.5 py-2 bg-surface-raised hover:bg-surface disabled:bg-surface text-content disabled:text-content-tertiary rounded-r-lg border-l border/30 text-sm transition-colors"
                 title="Save options"
               >
                 <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -617,7 +633,7 @@ const ParameterTable: React.FC = () => {
           <button
             onClick={handleLoadFromFile}
             disabled={isLoadingFile}
-            className="px-3 py-2 bg-surface-raised hover:bg-surface-raised disabled:bg-surface text-content disabled:text-content-tertiary rounded-lg text-sm font-medium transition-colors flex items-center gap-2"
+            className="px-3 py-2 bg-surface-raised hover:bg-surface disabled:bg-surface text-content disabled:text-content-tertiary rounded-lg text-sm font-medium transition-colors flex items-center gap-2"
             title="Load parameters from file"
           >
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -628,7 +644,7 @@ const ParameterTable: React.FC = () => {
 
           <button
             onClick={() => setShowHistory(true)}
-            className="px-3 py-2 bg-surface-raised hover:bg-surface-raised text-content rounded-lg text-sm font-medium transition-colors flex items-center gap-2"
+            className="px-3 py-2 bg-surface-raised hover:bg-surface text-content rounded-lg text-sm font-medium transition-colors flex items-center gap-2"
             title="View parameter change history"
           >
             <History className="w-4 h-4" />
@@ -677,7 +693,7 @@ const ParameterTable: React.FC = () => {
                   className={`px-3 py-2 rounded-l-lg text-sm font-medium transition-colors flex items-center gap-2 ${
                     showOnlyNonDefault
                       ? 'bg-surface-raised text-content ring-1 ring-inset ring-blue-500/40'
-                      : 'bg-surface-raised hover:bg-surface-raised text-content'
+                      : 'bg-surface-raised hover:bg-surface text-content'
                   }`}
                   title={showOnlyNonDefault
                     ? 'Show all parameters'
@@ -691,7 +707,7 @@ const ParameterTable: React.FC = () => {
                 </button>
                 <button
                   onClick={() => setColorPickerOpen((o) => !o)}
-                  className="px-1.5 py-2 bg-surface-raised hover:bg-surface-raised text-content rounded-r-lg border-l border-subtle/40 text-sm transition-colors"
+                  className="px-1.5 py-2 bg-surface-raised hover:bg-surface text-content rounded-r-lg border-l border-subtle/40 text-sm transition-colors"
                   title="Pick highlight color"
                   aria-haspopup="menu"
                   aria-expanded={colorPickerOpen}
@@ -762,7 +778,7 @@ const ParameterTable: React.FC = () => {
               const count = groupCounts().get(group.id) ?? 0;
               const isActive = selectedGroup === group.id;
               if (group.id !== 'all' && count === 0) return null;
-              const c = group.color;
+              const tabColor = GROUP_TAB_COLORS[group.color] ?? DEFAULT_TAB_COLOR;
 
               return (
                 <button
@@ -770,18 +786,18 @@ const ParameterTable: React.FC = () => {
                   onClick={() => setSelectedGroup(group.id)}
                   className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors flex items-center gap-1.5 whitespace-nowrap ${
                     isActive
-                      ? `bg-${c}-500/20 text-${c}-400 border-${c}-500/30`
+                      ? tabColor.active
                       : 'text-content-secondary hover:text-content hover:bg-surface'
                   }`}
                   title={group.description}
                 >
-                  <svg className={`w-3.5 h-3.5 ${isActive ? `text-${c}-400` : `text-${c}-400 opacity-50`}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <svg className={`w-3.5 h-3.5 ${tabColor.icon} ${isActive ? '' : 'opacity-50'}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={group.icon} />
                   </svg>
                   {group.name}
                   {count > 0 && (
                     <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${
-                      isActive ? `bg-${c}-500/30 text-${c}-300` : 'bg-surface-raised text-content-secondary'
+                      isActive ? tabColor.badge : 'bg-surface-raised text-content-secondary'
                     }`}>
                       {count}
                     </span>
@@ -875,8 +891,17 @@ const ParameterTable: React.FC = () => {
               <svg className="w-16 h-16 mx-auto mb-4 text-content-tertiary" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
               </svg>
-              <p className="text-lg mb-2">Loading parameters...</p>
-              <p className="text-sm text-content-tertiary">Parameters will download automatically when connected</p>
+              {connectionState.isConnected ? (
+                <>
+                  <p className="text-lg mb-2">Loading parameters...</p>
+                  <p className="text-sm text-content-tertiary">Parameters will download automatically when connected</p>
+                </>
+              ) : (
+                <>
+                  <p className="text-lg mb-2">Not connected</p>
+                  <p className="text-sm text-content-tertiary">Connect a vehicle to load parameters.</p>
+                </>
+              )}
             </div>
           </div>
         ) : (
@@ -1208,7 +1233,7 @@ const ParameterTable: React.FC = () => {
                   <tr className="text-left text-xs text-content-secondary uppercase">
                     <th className="pb-2">Parameter</th>
                     <th className="pb-2 text-right">Original</th>
-                    <th className="pb-2 text-center px-2">-</th>
+                    <th className="pb-2 text-center px-2">→</th>
                     <th className="pb-2">New</th>
                   </tr>
                 </thead>
@@ -1224,7 +1249,7 @@ const ParameterTable: React.FC = () => {
                         )}
                       </td>
                       <td className="py-2 text-right font-mono text-content-secondary">{formatParamValue(param.originalValue as number)}</td>
-                      <td className="py-2 text-center text-content-tertiary">-</td>
+                      <td className="py-2 text-center text-content-tertiary">→</td>
                       <td className="py-2 font-mono text-amber-400">{formatParamValue(param.value)}</td>
                     </tr>
                   ))}
@@ -1260,7 +1285,7 @@ const ParameterTable: React.FC = () => {
         />
       )}
 
-      {/* File Compare Modal — shows compare view OR post-apply summary */}
+      {/* File Compare Modal: shows compare view OR post-apply summary */}
       {showCompareModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
           <div className="bg-surface border rounded-xl shadow-2xl max-w-2xl w-full mx-4 max-h-[640px] h-[640px] flex flex-col overflow-hidden">
@@ -1566,7 +1591,7 @@ const ParameterTable: React.FC = () => {
             <div className="px-6 py-4 border-t border-subtle flex justify-end">
               <button
                 onClick={() => setCycleResult(null)}
-                className="px-4 py-2 bg-surface-raised hover:bg-surface-raised text-content rounded-lg text-sm font-medium transition-colors"
+                className="px-4 py-2 bg-surface-raised hover:bg-surface text-content rounded-lg text-sm font-medium transition-colors"
               >
                 Close
               </button>

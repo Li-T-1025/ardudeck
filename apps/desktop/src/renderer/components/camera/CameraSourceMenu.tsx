@@ -197,7 +197,7 @@ function SourceRow({ source, selected, onSelect, onChange, onRemove }: {
             onChange={(e) => onChange({ hfovDeg: e.target.value ? Number(e.target.value) : undefined })}
             placeholder="°"
             className="w-12 rounded bg-surface-input px-1 py-0.5 text-content"
-            title="Horizontal field of view — needed for click-to-point accuracy"
+            title="Horizontal field of view, needed for click-to-point accuracy"
           />
         </label>
         {source.kind === 'wfbng' && (

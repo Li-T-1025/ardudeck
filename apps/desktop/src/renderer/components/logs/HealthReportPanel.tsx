@@ -179,7 +179,7 @@ Return 3-6 cards. Most important issues first.`;
           </div>
           <div>
             <h3 className="text-content font-semibold">
-              {meta.firmwareString || `${meta.vehicleType} ${meta.firmwareVersion}` || 'Flight Log'}
+              {meta.firmwareString || [meta.vehicleType, meta.firmwareVersion].filter(Boolean).join(' ').trim() || 'Flight Log'}
             </h3>
             <p className="text-xs text-content-secondary">
               {currentLogPath?.split('/').pop() ?? 'Unknown file'}

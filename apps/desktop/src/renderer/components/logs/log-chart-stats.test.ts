@@ -87,8 +87,8 @@ describe('fmtStat (adaptive precision)', () => {
   it('uses exponential for extremes and dashes non-finite', () => {
     expect(fmtStat(1e7)).toContain('e');
     expect(fmtStat(0.0001)).toContain('e');
-    expect(fmtStat(NaN)).toBe('—');
-    expect(fmtStat(Infinity)).toBe('—');
+    expect(fmtStat(NaN)).toBe('-');
+    expect(fmtStat(Infinity)).toBe('-');
   });
 });
 

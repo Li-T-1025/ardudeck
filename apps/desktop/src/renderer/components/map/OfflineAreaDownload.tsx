@@ -170,8 +170,8 @@ export function OfflineAreaDownload({ bounds, activeLayer }: OfflineAreaDownload
                   {progress.skippedTiles === progress.downloadedTiles
                     ? `All ${progress.downloadedTiles.toLocaleString()} tiles already cached (${formatBytes(progress.bytesDownloaded)})`
                     : progress.skippedTiles > 0
-                      ? `Done — ${(progress.downloadedTiles - progress.skippedTiles).toLocaleString()} new + ${progress.skippedTiles.toLocaleString()} cached tiles (${formatBytes(progress.bytesDownloaded)})`
-                      : `Done — ${progress.downloadedTiles.toLocaleString()} tiles saved (${formatBytes(progress.bytesDownloaded)})`
+                      ? `Done: ${(progress.downloadedTiles - progress.skippedTiles).toLocaleString()} new + ${progress.skippedTiles.toLocaleString()} cached tiles (${formatBytes(progress.bytesDownloaded)})`
+                      : `Done: ${progress.downloadedTiles.toLocaleString()} tiles saved (${formatBytes(progress.bytesDownloaded)})`
                   }
                 </div>
                 <button

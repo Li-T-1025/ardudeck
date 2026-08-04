@@ -11,7 +11,7 @@ import {
 export const planeFlyingWing: VehicleTemplate = {
   slug: 'plane-flying-wing',
   name: 'Flying Wing / Delta',
-  description: 'No tail — elevons on trailing edge',
+  description: 'No tail, elevons on trailing edge',
   icon: Triangle,
   vehicleType: 'plane',
   category: 'fixed-wing',

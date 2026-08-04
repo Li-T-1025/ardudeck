@@ -52,7 +52,7 @@ function register(channel: string, handler: (params: any) => Promise<any>): void
 
 async function init(): Promise<void> {
   if (!window.__testing) {
-    console.warn('[test-driver] window.__testing not available — preload dev bridge missing');
+    console.warn('[test-driver] window.__testing not available: preload dev bridge missing');
     return;
   }
 
@@ -277,7 +277,7 @@ async function init(): Promise<void> {
     if (tState?.flight?.armed) {
       return {
         ok: false,
-        reason: 'vehicle is armed — disarm before applying parameter changes',
+        reason: 'vehicle is armed, disarm before applying parameter changes',
       };
     }
 

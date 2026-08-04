@@ -42,6 +42,7 @@ import {
   Radio,
 } from 'lucide-react';
 import { useParameterStore } from '../../stores/parameter-store';
+import { useSettingsStore } from '../../stores/settings-store';
 import { useTelemetryStore } from '../../stores/telemetry-store';
 import { useEffectiveRc } from '../../stores/pseudo-tx-store';
 
@@ -63,7 +64,7 @@ const MODE_PWM_RANGES = [
   { slot: 6, min: 1750, max: 2100, label: 'Position 6 (High)', position: 'high', group: 3 },
 ];
 
-// Switch position groupings (for 3-position switch) — ordered top-to-bottom to match physical switch
+// Switch position groupings (for 3-position switch), ordered top-to-bottom to match physical switch
 const SWITCH_POSITIONS = [
   { name: 'High', label: 'Switch Up', slots: [5, 6], color: 'bg-orange-500' },
   { name: 'Mid', label: 'Switch Center', slots: [3, 4], color: 'bg-purple-500' },
@@ -246,7 +247,9 @@ const FlightModesTab: React.FC<FlightModesTabProps> = ({ vehicleCategory = 'copt
   const rcChannels = useTelemetryStore((s) => s.rcChannels);
   const lastRcChannels = useTelemetryStore((s) => s.lastRcChannels);
 
-  const [advancedMode, setAdvancedMode] = useState<boolean>(true);
+  const [advancedMode, setAdvancedMode] = useState<boolean>(
+    () => useSettingsStore.getState().uiVisibility.defaultAdvancedViews
+  );
   const [detectMode, setDetectMode] = useState(false);
   const [detectedChannel, setDetectedChannel] = useState<number | null>(null);
 
@@ -401,7 +404,7 @@ const FlightModesTab: React.FC<FlightModesTabProps> = ({ vehicleCategory = 'copt
         </button>
       </div>
 
-      {/* Mode Switch Channel — with auto-detect */}
+      {/* Mode Switch Channel, with auto-detect */}
       <div className="bg-surface rounded-xl border border-subtle p-4">
         {!detectMode ? (
           /* Default state: dropdown + detect button */
@@ -445,7 +448,7 @@ const FlightModesTab: React.FC<FlightModesTabProps> = ({ vehicleCategory = 'copt
                 <h3 className="text-sm font-medium text-cyan-300">Detecting Mode Switch Channel</h3>
                 <p className="text-xs text-content-secondary mt-0.5">
                   {detectedChannel
-                    ? `Channel ${detectedChannel} detected — use this channel?`
+                    ? `Channel ${detectedChannel} detected: use this channel?`
                     : 'Flip your mode switch on your transmitter'}
                 </p>
               </div>
@@ -485,7 +488,7 @@ const FlightModesTab: React.FC<FlightModesTabProps> = ({ vehicleCategory = 'copt
                     <div className="flex items-center justify-between">
                       <span className={`text-[11px] ${isDetected ? 'text-green-400 font-medium' : 'text-content-secondary'}`}>
                         CH{chNum}
-                        {isDetected && ' — Detected'}
+                        {isDetected && ' - Detected'}
                       </span>
                       <span className={`text-[10px] font-mono ${isDetected ? 'text-green-400' : 'text-content-tertiary'}`}>{value}</span>
                     </div>
@@ -506,13 +509,16 @@ const FlightModesTab: React.FC<FlightModesTabProps> = ({ vehicleCategory = 'copt
         )}
       </div>
 
-      {/* Quick Presets */}
-      <PresetSelector
-        presets={presetSelectorPresets}
-        onApply={applyPreset}
-        label="Quick Presets"
-        hint="Click to apply a mode configuration"
-      />
+      {/* Quick Presets. Hidden for rovers: the presets contain copter/plane mode numbers
+          which are wrong for the rover mode table. */}
+      {!isRover && (
+        <PresetSelector
+          presets={presetSelectorPresets}
+          onApply={applyPreset}
+          label="Quick Presets"
+          hint="Click to apply a mode configuration"
+        />
+      )}
 
       {/* Visual Switch Position Diagram */}
       <div className="bg-surface rounded-xl border border-subtle p-4">
@@ -824,10 +830,10 @@ const FlightModesTab: React.FC<FlightModesTabProps> = ({ vehicleCategory = 'copt
 
       {/* Save Reminder */}
       {modified > 0 && (
-        <div className="bg-amber-500/10 rounded-xl border-amber-500/30 p-4 flex items-center gap-3">
+        <div className="bg-amber-500/10 rounded-xl border border-amber-500/30 p-4 flex items-center gap-3">
           <AlertTriangle className="w-5 h-5 text-amber-400" />
           <p className="text-sm text-amber-400">
-            You have unsaved changes. Click <span className="font-medium">"Write to Flash"</span> in the header to save.
+            You have unsaved changes. Click <span className="font-medium">"Save All Changes"</span> in the header to save.
           </p>
         </div>
       )}
@@ -839,7 +845,6 @@ const FlightModesTab: React.FC<FlightModesTabProps> = ({ vehicleCategory = 'copt
           <div className="grid grid-cols-3 gap-3">
             {Object.entries(getModesForCategory(vehicleCategory))
               .filter(([, mode]) => mode.safe)
-              .slice(0, 9)
               .map(([num, mode]) => {
                 const IconComponent = mode.icon;
                 return (

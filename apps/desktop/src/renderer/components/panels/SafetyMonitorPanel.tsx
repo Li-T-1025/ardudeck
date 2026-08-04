@@ -67,7 +67,7 @@ function DeviationBar({ signal }: { signal: SignalResult }) {
         style={{ width: `${frac * 100}%`, background: tone.fill, boxShadow: `0 0 6px ${tone.border}` }}
       />
       {/* nominal-band edge marker */}
-      <div className="absolute top-0 bottom-0 w-px bg-white/30" style={{ left: `${nominalPct}%` }} />
+      <div className="absolute top-0 bottom-0 w-px" style={{ left: `${nominalPct}%`, backgroundColor: 'var(--text-tertiary)' }} />
     </div>
   );
 }

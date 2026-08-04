@@ -7,7 +7,9 @@ const LEGEND_ITEMS = [
 
 export function AirspaceLegend() {
   return (
-    <div className="absolute bottom-3 left-3 z-[1000] bg-surface-overlay rounded-lg px-3 py-2 text-xs text-content space-y-1">
+    // bottom-14, not bottom-3: the mission map's action bar lives at bottom-3 left-3 and
+    // would otherwise be drawn on top of this box.
+    <div className="absolute bottom-14 left-3 z-[1000] bg-surface-overlay rounded-lg px-3 py-2 text-xs text-content space-y-1">
       {LEGEND_ITEMS.map(({ label, color }) => (
         <div key={label} className="flex items-center gap-2">
           <div className="w-3 h-3 rounded-sm" style={{ background: color }} />

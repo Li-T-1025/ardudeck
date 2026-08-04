@@ -87,7 +87,7 @@ export function VehicleTemplatePicker({ onSelect, onImportFromConnected, onClose
           <div>
             <h2 className="text-base font-semibold text-content">Choose a vehicle template</h2>
             <p className="text-xs text-content-secondary mt-0.5">
-              Pick the configuration that matches your aircraft — you can tweak fields after.
+              Pick the configuration that matches your aircraft, you can tweak fields after.
             </p>
           </div>
           <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-surface-overlay-subtle text-content-secondary hover:text-content">

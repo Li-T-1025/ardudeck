@@ -117,7 +117,7 @@ function topoSort(
   }
 
   if (sorted.length !== nodes.length) {
-    errors.push('Graph contains a cycle — cannot compile');
+    errors.push('Graph contains a cycle, cannot compile');
   }
 
   return { sorted, errors };

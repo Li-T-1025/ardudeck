@@ -5,7 +5,7 @@ import { batteryParams, commonSafetyParams, simPhysicsParams, matches } from '..
 export const roverAckermann: VehicleTemplate = {
   slug: 'rover-ackermann',
   name: 'Ackermann Rover',
-  description: 'Car-style — single throttle, steering servo',
+  description: 'Car-style: single throttle, steering servo',
   icon: Car,
   vehicleType: 'rover',
   category: 'rover',

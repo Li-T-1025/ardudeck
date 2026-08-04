@@ -8,7 +8,7 @@ import { batteryParams, commonSafetyParams, simPhysicsParams, matches } from '..
 export const roverSkid: VehicleTemplate = {
   slug: 'rover-skid',
   name: 'Skid-Steer Rover',
-  description: 'Differential drive — tank-style, no steering servo',
+  description: 'Differential drive: tank-style, no steering servo',
   icon: Car,
   vehicleType: 'rover',
   category: 'rover',

@@ -83,6 +83,27 @@ const EV_NAMES: Record<number, string> = {
   73: 'Land repositioning active', 74: 'Standby enabled', 75: 'Standby disabled',
 };
 
+/** ArduPilot ModeReason enum: why the vehicle changed flight mode. */
+const MODE_REASONS: Record<number, string> = {
+  0: 'unknown', 1: 'RC command', 2: 'GCS command', 3: 'radio failsafe',
+  4: 'battery failsafe', 5: 'GCS failsafe', 6: 'EKF failsafe', 7: 'GPS glitch',
+  8: 'mission end', 9: 'throttle land escape', 10: 'fence breach',
+  11: 'terrain failsafe', 12: 'brake timeout', 13: 'flip complete',
+  14: 'avoidance', 15: 'avoidance recovery', 16: 'throw complete',
+  17: 'terminate', 18: 'toy mode', 19: 'crash failsafe', 20: 'soaring FBW-B',
+  21: 'soaring thermal detected', 22: 'soaring in thermal', 23: 'unavailable',
+  24: 'autorotation start', 25: 'autorotation bailout',
+  26: 'soaring drift exceeded', 27: 'rtl complete switching to vtol land',
+  28: 'rtl complete switching to fixed wing autoland', 29: 'mission cmd',
+  30: 'frsky command', 31: 'fence return previous mode',
+  32: 'QRTL instead of RTL', 33: 'auto rtl exit', 34: 'loiter alt reached QLand',
+  35: 'loiter alt in vtol land', 36: 'radio failsafe recovery',
+  37: 'QLand instead of RTL', 38: 'deadreckon failsafe',
+  39: 'mode takeoff failsafe', 40: 'DDS command', 41: 'aux function',
+  42: 'lua command', 43: 'auto landing pattern', 44: 'rc emergency stop',
+  45: 'crow mode switch',
+};
+
 /** Event ids that deserve attention even though they are "events" not errors. */
 const EV_WARN_IDS = new Set([19, 51, 54, 59, 60, 62]);
 
@@ -160,7 +181,7 @@ export function extractLogEvents(log: { messages: LogMessages; metadata?: { vehi
       kind: 'MODE',
       severity: 'info',
       label: `Mode: ${name}`,
-      detail: typeof rsn === 'number' ? `reason ${rsn}` : undefined,
+      detail: typeof rsn === 'number' ? `reason: ${MODE_REASONS[rsn] ?? rsn}` : undefined,
     });
   }
 

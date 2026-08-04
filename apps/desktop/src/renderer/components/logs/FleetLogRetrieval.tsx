@@ -148,8 +148,10 @@ export function FleetLogRetrieval({ onIngested }: { onIngested: () => void }) {
                           ) : done ? (
                             <span className="flex-1 flex items-center gap-1 text-emerald-400"><Check className="w-3 h-3" /> fetched</span>
                           ) : failed ? (
-                            <span className="flex-1 flex items-center gap-1 text-red-400" title={job?.message}>
-                              <AlertTriangle className="w-3 h-3" /> failed
+                            <span className="flex-1 min-w-0 flex items-center gap-1 text-red-400" title={job?.message}>
+                              <AlertTriangle className="w-3 h-3 shrink-0" />
+                              <span className="shrink-0">failed</span>
+                              {job?.message && <span className="truncate">: {job.message}</span>}
                             </span>
                           ) : (
                             <button

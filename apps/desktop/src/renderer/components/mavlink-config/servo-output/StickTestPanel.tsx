@@ -53,7 +53,7 @@ const SliderRow: React.FC<SliderRowExtProps> = ({ label, value, min, max, center
       />
       <div className="w-16 text-right text-sm font-mono text-content">{value}</div>
       <div className={`w-20 text-right text-xs font-mono ${fcValue === 0 ? 'text-content-tertiary' : matches ? 'text-emerald-400' : 'text-amber-400'}`}>
-        FC: {fcValue || '—'}
+        FC: {fcValue || '-'}
       </div>
     </div>
   );

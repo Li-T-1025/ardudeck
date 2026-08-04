@@ -375,7 +375,7 @@ export const useArduPilotSitlStore = create<ArduPilotSitlStore>()(
           };
           const suggested = safeFallback[vehicleType];
           if (suggested && suggested !== model) {
-            appendOutput(`\n"${model}" has crashed on every available track for this platform — skipping launch.\n`);
+            appendOutput(`\n"${model}" has crashed on every available track for this platform, skipping launch.\n`);
             set({
               crashRecovery: {
                 kind: 'switch-frame',
@@ -600,7 +600,7 @@ export const useArduPilotSitlStore = create<ArduPilotSitlStore>()(
             lastError: null,
           });
           get().appendOutput(
-            `\n--- Falling back to "${recovery.suggestedModel}" — "${recovery.failedModel}" crashed on both stable and dev tracks for this platform ---\n`,
+            `\n--- Falling back to "${recovery.suggestedModel}": "${recovery.failedModel}" crashed on both stable and dev tracks for this platform ---\n`,
           );
           await get().start();
         }
@@ -739,7 +739,7 @@ export const useArduPilotSitlStore = create<ArduPilotSitlStore>()(
           );
           if (result.success) {
             set({ flightGearRunning: true, flightGearStarting: false });
-            appendOutput('FlightGear launched — it will show the SITL vehicle once scenery finishes loading.\n');
+            appendOutput('FlightGear launched, it will show the SITL vehicle once scenery finishes loading.\n');
             return true;
           }
           set({ flightGearStarting: false, flightGearError: result.error ?? 'Failed to launch FlightGear' });

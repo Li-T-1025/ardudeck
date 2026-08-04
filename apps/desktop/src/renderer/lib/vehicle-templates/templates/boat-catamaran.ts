@@ -5,7 +5,7 @@ import { batteryParams, commonSafetyParams, simPhysicsParams, matches } from '..
 export const boatCatamaran: VehicleTemplate = {
   slug: 'boat-catamaran',
   name: 'Catamaran',
-  description: 'Twin-hull, twin-prop — stable platform',
+  description: 'Twin-hull, twin-prop, stable platform',
   icon: Anchor,
   vehicleType: 'boat',
   category: 'boat',

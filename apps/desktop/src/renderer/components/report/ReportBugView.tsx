@@ -41,7 +41,7 @@ export default function ReportBugView() {
   const boardInfo = isMspBoard
     ? `${connectionState.fcVariant} ${connectionState.fcVersion}`
     : isMavlinkBoard
-      ? `${connectionState.autopilot} ${connectionState.vehicleType}`
+      ? [connectionState.autopilot, connectionState.vehicleType].filter(Boolean).join(' ') || 'MAVLink vehicle'
       : 'Not connected';
 
   // Fetch encryption info on mount

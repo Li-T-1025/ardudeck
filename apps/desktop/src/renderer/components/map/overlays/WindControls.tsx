@@ -12,6 +12,7 @@ import { useSettingsStore } from '../../../stores/settings-store';
 import { WIND_ALTITUDES, type WindAltitude } from '../../../../shared/wind-types';
 import { formatAltitudeFromMeters } from '../../../../shared/user-units.js';
 import { windColor, convertSpeed, unitLabel } from '../wind/wind-field';
+import { useDraggableOverlay } from '../useDraggableOverlay';
 
 const LEGEND_SAMPLES = [0, 5, 10, 15, 20, 28];
 const PLAY_INTERVAL_MS = 600;
@@ -37,7 +38,12 @@ function shortDay(iso: string): string {
   return days[new Date(Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3]))).getUTCDay()] ?? '';
 }
 
-export function WindControls(): JSX.Element {
+// raised: clear the attitude-ball overlay (bottom-center, ~160px tall) on the
+// telemetry map; other hosts keep the default bottom placement. Both are only
+// the STARTING position: the bar is drag-to-place and persists where the
+// operator drops it (per dragKey, clamped inside the map panel).
+export function WindControls({ raised = false, dragKey = 'wind-bar' }: { raised?: boolean; dragKey?: string } = {}): JSX.Element {
+  const dragOverlay = useDraggableOverlay(dragKey);
   const field = useWindStore((s) => s.field);
   const loading = useWindStore((s) => s.loading);
   const error = useWindStore((s) => s.error);
@@ -63,10 +69,15 @@ export function WindControls(): JSX.Element {
     return () => window.clearInterval(id);
   }, [playing, frames.length]);
 
-  const status = loading ? 'Loading…' : field ? null : error;
+  const status = loading ? 'Loading…' : field ? null : error ? 'Wind data unavailable' : null;
 
   return (
-    <div className="absolute bottom-12 left-1/2 -translate-x-1/2 z-[1000] max-w-[92%] flex items-center gap-3 px-3 py-2 rounded-lg bg-surface-solid border border-subtle shadow-xl select-none">
+    <div
+      ref={dragOverlay.ref}
+      style={dragOverlay.style}
+      onPointerDown={dragOverlay.onPointerDown}
+      className={`absolute ${raised ? 'bottom-44' : 'bottom-12'} left-1/2 -translate-x-1/2 z-[1000] max-w-[92%] flex items-center gap-3 px-3 py-2 rounded-lg bg-surface-solid border border-subtle shadow-xl select-none`}
+    >
       {/* Altitude pills */}
       <div className="flex items-center gap-0.5 shrink-0">
         {WIND_ALTITUDES.map((a: WindAltitude) => (
@@ -102,11 +113,12 @@ export function WindControls(): JSX.Element {
         )}
       </button>
 
-      {/* Timeline */}
-      <div className="flex flex-col gap-0.5 min-w-[240px] flex-1">
+      {/* Timeline. min-w low enough that the bar fits narrow map panes - with 240px the
+          shrink-0 legend was pushed past the container's rounded corner. */}
+      <div className="flex flex-col gap-0.5 min-w-[140px] flex-1">
         <div className="flex items-center justify-between text-[10px] text-content-tertiary tabular-nums leading-none">
           <span>{frames[0] ? shortDay(frames[0].time) : ''}</span>
-          <span className="text-content font-medium">{current ? formatFrameTime(current.time) : (status ?? '—')}</span>
+          <span className="text-content font-medium truncate max-w-[180px]">{current ? formatFrameTime(current.time) : (status ?? '-')}</span>
           <span>{frames[lastIdx] ? shortDay(frames[lastIdx].time) : ''}</span>
         </div>
         <input
@@ -124,7 +136,7 @@ export function WindControls(): JSX.Element {
       <div className="w-px h-6 bg-subtle shrink-0" />
 
       {/* Legend + unit toggle */}
-      <div className="shrink-0 flex flex-col gap-0.5" data-tip="Regional flow (~25 km model). Not valley/ridge detail — trust onboard sensors near terrain.">
+      <div className="shrink-0 flex flex-col gap-0.5" data-tip="Regional flow (~25 km model). Not valley/ridge detail, trust onboard sensors near terrain.">
         <div className="w-20 h-2 rounded" style={{ background: legendGradient() }} />
         <div className="flex justify-between items-center text-[9px] text-content-tertiary leading-none tabular-nums">
           <span>0</span>

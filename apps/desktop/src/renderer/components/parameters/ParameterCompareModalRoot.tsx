@@ -148,7 +148,7 @@ function CompareView({
         <h3 className="text-lg font-semibold text-content">Review parameter changes</h3>
         <p className="text-sm text-content-secondary mt-1">
           {diffs.length === 0
-            ? 'No differences found — all parameters already match the vehicle.'
+            ? 'No differences found: all parameters already match the vehicle.'
             : `${diffs.length} parameter${diffs.length !== 1 ? 's' : ''} will change. Pick which to apply.`}
         </p>
         {fileVehicleType && currentVehicleType && fileVehicleType !== currentVehicleType && (

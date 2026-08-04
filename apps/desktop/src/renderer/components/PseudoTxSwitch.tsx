@@ -228,11 +228,11 @@ export function PseudoTxSwitch(): JSX.Element {
           aria-label="Fly with USB transmitter"
           onClick={() => (enabled ? disable() : enable())}
           className={`relative w-10 h-5 rounded-full transition-colors shrink-0 ${
-            enabled ? 'bg-emerald-500' : 'bg-surface-raised'
+            enabled ? 'bg-emerald-500' : 'bg-surface-inset'
           }`}
         >
           <div
-            className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-transform ${
+            className={`absolute top-0.5 w-4 h-4 rounded-full bg-white border border-strong shadow-sm transition-transform ${
               enabled ? 'translate-x-5' : 'translate-x-0.5'
             }`}
           />

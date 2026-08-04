@@ -194,7 +194,7 @@ export const CLAUDE_LOG_TOOLS = [
         fields: { type: 'array', items: { type: 'string' } },
         startS: { type: 'number' },
         endS: { type: 'number' },
-        maxPoints: { type: 'number', description: '1–500, default 200' },
+        maxPoints: { type: 'number', description: '1-500, default 200' },
       },
       required: ['type'],
     },

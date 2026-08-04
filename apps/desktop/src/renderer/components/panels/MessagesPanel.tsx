@@ -14,7 +14,7 @@ function severityColor(severity: number): string {
     case 3: // ERROR
       return 'text-red-400';
     case 4: // WARNING
-      return 'text-yellow-400';
+      return 'text-amber-500';
     case 5: // NOTICE
       return 'text-blue-400';
     case 6: // INFO
@@ -39,11 +39,11 @@ function severityBorder(severity: number): string {
     case 5:
       return 'border-l-blue-500';
     case 6:
-      return 'border-l-gray-500';
+      return 'border-l-subtle';
     case 7:
-      return 'border-l-gray-600';
+      return 'border-l-subtle';
     default:
-      return 'border-l-gray-600';
+      return 'border-l-subtle';
   }
 }
 
@@ -56,15 +56,15 @@ function severityBadgeBg(severity: number): string {
     case 3:
       return 'bg-red-500/20 text-red-400';
     case 4:
-      return 'bg-yellow-500/20 text-yellow-400';
+      return 'bg-amber-500/20 text-amber-500';
     case 5:
       return 'bg-blue-500/20 text-blue-400';
     case 6:
-      return 'bg-gray-500/20 text-gray-400';
+      return 'bg-surface-raised text-content-secondary';
     case 7:
-      return 'bg-gray-600/20 text-gray-500';
+      return 'bg-surface-raised text-content-tertiary';
     default:
-      return 'bg-gray-600/20 text-gray-500';
+      return 'bg-surface-raised text-content-tertiary';
   }
 }
 

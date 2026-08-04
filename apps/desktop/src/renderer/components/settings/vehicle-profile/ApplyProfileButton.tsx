@@ -95,7 +95,7 @@ function deriveButtonState(args: {
 } {
   if (args.inFlight) {
     const label = args.applyStatus === 'writing' ? 'Writing…' : 'Reviewing…';
-    return { label, subLabel: 'Apply in progress — review the Parameters tab', variant: 'primary', disabled: true };
+    return { label, subLabel: 'Apply in progress, review the Parameters tab', variant: 'primary', disabled: true };
   }
   if (args.globallyBusy) {
     return { label: 'Busy', subLabel: 'Another profile apply is in progress', variant: 'muted', disabled: true };

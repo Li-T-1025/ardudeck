@@ -40,7 +40,10 @@ const ENGINE_FAULT_KINDS: { id: EngineFaultKind; label: string }[] = [
 export default function SimTestPanel() {
   const isConnected = useConnectionStore((s) => s.connectionState.isConnected);
   const [open, setOpen] = useState(false);
-  const { pos, handleProps } = useDraggablePanel({ x: 12, y: 56 });
+  // Expanded panel defaults to the right side, clear of the fleet picker rail
+  // on the left edge (the collapsed button stays at top-left). 332 = panel
+  // width (w-80) + 12 px margin; the view fills its window, so innerWidth works.
+  const { pos, handleProps } = useDraggablePanel({ x: Math.max(12, window.innerWidth - 332), y: 56 });
 
   // The engine drives the sim iff its state WS is connected. Its live telemetry
   // (motors, faults, load) comes from the first vehicle in the store.

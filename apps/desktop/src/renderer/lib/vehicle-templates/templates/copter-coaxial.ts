@@ -8,7 +8,7 @@ import { batteryParams, commonSafetyParams, simPhysicsParams, matches } from '..
 export const copterCoaxial: VehicleTemplate = {
   slug: 'copter-coaxial',
   name: 'Coaxial Quad (X8)',
-  description: 'Eight motors in 4 coaxial pairs — industrial workhorse',
+  description: 'Eight motors in 4 coaxial pairs, industrial workhorse',
   icon: Circle,
   vehicleType: 'copter',
   category: 'multirotor',

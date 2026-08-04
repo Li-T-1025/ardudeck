@@ -440,6 +440,17 @@ interface WeatherData {
 // Convert km/h to knots
 const kmhToKnots = (kmh: number) => Math.round(kmh * 0.539957);
 
+// Weather API reports wind in km/h; render in the user's preferred speed unit
+function WindSpeedValue({ kmh, unit, className }: { kmh: number; unit: SpeedUnit; className: string }) {
+  const formatted = formatSpeedFromMetersPerSecond(kmh / 3.6, unit);
+  const splitAt = formatted.lastIndexOf(' ');
+  return (
+    <div className={className}>
+      {formatted.slice(0, splitAt)} <span className="text-sm font-normal text-content-secondary">{formatted.slice(splitAt + 1)}</span>
+    </div>
+  );
+}
+
 // Weather widget with caching and rate limiting
 const weatherCache: {
   data: WeatherData | null;
@@ -457,6 +468,7 @@ function WeatherWidget({ vehicleType }: { vehicleType?: VehicleType }) {
   const [loading, setLoading] = useState(false);
   const [userLocation, setUserLocation] = useState<{ lat: number; lon: number } | null>(null);
   const [locationSource, setLocationSource] = useState<'vehicle' | 'device' | null>(null);
+  const speedUnit = useSettingsStore((s) => s.unitPreferences.speed);
 
   // Fallback: Get user's device location if vehicle GPS is not available
   useEffect(() => {
@@ -469,12 +481,12 @@ function WeatherWidget({ vehicleType }: { vehicleType?: VehicleType }) {
     // Try IP-based geolocation (more reliable than browser geolocation)
     const fetchIpLocation = async () => {
       try {
-        // Use ip-api.com (free, no API key needed, 45 req/min limit)
-        const response = await fetch('http://ip-api.com/json/?fields=lat,lon,status');
+        // Use ipapi.co (free, no API key needed, https)
+        const response = await fetch('https://ipapi.co/json/');
         if (response.ok) {
           const data = await response.json();
-          if (data.status === 'success' && data.lat && data.lon) {
-            setUserLocation({ lat: data.lat, lon: data.lon });
+          if (!data.error && data.latitude && data.longitude) {
+            setUserLocation({ lat: data.latitude, lon: data.longitude });
             setLocationSource('device');
             return;
           }
@@ -800,7 +812,7 @@ function WeatherWidget({ vehicleType }: { vehicleType?: VehicleType }) {
       </div>
 
       {/* Wind section - show knots for maritime, km/h for others */}
-      <div className="bg-black/20 rounded-lg p-3 mb-3">
+      <div className="bg-surface-overlay-subtle rounded-lg p-3 mb-3">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <svg className="w-5 h-5 text-content-secondary" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -814,7 +826,7 @@ function WeatherWidget({ vehicleType }: { vehicleType?: VehicleType }) {
                 </>
               ) : (
                 <>
-                  <div className="text-lg font-semibold text-content">{weather.windSpeed} <span className="text-sm font-normal text-content-secondary">km/h</span></div>
+                  <WindSpeedValue kmh={weather.windSpeed} unit={speedUnit} className="text-lg font-semibold text-content" />
                   <div className="text-xs text-content-secondary">Wind from {getWindDirection(weather.windDir)}</div>
                 </>
               )}
@@ -830,9 +842,11 @@ function WeatherWidget({ vehicleType }: { vehicleType?: VehicleType }) {
               </>
             ) : (
               <>
-                <div className={`text-lg font-semibold ${weather.windGusts > weather.windSpeed * 1.3 ? 'text-amber-400' : 'text-content'}`}>
-                  {weather.windGusts} <span className="text-sm font-normal text-content-secondary">km/h</span>
-                </div>
+                <WindSpeedValue
+                  kmh={weather.windGusts}
+                  unit={speedUnit}
+                  className={`text-lg font-semibold ${weather.windGusts > weather.windSpeed * 1.3 ? 'text-amber-400' : 'text-content'}`}
+                />
                 <div className="text-xs text-content-secondary">Gusts</div>
               </>
             )}
@@ -842,7 +856,7 @@ function WeatherWidget({ vehicleType }: { vehicleType?: VehicleType }) {
 
       {/* Maritime-specific: Wave and Swell data */}
       {isMaritime && (weather.waveHeight !== undefined || weather.swellHeight !== undefined) && (
-        <div className="bg-black/20 rounded-lg p-3 mb-3">
+        <div className="bg-surface-overlay-subtle rounded-lg p-3 mb-3">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <svg className="w-5 h-5 text-cyan-400" viewBox="0 0 24 24" fill="currentColor">
@@ -851,7 +865,7 @@ function WeatherWidget({ vehicleType }: { vehicleType?: VehicleType }) {
               </svg>
               <div>
                 <div className={`text-lg font-semibold ${(weather.waveHeight || 0) > 1.5 ? 'text-amber-400' : 'text-content'}`}>
-                  {weather.waveHeight?.toFixed(1) || '—'} <span className="text-sm font-normal text-content-secondary">m</span>
+                  {weather.waveHeight?.toFixed(1) || '-'} <span className="text-sm font-normal text-content-secondary">m</span>
                 </div>
                 <div className="text-xs text-content-secondary">Wave Height</div>
               </div>
@@ -875,34 +889,34 @@ function WeatherWidget({ vehicleType }: { vehicleType?: VehicleType }) {
       <div className="grid grid-cols-3 gap-2 text-center">
         {isMaritime ? (
           <>
-            <div className="bg-black/20 rounded-lg py-2 px-1">
+            <div className="bg-surface-overlay-subtle rounded-lg py-2 px-1">
               <div className={`text-sm font-semibold ${weather.visibility < 5 ? 'text-amber-400' : 'text-content'}`}>
                 {weather.visibility}km
               </div>
               <div className="text-[10px] text-content-secondary uppercase">Visibility</div>
             </div>
-            <div className="bg-black/20 rounded-lg py-2 px-1">
+            <div className="bg-surface-overlay-subtle rounded-lg py-2 px-1">
               <div className="text-sm font-semibold text-content">{weather.pressure}</div>
               <div className="text-[10px] text-content-secondary uppercase">hPa</div>
             </div>
-            <div className="bg-black/20 rounded-lg py-2 px-1">
+            <div className="bg-surface-overlay-subtle rounded-lg py-2 px-1">
               <div className="text-sm font-semibold text-content">{weather.temp}°</div>
               <div className="text-[10px] text-content-secondary uppercase">Air Temp</div>
             </div>
           </>
         ) : (
           <>
-            <div className="bg-black/20 rounded-lg py-2 px-1">
+            <div className="bg-surface-overlay-subtle rounded-lg py-2 px-1">
               <div className={`text-sm font-semibold ${weather.visibility < 5 ? 'text-amber-400' : 'text-content'}`}>
                 {weather.visibility}km
               </div>
               <div className="text-[10px] text-content-secondary uppercase">Visibility</div>
             </div>
-            <div className="bg-black/20 rounded-lg py-2 px-1">
+            <div className="bg-surface-overlay-subtle rounded-lg py-2 px-1">
               <div className="text-sm font-semibold text-content">{weather.cloudCover}%</div>
               <div className="text-[10px] text-content-secondary uppercase">Clouds</div>
             </div>
-            <div className="bg-black/20 rounded-lg py-2 px-1">
+            <div className="bg-surface-overlay-subtle rounded-lg py-2 px-1">
               <div className="text-sm font-semibold text-content">{weather.pressure}</div>
               <div className="text-[10px] text-content-secondary uppercase">hPa</div>
             </div>
@@ -1344,7 +1358,7 @@ export function SettingsView() {
                 <div className="mt-4 pt-4 border-t border-subtle">
                   <div className="grid grid-cols-2 gap-3">
                     {/* Type-specific primary spec */}
-                    <div className="bg-black/20 rounded-lg p-2">
+                    <div className="bg-surface-overlay-subtle rounded-lg p-2">
                       <div className="text-xs text-content-secondary">
                         {activeVehicle.type === 'copter' && 'Frame'}
                         {activeVehicle.type === 'plane' && 'Wingspan'}
@@ -1363,17 +1377,17 @@ export function SettingsView() {
                       </div>
                     </div>
                     {/* Weight */}
-                    <div className="bg-black/20 rounded-lg p-2">
+                    <div className="bg-surface-overlay-subtle rounded-lg p-2">
                       <div className="text-xs text-content-secondary">Weight</div>
                       <div className="text-sm text-content font-medium">{fmtWeight(activeVehicle.weight, weightUnit)}</div>
                     </div>
                     {/* Battery */}
-                    <div className="bg-black/20 rounded-lg p-2">
+                    <div className="bg-surface-overlay-subtle rounded-lg p-2">
                       <div className="text-xs text-content-secondary">Battery</div>
                       <div className="text-sm text-content font-medium">{activeVehicle.batteryCells}S{activeVehicle.batteryChemistry && activeVehicle.batteryChemistry !== 'lipo' ? ` ${({ lihv: 'LiHV', lion: 'Li-Ion', life: 'LiFe' } as Record<string, string>)[activeVehicle.batteryChemistry] ?? ''}` : ''} {fmtCapacity(activeVehicle.batteryCapacity, electricCapacityUnit)}</div>
                     </div>
                     {/* Type-specific secondary spec */}
-                    <div className="bg-black/20 rounded-lg p-2">
+                    <div className="bg-surface-overlay-subtle rounded-lg p-2">
                       <div className="text-xs text-content-secondary">
                         {['copter', 'plane', 'vtol'].includes(activeVehicle.type) ? 'Est. Cruise' : 'Est. Speed'}
                       </div>
@@ -1388,31 +1402,31 @@ export function SettingsView() {
                       <div className="text-[10px] text-content-secondary uppercase tracking-wider mb-2">Board Stats</div>
                       <div className="grid grid-cols-3 gap-2">
                         {activeVehicle.boardStats.totalFlightCount != null && (
-                          <div className="bg-black/20 rounded-lg p-2">
+                          <div className="bg-surface-overlay-subtle rounded-lg p-2">
                             <div className="text-[10px] text-content-secondary">Flights</div>
                             <div className="text-xs text-content font-medium">{activeVehicle.boardStats.totalFlightCount}</div>
                           </div>
                         )}
                         {activeVehicle.boardStats.totalFlightTime != null && (
-                          <div className="bg-black/20 rounded-lg p-2">
+                          <div className="bg-surface-overlay-subtle rounded-lg p-2">
                             <div className="text-[10px] text-content-secondary">Flight Time</div>
                             <div className="text-xs text-content font-medium">{formatTime(activeVehicle.boardStats.totalFlightTime)}</div>
                           </div>
                         )}
                         {activeVehicle.boardStats.totalRunTime != null && (
-                          <div className="bg-black/20 rounded-lg p-2">
+                          <div className="bg-surface-overlay-subtle rounded-lg p-2">
                             <div className="text-[10px] text-content-secondary">Run Time</div>
                             <div className="text-xs text-content font-medium">{formatTime(activeVehicle.boardStats.totalRunTime)}</div>
                           </div>
                         )}
                         {activeVehicle.boardStats.totalDistance != null && (
-                          <div className="bg-black/20 rounded-lg p-2">
+                          <div className="bg-surface-overlay-subtle rounded-lg p-2">
                             <div className="text-[10px] text-content-secondary">Distance</div>
                             <div className="text-xs text-content font-medium">{formatDistance(activeVehicle.boardStats.totalDistance)}</div>
                           </div>
                         )}
                         {activeVehicle.boardStats.bootCount != null && (
-                          <div className="bg-black/20 rounded-lg p-2">
+                          <div className="bg-surface-overlay-subtle rounded-lg p-2">
                             <div className="text-[10px] text-content-secondary">Boots</div>
                             <div className="text-xs text-content font-medium">{activeVehicle.boardStats.bootCount}</div>
                           </div>
@@ -1445,7 +1459,7 @@ export function SettingsView() {
                 />
               </div>
               {/* Multi-level estimates table */}
-              <div className="bg-black/20 rounded-lg overflow-hidden">
+              <div className="bg-surface-overlay-subtle rounded-lg overflow-hidden">
                 <div className="grid grid-cols-3 text-[10px] text-content-secondary uppercase tracking-wider px-2 py-1.5 border-b border-subtle">
                   <span>Usage</span>
                   <span className="text-center">Time</span>
@@ -1935,7 +1949,7 @@ function OpenAipKeyInput() {
     <div>
       <label className="block text-xs text-content-secondary mb-1.5">
         OpenAIP API Key
-        <span className="text-content-tertiary ml-1">— free at</span>{' '}
+        <span className="text-content-tertiary ml-1">- free at</span>{' '}
         <a href="https://www.openaip.net" target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:underline">
           openaip.net
         </a>
@@ -1985,10 +1999,10 @@ function ConsoleSettingsSection() {
             <button
               onClick={() => setShowDebugLogs(!showDebugLogs)}
               className={`w-9 h-5 rounded-full transition-colors relative flex-shrink-0 ${
-                showDebugLogs ? 'bg-blue-600' : 'bg-surface-raised'
+                showDebugLogs ? 'bg-blue-600' : 'bg-surface-inset'
               }`}
             >
-              <div className={`w-4 h-4 rounded-full bg-white absolute top-0.5 transition-all ${
+              <div className={`w-4 h-4 rounded-full bg-white border border-strong shadow-sm absolute top-0.5 transition-all ${
                 showDebugLogs ? 'left-[18px]' : 'left-0.5'
               }`} />
             </button>
@@ -2050,7 +2064,7 @@ function AiAnalysisSection() {
             Enable AI-powered analysis of your flight logs. Your API key is encrypted and stored locally.
           </p>
 
-          <div className="flex items-start gap-2 bg-amber-500/8 border border-amber-500/20 rounded-lg p-3">
+          <div className="flex items-start gap-2 bg-amber-500/10 border border-amber-500/20 rounded-lg p-3">
             <svg className="w-4 h-4 text-amber-400 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
             </svg>
@@ -2133,6 +2147,8 @@ function ExperimentalFeaturesSection() {
   const setAdvancedCommandsUnlocked = useSettingsStore((s) => s.setAdvancedCommandsUnlocked);
   const defaultCommandAltFrame = useSettingsStore((s) => s.defaultCommandAltFrame);
   const setDefaultCommandAltFrame = useSettingsStore((s) => s.setDefaultCommandAltFrame);
+  const tourPromptsEnabled = useSettingsStore((s) => s.tourPromptsEnabled);
+  const setTourPromptsEnabled = useSettingsStore((s) => s.setTourPromptsEnabled);
 
   return (
     <div className="mt-8">
@@ -2164,10 +2180,10 @@ function ExperimentalFeaturesSection() {
             <button
               onClick={() => setCompanionUnlocked(!companionUnlocked)}
               className={`w-9 h-5 rounded-full transition-colors relative flex-shrink-0 ${
-                companionUnlocked ? 'bg-purple-600' : 'bg-surface-raised'
+                companionUnlocked ? 'bg-purple-600' : 'bg-surface-inset'
               }`}
             >
-              <div className={`w-4 h-4 rounded-full bg-white absolute top-0.5 transition-all ${
+              <div className={`w-4 h-4 rounded-full bg-white border border-strong shadow-sm absolute top-0.5 transition-all ${
                 companionUnlocked ? 'left-[18px]' : 'left-0.5'
               }`} />
             </button>
@@ -2196,15 +2212,41 @@ function ExperimentalFeaturesSection() {
               <button
                 onClick={() => setAdvancedCommandsUnlocked(!advancedCommandsUnlocked)}
                 className={`w-9 h-5 rounded-full transition-colors relative flex-shrink-0 ${
-                  advancedCommandsUnlocked ? 'bg-purple-600' : 'bg-surface-raised'
+                  advancedCommandsUnlocked ? 'bg-purple-600' : 'bg-surface-inset'
                 }`}
               >
-                <div className={`w-4 h-4 rounded-full bg-white absolute top-0.5 transition-all ${
+                <div className={`w-4 h-4 rounded-full bg-white border border-strong shadow-sm absolute top-0.5 transition-all ${
                   advancedCommandsUnlocked ? 'left-[18px]' : 'left-0.5'
                 }`} />
               </button>
             </div>
             {advancedCommandsUnlocked && <ScriptInstallerActions />}
+          </div>
+
+          {/* Feature tour prompts. The tours themselves stay available; this only
+              silences the automatic "want a walkthrough?" offers. */}
+          <div className="bg-surface-input rounded-lg p-3">
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex-1">
+                <div className="text-sm text-content font-medium mb-0.5">Feature tour prompts</div>
+                <div className="text-xs text-content-secondary">
+                  Offer guided walkthroughs when opening a view for the first time.
+                </div>
+              </div>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={tourPromptsEnabled}
+                onClick={() => setTourPromptsEnabled(!tourPromptsEnabled)}
+                className={`relative w-9 h-5 rounded-full transition-colors shrink-0 ${
+                  tourPromptsEnabled ? 'bg-blue-600' : 'bg-surface-inset border border-subtle'
+                }`}
+              >
+                <div className={`w-4 h-4 rounded-full bg-white border border-strong shadow-sm absolute top-0.5 transition-all ${
+                  tourPromptsEnabled ? 'left-[18px]' : 'left-0.5'
+                }`} />
+              </button>
+            </div>
           </div>
 
           {/* Default altitude reference for map commands (Fly here / Orbit).
@@ -4035,6 +4077,12 @@ function VehicleCard({
   canDelete,
 }: VehicleCardProps) {
   const { unitPreferences } = useSettingsStore();
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  useEffect(() => {
+    if (!confirmDelete) return;
+    const t = setTimeout(() => setConfirmDelete(false), 3000);
+    return () => clearTimeout(t);
+  }, [confirmDelete]);
   const altitudeUnit = unitPreferences.altitude;
   const electricCapacityUnit = unitPreferences.electricCapacity;
   const weightUnit = unitPreferences.weight;
@@ -4146,10 +4194,26 @@ function VehicleCard({
               </svg>
             </button>
             {canDelete && (
-              <button onClick={onDelete} className="p-1.5 text-content-secondary hover:text-red-400 transition-colors" title="Delete">
-                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                </svg>
+              <button
+                onClick={() => {
+                  if (confirmDelete) {
+                    onDelete();
+                  } else {
+                    setConfirmDelete(true);
+                  }
+                }}
+                className={confirmDelete
+                  ? 'px-2 py-1 rounded text-[11px] font-medium text-red-400 bg-red-500/10 transition-colors'
+                  : 'p-1.5 text-content-secondary hover:text-red-400 transition-colors'}
+                title={confirmDelete ? 'Click again to delete' : 'Delete'}
+              >
+                {confirmDelete ? (
+                  'Delete?'
+                ) : (
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                  </svg>
+                )}
               </button>
             )}
           </div>

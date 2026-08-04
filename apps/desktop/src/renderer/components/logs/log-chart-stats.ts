@@ -57,7 +57,7 @@ export function columnStats(col: ArrayLike<number>, i0: number, i1: number): Fie
 
 /** Compact numeric formatting for the stats readout (adaptive precision). */
 export function fmtStat(v: number): string {
-  if (!Number.isFinite(v)) return '—';
+  if (!Number.isFinite(v)) return '-';
   const a = Math.abs(v);
   if (a === 0) return '0';
   if (a >= 100000 || a < 0.001) return v.toExponential(1);

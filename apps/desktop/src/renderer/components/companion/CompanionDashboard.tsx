@@ -34,7 +34,7 @@ import { DroneBridgeSettingsPanel } from './panels/DroneBridgeSettingsPanel';
 type CompanionTab = 'store' | 'dronebridge' | 'dashboard';
 
 const TAB_ITEMS: Array<{ id: CompanionTab; label: string; icon: string }> = [
-  { id: 'store', label: 'Store', icon: 'M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4' },
+  { id: 'store', label: 'Templates', icon: 'M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4' },
   { id: 'dronebridge', label: 'DroneBridge', icon: 'M8.111 16.404a5.5 5.5 0 017.778 0M12 20h.01m-7.08-7.071c3.904-3.905 10.236-3.905 14.141 0M1.394 9.393c5.857-5.858 15.355-5.858 21.213 0' },
   { id: 'dashboard', label: 'Dashboard', icon: 'M4 5a1 1 0 011-1h14a1 1 0 011 1v2a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM4 13a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H5a1 1 0 01-1-1v-6zM16 13a1 1 0 011-1h2a1 1 0 011 1v6a1 1 0 01-1 1h-2a1 1 0 01-1-1v-6z' },
 ];
@@ -414,7 +414,7 @@ function DroneBridgeUsbReader() {
             onClick={handleGoLive}
             className="w-full py-2 bg-blue-600/80 hover:bg-blue-500/80 text-white text-xs font-medium rounded-lg transition-colors"
           >
-            I'm on the WiFi — Connect
+            I'm on the WiFi - Connect
           </button>
         </div>
 

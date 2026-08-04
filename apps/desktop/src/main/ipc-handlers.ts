@@ -173,6 +173,7 @@ import { createDataFlashParser, runHealthChecks } from '@ardudeck/dataflash-pars
 import { sitlProcess } from './sitl/sitl-process.js';
 import { mediaEngine } from './media/media-engine.js';
 import { ardupilotSitlProcess, swarmSitlProcess, ardupilotSitlDownloader, ardupilotRcSender } from './sitl/index.js';
+import { startSimHandoverServer, stopSimHandoverServer } from './sim/sim-handover-server.js';
 import { orchestratorProcess } from './orchestrator/orchestrator-process.js';
 import {
   initUnifiedLogger,
@@ -1414,6 +1415,16 @@ function createBackgroundDiscoveryHandler(
                 severity, severityLabel, text: `SYS ${packet.sysid}: ${text}`,
               });
             }
+          } else if (packet.msgid === MSG_TERRAIN_REPORT) {
+            // Same decode as the primary path: gates terrain-relative commands
+            // per fleet vehicle. Zero-pad, never length-guard (v2 truncation).
+            const p = padTo(packet.payload, 22);
+            safeSend(mainWindow, IPC_CHANNELS.MAVLINK_TERRAIN_STATUS, {
+              sysid: packet.sysid,
+              spacing: readUint16(p, 16),
+              pending: readUint16(p, 18),
+              loaded: readUint16(p, 20),
+            });
           } else if (packet.msgid === MSG_COMMAND_ACK && packet.payload.length >= 3) {
             const ackCommand = readUint16(packet.payload, 0);
             const ackResult = packet.payload[2] ?? 0;
@@ -1426,10 +1437,23 @@ function createBackgroundDiscoveryHandler(
             if (label && !(ackCommand === 176 && ackResult === 0)) {
               const MAV_RESULT_NAMES = ['ACCEPTED', 'TEMPORARILY_REJECTED', 'DENIED', 'UNSUPPORTED', 'FAILED', 'IN_PROGRESS'];
               const severity = ackResult === 0 ? 6 : 4;
+              // Terrain-frame goto refused: the generic FAILED gives the operator
+              // nothing to act on, but this cause has a one-click remedy.
+              const terrainHint = ackCommand === 192 && ackResult === 4
+                && lastGotoFrameBySysid.get(packet.sysid) === 11
+                ? ' (terrain-relative sent, vehicle has no terrain data. Switch "Above" to Home in the fly popup)'
+                : '';
               safeSend(mainWindow, IPC_CHANNELS.MAVLINK_STATUSTEXT, {
                 severity,
                 severityLabel: SEVERITY_LABELS[severity] ?? 'INFO',
-                text: `SYS ${packet.sysid}: ${label} ${MAV_RESULT_NAMES[ackResult] ?? `UNKNOWN(${ackResult})`}`,
+                text: `SYS ${packet.sysid}: ${label} ${MAV_RESULT_NAMES[ackResult] ?? `UNKNOWN(${ackResult})`}${terrainHint}`,
+              });
+            }
+            if ((ackCommand === 192 || ackCommand === 34 || ackCommand === 21)
+              && ackResult !== 0 && ackResult !== 5) {
+              safeSend(mainWindow, IPC_CHANNELS.MAVLINK_COMMAND_REJECTED, {
+                command: ackCommand, result: ackResult, sysid: packet.sysid,
+                frame: ackCommand === 192 ? lastGotoFrameBySysid.get(packet.sysid) : undefined,
               });
             }
           }
@@ -1549,6 +1573,10 @@ let cachedSysStatus: BoardDumpMavlink['sys_status'] | null = null;
 let cachedHeartbeat: BoardDumpMavlink['heartbeat'] | null = null;
 /** Last decoded flight-mode name from the primary heartbeat, for command logs. */
 let lastFlightModeName = 'Unknown';
+// Frame of the last DO_REPOSITION sent to each sysid: a bare FAILED ack can't
+// say WHY, but if we sent terrain-frame to a vehicle without terrain data the
+// cause is near-certain, so the refusal message can name it and the remedy.
+const lastGotoFrameBySysid = new Map<number, number>();
 // Last GPS_RAW_INT from the active vehicle, consumed by the NTRIP client's
 // GGA position uploads (issue #60). Timestamped so a dead link goes stale.
 let lastGpsRawForNtrip: { gps: GpsData; atMs: number } | null = null;
@@ -2108,6 +2136,7 @@ const MSG_RC_CHANNELS = 65;
 const MSG_NAV_CONTROLLER_OUTPUT = 62;
 const MSG_VFR_HUD = 74;
 const MSG_COMMAND_ACK = 77;
+const MSG_TERRAIN_REPORT = 136;
 const MSG_WIND = 168;
 const MSG_NAMED_VALUE_FLOAT = 251;
 const MSG_STATUSTEXT = 253;
@@ -2684,6 +2713,22 @@ function parseTelemetry(mainWindow: BrowserWindow, packet: MAVLinkPacket): void 
       break;
     }
 
+    case MSG_TERRAIN_REPORT: {
+      // TERRAIN_REPORT wire order (size-sorted): lat(i32)@0, lon(i32)@4,
+      // terrain_height(f32)@8, current_height(f32)@12, spacing(u16)@16,
+      // pending(u16)@18, loaded(u16)@20. v2 zero-truncation: an FC with no
+      // terrain data sends pending/loaded as 0 which get truncated away, so
+      // zero-pad rather than length-guard (truncated bytes ARE the real value).
+      const p = padTo(payload, 22);
+      safeSend(mainWindow, IPC_CHANNELS.MAVLINK_TERRAIN_STATUS, {
+        sysid: packet.sysid,
+        spacing: readUint16(p, 16),
+        pending: readUint16(p, 18),
+        loaded: readUint16(p, 20),
+      });
+      break;
+    }
+
     case MSG_COMMAND_ACK: {
       // COMMAND_ACK wire layout (verified against pymavlink/common.xml):
       //   command       (uint16) @ 0
@@ -2733,7 +2778,10 @@ function parseTelemetry(mainWindow: BrowserWindow, packet: MAVLinkPacket): void 
       if (ackCommand === 192) {
         const severity = ackResult === 0 ? 6 : 4;
         const severityLabel = SEVERITY_LABELS[severity] ?? 'INFO';
+        const sentTerrainFrame = lastGotoFrameBySysid.get(packet.sysid) === 11;
         const text = ackResult === 0 ? 'GO_TO accepted'
+          : ackResult === 4 && sentTerrainFrame
+            ? 'GO_TO FAILED - sent terrain-relative but the vehicle has no terrain data. Switch "Above" to Home in the fly popup.'
           : ackResult === 4 ? 'GO_TO FAILED - FC refused: destination outside geofence, mode switch to GUIDED refused, or terrain data missing'
           : `GO_TO ${resultName}`;
         mainWindow.webContents.send(IPC_CHANNELS.MAVLINK_STATUSTEXT, { severity, severityLabel, text });
@@ -2765,6 +2813,17 @@ function parseTelemetry(mainWindow: BrowserWindow, packet: MAVLinkPacket): void 
         const text = ackResult === 0 ? 'LAND accepted' : `LAND ${resultName}`;
         mainWindow.webContents.send(IPC_CHANNELS.MAVLINK_STATUSTEXT, { severity, severityLabel, text });
         sendLog(mainWindow, ackResult === 0 ? 'info' : 'warn', text);
+      }
+
+      // A refused nav command must also kill the optimistic target overlay the
+      // map drew at send time, otherwise the dotted line promises a flight the
+      // FC already declined. IN_PROGRESS (5) is not a refusal.
+      if ((ackCommand === 192 || ackCommand === 34 || ackCommand === 21)
+        && ackResult !== 0 && ackResult !== 5) {
+        safeSend(mainWindow, IPC_CHANNELS.MAVLINK_COMMAND_REJECTED, {
+          command: ackCommand, result: ackResult, sysid: packet.sysid,
+          frame: ackCommand === 192 ? lastGotoFrameBySysid.get(packet.sysid) : undefined,
+        });
       }
 
       // Forward calibration-related COMMAND_ACKs (241=PREFLIGHT_CALIBRATION,
@@ -3526,6 +3585,14 @@ export function setupIpcHandlers(mainWindow: BrowserWindow): void {
       connectionRegistry.setActive(payload.transportId, payload.vehicleKey ?? null);
     } catch (err) {
       sendLog(mainWindow, 'warn', 'Ignored stale active-vehicle selection', err instanceof Error ? err.message : String(err));
+      // Loud, not just logged: a swallowed selection failure means every map/flight
+      // command keeps targeting the PREVIOUS vehicle, which reads as "commands
+      // stopped working" while the UI highlights the newly clicked one.
+      safeSend(mainWindow, IPC_CHANNELS.MAVLINK_STATUSTEXT, {
+        severity: 4,
+        severityLabel: 'WARNING',
+        text: `Vehicle selection failed to sync (${payload.vehicleKey ?? 'none'}) - commands still target the previous vehicle`,
+      });
     }
     // Broadcast to every window so other views (the 3D world pop-out) follow the
     // same active vehicle. The initiating window's local pointer already matches,
@@ -6993,12 +7060,18 @@ export function setupIpcHandlers(mainWindow: BrowserWindow): void {
       const packet = await sendMavlinkPacket(COMMAND_INT_ID, payload, COMMAND_INT_CRC_EXTRA);
       await target.transport.write(packet);
       connectionState.packetsSent++;
+      lastGotoFrameBySysid.set(target.sysid, altFrame);
 
       // Mode + target sysid at send time: a FAILED ack with fence off means
       // either "not in GUIDED and the mode switch was refused" or the wrong
       // vehicle got the command - this line discriminates.
       const frameName = altFrame === 11 ? 'terrain' : altFrame === 5 ? 'AMSL' : 'rel-home';
-      sendLog(mainWindow, 'info', `Sent DO_REPOSITION to ${lat.toFixed(7)}, ${lon.toFixed(7)}, alt=${alt.toFixed(1)}m ${frameName} (mode=${lastFlightModeName}, sysid=${target.sysid})`);
+      // Flag when the pinned selection did not resolve and the command fell back
+      // to the primary/first vehicle - the "clicked SYS 7, commanded SYS 1" case.
+      const activeKey = connectionRegistry.getActiveVehicleKey();
+      const pinned = activeKey ? connectionRegistry.getVehicleByKey(activeKey) : null;
+      const fallback = !pinned || pinned.sysid !== target.sysid ? ' [FALLBACK TARGET - fleet selection did not resolve]' : '';
+      sendLog(mainWindow, fallback ? 'warn' : 'info', `Sent DO_REPOSITION to ${lat.toFixed(7)}, ${lon.toFixed(7)}, alt=${alt.toFixed(1)}m ${frameName} (mode=${lastFlightModeName}, sysid=${target.sysid})${fallback}`);
       return true;
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unknown error';
@@ -10886,6 +10959,35 @@ export function setupIpcHandlers(mainWindow: BrowserWindow): void {
   // Traffic overlays (ADS-B + glider/OGN)
   setupTrafficHandlers(mainWindow);
 
+  // Loopback control endpoint that lets the ArduDeck Trainer game borrow this
+  // app's flight controller and physics engine. See sim-handover-server.ts.
+  void startSimHandoverServer({
+    userDataPath: app.getPath('userData'),
+    isVehicleArmed: () => lastReportedArmed === true,
+    setParam: (paramId, value) => buildFcAdapter().setParam(paramId, value),
+    reconnectVehicle: async (reason, timeoutSec) => {
+      scheduleReconnect({
+        reason,
+        delayMs: 4000,
+        timeoutMs: timeoutSec * 1000,
+        maxAttempts: 20,
+      });
+      const deadline = Date.now() + timeoutSec * 1000;
+      while (Date.now() < deadline) {
+        if (connectionState.isConnected && !connectionState.isReconnecting) {
+          // Let the first heartbeat land so subsequent reads have a systemId.
+          await new Promise((r) => setTimeout(r, 500));
+          return true;
+        }
+        await new Promise((r) => setTimeout(r, 250));
+      }
+      return false;
+    },
+    log: (level, message) => sendLog(mainWindow, level, message),
+  }).catch((err) => {
+    console.warn('[sim-handover] endpoint failed to start:', err);
+  });
+
   // NTRIP client for RTK corrections (issue #60)
   setupNtripHandlers(mainWindow, {
     sendGpsRtcm: async (fragment) => {
@@ -11845,6 +11947,14 @@ export async function cleanupOnShutdown(): Promise<void> {
     cleanupNtrip();
   } catch (err) {
     console.warn('[Shutdown] Error stopping NTRIP client:', err);
+  }
+
+  try {
+    // Close the sim handover endpoint and remove its discovery file, so the
+    // Trainer game never dials a port that died with this app.
+    await stopSimHandoverServer();
+  } catch (err) {
+    console.warn('[Shutdown] Error stopping sim handover endpoint:', err);
   }
 
   try {

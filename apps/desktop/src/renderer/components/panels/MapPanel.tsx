@@ -27,9 +27,11 @@ import { useVehicleColor } from '../../stores/vehicle-appearance-store';
 import { useTelemMissionViewStore } from '../../stores/telem-mission-view-store';
 import { mavTypeToTacticalClass, type VehicleState } from '../map/tactical-icon-pool';
 import { dispatchMapCommand, type ActiveCommandTarget, type MapCommand } from '../map/map-command-types';
-import { useCommandTargetStore, useSelfActiveTarget, SELF_VEHICLE_ID } from '../../stores/command-target-store';
+import { useCommandTargetStore, useActiveVehicleTarget, commandTargetKey } from '../../stores/command-target-store';
 import { useImperativeMapLayer } from '../map/ImperativeMapLayer';
 import { MapCommandPopup } from '../map/MapCommandPopup';
+import { SmoothWheelZoom } from '../map/SmoothWheelZoom';
+import { useDraggableOverlay } from '../map/useDraggableOverlay';
 import { createPortal } from 'react-dom';
 import { computeOffsetPosition } from '../../utils/geo-offset';
 import { getElevation } from '../../utils/elevation-api';
@@ -61,6 +63,10 @@ import { DipulOverlay } from '../map/overlays/DipulOverlay';
 import { AirspaceOverlay } from '../map/overlays/AirspaceOverlay';
 import { AirspaceLegend } from '../map/overlays/AirspaceLegend';
 import { MapLayersControl } from '../map/overlays/MapLayersControl';
+import { InstrumentsLayer } from '../map/instruments/InstrumentsLayer';
+import { InstrumentsMenu } from '../map/instruments/InstrumentsMenu';
+import { useMapHomeStore } from '../map/instruments/registry';
+import { useMapInstrumentsStore, resolveInstrumentVisible } from '../../stores/map-instruments-store';
 import { WindParticleOverlay } from '../map/overlays/WindParticleOverlay';
 import { TrafficOverlay } from '../map/overlays/TrafficOverlay';
 import { CameraFootprintOverlay } from '../map/overlays/CameraFootprintOverlay';
@@ -957,10 +963,17 @@ function LayerSwitcher({
   );
 }
 
-// Compass overlay
+// Compass overlay. 3D view only: the 2D map replaced it with the 'heading'
+// round gauge instrument (map-instruments-store).
 function CompassOverlay({ heading }: { heading: number }) {
+  const dragOverlay = useDraggableOverlay('compass');
   return (
-    <div className="absolute top-2 left-1/2 -translate-x-1/2 z-[1000]">
+    <div
+      ref={dragOverlay.ref}
+      style={dragOverlay.style}
+      onPointerDown={dragOverlay.onPointerDown}
+      className="absolute top-2 left-1/2 -translate-x-1/2 z-[1000]"
+    >
       <div className="relative w-16 h-16">
         {/* Compass ring */}
         <svg viewBox="0 0 100 100" className="w-full h-full">
@@ -1164,7 +1177,7 @@ const TelemetryMap3D = React.memo(function TelemetryMap3D() {
   // so the operator sees the same intent regardless of the active map mode.
   // Reads from the shared command-target store so the overlay survives the
   // 2D ↔ 3D switch (the bug this whole refactor was about).
-  const activeTarget3D = useSelfActiveTarget();
+  const activeTarget3D = useActiveVehicleTarget();
   useEffect(() => {
     const map = mapInstanceRef.current;
     if (!map || !mapReady) return;
@@ -1429,19 +1442,7 @@ const TelemetryMap3D = React.memo(function TelemetryMap3D() {
       {showCompass && <CompassOverlay heading={vfrHud.heading} />}
 
       {/* Attitude indicator overlay */}
-      {showAttitude && (
-        <div className="absolute bottom-3 left-1/2 -translate-x-1/2 z-[1000]">
-          <div className="absolute inset-[-4px] rounded-full bg-surface-overlay-light shadow-xl" />
-          <div className="relative">
-            <AttitudeIndicator
-              roll={attitude.roll}
-              pitch={attitude.pitch}
-              heading={vfrHud.heading}
-              size={140}
-            />
-          </div>
-        </div>
-      )}
+      {showAttitude && <AttitudeBallOverlay roll={attitude.roll} pitch={attitude.pitch} heading={vfrHud.heading} />}
 
       {/* GPS warning */}
       {!hasValidGps && (
@@ -1593,10 +1594,29 @@ function AirspaceLegendWrapper() {
 }
 
 // Wind timeline bar — owns its own subscription
-function WindControlsWrapper() {
+function WindControlsWrapper({ raised }: { raised?: boolean }) {
   const hasWind = useOverlayStore((s) => s.activeOverlays.has('wind'));
   if (!hasWind) return null;
-  return <WindControls />;
+  return <WindControls raised={raised} />;
+}
+
+// Nav ball, drag-to-place anywhere inside the map panel (position persists).
+function AttitudeBallOverlay({ roll, pitch, heading }: { roll: number; pitch: number; heading: number }) {
+  const dragOverlay = useDraggableOverlay('attitude-ball');
+  return (
+    <div
+      ref={dragOverlay.ref}
+      style={dragOverlay.style}
+      onPointerDown={dragOverlay.onPointerDown}
+      className="absolute bottom-3 left-1/2 -translate-x-1/2 z-[1000]"
+    >
+      {/* Dark background circle */}
+      <div className="absolute inset-[-4px] rounded-full bg-surface-overlay-light shadow-xl" />
+      <div className="relative">
+        <AttitudeIndicator roll={roll} pitch={pitch} heading={heading} size={140} />
+      </div>
+    </div>
+  );
 }
 
 // ─── MapPanel entry point — delegates to 2D or 3D based on global mapMode ────
@@ -1761,7 +1781,6 @@ const TelemetryMap2D = React.memo(function TelemetryMap2D() {
   const attitude = useTelemetryStore((s) => s.attitude);
   const battery = useTelemetryStore((s) => s.battery);
   const wind = useTelemetryStore((s) => s.wind);
-  const distanceUnit = useSettingsStore((s) => s.unitPreferences.distance);
   const altitudeUnit = useSettingsStore((s) => s.unitPreferences.altitude);
   const speedUnit = useSettingsStore((s) => s.unitPreferences.speed);
   const connectionState = useConnectionStore((s) => s.connectionState);
@@ -1774,7 +1793,10 @@ const TelemetryMap2D = React.memo(function TelemetryMap2D() {
   const currentLayer: TelemetryLayerKey = (sharedMapLayer in TELEMETRY_LAYERS ? sharedMapLayer : 'googleSat') as TelemetryLayerKey;
   const setCurrentLayer = (layer: TelemetryLayerKey) => setSharedMapLayer(layer);
   const [showHeadingLine, setShowHeadingLine] = useState(true);
-  const [showCompass, setShowCompass] = useState(true);
+  // The old small CompassOverlay is gone in 2D; the toolbar Compass button
+  // now drives the 'heading' round gauge instrument instead.
+  const headingInstrumentVisible = useMapInstrumentsStore((s) => resolveInstrumentVisible(s.visible, 'heading'));
+  const toggleInstrument = useMapInstrumentsStore((s) => s.toggle);
   const [showAttitude, setShowAttitude] = useState(true);
   const [showMission, setShowMission] = useState(true); // Show mission overlays by default
   const [showTerrain, setShowTerrain] = useState(false);
@@ -1939,6 +1961,12 @@ const TelemetryMap2D = React.memo(function TelemetryMap2D() {
     }
   }, [gpsPosition, hasValidGps]); // Removed homePosition from deps - it's only read, not a condition
 
+  // Mirror home into the instruments' store: the flight-data instrument is a
+  // registry component with no access to this panel's local state.
+  useEffect(() => {
+    useMapHomeStore.getState().setHome(homePosition);
+  }, [homePosition]);
+
   // Disable follow when user manually interacts with the map
   const handleUserMapInteraction = useCallback(() => {
     setFollowVehicle(false);
@@ -1946,6 +1974,19 @@ const TelemetryMap2D = React.memo(function TelemetryMap2D() {
 
   // Command popup is local UI state — only relevant while the popover is up.
   const [commandPopup, setCommandPopup] = useState<{ lat: number; lon: number } | null>(null);
+  // Refusals must be visible on the map itself: the Messages panel is not part
+  // of the default layout, so a store-only warning reads as a dead right-click.
+  const [mapNotice, setMapNotice] = useState<string | null>(null);
+  const mapNoticeTimer = useRef<number | null>(null);
+  const showMapNotice = useCallback((text: string) => {
+    useMessagesStore.getState().addMessage(4, 'WARNING', text);
+    setMapNotice(text);
+    if (mapNoticeTimer.current !== null) window.clearTimeout(mapNoticeTimer.current);
+    mapNoticeTimer.current = window.setTimeout(() => setMapNotice(null), 4000);
+  }, []);
+  useEffect(() => () => {
+    if (mapNoticeTimer.current !== null) window.clearTimeout(mapNoticeTimer.current);
+  }, []);
   // Ground point the camera/gimbal is currently locked onto (ROI). Marks the
   // spot on the map; cleared by "Clear ROI" or on disconnect. Ref mirrors the
   // state so empty-dep callbacks (handleCommandConfirm) read the live value.
@@ -1954,10 +1995,11 @@ const TelemetryMap2D = React.memo(function TelemetryMap2D() {
   roiTargetRef.current = roiTarget;
   // Active target lives in a global store so it survives 2D ↔ 3D switches and
   // panel remounts, and so the 3D map can render the same overlay. Keyed by
-  // vehicle id (currently always SELF) for future multi-vehicle support.
-  const activeTarget = useSelfActiveTarget();
+  // the active fleet vehicle so each drone keeps its own target: switching
+  // selection must not steal the previous vehicle's line.
+  const activeTarget = useActiveVehicleTarget();
   const setActiveTarget = useCallback((next: ActiveCommandTarget | null) => {
-    useCommandTargetStore.getState().setTarget(SELF_VEHICLE_ID, next);
+    useCommandTargetStore.getState().setTarget(commandTargetKey(), next);
   }, []);
 
   // Escape key: close popup first, then deselect vehicle
@@ -1979,15 +2021,15 @@ const TelemetryMap2D = React.memo(function TelemetryMap2D() {
   // Both refusals say WHY. Silence here reads as "the fleet ignores right-click".
   const handleMapContextMenu = useCallback((lat: number, lon: number) => {
     if (!selectedVehicleId && !fleetActive) {
-      useMessagesStore.getState().addMessage(4, 'WARNING', 'No vehicle selected: click a vehicle marker before commanding.');
+      showMapNotice('No vehicle selected: click a vehicle marker before commanding.');
       return;
     }
     if (!useTelemetryStore.getState().flight.armed) {
-      useMessagesStore.getState().addMessage(4, 'WARNING', 'Map commands need an armed vehicle.');
+      showMapNotice('Map commands need an armed vehicle.');
       return;
     }
     setCommandPopup({ lat, lon });
-  }, [selectedVehicleId, fleetActive]);
+  }, [selectedVehicleId, fleetActive, showMapNotice]);
 
   // Camera ROI: point the active vehicle's gimbal at a clicked ground point.
   // This is a gimbal command (MAV_CMD_DO_SET_ROI_LOCATION), not a nav command,
@@ -2020,11 +2062,11 @@ const TelemetryMap2D = React.memo(function TelemetryMap2D() {
   const handleCommandConfirm = useCallback(async (command: MapCommand, options?: { preferScript?: boolean }) => {
     // Safety: verify still armed before sending any flight command
     if (!useTelemetryStore.getState().flight.armed) {
-      useMessagesStore.getState().addMessage(4, 'WARNING', 'Command dropped: vehicle disarmed.');
+      showMapNotice('Command dropped: vehicle disarmed.');
       setCommandPopup(null);
       return;
     }
-    const prev = useCommandTargetStore.getState().getTarget(SELF_VEHICLE_ID);
+    const prev = useCommandTargetStore.getState().getTarget(commandTargetKey());
     const prevWasScriptHeld = !!prev && (
       prev.type === 'orbit' || prev.type === 'spiral' ||
       prev.type === 'watchtower' || prev.type === 'climbRtl' ||
@@ -2072,7 +2114,7 @@ const TelemetryMap2D = React.memo(function TelemetryMap2D() {
       }
     }
     setCommandPopup(null);
-  }, [sendRoiCommand]);
+  }, [sendRoiCommand, showMapNotice]);
 
   const handleCommandCancel = useCallback(() => {
     setCommandPopup(null);
@@ -2158,8 +2200,18 @@ const TelemetryMap2D = React.memo(function TelemetryMap2D() {
           </span>
         </div>
       )}
-      <TrafficAltitudeFilter />
+      {/* Shifted right of its default slot: the Instruments menu owns top-left here */}
+      <TrafficAltitudeFilter className="absolute top-3 left-40 z-[1000]" />
       <ZoneAlertBanner />
+      {/* Transient refusal notice (right-click with nothing selected, etc.) */}
+      {mapNotice && (
+        <div className="absolute top-14 left-1/2 -translate-x-1/2 z-[1100] flex items-center gap-2 px-3 py-1.5 rounded-md bg-surface-solid border border-amber-500/50 shadow-lg text-[12px] font-medium text-content pointer-events-none whitespace-nowrap">
+          <svg className="w-3.5 h-3.5 text-amber-500 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v4m0 4h.01M10.3 3.86l-8.02 13.89A2 2 0 004 21h16a2 2 0 001.73-3.25L13.7 3.86a2 2 0 00-3.4 0z" />
+          </svg>
+          {mapNotice}
+        </div>
+      )}
       {/* Top toolbar */}
       <div data-tour="telemetry-map-overlays" className="absolute top-2 right-2 z-[1000] flex flex-col gap-1">
         <MapLayersControl
@@ -2203,9 +2255,9 @@ const TelemetryMap2D = React.memo(function TelemetryMap2D() {
           HDG Line
         </button>
         <button
-          onClick={() => setShowCompass(!showCompass)}
+          onClick={() => toggleInstrument('heading')}
           className={`px-2 py-1 text-xs rounded shadow-lg transition-colors flex items-center gap-1.5 ${
-            showCompass
+            headingInstrumentVisible
               ? 'bg-blue-600 text-white'
               : 'bg-surface text-content hover:bg-surface-raised'
           }`}
@@ -2270,44 +2322,39 @@ const TelemetryMap2D = React.memo(function TelemetryMap2D() {
         </button>
       </div>
 
+      {/* Instruments menu (top-left counterpart of the Layers menu) */}
+      <div className="absolute top-2 left-2 z-[1000]">
+        <InstrumentsMenu
+          showAttitude={showAttitude}
+          onToggleAttitude={() => setShowAttitude((v) => !v)}
+        />
+      </div>
+
       {/* Airspace legend */}
       <AirspaceLegendWrapper />
 
       {/* Wind timeline bar */}
-      <WindControlsWrapper />
+      <WindControlsWrapper raised={showAttitude} />
+
+      {/* Floating instrument widgets (drag-to-place, toggled from the Instruments menu) */}
+      <InstrumentsLayer />
 
       {/* API key dialog */}
       <ApiKeyDialog />
 
-      {/* Compass overlay */}
-      {showCompass && <CompassOverlay heading={vfrHud.heading} />}
+      {/* Attitude indicator overlay (nav ball): drag-to-place, persists */}
+      {showAttitude && <AttitudeBallOverlay roll={attitude.roll} pitch={attitude.pitch} heading={vfrHud.heading} />}
 
-      {/* Attitude indicator overlay (nav ball) */}
-      {showAttitude && (
-        <div className="absolute bottom-3 left-1/2 -translate-x-1/2 z-[1000]">
-          {/* Dark background circle */}
-          <div className="absolute inset-[-4px] rounded-full bg-surface-overlay-light shadow-xl" />
-          <div className="relative">
-            <AttitudeIndicator
-              roll={attitude.roll}
-              pitch={attitude.pitch}
-              heading={vfrHud.heading}
-              size={140}
-            />
-          </div>
-        </div>
-      )}
-
-      {/* GPS status overlay */}
+      {/* GPS status overlay (below the Instruments menu button) */}
       {!hasValidGps && (
-        <div className="absolute top-2 left-2 z-[1000] px-2 py-1 bg-yellow-600/90 text-white text-xs rounded shadow-lg">
+        <div className="absolute top-10 left-2 z-[1000] px-2 py-1 bg-yellow-600/90 text-white text-xs rounded shadow-lg">
           No GPS fix
         </div>
       )}
 
       {/* Live survey progress readout (renders nothing until a survey group
           has actual progress). Drops below the "No GPS fix" badge slot. */}
-      {showMission && <SurveyProgressCard className={hasValidGps ? 'top-2 left-2' : 'top-10 left-2'} />}
+      {showMission && <SurveyProgressCard className={hasValidGps ? 'top-10 left-2' : 'top-[4.5rem] left-2'} />}
 
       {/* Elevation legend (above stats overlay) */}
       {showTerrain && elevationRange.max > 0 && (
@@ -2326,46 +2373,8 @@ const TelemetryMap2D = React.memo(function TelemetryMap2D() {
         </div>
       )}
 
-      {/* Stats overlay */}
-      <div className="absolute bottom-2 left-2 z-[1000] bg-surface-overlay backdrop-blur-sm rounded px-3 py-2 text-xs text-content space-y-1 min-w-[130px] border border-subtle shadow-lg">
-        <div className="flex justify-between">
-          <span className="text-content-secondary">MSL</span>
-          <span className="font-mono text-content">{formatAltitudeFromMeters(position.alt, altitudeUnit)}</span>
-        </div>
-        <div className="flex justify-between">
-          <span className="text-content-secondary">Rel</span>
-          <span className="font-mono text-content">{formatAltitudeFromMeters(position.relativeAlt, altitudeUnit)}</span>
-        </div>
-        <div className="flex justify-between">
-          <span className="text-content-secondary">Spd</span>
-          <span className="font-mono text-content">{formatSpeedFromMetersPerSecond(vfrHud.groundspeed, speedUnit)}</span>
-        </div>
-        <div className="flex justify-between">
-          <span className="text-content-secondary">Hdg</span>
-          <span className="font-mono text-content">{vfrHud.heading.toFixed(0)}<span className="text-content-secondary ml-0.5">°</span></span>
-        </div>
-        {homeStats && (
-          <>
-            <div className="border-t border-default my-1" />
-            <div className="flex justify-between">
-              <span className="text-content-secondary">Home</span>
-              <span className="font-mono text-emerald-400">{formatDistance(homeStats.distance, distanceUnit)}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-content-secondary">Brng</span>
-              <span className="font-mono text-emerald-400">{homeStats.bearing.toFixed(0)}<span className="text-content-secondary ml-0.5">°</span></span>
-            </div>
-          </>
-        )}
-        {hasValidGps && (
-          <>
-            <div className="border-t border-default my-1" />
-            <div className="text-[10px] text-content-secondary font-mono">
-              {gps.lat.toFixed(6)}, {gps.lon.toFixed(6)}
-            </div>
-          </>
-        )}
-      </div>
+      {/* The flight-data card that lived here is now the 'flight-data' entry in
+          the instruments registry (same bottom-left default, draggable). */}
 
       {/* Center on vehicle FAB — Google Maps style */}
       <button
@@ -2397,10 +2406,12 @@ const TelemetryMap2D = React.memo(function TelemetryMap2D() {
       <MapContainer
         center={vehiclePosition}
         zoom={17}
+        zoomSnap={0}
         className="h-full w-full"
         zoomControl={false}
         attributionControl={false}
       >
+        <SmoothWheelZoom />
         <TelemetryViewportSync />
         <MapBoundsTracker onBoundsChange={handleBoundsChange} />
         <TileLayer

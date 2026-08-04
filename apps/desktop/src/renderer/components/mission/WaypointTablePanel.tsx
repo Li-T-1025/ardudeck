@@ -1174,6 +1174,89 @@ function UnitParamInput({
   );
 }
 
+// Plain-number sibling of UnitParamInput: keeps a string draft while focused so
+// partial input ("", "-", "1.") never commits. Without this, clearing the
+// latitude field commits Number('') = 0 and teleports the waypoint to 0,0
+// mid-edit. Commits on blur/Enter (plus live for in-range values when `live`),
+// Escape reverts.
+//
+// `text` renders as type="text" inputMode="decimal": Chromium localizes
+// type="number" display (comma decimals on comma-locale systems), which made
+// lat/lon show "42,44" while every other coordinate in the app uses dots.
+// Comma input is still accepted when typing.
+function parseDecimal(s: string): number {
+  return Number(s.trim().replace(',', '.'));
+}
+
+function DraftNumberInput({
+  value,
+  onCommit,
+  min,
+  max,
+  step,
+  live = false,
+  text = false,
+}: {
+  value: number;
+  onCommit: (v: number) => void;
+  min?: number;
+  max?: number;
+  step?: number;
+  live?: boolean;
+  text?: boolean;
+}) {
+  const [draft, setDraft] = useState(() => String(value));
+  const [focused, setFocused] = useState(false);
+  const skipBlurCommitRef = useRef(false);
+
+  useEffect(() => {
+    if (!focused) setDraft(String(value));
+  }, [value, focused]);
+
+  return (
+    <input
+      type={text ? 'text' : 'number'}
+      inputMode="decimal"
+      value={draft}
+      onFocus={() => setFocused(true)}
+      onChange={(e) => {
+        const next = e.target.value;
+        setDraft(next);
+        if (!live || next.trim() === '') return;
+        const parsed = parseDecimal(next);
+        if (isValidDisplayNumber(parsed, min, max) && parsed !== value) onCommit(parsed);
+      }}
+      onBlur={() => {
+        setFocused(false);
+        if (skipBlurCommitRef.current) {
+          skipBlurCommitRef.current = false;
+          setDraft(String(value));
+          return;
+        }
+        const parsed = parseDecimal(draft);
+        if (draft.trim() === '' || !isValidDisplayNumber(parsed, min, max)) {
+          setDraft(String(value));
+          return;
+        }
+        if (parsed !== value) onCommit(parsed);
+        setDraft(String(parsed));
+      }}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter') {
+          e.currentTarget.blur();
+        } else if (e.key === 'Escape') {
+          skipBlurCommitRef.current = true;
+          e.currentTarget.blur();
+        }
+      }}
+      min={min}
+      max={max}
+      step={step}
+      className="w-full bg-surface-input text-content text-sm px-2 py-1.5 rounded border border-default focus:border-blue-500 focus:outline-none font-mono"
+    />
+  );
+}
+
 function GroupHeaderRow({
   group,
   count,
@@ -1377,7 +1460,7 @@ function GroupHeaderRow({
           />
         ) : (
           <span
-            className={`text-xs font-medium text-content truncate ${readOnly ? '' : 'cursor-text hover:text-blue-300'}`}
+            className={`flex-1 min-w-0 text-xs font-medium text-content truncate ${readOnly ? '' : 'cursor-text hover:text-blue-300'}`}
             onDoubleClick={() => !readOnly && setEditing(true)}
             title={readOnly ? group.name : 'Double-click to rename'}
           >
@@ -2089,7 +2172,7 @@ function WaypointListContent({ readOnly = false }: { readOnly?: boolean }) {
             ) : (
               <>
                 <p className="text-sm font-medium mb-1">No waypoints yet</p>
-                <p className="text-xs text-content-tertiary text-center">Click "Add" below or click on the map to add waypoints</p>
+                <p className="text-xs text-content-tertiary text-center">Click "Add Waypoint" below, use the map's Add WP tool, or Shift+click the map</p>
               </>
             )}
           </div>
@@ -2227,7 +2310,7 @@ function WaypointListContent({ readOnly = false }: { readOnly?: boolean }) {
                   onDragLeave={!readOnly ? handleDragLeave : undefined}
                   onDrop={(e) => !readOnly && handleDrop(e, wp.seq)}
                   onDragEnd={!readOnly ? handleDragEnd : undefined}
-                  className={`flex items-center gap-2 py-2 transition-colors ${
+                  className={`group flex items-center gap-2 py-2 transition-colors ${
                     isChild ? 'px-2 pl-8' : 'px-2'
                   } ${
                     isParentWithGap ? 'mt-1' : ''
@@ -2336,7 +2419,23 @@ function WaypointListContent({ readOnly = false }: { readOnly?: boolean }) {
                     <div className={`flex items-center gap-1.5 ${
                       isChild ? 'text-xs text-content-secondary' : 'text-sm text-content'
                     }`}>
-                      <span className="truncate">{getWaypointSummary(wp, advancedLabels, distanceUnit, altitudeUnit, speedUnit, verticalSpeedUnit)}</span>
+                      {(() => {
+                        const summary = getWaypointSummary(wp, advancedLabels, distanceUnit, altitudeUnit, speedUnit, verticalSpeedUnit);
+                        const altText = commandHasLocation(wp.command)
+                          ? formatAltitudeFromMeters(wp.altitude, altitudeUnit)
+                          : null;
+                        return (
+                          <>
+                            <span className="truncate">{summary}</span>
+                            {/* Altitude on the primary line; skipped when the
+                                summary already embeds it (Takeoff, Loiter to
+                                Alt, ...) so it never shows twice. */}
+                            {altText && !summary.includes(altText) && (
+                              <span className="shrink-0 text-content-secondary tabular-nums">{altText}</span>
+                            )}
+                          </>
+                        );
+                      })()}
                       {wp.command === MAV_CMD.CONDITION_YAW && wp.param3 !== 0 && (
                         <span className={`px-1 py-0 text-[9px] font-bold rounded shrink-0 ${
                           wp.param3 < 0
@@ -2354,7 +2453,7 @@ function WaypointListContent({ readOnly = false }: { readOnly?: boolean }) {
                       )}
                     </div>
                     {commandHasLocation(wp.command) && (
-                      <div className="text-[10px] text-content-secondary font-mono">
+                      <div className="text-[10px] text-content-tertiary font-mono">
                         {wp.latitude.toFixed(5)}, {wp.longitude.toFixed(5)}
                       </div>
                     )}
@@ -2367,7 +2466,9 @@ function WaypointListContent({ readOnly = false }: { readOnly?: boolean }) {
                         e.stopPropagation();
                         focusWaypoint(wp.seq);
                       }}
-                      className="p-1 text-content-secondary hover:text-blue-400 hover:bg-blue-500/10 rounded transition-colors shrink-0"
+                      className={`p-1 text-content-secondary hover:text-blue-400 hover:bg-blue-500/10 rounded transition-all shrink-0 ${
+                        isSelected || multiSelected.has(wp.seq) ? '' : 'opacity-0 group-hover:opacity-100 focus-visible:opacity-100'
+                      }`}
                       data-tip="Focus map on this waypoint"
                     >
                       <Crosshair className="w-4 h-4" />
@@ -2381,7 +2482,9 @@ function WaypointListContent({ readOnly = false }: { readOnly?: boolean }) {
                         e.stopPropagation();
                         handleDelete(wp.seq);
                       }}
-                      className="p-1 text-content-secondary hover:text-red-400 hover:bg-red-500/10 rounded transition-colors shrink-0"
+                      className={`p-1 text-content-secondary hover:text-red-400 hover:bg-red-500/10 rounded transition-all shrink-0 ${
+                        isSelected || multiSelected.has(wp.seq) ? '' : 'opacity-0 group-hover:opacity-100 focus-visible:opacity-100'
+                      }`}
                       title="Delete"
                     >
                       <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -2447,14 +2550,13 @@ function WaypointListContent({ readOnly = false }: { readOnly?: boolean }) {
                         onCommit={(nativeValue) => handleParamChange(selectedWaypoint.seq, param.key, nativeValue)}
                       />
                     ) : (
-                      <input
-                        type="number"
+                      <DraftNumberInput
                         value={selectedWaypoint[param.key] as number}
-                        onChange={(e) => handleParamChange(selectedWaypoint.seq, param.key, Number(e.target.value))}
+                        onCommit={(v) => handleParamChange(selectedWaypoint.seq, param.key, v)}
                         min={param.min}
                         max={param.max}
                         step={param.step}
-                        className="w-full bg-surface-input text-content text-sm px-2 py-1.5 rounded border border-default focus:border-blue-500 focus:outline-none font-mono"
+                        live
                       />
                     )}
                   </div>
@@ -2466,22 +2568,22 @@ function WaypointListContent({ readOnly = false }: { readOnly?: boolean }) {
               <>
                 <div>
                   <label className="block text-[11px] text-content-secondary mb-1">Latitude</label>
-                  <input
-                    type="number"
+                  <DraftNumberInput
                     value={selectedWaypoint.latitude}
-                    onChange={(e) => handleParamChange(selectedWaypoint.seq, 'latitude', Number(e.target.value))}
-                    step={0.00001}
-                    className="w-full bg-surface-input text-content text-sm px-2 py-1.5 rounded border border-default focus:border-blue-500 focus:outline-none font-mono"
+                    onCommit={(v) => handleParamChange(selectedWaypoint.seq, 'latitude', v)}
+                    min={-90}
+                    max={90}
+                    text
                   />
                 </div>
                 <div>
                   <label className="block text-[11px] text-content-secondary mb-1">Longitude</label>
-                  <input
-                    type="number"
+                  <DraftNumberInput
                     value={selectedWaypoint.longitude}
-                    onChange={(e) => handleParamChange(selectedWaypoint.seq, 'longitude', Number(e.target.value))}
-                    step={0.00001}
-                    className="w-full bg-surface-input text-content text-sm px-2 py-1.5 rounded border border-default focus:border-blue-500 focus:outline-none font-mono"
+                    onCommit={(v) => handleParamChange(selectedWaypoint.seq, 'longitude', v)}
+                    min={-180}
+                    max={180}
+                    text
                   />
                 </div>
               </>

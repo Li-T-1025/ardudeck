@@ -69,7 +69,7 @@ export function WindRoseCard(): JSX.Element | null {
   const span = 360 / rose.bins.length - 4;
 
   const cp = map.latLngToContainerPoint([probe.lat, probe.lng]);
-  const readout = cur ? `${compassPoint(cur.dirFromDeg)} · ${formatWindSpeed(cur.speed, units)}` : '—';
+  const readout = cur ? `${compassPoint(cur.dirFromDeg)} · ${formatWindSpeed(cur.speed, units)}` : '-';
 
   return createPortal(
     <div style={{ position: 'absolute', left: cp.x, top: cp.y, width: SIZE, height: SIZE, transform: 'translate(-50%, -50%)', zIndex: 1000, pointerEvents: 'none' }}>

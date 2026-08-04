@@ -95,7 +95,7 @@ function SuggestedBoards({
           />
         </svg>
         <span>
-          Detected {mcuType} — select your board:
+          Detected {mcuType}, select your board:
         </span>
       </div>
       <div className="flex flex-wrap gap-2">

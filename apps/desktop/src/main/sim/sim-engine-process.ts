@@ -56,6 +56,10 @@ class SimEngineProcessManager {
   private _loggedBinaryPath = false;
   /** Last stderr line from the engine, surfaced in a startup failure. */
   private _lastStderr = '';
+  /** Options of the most recent start(), kept across stop() so the engine can be
+   *  handed to an external owner (the Trainer game) and later restarted exactly
+   *  as ArduDeck had it. */
+  private _lastOptions: SimEngineStartOptions | null = null;
 
   get isRunning(): boolean {
     return this._isRunning;
@@ -63,6 +67,18 @@ class SimEngineProcessManager {
 
   get wsPort(): number | null {
     return this._wsPort;
+  }
+
+  get lastOptions(): SimEngineStartOptions | null {
+    return this._lastOptions;
+  }
+
+  /** Restart with the options of the last start(). */
+  async restartLast(): Promise<{ success: boolean; wsPort?: number; error?: string }> {
+    if (!this._lastOptions) {
+      return { success: false, error: 'no previous sim-engine options to restart with' };
+    }
+    return this.start(this._lastOptions);
   }
 
   /** Resolve the native engine binary, or null if it is not present. */
@@ -123,6 +139,7 @@ class SimEngineProcessManager {
 
   async start(opts: SimEngineStartOptions): Promise<{ success: boolean; wsPort?: number; error?: string }> {
     if (this._isRunning) this.stop();
+    this._lastOptions = opts;
 
     const binary = this.resolveBinary();
     if (!binary) {

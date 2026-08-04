@@ -78,17 +78,15 @@ function MissionModeControls() {
     <div className="flex items-center gap-1.5">
       {/* Simple / Advanced toggle - only relevant for ArduPilot (iNav has only 8 commands) */}
       {!isInav && (
-        <div className={`flex items-center rounded-lg border transition-colors ${
-          advancedLabels ? 'border-amber-500/40' : 'border-teal-500/40'
-        }`}>
+        <div className="flex items-center rounded-lg overflow-hidden border border-subtle">
           <button
             onClick={() => updateMissionDefaults({ advancedMissionLabels: false })}
-            className={`p-1.5 rounded-l transition-colors ${
+            className={`p-1.5 transition-colors ${
               !advancedLabels
-                ? 'bg-teal-600/80 text-white'
+                ? 'bg-blue-600 text-white'
                 : 'text-content-secondary hover:bg-surface-raised'
             }`}
-            data-tip="Simple - friendly labels"
+            data-tip="Simple mode: friendly waypoint labels (Fly here, Circle here) and common commands only"
           >
             {/* Eye icon - simple/readable view */}
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -96,15 +94,15 @@ function MissionModeControls() {
               <path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
             </svg>
           </button>
-          <div className={`w-px h-5 transition-colors ${advancedLabels ? 'bg-amber-500/30' : 'bg-teal-500/30'}`} />
+          <div className="w-px h-5 bg-subtle" />
           <button
             onClick={() => updateMissionDefaults({ advancedMissionLabels: true })}
-            className={`p-1.5 rounded-r transition-colors ${
+            className={`p-1.5 transition-colors ${
               advancedLabels
-                ? 'bg-amber-600/80 text-white'
+                ? 'bg-blue-600 text-white'
                 : 'text-content-secondary hover:bg-surface-raised'
             }`}
-            data-tip="Advanced - all GCS commands"
+            data-tip="Advanced mode: standard GCS command names and the full command list"
           >
             {/* Code/terminal icon - advanced/technical view */}
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -547,7 +545,7 @@ export function MissionToolbar({ onResetLayout, showToast }: MissionToolbarProps
               ? 'bg-emerald-600/80 hover:bg-emerald-500/80 text-white'
               : 'bg-surface-raised text-content-tertiary cursor-not-allowed'
           }`}
-          data-tip={fcOpsDisabledForMsp ? `${getModeLabel()} not supported on iNav/Betaflight` : multipleGroups ? 'Multiple groups — upload one at a time from each group in the list' : !isConnected ? 'Connect to upload' : !hasItems ? `Add ${getModeLabel()} first` : `Upload ${getModeLabel()} to FC`}
+          data-tip={fcOpsDisabledForMsp ? `${getModeLabel()} not supported on iNav/Betaflight` : multipleGroups ? 'Multiple groups: upload one at a time from each group in the list' : !isConnected ? 'Connect to upload' : !hasItems ? `Add ${getModeLabel()} first` : `Upload ${getModeLabel()} to FC`}
         >
           {isUploading ? (
             <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
@@ -625,40 +623,32 @@ export function MissionToolbar({ onResetLayout, showToast }: MissionToolbarProps
           </svg>
         </button>
         {/* Save: mission mode gets the multi-destination dropdown (Library +
-            file formats); other modes keep a single save-to-file. A floppy
-            glyph - NOT an up/down arrow - so it never reads like the FC
-            transfer buttons. */}
-        {activeMode === 'mission' ? (
+            file formats). A floppy glyph - NOT an up/down arrow - so it never
+            reads like the FC transfer buttons. Fence/rally file save is still
+            a stub (handleSaveFile TODO branches), so those modes get no save
+            button until it is implemented. */}
+        {activeMode === 'mission' && (
           <SaveMenu
             enabled={missionHasItems}
             multipleGroups={multipleGroups}
             onLibrary={() => setShowSaveLibraryModal(true)}
             onExport={(fmt) => { void handleSaveFile(fmt); }}
           />
-        ) : (
+        )}
+        {/* Open from file - folder glyph, distinct from the FC download arrow.
+            Fence/rally file load is still a stub (handleLoadFile TODO
+            branches); the button returns for those modes once implemented. */}
+        {activeMode === 'mission' && (
           <button
-            onClick={() => { void handleSaveFile(); }}
-            disabled={!hasItems}
-            className={`p-1.5 rounded bg-surface-raised transition-colors ${
-              hasItems ? 'text-content hover:brightness-125' : 'text-content-tertiary cursor-not-allowed'
-            }`}
-            data-tip={hasItems ? `Save ${getModeLabel()} to file` : 'Nothing to save'}
+            onClick={handleLoadFile}
+            className="p-1.5 rounded bg-surface-raised text-content hover:brightness-125 transition-colors"
+            data-tip={`Open ${getModeLabel()} file`}
           >
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 4h11l3 3v13H5z M9 4v5h6V4 M9 17h6" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M3.75 9.776c.112-.017.227-.026.344-.026h15.812c.117 0 .232.009.344.026m-16.5 0a2.25 2.25 0 00-1.883 2.542l.857 6a2.25 2.25 0 002.227 1.932H19.05a2.25 2.25 0 002.227-1.932l.857-6a2.25 2.25 0 00-1.883-2.542m-16.5 0V6A2.25 2.25 0 016 3.75h3.879a1.5 1.5 0 011.06.44l2.122 2.12a1.5 1.5 0 001.06.44H18A2.25 2.25 0 0120.25 9v.776" />
             </svg>
           </button>
         )}
-        {/* Open from file - folder glyph, distinct from the FC download arrow. */}
-        <button
-          onClick={handleLoadFile}
-          className="p-1.5 rounded bg-surface-raised text-content hover:brightness-125 transition-colors"
-          data-tip={`Open ${getModeLabel()} file`}
-        >
-          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M3.75 9.776c.112-.017.227-.026.344-.026h15.812c.117 0 .232.009.344.026m-16.5 0a2.25 2.25 0 00-1.883 2.542l.857 6a2.25 2.25 0 002.227 1.932H19.05a2.25 2.25 0 002.227-1.932l.857-6a2.25 2.25 0 00-1.883-2.542m-16.5 0V6A2.25 2.25 0 016 3.75h3.879a1.5 1.5 0 011.06.44l2.122 2.12a1.5 1.5 0 001.06.44H18A2.25 2.25 0 0120.25 9v.776" />
-          </svg>
-        </button>
         {activeMode === 'mission' && (
           <GuidesButton showToast={showToast} />
         )}

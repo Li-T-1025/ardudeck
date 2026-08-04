@@ -64,15 +64,15 @@ const THEME_TIP: Record<ThemePreference, string> = {
 };
 
 const TOOLS: { id: AreaTool; icon: () => JSX.Element; tip: string }[] = [
-  { id: 'select', icon: ICursor, tip: 'Select & transform — move, rotate, scale' },
-  { id: 'polygon', icon: IPolygon, tip: 'Draw area — click points, double-click to finish' },
-  { id: 'corridor', icon: ICorridor, tip: 'Draw corridor — a centerline for a linear survey' },
-  { id: 'branch', icon: IBranch, tip: 'Branch — select a corridor, draw a fork off it (double-click to finish)' },
-  { id: 'rectangle', icon: IRect, tip: 'Rectangle — drag on the map' },
-  { id: 'circle', icon: ICircle, tip: 'Circle — drag from the center' },
+  { id: 'select', icon: ICursor, tip: 'Select & transform: move, rotate, scale' },
+  { id: 'polygon', icon: IPolygon, tip: 'Draw area: click points, double-click to finish' },
+  { id: 'corridor', icon: ICorridor, tip: 'Draw corridor: a centerline for a linear survey' },
+  { id: 'branch', icon: IBranch, tip: 'Branch: select a corridor, draw a fork off it (double-click to finish)' },
+  { id: 'rectangle', icon: IRect, tip: 'Rectangle: drag on the map' },
+  { id: 'circle', icon: ICircle, tip: 'Circle: drag from the center' },
   { id: 'edit', icon: IEdit, tip: 'Edit points of the selected object' },
-  { id: 'hole', icon: IHole, tip: 'Cut a hole — select an area, then click an inner ring (double-click to finish)' },
-  { id: 'split', icon: ISplit, tip: 'Split — select an area, then draw a line across it (two clicks)' },
+  { id: 'hole', icon: IHole, tip: 'Cut a hole: select an area, then click an inner ring (double-click to finish)' },
+  { id: 'split', icon: ISplit, tip: 'Split: select an area, then draw a line across it (two clicks)' },
   { id: 'measure', icon: IRuler, tip: 'Measure distance & area' },
 ];
 

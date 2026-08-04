@@ -295,6 +295,9 @@ export function AiAnalysisPanel() {
   const [pendingAction, setPendingAction] = useState<(() => void) | null>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  // Token for the in-flight analysis; Stop flips it and the tool-use loop's
+  // call wrapper checks it between rounds, so no further API calls are made.
+  const cancelAiRef = useRef<{ cancelled: boolean } | null>(null);
 
   const requireWarning = useCallback((action: () => void) => {
     if (aiWarningDismissed) {
@@ -381,11 +384,11 @@ export function AiAnalysisPanel() {
       ? `
 
 ## Reading the Log (IMPORTANT)
-You have tools to query the raw telemetry of THIS log on demand — you are not limited to the summary below. Use them to ground every claim in actual data instead of guessing:
-- list_message_types — discover what's recorded (ATT, RCOU, VIBE, GPS, BAT, ERR, MODE, RATE, …). Call this first if unsure what's available.
-- get_field_stats(type, fields?, startS?, endS?) — count/min/max/mean/stddev/first/last for numeric fields. Use for aggregate questions.
-- read_samples(type, fields?, startS?, endS?, maxPoints?) — decimated time-series to inspect the shape of a trend, spike, or oscillation.
-- get_parameters(names? | search?) — ArduPilot parameter values from the log.
+You have tools to query the raw telemetry of THIS log on demand: you are not limited to the summary below. Use them to ground every claim in actual data instead of guessing:
+- list_message_types: discover what's recorded (ATT, RCOU, VIBE, GPS, BAT, ERR, MODE, RATE, …). Call this first if unsure what's available.
+- get_field_stats(type, fields?, startS?, endS?): count/min/max/mean/stddev/first/last for numeric fields. Use for aggregate questions.
+- read_samples(type, fields?, startS?, endS?, maxPoints?): decimated time-series to inspect the shape of a trend, spike, or oscillation.
+- get_parameters(names? | search?): ArduPilot parameter values from the log.
 All time arguments (startS/endS) are SECONDS from log start. This flight is ${dS.toFixed(1)} s long. Prefer real values pulled from these tools over the summary, and cite specific numbers and timestamps.`
       : '';
 
@@ -429,6 +432,8 @@ If a parameter requires a reboot, mention it in your explanation text.${rebootPa
   const sendToAi = useCallback(async () => {
     if (!aiProvider || !currentLog) return;
     const store = useLogStore.getState();
+    const cancelToken = { cancelled: false };
+    cancelAiRef.current = cancelToken;
     store.setIsAiAnalyzing(true);
     store.setAiAnalysisError(null);
 
@@ -445,8 +450,15 @@ If a parameter requires a reboot, mention it in your explanation text.${rebootPa
         system: buildSystemContext(),
         history: store.aiMessages,
         log: currentLog,
-        call: (body) => call(body),
+        // Once cancelled, the next round short-circuits with a failure so the
+        // loop unwinds without hitting the API again.
+        call: (body) =>
+          cancelToken.cancelled
+            ? Promise.resolve({ success: false, error: 'Stopped' })
+            : call(body),
       });
+      // Stop already reset the analyzing state; drop the aborted result.
+      if (cancelToken.cancelled) return;
       store.setIsAiAnalyzing(false);
       if (text) {
         store.addAiMessage({ role: 'assistant', content: text });
@@ -462,6 +474,7 @@ If a parameter requires a reboot, mention it in your explanation text.${rebootPa
       systemContext: buildSystemContext(),
     });
 
+    if (cancelToken.cancelled) return;
     store.setIsAiAnalyzing(false);
     if (result?.success && result.response) {
       store.addAiMessage({ role: 'assistant', content: result.response });
@@ -469,6 +482,11 @@ If a parameter requires a reboot, mention it in your explanation text.${rebootPa
       store.setAiAnalysisError(result?.error ?? 'Analysis failed');
     }
   }, [aiProvider, currentLog, buildSystemContext]);
+
+  const handleStopAi = useCallback(() => {
+    if (cancelAiRef.current) cancelAiRef.current.cancelled = true;
+    useLogStore.getState().setIsAiAnalyzing(false);
+  }, []);
 
   const handleSend = useCallback(async (userMessage: string) => {
     useLogStore.getState().addAiMessage({ role: 'user', content: userMessage });
@@ -625,6 +643,12 @@ If a parameter requires a reboot, mention it in your explanation text.${rebootPa
               <div className="flex items-center gap-2 py-2">
                 <div className="w-3.5 h-3.5 border-2 border-purple-400 border-t-transparent rounded-full animate-spin" />
                 <span className="text-xs text-content-secondary">Analyzing...</span>
+                <button
+                  onClick={handleStopAi}
+                  className="text-xs px-2 py-0.5 rounded-md border border-subtle text-content-secondary hover:text-red-400 hover:border-red-500/40 transition-colors"
+                >
+                  Stop
+                </button>
               </div>
             )}
             {aiAnalysisError && (

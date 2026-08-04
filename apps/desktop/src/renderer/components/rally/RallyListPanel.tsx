@@ -128,7 +128,7 @@ export function RallyListPanel({
               />
             </svg>
             <p>No rally points</p>
-            <p className="mt-1 text-content-tertiary">Click "Add Rally Point" to create one</p>
+            <p className="mt-1 text-content-tertiary">Click "Add Rally" on the map to create one</p>
           </div>
         ) : (
           <div className="p-2 space-y-1">
@@ -307,8 +307,14 @@ function RallyDetailsPanel({ point, altitudeUnit, onUpdate }: RallyDetailsPanelP
 
   const handleDirectionBlur = () => {
     const val = parseFloat(localDirection);
-    if (!isNaN(val) && val !== point.landDirection) {
-      onUpdate({ landDirection: val });
+    if (isNaN(val)) {
+      setLocalDirection(String(point.landDirection));
+      return;
+    }
+    const clamped = Math.min(360, Math.max(0, val));
+    setLocalDirection(String(clamped));
+    if (clamped !== point.landDirection) {
+      onUpdate({ landDirection: clamped });
     }
   };
 

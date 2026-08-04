@@ -5,7 +5,7 @@ import { useConnectionStore } from '../stores/connection-store';
 import { useNavigationStore } from '../stores/navigation-store';
 import { useParameterStore } from '../stores/parameter-store';
 import { useMissionStore } from '../stores/mission-store';
-import { useCommandTargetStore, SELF_VEHICLE_ID } from '../stores/command-target-store';
+import { useCommandTargetStore, commandTargetKey } from '../stores/command-target-store';
 import { useHudStore } from '../stores/hud-store';
 import { useHudOverlayStore } from '../stores/hud-overlay-store';
 import { buildHudProjection } from '../components/camera/hud/hud-projection';
@@ -139,10 +139,10 @@ export function createRendererHostApi(
     },
 
     commandTarget: {
-      get: () => useCommandTargetStore.getState().targets[SELF_VEHICLE_ID] ?? null,
+      get: () => useCommandTargetStore.getState().targets[commandTargetKey()] ?? null,
       subscribe: (listener) =>
         useCommandTargetStore.subscribe((s) =>
-          listener(s.targets[SELF_VEHICLE_ID] ?? null),
+          listener(s.targets[commandTargetKey()] ?? null),
         ),
     },
 
