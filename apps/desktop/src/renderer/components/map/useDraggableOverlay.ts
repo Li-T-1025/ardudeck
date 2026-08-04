@@ -5,12 +5,17 @@
  * Widgets keep their default Tailwind position until the user drags them; a
  * drag switches to an absolute left/top pinned inside the map container and
  * persists per widget key, so the operator arranges the cockpit once. Drag
- * moves in 8px grid steps so arrangements line up. Positions persist as
- * FRACTIONS of the free container space (v2 payload { xr, yr }), so widgets
- * keep their relative placement when the panel or window resizes; a
- * ResizeObserver re-derives pixels whenever the container or the widget
- * changes size. Legacy v1 pixel payloads are converted to ratios on first
- * apply and re-saved.
+ * moves in 8px grid steps so arrangements line up.
+ *
+ * Positions persist as EDGE ANCHORS (v3 payload { ax, ay, dx, dy }): the
+ * widget's center picks the nearest third of the panel on each axis, and the
+ * pixel offset from that edge (or from the panel center) is stored. On
+ * resize a bottom-anchored gauge row stays the same distance from the bottom
+ * and a center-anchored cluster keeps its exact internal spacing, instead of
+ * the whole arrangement compressing proportionally (the v2 ratio scheme did
+ * that and piled fixed-size widgets into each other on small windows).
+ * A ResizeObserver re-derives pixels whenever the container or the widget
+ * changes size. Legacy v1 px / v2 ratio payloads migrate on first apply.
  *
  * Interactive children (buttons, inputs, sliders) never start a drag, and a
  * drag under the 4px threshold still delivers the click.
@@ -22,20 +27,69 @@ const DRAG_THRESHOLD_PX = 4;
 const GRID_PX = 8;
 
 interface Pos { x: number; y: number }
-/** Position as a fraction of the free container space, both axes 0..1. */
-interface Ratio { xr: number; yr: number }
 
-type Stored = { kind: 'ratio'; ratio: Ratio } | { kind: 'px'; pos: Pos };
+export type OverlayAnchorX = 'left' | 'center' | 'right';
+export type OverlayAnchorY = 'top' | 'middle' | 'bottom';
+
+/**
+ * v3 payload. dx/dy are px offsets: from the anchored edge for left/right/
+ * top/bottom, or the widget-center offset from the panel center for
+ * center/middle.
+ */
+export interface OverlayAnchorPos {
+  ax: OverlayAnchorX;
+  ay: OverlayAnchorY;
+  dx: number;
+  dy: number;
+}
+
+/**
+ * Anchor payloads carry a rule version: v4 anchors were derived with the
+ * fixed-edge-band rule below. Earlier (unversioned) anchors used a
+ * relative-distance rule that could split one visual cluster across
+ * different anchors, so they re-derive from their current pixel position on
+ * first apply.
+ */
+const ANCHOR_RULE_VERSION = 4;
+
+/**
+ * A widget is edge-anchored only when its near edge sits within this many px
+ * of the panel edge (a deliberately pinned toolbar/card); everything else is
+ * center-anchored so an arranged cluster keeps its exact shape and moves as
+ * one on resize. Choosing anchors by relative distance instead breaks wide
+ * clusters: their outer members sit closer to a side edge than to the
+ * center, get edge-anchored, and resize drags them through their neighbours.
+ */
+const EDGE_SNAP_PX = 140;
+
+type Stored =
+  | { kind: 'anchor'; anchor: OverlayAnchorPos; current: boolean }
+  | { kind: 'ratio'; ratio: { xr: number; yr: number } }
+  | { kind: 'px'; pos: Pos };
 
 function clamp01(v: number): number {
   return Math.max(0, Math.min(1, v));
+}
+
+function isAnchorX(v: unknown): v is OverlayAnchorX {
+  return v === 'left' || v === 'center' || v === 'right';
+}
+function isAnchorY(v: unknown): v is OverlayAnchorY {
+  return v === 'top' || v === 'middle' || v === 'bottom';
 }
 
 function readStored(key: string): Stored | null {
   try {
     const raw = localStorage.getItem(STORAGE_PREFIX + key);
     if (!raw) return null;
-    const p = JSON.parse(raw) as Partial<Pos & Ratio>;
+    const p = JSON.parse(raw) as Record<string, unknown>;
+    if (isAnchorX(p.ax) && isAnchorY(p.ay) && Number.isFinite(p.dx) && Number.isFinite(p.dy)) {
+      return {
+        kind: 'anchor',
+        anchor: { ax: p.ax, ay: p.ay, dx: p.dx as number, dy: p.dy as number },
+        current: p.v === ANCHOR_RULE_VERSION,
+      };
+    }
     if (Number.isFinite(p.xr) && Number.isFinite(p.yr)) {
       return { kind: 'ratio', ratio: { xr: clamp01(p.xr as number), yr: clamp01(p.yr as number) } };
     }
@@ -48,8 +102,30 @@ function readStored(key: string): Stored | null {
   }
 }
 
-function writeRatio(key: string, ratio: Ratio): void {
-  try { localStorage.setItem(STORAGE_PREFIX + key, JSON.stringify(ratio)); } catch { /* full/blocked */ }
+function writeAnchor(key: string, anchor: OverlayAnchorPos): void {
+  try {
+    localStorage.setItem(STORAGE_PREFIX + key, JSON.stringify({ ...anchor, v: ANCHOR_RULE_VERSION }));
+  } catch { /* full/blocked */ }
+}
+
+/** Raw stored payload for a widget key (any version), for layout snapshots. */
+export function readOverlayPosPayload(key: string): unknown | null {
+  try {
+    const raw = localStorage.getItem(STORAGE_PREFIX + key);
+    return raw ? (JSON.parse(raw) as unknown) : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Write back a payload captured by readOverlayPosPayload (or a preset). */
+export function writeOverlayPosPayload(key: string, payload: unknown): void {
+  try { localStorage.setItem(STORAGE_PREFIX + key, JSON.stringify(payload)); } catch { /* full/blocked */ }
+}
+
+/** Remove a stored position so the widget returns to its default placement. */
+export function clearOverlayPosPayload(key: string): void {
+  try { localStorage.removeItem(STORAGE_PREFIX + key); } catch { /* blocked */ }
 }
 
 function snapToGrid(v: number): number {
@@ -65,21 +141,58 @@ function clampToParent(el: HTMLElement, pos: Pos): Pos {
   };
 }
 
-function toRatio(el: HTMLElement, pos: Pos): Ratio | null {
+function toAnchor(el: HTMLElement, pos: Pos): OverlayAnchorPos | null {
   const parent = el.offsetParent as HTMLElement | null;
   if (!parent) return null;
-  return {
-    xr: clamp01(pos.x / Math.max(1, parent.clientWidth - el.offsetWidth)),
-    yr: clamp01(pos.y / Math.max(1, parent.clientHeight - el.offsetHeight)),
-  };
+  const W = parent.clientWidth;
+  const H = parent.clientHeight;
+  const w = el.offsetWidth;
+  const h = el.offsetHeight;
+  const cx = pos.x + w / 2;
+  const cy = pos.y + h / 2;
+
+  // Fixed edge band (see EDGE_SNAP_PX): only widgets deliberately pinned
+  // near an edge get edge anchors; everything else is center-anchored so an
+  // arranged cluster keeps its exact shape on resize.
+  const leftDist = pos.x;
+  const rightDist = W - w - pos.x;
+  let ax: OverlayAnchorX;
+  let dx: number;
+  if (leftDist <= EDGE_SNAP_PX && leftDist <= rightDist) { ax = 'left'; dx = leftDist; }
+  else if (rightDist <= EDGE_SNAP_PX) { ax = 'right'; dx = rightDist; }
+  else { ax = 'center'; dx = cx - W / 2; }
+
+  const topDist = pos.y;
+  const bottomDist = H - h - pos.y;
+  let ay: OverlayAnchorY;
+  let dy: number;
+  if (topDist <= EDGE_SNAP_PX && topDist <= bottomDist) { ay = 'top'; dy = topDist; }
+  else if (bottomDist <= EDGE_SNAP_PX) { ay = 'bottom'; dy = bottomDist; }
+  else { ay = 'middle'; dy = cy - H / 2; }
+
+  return { ax, ay, dx, dy };
 }
 
-function fromRatio(el: HTMLElement, ratio: Ratio): Pos | null {
+function fromAnchor(el: HTMLElement, a: OverlayAnchorPos): Pos | null {
+  const parent = el.offsetParent as HTMLElement | null;
+  if (!parent) return null;
+  const W = parent.clientWidth;
+  const H = parent.clientHeight;
+  const w = el.offsetWidth;
+  const h = el.offsetHeight;
+  const x = a.ax === 'left' ? a.dx : a.ax === 'right' ? W - w - a.dx : W / 2 + a.dx - w / 2;
+  const y = a.ay === 'top' ? a.dy : a.ay === 'bottom' ? H - h - a.dy : H / 2 + a.dy - h / 2;
+  // No grid re-snap here: snapping happens during the drag, and re-snapping a
+  // center-anchored widget after resize would walk it off its saved offset.
+  return clampToParent(el, { x, y });
+}
+
+function fromRatioLegacy(el: HTMLElement, ratio: { xr: number; yr: number }): Pos | null {
   const parent = el.offsetParent as HTMLElement | null;
   if (!parent) return null;
   return clampToParent(el, {
-    x: snapToGrid(ratio.xr * Math.max(0, parent.clientWidth - el.offsetWidth)),
-    y: snapToGrid(ratio.yr * Math.max(0, parent.clientHeight - el.offsetHeight)),
+    x: ratio.xr * Math.max(0, parent.clientWidth - el.offsetWidth),
+    y: ratio.yr * Math.max(0, parent.clientHeight - el.offsetHeight),
   });
 }
 
@@ -90,31 +203,45 @@ export function useDraggableOverlay(storageKey: string): {
 } {
   const [pos, setPos] = useState<Pos | null>(null);
   const elRef = useRef<HTMLElement | null>(null);
-  const ratioRef = useRef<Ratio | null>(null);
+  const anchorRef = useRef<OverlayAnchorPos | null>(null);
   const drag = useRef<{ startX: number; startY: number; origin: Pos; active: boolean } | null>(null);
+
+  // Bail out when the recomputed position is unchanged: applying a fresh
+  // object every time would re-render, and a consumer whose render re-invokes
+  // the ref (e.g. an unstable composite ref) would then loop forever.
+  const applyPos = useCallback((next: Pos | null) => {
+    setPos((prev) => (prev && next && prev.x === next.x && prev.y === next.y ? prev : next));
+  }, []);
 
   // Applying a stored position needs real element/container dimensions, so it
   // happens in the ref callback (post-attach, pre-paint) rather than in state
-  // initialisation. v1 pixel payloads migrate to ratios here.
+  // initialisation. v1 px and v2 ratio payloads migrate to anchors here.
   const ref = useCallback((el: HTMLElement | null) => {
     elRef.current = el;
     if (!el) return;
-    if (!ratioRef.current) {
+    if (!anchorRef.current) {
       const stored = readStored(storageKey);
       if (!stored) return;
-      if (stored.kind === 'ratio') {
-        ratioRef.current = stored.ratio;
+      if (stored.kind === 'anchor' && stored.current) {
+        anchorRef.current = stored.anchor;
       } else {
-        const ratio = toRatio(el, clampToParent(el, stored.pos));
-        if (!ratio) return;
-        ratioRef.current = ratio;
-        writeRatio(storageKey, ratio);
+        // Older payloads (px, ratio, or anchors from a previous rule
+        // version) re-derive from their current on-screen position.
+        const px = stored.kind === 'anchor'
+          ? fromAnchor(el, stored.anchor)
+          : stored.kind === 'px'
+            ? clampToParent(el, stored.pos)
+            : fromRatioLegacy(el, stored.ratio);
+        const anchor = px ? toAnchor(el, px) : null;
+        if (!anchor) return;
+        anchorRef.current = anchor;
+        writeAnchor(storageKey, anchor);
       }
     }
-    setPos(fromRatio(el, ratioRef.current));
-  }, [storageKey]);
+    applyPos(fromAnchor(el, anchorRef.current));
+  }, [storageKey, applyPos]);
 
-  // Keep the relative placement when the map panel resizes or the widget
+  // Keep the anchored placement when the map panel resizes or the widget
   // itself changes size (e.g. instrument scaling).
   useEffect(() => {
     const el = elRef.current;
@@ -122,13 +249,13 @@ export function useDraggableOverlay(storageKey: string): {
     if (!el || !parent) return;
     const ro = new ResizeObserver(() => {
       const node = elRef.current;
-      if (!node || !ratioRef.current || drag.current) return;
-      setPos(fromRatio(node, ratioRef.current));
+      if (!node || !anchorRef.current || drag.current) return;
+      applyPos(fromAnchor(node, anchorRef.current));
     });
     ro.observe(parent);
     ro.observe(el);
     return () => ro.disconnect();
-  }, [storageKey]);
+  }, [storageKey, applyPos]);
 
   const onPointerDown = useCallback((e: ReactPointerEvent) => {
     const el = elRef.current;
@@ -168,10 +295,10 @@ export function useDraggableOverlay(storageKey: string): {
         setPos((p) => {
           const node = elRef.current;
           if (p && node) {
-            const ratio = toRatio(node, p);
-            if (ratio) {
-              ratioRef.current = ratio;
-              writeRatio(storageKey, ratio);
+            const anchor = toAnchor(node, p);
+            if (anchor) {
+              anchorRef.current = anchor;
+              writeAnchor(storageKey, anchor);
             }
           }
           return p;

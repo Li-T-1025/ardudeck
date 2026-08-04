@@ -462,6 +462,14 @@ export const IPC_CHANNELS = {
   ARDUPILOT_SITL_STDERR: 'ardupilot-sitl:stderr',
   ARDUPILOT_SITL_ERROR: 'ardupilot-sitl:error',
   ARDUPILOT_SITL_EXIT: 'ardupilot-sitl:exit',
+  /**
+   * Authoritative "SITL is up, with this config" push, sent on every successful
+   * spawn. The renderer cannot derive this on its own: SITL can be started or
+   * relaunched by the main process alone (the sim handover endpoint moves the
+   * take-off point that way), and without this push the renderer keeps showing
+   * the config it last sent rather than the one SITL is actually running.
+   */
+  ARDUPILOT_SITL_STARTED: 'ardupilot-sitl:started',
   ARDUPILOT_SITL_RC_SEND: 'ardupilot-sitl:rc-send',
   ARDUPILOT_SITL_RC_START: 'ardupilot-sitl:rc-start',
   ARDUPILOT_SITL_RC_STOP: 'ardupilot-sitl:rc-stop',
@@ -1662,6 +1670,33 @@ export interface ArduPilotSitlExitData {
   vehicleType?: ArduPilotVehicleType;
   model?: string;
   releaseTrack?: ArduPilotReleaseTrack;
+  /**
+   * This exit is the first half of a deliberate relaunch, so SITL is coming
+   * straight back and the renderer must not report it as stopped or offer crash
+   * recovery. An `ARDUPILOT_SITL_STARTED` follows when the new process is up, or
+   * an `ARDUPILOT_SITL_ERROR` if the relaunch failed. Absent or false on every
+   * unexpected death, which stays a genuine stop.
+   */
+  relaunching?: boolean;
+}
+
+/**
+ * The config SITL is actually running with, pushed after every successful spawn.
+ *
+ * `homeLocation` is the point that matters: a relaunch driven by the sim
+ * handover endpoint moves the take-off point without the renderer asking, and
+ * the renderer's own copy would otherwise stay at the old location forever.
+ */
+export interface ArduPilotSitlStartedData {
+  homeLocation: { lat: number; lng: number; alt: number; heading: number };
+  vehicleType: ArduPilotVehicleType;
+  model: string;
+  releaseTrack: ArduPilotReleaseTrack;
+  pid?: number;
+  /** Full command line, for the SITL console output pane. */
+  command?: string;
+  /** True when this spawn replaced a running SITL rather than starting a cold one. */
+  wasRelaunch?: boolean;
 }
 
 /**

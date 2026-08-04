@@ -106,6 +106,7 @@ const PANEL_ID_TO_INSTRUMENT: Record<string, string> = {
   position: 'flight-data',
   flightMode: 'flight-mode',
   safetyMonitor: 'annunciator',
+  flightControl: 'controls',
 };
 
 function PanelHeaderActions(props: IDockviewHeaderActionsProps): JSX.Element | null {

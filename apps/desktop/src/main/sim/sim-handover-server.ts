@@ -170,12 +170,14 @@ export class SimHandoverService {
       SIM_OPOS_ALT: req.alt,
       SIM_OPOS_HDG: req.hdg,
     };
-    // Written first so the stored origin agrees with the `-O` the relaunch is
-    // about to use. On its own this changes nothing while `-O` is present; it is
-    // what an `-O`-less launch would honour, and it keeps the two in sync.
+    // Best effort, and deliberately NOT fatal. These keep the stored origin in step with the
+    // `-O` the relaunch is about to use, but while `-O` is present they change nothing at all,
+    // which the measurement above establishes. Treating a failed write as a failed handover
+    // blocked the whole flow on a step that cannot affect the outcome, which is exactly what
+    // happened the first time this ran for real.
     for (const id of OPOS_PARAMS) {
       const ok = await this.deps.setParam(id, values[id]);
-      if (!ok) return { ok: false, error: `failed to set ${id}` };
+      if (!ok) console.warn(`[sim-handover] could not set ${id}; the relaunch sets the origin anyway`);
     }
 
     // The operative step. A relaunch is the only reboot that actually moves the

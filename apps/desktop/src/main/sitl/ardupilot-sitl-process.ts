@@ -353,6 +353,12 @@ class ArduPilotSitlProcessManager {
    * process that is actually flying the aircraft.
    */
   private _engineManaged = true;
+  /**
+   * True only for the window in which relaunchWithHome is deliberately killing
+   * SITL to respawn it. The exit event carries this so the renderer can tell an
+   * intentional restart from a crash; every other death leaves it false.
+   */
+  private _relaunching = false;
 
   get isRunning(): boolean {
     return this._isRunning;
@@ -393,11 +399,25 @@ class ArduPilotSitlProcessManager {
     const cfg = this._currentConfig;
     if (!cfg) return { success: false, error: 'SITL is not running' };
     const next: ArduPilotSitlConfig = { ...cfg, homeLocation: home };
-    await this.stopAndWait(5000);
-    // Brief pause for the OS to fully release the bound TCP port (5760).
-    await new Promise<void>((r) => setTimeout(r, 1000));
-    const res = await this.start(next);
-    return { success: res.success, error: res.error };
+    this._relaunching = true;
+    try {
+      await this.stopAndWait(5000);
+      // Brief pause for the OS to fully release the bound TCP port (5760).
+      await new Promise<void>((r) => setTimeout(r, 1000));
+      const res = await this.start(next);
+      if (!res.success) {
+        // The kill already reached the renderer as a relaunch, which told it to
+        // hold its "running" state. Nothing is coming back, so say so on the
+        // error channel the renderer already treats as "SITL is down".
+        this.sendToRenderer(
+          IPC_CHANNELS.ARDUPILOT_SITL_ERROR,
+          `SITL relaunch at the new take-off point failed: ${res.error ?? 'unknown error'}`,
+        );
+      }
+      return { success: res.success, error: res.error };
+    } finally {
+      this._relaunching = false;
+    }
   }
 
   setMainWindow(window: BrowserWindow): void {
@@ -694,12 +714,13 @@ class ArduPilotSitlProcessManager {
       // ArduPilot SITL binary, matched by name, so nothing unrelated is touched.
       await this.reapStaleSitl(5760);
 
-      this.process = spawn(spawnCmd, args, {
+      const child = spawn(spawnCmd, args, {
         cwd: path.dirname(binaryPath),
         env,
         stdio: ['pipe', 'pipe', 'pipe'],
         shell: process.platform === 'win32',
       });
+      this.process = child;
       this._isRunning = true;
       const launchedAt = Date.now();
       // Snapshot the active config now so the exit handler can attribute the
@@ -709,26 +730,33 @@ class ArduPilotSitlProcessManager {
       const launchedModel = config.model || DEFAULT_MODELS[config.vehicleType];
       const launchedTrack = config.releaseTrack;
 
-      this.process.stdout?.on('data', (data: Buffer) => {
+      child.stdout?.on('data', (data: Buffer) => {
         this.sendToRenderer(IPC_CHANNELS.ARDUPILOT_SITL_STDOUT, data.toString());
       });
 
-      this.process.stderr?.on('data', (data: Buffer) => {
+      child.stderr?.on('data', (data: Buffer) => {
         this.sendToRenderer(IPC_CHANNELS.ARDUPILOT_SITL_STDERR, data.toString());
       });
 
-      this.process.on('error', (error: Error) => {
+      child.on('error', (error: Error) => {
         console.error('ArduPilot SITL process error:', error);
         this._isRunning = false;
         this.sendToRenderer(IPC_CHANNELS.ARDUPILOT_SITL_ERROR, error.message);
       });
 
-      this.process.on('exit', (code: number | null, signal: string | null) => {
-        this._isRunning = false;
-        this.process = null;
-        this._currentConfig = null;
-        // If SITL dies, tear down the sim engine too so it isn't orphaned.
-        if (this._engineManaged) simEngineProcess.stop();
+      child.on('exit', (code: number | null, signal: string | null) => {
+        // A relaunch kills the old SITL and spawns a new one; if the old child's
+        // exit lands after that spawn, this handler would null out the SUCCESSOR's
+        // process/config and kill its engine. Only the process that is still the
+        // active one may tear state down.
+        const wasActive = this.process === child;
+        if (wasActive) {
+          this._isRunning = false;
+          this.process = null;
+          this._currentConfig = null;
+          // If SITL dies, tear down the sim engine too so it isn't orphaned.
+          if (this._engineManaged) simEngineProcess.stop();
+        }
         // Early-crash detection: an exit within the first few seconds with
         // a fatal signal (or a non-zero code, since some crashes don't
         // surface a signal on Windows) almost always means the binary can't
@@ -752,7 +780,22 @@ class ArduPilotSitlProcessManager {
           vehicleType: launchedVehicleType,
           model: launchedModel,
           releaseTrack: launchedTrack,
+          relaunching: this._relaunching,
         });
+      });
+
+      // Tell the renderer what SITL is actually running with. Without this a
+      // relaunch driven from main (the sim handover endpoint moving the take-off
+      // point) leaves the renderer showing the old home and, after the exit
+      // above, believing SITL is stopped while it is flying.
+      this.sendToRenderer(IPC_CHANNELS.ARDUPILOT_SITL_STARTED, {
+        homeLocation: config.homeLocation,
+        vehicleType: launchedVehicleType,
+        model: launchedModel,
+        releaseTrack: launchedTrack,
+        pid: child.pid,
+        command: commandString,
+        wasRelaunch: this._relaunching,
       });
 
       return { success: true, command: commandString };

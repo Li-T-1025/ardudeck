@@ -792,6 +792,16 @@ export const useArduPilotSitlStore = create<ArduPilotSitlStore>()(
 
         // Listen for exit
         const unsubExit = window.electronAPI.onArdupilotSitlExit((data) => {
+          // Half of a deliberate relaunch (the sim handover endpoint moving the
+          // take-off point). SITL is coming straight back on the same port, so
+          // reporting it as stopped here leaves the UI insisting the simulator is
+          // off while it is flying, and none of the crash recovery below applies.
+          // An ARDUPILOT_SITL_STARTED confirms the new process, or an
+          // ARDUPILOT_SITL_ERROR reports that it never came back.
+          if (data.relaunching) {
+            appendOutput('\nSITL is restarting at a new take-off point...\n');
+            return;
+          }
           set({ isRunning: false, isStarting: false, isStopping: false, isRcSending: false });
           // FlightGear is driven purely by SITL's FGNetFDM stream; once SITL is
           // gone the viewer just freezes, so close it too.
@@ -864,6 +874,28 @@ export const useArduPilotSitlStore = create<ArduPilotSitlStore>()(
           }
         });
 
+        // Authoritative "this is what SITL is running with" push, sent by main on
+        // every successful spawn. It is the only thing that keeps the store in step
+        // with a relaunch main did on its own behalf, and homeLocation is persisted,
+        // so without it the next manual Start would go back to the stale location.
+        const unsubStarted = window.electronAPI.onArdupilotSitlStarted((data) => {
+          set({
+            isRunning: true,
+            isStarting: false,
+            isStopping: false,
+            lastError: null,
+            homeLocation: data.homeLocation,
+            vehicleType: data.vehicleType,
+            model: data.model,
+            releaseTrack: data.releaseTrack,
+            ...(data.command ? { lastCommand: data.command } : {}),
+          });
+          if (data.wasRelaunch) {
+            const { lat, lng, alt, heading } = data.homeLocation;
+            appendOutput(`SITL is back up, taking off from ${lat}, ${lng} (alt ${alt} m, heading ${heading} deg).\n`);
+          }
+        });
+
         // Listen for download progress
         const unsubProgress = window.electronAPI.onArdupilotSitlDownloadProgress((progress) => {
           set({ downloadProgress: progress });
@@ -881,6 +913,7 @@ export const useArduPilotSitlStore = create<ArduPilotSitlStore>()(
           unsubStderr();
           unsubError();
           unsubExit();
+          unsubStarted();
           unsubProgress();
         };
       },

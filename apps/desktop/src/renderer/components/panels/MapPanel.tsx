@@ -7,7 +7,6 @@ import { useConnectionStore } from '../../stores/connection-store';
 import { useMissionStore } from '../../stores/mission-store';
 import { commandHasLocation, hasValidCoordinates, MAV_CMD, type MissionItem } from '../../../shared/mission-types';
 import { splitMissionMarkers } from '../../utils/mission-markers';
-import { AttitudeIndicator } from './AttitudePanel';
 import { useIpLocation } from '../../utils/ip-geolocation';
 import { useEditModeStore } from '../../stores/edit-mode-store';
 import { useSettingsStore } from '../../stores/settings-store';
@@ -63,7 +62,7 @@ import { DipulOverlay } from '../map/overlays/DipulOverlay';
 import { AirspaceOverlay } from '../map/overlays/AirspaceOverlay';
 import { AirspaceLegend } from '../map/overlays/AirspaceLegend';
 import { MapLayersControl } from '../map/overlays/MapLayersControl';
-import { InstrumentsLayer } from '../map/instruments/InstrumentsLayer';
+import { InstrumentsLayer, SingleMapInstrument } from '../map/instruments/InstrumentsLayer';
 import { InstrumentsMenu } from '../map/instruments/InstrumentsMenu';
 import { useMapHomeStore } from '../map/instruments/registry';
 import { useMapInstrumentsStore, resolveInstrumentVisible } from '../../stores/map-instruments-store';
@@ -1073,7 +1072,9 @@ const TelemetryMap3D = React.memo(function TelemetryMap3D() {
 
   const [followVehicle, setFollowVehicle] = useState(true);
   const [showCompass, setShowCompass] = useState(true);
-  const [showAttitude, setShowAttitude] = useState(true);
+  // The nav ball is the 'attitude' registry instrument; 3D mounts just it.
+  const showAttitude = useMapInstrumentsStore((s) => resolveInstrumentVisible(s.visible, 'attitude'));
+  const toggleInstrument = useMapInstrumentsStore((s) => s.toggle);
   const [showHeadingLine, setShowHeadingLine] = useState(false); // off by default in 3D — vehicle model shows heading
   const [showMission, setShowMission] = useState(true);
   const [showTerrain, setShowTerrain] = useState(true);
@@ -1392,7 +1393,7 @@ const TelemetryMap3D = React.memo(function TelemetryMap3D() {
       {showMoreTools && (
         <>
           {toggleBtn('Compass', showCompass, () => setShowCompass(v => !v), 'Toggle compass', icons.compass)}
-          {toggleBtn('Attitude', showAttitude, () => setShowAttitude(v => !v), 'Toggle attitude indicator', icons.attitude)}
+          {toggleBtn('Attitude', showAttitude, () => toggleInstrument('attitude'), 'Toggle attitude indicator', icons.attitude)}
           {toggleBtn('Mission', showMission, () => setShowMission(v => !v), 'Toggle mission overlays', icons.mission)}
           {toggleBtn('Height', showTerrain, () => setShowTerrain(v => !v), 'Toggle terrain elevation', icons.height)}
           <div className="my-0.5 border-t border-subtle" />
@@ -1416,7 +1417,7 @@ const TelemetryMap3D = React.memo(function TelemetryMap3D() {
         </>
       )}
     </>
-  ), [followVehicle, showCompass, showAttitude, showMission, showTerrain, useRealVehicleSize, showMoreTools, hasValidGps, clearTrail, setHome, toggleBtn, icons]);
+  ), [followVehicle, showCompass, showAttitude, toggleInstrument, showMission, showTerrain, useRealVehicleSize, showMoreTools, hasValidGps, clearTrail, setHome, toggleBtn, icons]);
 
   return (
     <div className="relative h-full w-full">
@@ -1441,8 +1442,8 @@ const TelemetryMap3D = React.memo(function TelemetryMap3D() {
       {/* Compass overlay */}
       {showCompass && <CompassOverlay heading={vfrHud.heading} />}
 
-      {/* Attitude indicator overlay */}
-      {showAttitude && <AttitudeBallOverlay roll={attitude.roll} pitch={attitude.pitch} heading={vfrHud.heading} />}
+      {/* Attitude ball (the 'attitude' instrument; drag/resize/config work here too) */}
+      <SingleMapInstrument id="attitude" />
 
       {/* GPS warning */}
       {!hasValidGps && (
@@ -1598,25 +1599,6 @@ function WindControlsWrapper({ raised }: { raised?: boolean }) {
   const hasWind = useOverlayStore((s) => s.activeOverlays.has('wind'));
   if (!hasWind) return null;
   return <WindControls raised={raised} />;
-}
-
-// Nav ball, drag-to-place anywhere inside the map panel (position persists).
-function AttitudeBallOverlay({ roll, pitch, heading }: { roll: number; pitch: number; heading: number }) {
-  const dragOverlay = useDraggableOverlay('attitude-ball');
-  return (
-    <div
-      ref={dragOverlay.ref}
-      style={dragOverlay.style}
-      onPointerDown={dragOverlay.onPointerDown}
-      className="absolute bottom-3 left-1/2 -translate-x-1/2 z-[1000]"
-    >
-      {/* Dark background circle */}
-      <div className="absolute inset-[-4px] rounded-full bg-surface-overlay-light shadow-xl" />
-      <div className="relative">
-        <AttitudeIndicator roll={roll} pitch={pitch} heading={heading} size={140} />
-      </div>
-    </div>
-  );
 }
 
 // ─── MapPanel entry point — delegates to 2D or 3D based on global mapMode ────
@@ -1797,7 +1779,8 @@ const TelemetryMap2D = React.memo(function TelemetryMap2D() {
   // now drives the 'heading' round gauge instrument instead.
   const headingInstrumentVisible = useMapInstrumentsStore((s) => resolveInstrumentVisible(s.visible, 'heading'));
   const toggleInstrument = useMapInstrumentsStore((s) => s.toggle);
-  const [showAttitude, setShowAttitude] = useState(true);
+  // The nav ball is the 'attitude' registry instrument now.
+  const attitudeVisible = useMapInstrumentsStore((s) => resolveInstrumentVisible(s.visible, 'attitude'));
   const [showMission, setShowMission] = useState(true); // Show mission overlays by default
   const [showTerrain, setShowTerrain] = useState(false);
   const [elevationRange, setElevationRange] = useState<ElevationRange>({ min: 0, max: 0 });
@@ -2270,9 +2253,9 @@ const TelemetryMap2D = React.memo(function TelemetryMap2D() {
           Compass
         </button>
         <button
-          onClick={() => setShowAttitude(!showAttitude)}
+          onClick={() => toggleInstrument('attitude')}
           className={`px-2 py-1 text-xs rounded shadow-lg transition-colors flex items-center gap-1.5 ${
-            showAttitude
+            attitudeVisible
               ? 'bg-blue-600 text-white'
               : 'bg-surface text-content hover:bg-surface-raised'
           }`}
@@ -2324,26 +2307,21 @@ const TelemetryMap2D = React.memo(function TelemetryMap2D() {
 
       {/* Instruments menu (top-left counterpart of the Layers menu) */}
       <div className="absolute top-2 left-2 z-[1000]">
-        <InstrumentsMenu
-          showAttitude={showAttitude}
-          onToggleAttitude={() => setShowAttitude((v) => !v)}
-        />
+        <InstrumentsMenu />
       </div>
 
       {/* Airspace legend */}
       <AirspaceLegendWrapper />
 
       {/* Wind timeline bar */}
-      <WindControlsWrapper raised={showAttitude} />
+      <WindControlsWrapper raised={attitudeVisible} />
 
-      {/* Floating instrument widgets (drag-to-place, toggled from the Instruments menu) */}
+      {/* Floating instrument widgets, attitude ball included
+          (drag-to-place, toggled from the Instruments menu) */}
       <InstrumentsLayer />
 
       {/* API key dialog */}
       <ApiKeyDialog />
-
-      {/* Attitude indicator overlay (nav ball): drag-to-place, persists */}
-      {showAttitude && <AttitudeBallOverlay roll={attitude.roll} pitch={attitude.pitch} heading={vfrHud.heading} />}
 
       {/* GPS status overlay (below the Instruments menu button) */}
       {!hasValidGps && (

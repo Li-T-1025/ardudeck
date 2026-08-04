@@ -194,12 +194,14 @@ describe('SimHandoverService.setOrigin', () => {
     expect(res.error).toMatch(/SITL is not running/);
   });
 
-  it('surfaces a failed PARAM_SET without relaunching', async () => {
+  // A failed SIM_OPOS write must NOT abort the handover. Those params cannot move the origin
+  // while `-O` is on the command line, which is always, so failing on one blocks the flow on a
+  // step that has no bearing on the result. The relaunch is what moves the origin.
+  it('carries on when a PARAM_SET fails, because the relaunch is what moves the origin', async () => {
     const { deps, sitl } = makeDeps({ setParam: async (id) => id !== 'SIM_OPOS_ALT' });
     const res = await new SimHandoverService(deps).setOrigin({ lat: 1, lon: 2, alt: 3, hdg: 0 });
-    expect(res.ok).toBe(false);
-    expect(res.error).toMatch(/SIM_OPOS_ALT/);
-    expect(sitl.relaunches).toEqual([]);
+    expect(res.ok).toBe(true);
+    expect(sitl.relaunches).toHaveLength(1);
   });
 
   it('surfaces a failed relaunch', async () => {

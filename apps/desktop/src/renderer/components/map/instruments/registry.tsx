@@ -32,8 +32,10 @@ import {
 } from '../../../../shared/user-units.js';
 import { haversineMeters, bearingDeg } from '../traffic/proximity';
 import { getModeCategory } from '../tactical-icon-pool';
+import { AttitudeIndicator } from '../../panels/AttitudePanel';
 import { RoundGauge, GAUGE_COLORS, gaugeArcPath, gaugePoint, valueToAngle, type GaugeScale } from './RoundGauge';
 import { InstrumentStrip } from './InstrumentStrip';
+import { FlightControlInstrument } from './FlightControlInstrument';
 
 export interface MapInstrumentDef {
   id: string;
@@ -41,6 +43,8 @@ export interface MapInstrumentDef {
   defaultClassName: string;
   defaultVisible: boolean;
   Component: () => JSX.Element;
+  /** Numeric readout alternative; instruments without one are analog-only. */
+  NumericComponent?: () => JSX.Element;
 }
 
 /**
@@ -481,6 +485,156 @@ function HomeInstrument(): JSX.Element {
   );
 }
 
+/**
+ * Shared card for the numeric display mode of the round gauges. Same
+ * gauge-face palette as the analog instruments (white face + near-black
+ * digits in light, dark face + white digits in dark), big tabular digits so
+ * it stays readable at a glance in the field.
+ */
+function NumericReadout({
+  label,
+  value,
+  unit,
+  sub,
+  valueClassName,
+}: {
+  label: string;
+  value: string;
+  unit?: string;
+  sub?: string;
+  valueClassName?: string;
+}): JSX.Element {
+  return (
+    <div
+      className="rounded-lg px-3 pt-1.5 pb-2 min-w-[100px] shadow-xl select-none"
+      style={{ background: GAUGE_COLORS.face, border: `1.5px solid ${GAUGE_COLORS.bezelEdge}`, color: GAUGE_COLORS.text }}
+    >
+      <div className="text-[9px] font-semibold tracking-[0.14em] leading-none text-[var(--gauge-text-dim)]">{label}</div>
+      <div className="mt-1.5 flex items-baseline gap-1 whitespace-nowrap">
+        <span className={`text-[22px] font-bold leading-none tabular-nums ${valueClassName ?? 'text-[var(--gauge-text)]'}`}>
+          {value}
+        </span>
+        {unit && <span className="text-[10px] font-medium text-[var(--gauge-text-dim)]">{unit}</span>}
+      </div>
+      <div className="mt-1 text-[9px] leading-none text-[var(--gauge-text-dim)] whitespace-nowrap min-h-[9px]">{sub ?? ''}</div>
+    </div>
+  );
+}
+
+function BatteryNumeric(): JSX.Element {
+  const connected = useLinkUp();
+  const voltage = useTelemetryStore((s) => s.battery.voltage);
+  const remaining = useTelemetryStore((s) => s.battery.remaining);
+  const known = connected && remaining >= 0;
+  const valueClassName = !known ? undefined : remaining > 30 ? 'text-[var(--gauge-green)]' : remaining > 15 ? 'text-[var(--gauge-amber)]' : 'text-[var(--gauge-red)]';
+  return (
+    <NumericReadout
+      label="BAT"
+      value={connected ? voltage.toFixed(1) : '--'}
+      unit={connected ? 'V' : undefined}
+      sub={known ? `${Math.round(remaining)}%` : '--%'}
+      valueClassName={valueClassName}
+    />
+  );
+}
+
+function GpsNumeric(): JSX.Element {
+  const connected = useLinkUp();
+  const fixType = useTelemetryStore((s) => s.gps.fixType);
+  const satellites = useTelemetryStore((s) => s.gps.satellites);
+  const valueClassName = !connected ? undefined : fixType >= 3 ? 'text-[var(--gauge-green)]' : fixType >= 2 ? 'text-[var(--gauge-amber)]' : 'text-[var(--gauge-red)]';
+  return (
+    <NumericReadout
+      label="GPS"
+      value={connected ? (GPS_FIX_SHORT[fixType] ?? 'NO FIX') : '--'}
+      sub={connected ? `${satellites} sats` : '-- sats'}
+      valueClassName={valueClassName}
+    />
+  );
+}
+
+function AltitudeNumeric(): JSX.Element {
+  const connected = useLinkUp();
+  const msl = useTelemetryStore((s) => s.position.alt);
+  const agl = useTelemetryStore((s) => s.position.relativeAlt);
+  const altitudeUnit = useSettingsStore((s) => s.unitPreferences.altitude);
+  const fmtAlt = (m: number) => trimmed(altitudeValueFromMeters(m, altitudeUnit), UNIT_PRECISION.altitude[altitudeUnit]);
+  return (
+    <NumericReadout
+      label="ALT"
+      value={connected ? fmtAlt(agl) : '--'}
+      unit={connected ? UNIT_LABELS.altitude[altitudeUnit] : undefined}
+      sub={connected ? `MSL ${fmtAlt(msl)}` : undefined}
+    />
+  );
+}
+
+function SpeedNumeric(): JSX.Element {
+  const connected = useLinkUp();
+  const groundspeed = useTelemetryStore((s) => s.vfrHud.groundspeed);
+  const airspeed = useTelemetryStore((s) => s.vfrHud.airspeed);
+  const speedUnit = useSettingsStore((s) => s.unitPreferences.speed);
+  const fmt = (mps: number) => trimmed(speedValueFromMetersPerSecond(mps, speedUnit), UNIT_PRECISION.speed[speedUnit]);
+  return (
+    <NumericReadout
+      label="SPD"
+      value={connected ? fmt(groundspeed) : '--'}
+      unit={connected ? UNIT_LABELS.speed[speedUnit] : undefined}
+      sub={connected && airspeed > 0 ? `AIR ${fmt(airspeed)}` : undefined}
+    />
+  );
+}
+
+function HeadingNumeric(): JSX.Element {
+  const connected = useLinkUp();
+  const heading = useTelemetryStore((s) => s.vfrHud.heading);
+  const deg = Math.round(heading) % 360;
+  return (
+    <NumericReadout
+      label="HDG"
+      value={connected ? String(deg) : '--'}
+      unit={connected ? '°' : undefined}
+      sub={connected ? CARDINALS[Math.round(deg / 45) % 8] : undefined}
+    />
+  );
+}
+
+function VsiNumeric(): JSX.Element {
+  const connected = useLinkUp();
+  const climb = useTelemetryStore((s) => s.vfrHud.climb);
+  const verticalSpeedUnit = useSettingsStore((s) => s.unitPreferences.verticalSpeed);
+  const value = verticalSpeedValueFromMetersPerSecond(climb, verticalSpeedUnit);
+  const valueText = `${value > 0 ? '+' : ''}${trimmed(value, UNIT_PRECISION.verticalSpeed[verticalSpeedUnit])}`;
+  return (
+    <NumericReadout
+      label="VSI"
+      value={connected ? valueText : '--'}
+      unit={connected ? UNIT_LABELS.verticalSpeed[verticalSpeedUnit] : undefined}
+      valueClassName={connected && Math.abs(climb) > 3 ? 'text-[var(--gauge-amber)]' : undefined}
+    />
+  );
+}
+
+function HomeNumeric(): JSX.Element {
+  const connected = useLinkUp();
+  const home = useMapHomeStore((s) => s.home);
+  const lat = useTelemetryStore((s) => s.position.lat);
+  const lon = useTelemetryStore((s) => s.position.lon);
+  const distanceUnit = useSettingsStore((s) => s.unitPreferences.distance);
+  const hasFix = connected && (lat !== 0 || lon !== 0);
+  const active = !!home && hasFix;
+  const bearing = active ? bearingDeg(lat, lon, home[0], home[1]) : 0;
+  const distance = active ? haversineMeters(lat, lon, home[0], home[1]) : null;
+  return (
+    <NumericReadout
+      label="HOME"
+      value={distance !== null ? formatDistanceFromMeters(distance, distanceUnit) : '--'}
+      sub={active ? `BRG ${Math.round((bearing + 360) % 360)}°` : undefined}
+      valueClassName={active ? 'text-[var(--gauge-green)]' : undefined}
+    />
+  );
+}
+
 function FlightModeInstrument(): JSX.Element {
   const connected = useLinkUp();
   const mode = useTelemetryStore((s) => s.flight.mode);
@@ -740,19 +894,38 @@ function MissionInstrument(): JSX.Element {
   );
 }
 
+// The nav ball, a first-class instrument like everything else (drag, resize,
+// opacity, layouts). Was a special-cased MapPanel overlay before; its old
+// 'attitude-ball' drag position migrates in map-instruments-store.
+function AttitudeBallInstrument(): JSX.Element {
+  const attitude = useTelemetryStore((s) => s.attitude);
+  const heading = useTelemetryStore((s) => s.vfrHud.heading);
+  return (
+    <div className="relative">
+      {/* Dark background circle */}
+      <div className="absolute inset-[-4px] rounded-full bg-surface-overlay-light shadow-xl" />
+      <div className="relative">
+        <AttitudeIndicator roll={attitude.roll} pitch={attitude.pitch} heading={heading} size={140} />
+      </div>
+    </div>
+  );
+}
+
 export const MAP_INSTRUMENTS: MapInstrumentDef[] = [
+  { id: 'attitude', label: 'Attitude ball', defaultClassName: 'absolute bottom-3 left-1/2 -translate-x-1/2 z-[1000]', defaultVisible: true, Component: AttitudeBallInstrument },
   { id: 'flight-data', label: 'Flight data', defaultClassName: 'absolute bottom-2 left-2 z-[1000]', defaultVisible: true, Component: FlightDataInstrument },
-  { id: 'battery', label: 'Battery', defaultClassName: 'absolute left-3 top-16 z-[1000]', defaultVisible: false, Component: BatteryInstrument },
-  { id: 'gps', label: 'GPS', defaultClassName: 'absolute left-3 top-[176px] z-[1000]', defaultVisible: false, Component: GpsInstrument },
-  { id: 'altitude', label: 'Altitude', defaultClassName: 'absolute left-3 top-[288px] z-[1000]', defaultVisible: false, Component: AltitudeInstrument },
-  { id: 'speed', label: 'Speed', defaultClassName: 'absolute left-3 top-[400px] z-[1000]', defaultVisible: false, Component: SpeedInstrument },
-  { id: 'heading', label: 'Compass (HDG)', defaultClassName: 'absolute bottom-3 left-[calc(50%+88px)] z-[1000]', defaultVisible: true, Component: HeadingInstrument },
-  { id: 'vsi', label: 'VSI', defaultClassName: 'absolute left-3 top-[512px] z-[1000]', defaultVisible: false, Component: VsiInstrument },
-  { id: 'home', label: 'Home', defaultClassName: 'absolute left-3 top-[624px] z-[1000]', defaultVisible: false, Component: HomeInstrument },
+  { id: 'battery', label: 'Battery', defaultClassName: 'absolute left-3 top-16 z-[1000]', defaultVisible: false, Component: BatteryInstrument, NumericComponent: BatteryNumeric },
+  { id: 'gps', label: 'GPS', defaultClassName: 'absolute left-3 top-[176px] z-[1000]', defaultVisible: false, Component: GpsInstrument, NumericComponent: GpsNumeric },
+  { id: 'altitude', label: 'Altitude', defaultClassName: 'absolute left-3 top-[288px] z-[1000]', defaultVisible: false, Component: AltitudeInstrument, NumericComponent: AltitudeNumeric },
+  { id: 'speed', label: 'Speed', defaultClassName: 'absolute left-3 top-[400px] z-[1000]', defaultVisible: false, Component: SpeedInstrument, NumericComponent: SpeedNumeric },
+  { id: 'heading', label: 'Compass (HDG)', defaultClassName: 'absolute bottom-3 left-[calc(50%+88px)] z-[1000]', defaultVisible: true, Component: HeadingInstrument, NumericComponent: HeadingNumeric },
+  { id: 'vsi', label: 'VSI', defaultClassName: 'absolute left-3 top-[512px] z-[1000]', defaultVisible: false, Component: VsiInstrument, NumericComponent: VsiNumeric },
+  { id: 'home', label: 'Home', defaultClassName: 'absolute left-3 top-[624px] z-[1000]', defaultVisible: false, Component: HomeInstrument, NumericComponent: HomeNumeric },
   // Strips stack in a second column beside the left-edge gauges (gauge is
   // 104px wide at left-3, so 124px clears it) under the Instruments button.
   { id: 'flight-mode', label: 'Flight mode', defaultClassName: 'absolute left-[124px] top-16 z-[1000]', defaultVisible: false, Component: FlightModeInstrument },
   { id: 'link', label: 'Link', defaultClassName: 'absolute left-[124px] top-[128px] z-[1000]', defaultVisible: false, Component: LinkInstrument },
   { id: 'mission', label: 'Mission', defaultClassName: 'absolute left-[124px] top-[192px] z-[1000]', defaultVisible: false, Component: MissionInstrument },
   { id: 'annunciator', label: 'Annunciator', defaultClassName: 'absolute left-[124px] top-[268px] z-[1000]', defaultVisible: false, Component: AnnunciatorInstrument },
+  { id: 'controls', label: 'Flight control', defaultClassName: 'absolute left-[124px] top-[420px] z-[1000]', defaultVisible: false, Component: FlightControlInstrument },
 ];

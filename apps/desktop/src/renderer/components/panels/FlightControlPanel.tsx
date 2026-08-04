@@ -26,7 +26,7 @@ import { getVehicleClass, VEHICLE_CAPABILITIES, type ArduPilotVehicleClass } fro
 import { useModeRequest } from '../../hooks/useModeRequest';
 import { ModeAnnunciator } from './flight-modes/ModeAnnunciator';
 import { ModePicker } from './flight-modes/ModePicker';
-import { modeMetaFor, modeSubline, isPilotThrottleMode } from '../../../shared/flight-mode-meta';
+import { modeMetaFor, modeSubline, isPilotThrottleMode, MISSION_MODES } from '../../../shared/flight-mode-meta';
 import { executeTakeoff, presentTakeoff } from './takeoff-strategies';
 import {
   altitudeValueFromMeters,
@@ -459,21 +459,8 @@ const COMMON_MODES = [
 // MAVLink Flight Control (ArduPilot)
 // =============================================================================
 
-// AUTO + pause mode numbers per vehicle class. Pause mode is whichever holds
-// position cleanly without giving up the mission (BRAKE on copter, LOITER on
-// plane, HOLD on rover, POSHOLD on sub) — switching back to AUTO resumes.
-// `abort` is the mode a mission Abort drops into: a return-to-launch for the
-// vehicles that have one, and a clean position hold for Sub (ArduSub has no RTL).
-const MISSION_MODES: Record<ArduPilotVehicleClass, { auto: number; pause: number; pauseLabel: string; abort: number; abortLabel: string }> = {
-  copter: { auto: 3,  pause: 17, pauseLabel: 'Brake',   abort: 6,  abortLabel: 'RTL'     },
-  plane:  { auto: 10, pause: 12, pauseLabel: 'Loiter',  abort: 11, abortLabel: 'RTL'     },
-  // VTOL pause = QLOITER (19): vertical position hold without giving up the
-  // mission. Q-modes auto-disarm-tolerant in a way fixed-wing LOITER isn't
-  // for tailsitters. Abort = QRTL (21): a vertical return, safer than plane RTL.
-  vtol:   { auto: 10, pause: 19, pauseLabel: 'QLoiter', abort: 21, abortLabel: 'QRTL'    },
-  rover:  { auto: 10, pause: 4,  pauseLabel: 'Hold',    abort: 11, abortLabel: 'RTL'     },
-  sub:    { auto: 3,  pause: 16, pauseLabel: 'PosHold', abort: 16, abortLabel: 'PosHold' },
-};
+// MISSION_MODES (AUTO/pause/abort numbers per vehicle class) moved to
+// shared/flight-mode-meta.ts, shared with the map flight-control instrument.
 
 function MavlinkFlightControl({ mavTypeOverride }: { mavTypeOverride?: number }) {
   const flight = useTelemetryStore((s) => s.flight);
