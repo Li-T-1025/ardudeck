@@ -122,6 +122,16 @@ pub struct SitlCustomFrame {
     pub disc_area: f64,
     pub mdrag_coef: f64,
     pub num_motors: f64,
+    /// Roll, pitch and yaw moments of inertia (kg m^2), when the frame knows them.
+    ///
+    /// Absent falls back to ArduPilot's `0.25 * mass * (diagonal_size/2)^2` ring guess, which is
+    /// what `SIM_Frame::update_parameters` does with a zeroed value. That guess is calibrated for
+    /// nothing in particular and its error grows as the frame shrinks: angular authority goes as
+    /// `1/diagonal_size`, so a 300 mm quad ends up with roughly 2.7x the roll acceleration of the
+    /// 700 mm model ArduPilot's stock PID gains were set against, and the rate loop limit-cycles
+    /// at a few Hz. Supplying the real figure is the fix ArduPilot itself provides for this.
+    #[serde(rename = "momentOfInertia", default)]
+    pub moment_of_inertia: Option<[f64; 3]>,
     /// Optional suspended payload. Absent => no load (back-compatible).
     #[serde(rename = "slungLoad", default)]
     pub slung_load: Option<SlungLoadFrame>,
@@ -153,6 +163,8 @@ pub struct FrameModel {
     pub disc_area: f64,
     pub mdrag_coef: f64,
     pub num_motors: f64,
+    /// See `SitlCustomFrame::moment_of_inertia`.
+    pub moment_of_inertia: Option<[f64; 3]>,
 }
 
 impl Default for FrameModel {
@@ -185,6 +197,9 @@ impl Default for FrameModel {
             disc_area: 0.385,
             mdrag_coef: 0.2,
             num_motors: 4.0,
+            // ArduPilot's default_model supplies no inertia either, so a no-frame run keeps
+            // flying exactly like stock SITL.
+            moment_of_inertia: None,
         }
     }
 }
@@ -212,6 +227,7 @@ impl From<&SitlCustomFrame> for FrameModel {
             disc_area: f.disc_area,
             mdrag_coef: f.mdrag_coef,
             num_motors: f.num_motors,
+            moment_of_inertia: f.moment_of_inertia,
         }
     }
 }
@@ -253,6 +269,9 @@ pub struct MultirotorParams {
     pub voltage_max: f64,
     /// Momentum drag coefficient (possibly rescaled by Frame::init).
     pub momentum_drag_coefficient: f64,
+    /// Roll/pitch/yaw inertia (kg m^2) when the frame states it, else `None` and the caller
+    /// falls back to ArduPilot's ring guess. See `SitlCustomFrame::moment_of_inertia`.
+    pub moment_of_inertia: Option<[f64; 3]>,
     /// Optional suspended payload physics. `None` => no load, unchanged physics.
     pub slung_load: Option<SlungLoadParams>,
 }
@@ -321,6 +340,7 @@ pub fn multirotor_params(m: &FrameModel) -> MultirotorParams {
     MultirotorParams {
         frame_class: m.frame_class,
         frame_type: m.frame_type,
+        moment_of_inertia: m.moment_of_inertia,
         mass: m.mass,
         diagonal_size: m.diagonal_size,
         num_motors: num_motors as u32,

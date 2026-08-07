@@ -3570,4 +3570,140 @@ export const GRAPH_TEMPLATES: GraphTemplate[] = [
       viewport: { x: 0, y: 0, zoom: 0.75 },
     },
   },
+
+  // ─── Custom Serial Telemetry ─────────────────────────────────
+  {
+    id: 'custom-serial-telemetry',
+    name: 'Custom Serial Telemetry',
+    description: 'Format position + battery into a custom text sentence with a Custom Lua node and stream it out a serial port and UDP once a second.',
+    category: 'Utility',
+    graph: {
+      version: 1,
+      name: 'Custom Serial Telemetry',
+      description: 'Custom-formatted telemetry sentence over serial and UDP',
+      runIntervalMs: 200,
+      createdAt: '2025-01-01T00:00:00.000Z',
+      updatedAt: '2025-01-01T00:00:00.000Z',
+      nodes: [
+        // ── Annotations ──
+        {
+          id: 'comment_sense',
+          type: 'flow-comment',
+          position: { x: 40, y: 20 },
+          data: {
+            definitionType: 'flow-comment',
+            label: 'Step 1',
+            category: 'flow',
+            propertyValues: { text: 'Read position and battery' },
+          },
+        },
+        {
+          id: 'comment_format',
+          type: 'flow-comment',
+          position: { x: 420, y: 20 },
+          data: {
+            definitionType: 'flow-comment',
+            label: 'Step 2',
+            category: 'flow',
+            propertyValues: { text: 'Custom Lua builds the message. Edit pins and code in the inspector.' },
+          },
+        },
+        {
+          id: 'comment_send',
+          type: 'flow-comment',
+          position: { x: 800, y: 20 },
+          data: {
+            definitionType: 'flow-comment',
+            label: 'Step 3',
+            category: 'flow',
+            propertyValues: { text: 'Rate-limit to 1 Hz, send over serial and UDP. Delete the output you do not need.' },
+          },
+        },
+        // ── Sensors ──
+        {
+          id: 'gps',
+          type: 'sensor-gps',
+          position: { x: 60, y: 100 },
+          data: {
+            definitionType: 'sensor-gps',
+            label: 'GPS Position',
+            category: 'sensors',
+            propertyValues: {},
+          },
+        },
+        {
+          id: 'battery',
+          type: 'sensor-battery',
+          position: { x: 60, y: 280 },
+          data: {
+            definitionType: 'sensor-battery',
+            label: 'Battery',
+            category: 'sensors',
+            propertyValues: { instance: 0 },
+          },
+        },
+        // ── Format ──
+        {
+          id: 'format',
+          type: 'flow-custom-lua',
+          position: { x: 440, y: 120 },
+          data: {
+            definitionType: 'flow-custom-lua',
+            label: 'Build Sentence',
+            category: 'flow',
+            propertyValues: {
+              inputs: 'lat, lng, alt, volt',
+              outputs: 'line',
+              code: '-- Any Lua you like. Inputs are locals, return feeds the output pins.\nreturn string.format("$ADK,%.6f,%.6f,%.1f,%.2f", lat, lng, alt, volt)',
+            },
+          },
+        },
+        // ── Rate limit + outputs ──
+        {
+          id: 'timer',
+          type: 'timing-run-every',
+          position: { x: 440, y: 340 },
+          data: {
+            definitionType: 'timing-run-every',
+            label: 'Every 1s',
+            category: 'timing',
+            propertyValues: { interval_ms: 1000 },
+          },
+        },
+        {
+          id: 'serial_out',
+          type: 'action-serial-write',
+          position: { x: 820, y: 100 },
+          data: {
+            definitionType: 'action-serial-write',
+            label: 'Serial Out',
+            category: 'actions',
+            propertyValues: { instance: 0, baud: 57600, line_ending: 'lf' },
+          },
+        },
+        {
+          id: 'udp_out',
+          type: 'action-socket-send',
+          position: { x: 820, y: 290 },
+          data: {
+            definitionType: 'action-socket-send',
+            label: 'UDP Out',
+            category: 'actions',
+            propertyValues: { protocol: 'udp', ip: '192.168.1.10', port: 14550 },
+          },
+        },
+      ],
+      edges: [
+        { id: 'e1', source: 'gps', target: 'format', sourceHandle: 'lat', targetHandle: 'lat' },
+        { id: 'e2', source: 'gps', target: 'format', sourceHandle: 'lng', targetHandle: 'lng' },
+        { id: 'e3', source: 'gps', target: 'format', sourceHandle: 'alt', targetHandle: 'alt' },
+        { id: 'e4', source: 'battery', target: 'format', sourceHandle: 'voltage', targetHandle: 'volt' },
+        { id: 'e5', source: 'timer', target: 'serial_out', sourceHandle: 'flow', targetHandle: 'trigger' },
+        { id: 'e6', source: 'format', target: 'serial_out', sourceHandle: 'line', targetHandle: 'data' },
+        { id: 'e7', source: 'timer', target: 'udp_out', sourceHandle: 'flow', targetHandle: 'trigger' },
+        { id: 'e8', source: 'format', target: 'udp_out', sourceHandle: 'line', targetHandle: 'data' },
+      ],
+      viewport: { x: 0, y: 0, zoom: 0.85 },
+    },
+  },
 ];

@@ -17,6 +17,16 @@ import type { StreamDiagnosis } from '../../../shared/link-doctor-types';
 
 const BAUD_RATES = [1500000, 921600, 460800, 230400, 115200, 57600, 38400, 19200, 9600];
 
+interface MavlinkForwardStatus {
+  running: boolean;
+  listenPort: number | null;
+  endpoints: { host: string; port: number }[];
+  learned: { host: string; port: number }[];
+  forwardedBytes: number;
+  injectedBytes: number;
+  lastError: string | null;
+}
+
 export function ConnectionPanel() {
   const { connectionState, isConnecting, error, connect, disconnect, setError } = useConnectionStore();
   const { connectionMemory, updateConnectionMemory, removeRecentConnection } = useSettingsStore();
@@ -45,6 +55,48 @@ export function ConnectionPanel() {
   const signingInputRef = useRef<HTMLInputElement>(null);
   const hasAppliedMemory = useRef(false);
   const { hasKey, keyBase64, keyMismatch, savedKeys, loading: signingLoading, setKey: signingSetKey } = useSigningStore();
+  const [showForward, setShowForward] = useState(false);
+  const [forwardStatus, setForwardStatus] = useState<MavlinkForwardStatus | null>(null);
+  const [forwardEndpoint, setForwardEndpoint] = useState('');
+  const [forwardBusy, setForwardBusy] = useState(false);
+
+  // Keep the forward status fresh while its section is open.
+  useEffect(() => {
+    if (!showForward) return;
+    let alive = true;
+    const refresh = (): void => {
+      window.electronAPI.mavlinkForwardStatus()
+        .then((s) => { if (alive) setForwardStatus(s as MavlinkForwardStatus); })
+        .catch(() => { /* main not ready */ });
+    };
+    refresh();
+    const timer = setInterval(refresh, 3000);
+    return () => { alive = false; clearInterval(timer); };
+  }, [showForward]);
+
+  const toggleForward = async (): Promise<void> => {
+    setForwardBusy(true);
+    try {
+      if (forwardStatus?.running) {
+        await window.electronAPI.mavlinkForwardStop();
+      } else {
+        const trimmed = forwardEndpoint.trim();
+        let endpoints: { host: string; port: number }[] = [];
+        if (trimmed) {
+          const [host, portStr] = trimmed.split(':');
+          const port = Number(portStr ?? '14550');
+          if (host && Number.isFinite(port) && port > 0) endpoints = [{ host, port }];
+        }
+        await window.electronAPI.mavlinkForwardStart({ endpoints });
+      }
+      setForwardStatus(await window.electronAPI.mavlinkForwardStatus() as MavlinkForwardStatus);
+    } catch {
+      // Port in use is the realistic failure; status refresh shows lastError.
+      setForwardStatus(await window.electronAPI.mavlinkForwardStatus().catch(() => null) as MavlinkForwardStatus | null);
+    } finally {
+      setForwardBusy(false);
+    }
+  };
 
   // Apply connection memory once settings have loaded from disk.
   // Gating on settingsInitialized prevents applying the empty default memory
@@ -1030,6 +1082,66 @@ export function ConnectionPanel() {
               'Connect'
             )}
           </button>
+        )}
+
+        {/* Second screen: forward the raw MAVLink stream to the mobile app
+            (or any GCS on the LAN) and inject its commands into this link. */}
+        {connectionState.isConnected && (
+          <div className="rounded-xl border border-subtle overflow-hidden">
+            <button
+              onClick={() => setShowForward(!showForward)}
+              className="w-full flex items-center gap-2.5 px-3 py-2.5 hover:bg-surface transition-colors"
+            >
+              <svg className={`w-4 h-4 ${forwardStatus?.running ? 'text-emerald-400' : 'text-content-secondary'}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M10.5 1.5H8.25A2.25 2.25 0 006 3.75v16.5a2.25 2.25 0 002.25 2.25h7.5A2.25 2.25 0 0018 20.25V3.75a2.25 2.25 0 00-2.25-2.25H13.5m-3 0V3h3V1.5m-3 0h3" />
+              </svg>
+              <span className="text-xs font-medium text-content flex-1 text-left">Second Screen / Forward</span>
+              {forwardStatus?.running && (
+                <span className="text-[10px] font-medium px-1.5 py-0.5 rounded text-emerald-400 bg-emerald-400/10">
+                  {forwardStatus.endpoints.length + forwardStatus.learned.length > 0
+                    ? `${forwardStatus.endpoints.length + forwardStatus.learned.length} client${forwardStatus.endpoints.length + forwardStatus.learned.length > 1 ? 's' : ''}`
+                    : 'Listening'}
+                </span>
+              )}
+              <svg className={`w-3.5 h-3.5 text-content-secondary transition-transform ${showForward ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+              </svg>
+            </button>
+            {showForward && (
+              <div className="px-3 pb-3 space-y-2.5 border-t border-subtle pt-2.5">
+                <p className="text-[11px] text-content-secondary">
+                  Mirrors this link's raw MAVLink to other devices over UDP and relays their commands back. A phone running ArduDeck on the same network connects with UDP, and it is picked up automatically once it sends a heartbeat; or enter its address below.
+                </p>
+                {!forwardStatus?.running && (
+                  <input
+                    type="text"
+                    value={forwardEndpoint}
+                    onChange={(e) => setForwardEndpoint(e.target.value)}
+                    placeholder="Phone address (optional), e.g. 192.168.1.42:14550"
+                    className="w-full px-2.5 py-1.5 text-xs rounded-lg bg-input border border-subtle text-content placeholder:text-content-tertiary focus:outline-none focus:border-blue-500/50"
+                  />
+                )}
+                {forwardStatus?.running && (
+                  <div className="text-[11px] text-content-secondary space-y-0.5">
+                    <div>Listening on UDP :{forwardStatus.listenPort}</div>
+                    {[...forwardStatus.endpoints, ...forwardStatus.learned].map((ep) => (
+                      <div key={`${ep.host}:${ep.port}`} className="tabular-nums">→ {ep.host}:{ep.port}</div>
+                    ))}
+                  </div>
+                )}
+                {forwardStatus?.lastError && (
+                  <p className="text-[11px] text-red-400">{forwardStatus.lastError}</p>
+                )}
+                <button
+                  onClick={toggleForward}
+                  disabled={forwardBusy}
+                  className={`btn w-full text-xs ${forwardStatus?.running ? 'btn-secondary' : 'btn-primary'}`}
+                >
+                  {forwardStatus?.running ? 'Stop forwarding' : 'Start forwarding'}
+                </button>
+              </div>
+            )}
+          </div>
         )}
 
         {/* Waiting for heartbeat indicator */}

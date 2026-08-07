@@ -5,6 +5,7 @@
 import { useCallback, useState } from 'react';
 import {
   X,
+  Search,
   Layers,
   BatteryWarning,
   MapPin,
@@ -20,6 +21,7 @@ import {
   Package,
   Gauge,
   FileSpreadsheet,
+  Cable,
   type LucideIcon,
 } from 'lucide-react';
 import { GRAPH_TEMPLATES } from './graph-templates';
@@ -82,6 +84,7 @@ const TEMPLATE_ICON: Record<string, LucideIcon> = {
   'payload-drop': Package,
   'speed-limit-warning': Gauge,
   'flight-data-logger': FileSpreadsheet,
+  'custom-serial-telemetry': Cable,
 };
 
 // ── Format interval ─────────────────────────────────────────────
@@ -100,6 +103,7 @@ interface TemplateDialogProps {
 export function TemplateDialog({ onClose }: TemplateDialogProps) {
   const { loadGraph, isDirty } = useLuaGraphStore();
   const [pendingTemplateId, setPendingTemplateId] = useState<string | null>(null);
+  const [query, setQuery] = useState('');
 
   const applyTemplate = useCallback(
     (templateId: string) => {
@@ -123,8 +127,19 @@ export function TemplateDialog({ onClose }: TemplateDialogProps) {
     [isDirty, applyTemplate],
   );
 
+  // Search across name, description, and category
+  const q = query.trim().toLowerCase();
+  const visibleTemplates = q
+    ? GRAPH_TEMPLATES.filter(
+        (t) =>
+          t.name.toLowerCase().includes(q) ||
+          t.description.toLowerCase().includes(q) ||
+          t.category.toLowerCase().includes(q),
+      )
+    : GRAPH_TEMPLATES;
+
   // Group templates by category
-  const categories = [...new Set(GRAPH_TEMPLATES.map((t) => t.category))];
+  const categories = [...new Set(visibleTemplates.map((t) => t.category))];
 
   return (
     <>
@@ -151,8 +166,28 @@ export function TemplateDialog({ onClose }: TemplateDialogProps) {
             </button>
           </div>
 
+          {/* Search */}
+          <div className="px-5 pt-4">
+            <div className="relative">
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-content-secondary" />
+              <input
+                type="text"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="Search templates..."
+                autoFocus
+                className="w-full pl-8 pr-3 py-1.5 text-xs bg-surface-input border border-subtle rounded-md text-content placeholder:text-content-tertiary focus:outline-none focus:border-blue-500/40"
+              />
+            </div>
+          </div>
+
           {/* Body */}
           <div className="p-5 max-h-[65vh] overflow-y-auto space-y-6">
+            {visibleTemplates.length === 0 && (
+              <div className="py-10 text-center text-xs text-content-secondary">
+                No templates match "{query.trim()}"
+              </div>
+            )}
             {categories.map((cat) => {
               const style = CATEGORY_STYLE[cat] ?? FALLBACK_STYLE;
               return (
@@ -169,7 +204,7 @@ export function TemplateDialog({ onClose }: TemplateDialogProps) {
 
                   {/* Template cards */}
                   <div className="grid grid-cols-2 gap-3">
-                    {GRAPH_TEMPLATES.filter((t) => t.category === cat).map((template) => {
+                    {visibleTemplates.filter((t) => t.category === cat).map((template) => {
                       const Icon = TEMPLATE_ICON[template.id] ?? Layers;
                       const nodeCount = template.graph.nodes.filter(
                         (n) => n.type !== 'flow-comment',

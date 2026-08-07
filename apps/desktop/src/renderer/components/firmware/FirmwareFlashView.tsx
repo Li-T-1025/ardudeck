@@ -5,6 +5,7 @@ import type { FirmwareVehicleType, FirmwareSource } from '../../../shared/firmwa
 import { FIRMWARE_SOURCE_NAMES, KNOWN_BOARDS } from '../../../shared/firmware-types';
 import { BoardPicker } from './BoardPicker';
 import { BootPadWizard } from './BootPadWizard';
+import { RadioSdView } from './RadioSdView';
 import { formatPortDisplayName } from '../../utils/usb-device-names';
 
 /**
@@ -390,6 +391,7 @@ function isVehicleTypeSupported(type: FirmwareVehicleType, source: FirmwareSourc
 }
 
 export function FirmwareFlashView() {
+  const [activeTab, setActiveTab] = useState<'fc' | 'radio'>('fc');
   const store = useFirmwareStore();
   const {
     advancedMode,
@@ -649,7 +651,22 @@ export function FirmwareFlashView() {
               />
             </svg>
             <h1 className="text-xl font-semibold text-content">Firmware Flash</h1>
+            <div className="flex items-center bg-surface-raised border border-subtle rounded-lg p-0.5 ml-2">
+              <button
+                onClick={() => setActiveTab('fc')}
+                className={`px-3 py-1 text-xs rounded-md transition-colors ${activeTab === 'fc' ? 'bg-surface-input text-content' : 'text-content-secondary hover:text-content'}`}
+              >
+                Flight Controller
+              </button>
+              <button
+                onClick={() => setActiveTab('radio')}
+                className={`px-3 py-1 text-xs rounded-md transition-colors ${activeTab === 'radio' ? 'bg-surface-input text-content' : 'text-content-secondary hover:text-content'}`}
+              >
+                Radio (EdgeTX)
+              </button>
+            </div>
           </div>
+          {activeTab === 'fc' && (
           <div className="flex items-center gap-3">
             <label className="flex items-center gap-2 text-sm text-content-secondary cursor-pointer">
               <input
@@ -667,9 +684,14 @@ export function FirmwareFlashView() {
               Reset
             </button>
           </div>
+          )}
         </div>
       </div>
 
+      {activeTab === 'radio' ? (
+        <RadioSdView />
+      ) : (
+      <>
       {/* Main Content - Single Column */}
       <div className="flex-1 overflow-auto">
         <div className="max-w-2xl mx-auto p-6 space-y-6">
@@ -1388,6 +1410,8 @@ export function FirmwareFlashView() {
         firmwareVersion={wizardFirmwareVersion || selectedVersion?.version || ''}
         firmwareSource={FIRMWARE_SOURCE_NAMES[wizardFirmwareSource as keyof typeof FIRMWARE_SOURCE_NAMES] || wizardFirmwareSource || ''}
       />
+      </>
+      )}
     </div>
   );
 }

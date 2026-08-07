@@ -68,6 +68,21 @@ export interface NavControllerData {
   aspdError: number;     // m/s
 }
 
+/**
+ * POSITION_TARGET_GLOBAL_INT (87) - the autopilot's own broadcast of its active
+ * guided destination. Authoritative across every GCS on the link: a goto
+ * commanded by any GCS shows up here with no app-to-app sync. ArduPilot stops
+ * broadcasting once the target clears, so consumers age-gate on receivedAt.
+ */
+export interface GuidedTargetData {
+  lat: number;       // degrees
+  lon: number;       // degrees
+  alt: number;       // meters, reference depends on frame
+  typeMask: number;  // POSITION_TARGET_TYPEMASK; position invalid when (typeMask & 0x3) != 0
+  frame: number;     // MAV_FRAME of alt
+  receivedAt: number; // ms epoch at decode
+}
+
 export interface FlightState {
   mode: string;
   modeNum: number;
@@ -132,6 +147,8 @@ export interface TelemetryState {
   sensorHealth: SensorHealth | null;
   /** null until the vehicle is navigating (NAV_CONTROLLER_OUTPUT received). */
   navController: NavControllerData | null;
+  /** null until the vehicle broadcasts a guided target; age-gate on receivedAt. */
+  guidedTarget: GuidedTargetData | null;
 }
 
 // Flight modes for ArduPilot Copter

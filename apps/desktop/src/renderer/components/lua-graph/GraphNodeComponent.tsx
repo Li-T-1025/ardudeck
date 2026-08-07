@@ -5,7 +5,7 @@
 import { memo, useCallback } from 'react';
 import { Handle, Position, type NodeProps, type Node } from '@xyflow/react';
 import type { GraphNodeData, PortValueType } from './lua-graph-types';
-import { getNodeDefinition } from './node-library';
+import { getNodeDefinition, getEffectivePorts } from './node-library';
 import { CATEGORY_COLORS } from './lua-graph-types';
 import { useLuaGraphStore } from '../../stores/lua-graph-store';
 import { useResolvedTheme } from '../../hooks/useTheme';
@@ -35,6 +35,8 @@ function GraphNodeComponent({ id, data, selected }: NodeProps<Node<GraphNodeData
       </div>
     );
   }
+
+  const ports = getEffectivePorts(def, data.propertyValues);
 
   // ── Comment / annotation node — lightweight label style ──
   if (data.definitionType === 'flow-comment') {
@@ -87,10 +89,19 @@ function GraphNodeComponent({ id, data, selected }: NodeProps<Node<GraphNodeData
         <span className="truncate">{data.label}</span>
       </div>
 
+      {/* Custom Lua — one-line code preview so the node isn't a blank box */}
+      {data.definitionType === 'flow-custom-lua' && (
+        <div className="px-3 pt-1.5 max-w-[220px]">
+          <div className="text-[9px] font-mono text-content-tertiary truncate">
+            {String(data.propertyValues['code'] ?? '').split('\n').find((l) => l.trim() && !l.trim().startsWith('--')) ?? 'edit code in inspector'}
+          </div>
+        </div>
+      )}
+
       {/* Ports */}
       <div className="px-1 py-1.5 flex flex-col gap-0.5">
         {/* Input ports */}
-        {def.inputs.map((port) => (
+        {ports.inputs.map((port) => (
           <div key={port.id} className="relative flex items-center h-5 pl-3 pr-2">
             <Handle
               type="target"
@@ -104,7 +115,7 @@ function GraphNodeComponent({ id, data, selected }: NodeProps<Node<GraphNodeData
         ))}
 
         {/* Output ports */}
-        {def.outputs.map((port) => (
+        {ports.outputs.map((port) => (
           <div key={port.id} className="relative flex items-center justify-end h-5 pl-2 pr-3">
             <span className="text-[10px] text-content-secondary">{port.label}</span>
             <Handle

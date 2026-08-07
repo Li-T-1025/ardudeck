@@ -1,7 +1,7 @@
 /**
  * Node library — defines every available node type for the Lua Graph Editor.
  */
-import type { NodeDefinition } from './lua-graph-types';
+import type { NodeDefinition, PortDefinition } from './lua-graph-types';
 
 // ── Sensors ─────────────────────────────────────────────────────
 
@@ -821,6 +821,65 @@ const actionNodes: NodeDefinition[] = [
       },
     ],
   },
+  {
+    type: 'action-serial-write',
+    label: 'Serial Write',
+    description: 'Write a string out a scripting serial port. Set an unused SERIALx_PROTOCOL to 28 (Scripting); Instance picks the Nth such port.',
+    category: 'actions',
+    inputs: [
+      { id: 'trigger', label: 'Trigger', type: 'boolean', direction: 'input' },
+      { id: 'data', label: 'Data', type: 'any', direction: 'input' },
+    ],
+    outputs: [],
+    properties: [
+      { id: 'instance', label: 'Scripting Serial Instance', type: 'number', defaultValue: 0, min: 0, max: 3 },
+      {
+        id: 'baud', label: 'Baud Rate', type: 'select', defaultValue: 57600,
+        options: [
+          { label: '9600', value: 9600 },
+          { label: '19200', value: 19200 },
+          { label: '38400', value: 38400 },
+          { label: '57600', value: 57600 },
+          { label: '115200', value: 115200 },
+          { label: '230400', value: 230400 },
+          { label: '460800', value: 460800 },
+          { label: '921600', value: 921600 },
+        ],
+      },
+      {
+        id: 'line_ending', label: 'Line Ending', type: 'select', defaultValue: 'none',
+        options: [
+          { label: 'None', value: 'none' },
+          { label: 'Newline (\\n)', value: 'lf' },
+          { label: 'CRLF (\\r\\n)', value: 'crlf' },
+        ],
+      },
+    ],
+    luaTemplate: 'port:write(byte)',
+  },
+  {
+    type: 'action-socket-send',
+    label: 'Network Send',
+    description: 'Send a string over UDP or TCP via the flight controller network stack. Needs a board with networking and NET_ENABLE = 1 (ArduPilot 4.5+).',
+    category: 'actions',
+    inputs: [
+      { id: 'trigger', label: 'Trigger', type: 'boolean', direction: 'input' },
+      { id: 'data', label: 'Data', type: 'any', direction: 'input' },
+    ],
+    outputs: [],
+    properties: [
+      {
+        id: 'protocol', label: 'Protocol', type: 'select', defaultValue: 'udp',
+        options: [
+          { label: 'UDP', value: 'udp' },
+          { label: 'TCP', value: 'tcp' },
+        ],
+      },
+      { id: 'ip', label: 'Destination IP', type: 'string', defaultValue: '192.168.1.10' },
+      { id: 'port', label: 'Destination Port', type: 'number', defaultValue: 14550, min: 1, max: 65535 },
+    ],
+    luaTemplate: 'sock:send(data, #data)',
+  },
 ];
 
 // ── Timing ──────────────────────────────────────────────────────
@@ -984,6 +1043,20 @@ const variableNodes: NodeDefinition[] = [
 
 const flowNodes: NodeDefinition[] = [
   {
+    type: 'flow-custom-lua',
+    label: 'Custom Lua',
+    description: 'Inline your own Lua snippet. Input pins arrive as local variables named after the pins; end the snippet with "return <output pins>" to feed downstream nodes.',
+    category: 'flow',
+    // Ports are derived per-instance from the pin properties, see getEffectivePorts
+    inputs: [],
+    outputs: [],
+    properties: [
+      { id: 'inputs', label: 'Input pins (comma separated)', type: 'string', defaultValue: '' },
+      { id: 'outputs', label: 'Output pins (comma separated)', type: 'string', defaultValue: '' },
+      { id: 'code', label: 'Lua code', type: 'code', defaultValue: '-- inputs are locals named after your input pins\n-- return values in output pin order' },
+    ],
+  },
+  {
     type: 'flow-comment',
     label: 'Comment',
     description: 'A text comment for documentation purposes, no effect on code',
@@ -1021,4 +1094,50 @@ export function getNodeDefinition(type: string): NodeDefinition | undefined {
 /** Get all nodes in a given category */
 export function getNodesByCategory(category: string): NodeDefinition[] {
   return NODE_LIBRARY.filter((n) => n.category === category);
+}
+
+// ── Dynamic ports (Custom Lua) ──────────────────────────────────
+
+const LUA_KEYWORDS = new Set([
+  'and', 'break', 'do', 'else', 'elseif', 'end', 'false', 'for', 'function',
+  'goto', 'if', 'in', 'local', 'nil', 'not', 'or', 'repeat', 'return',
+  'then', 'true', 'until', 'while',
+]);
+
+/** Parse a comma-separated pin list into unique valid Lua identifiers */
+export function parseCustomPins(raw: string): string[] {
+  const seen = new Set<string>();
+  const pins: string[] = [];
+  for (const part of raw.split(',')) {
+    let name = part.trim().replace(/[^a-zA-Z0-9_]/g, '_').replace(/^[0-9]/, '_$&');
+    if (LUA_KEYWORDS.has(name)) name = `${name}_`;
+    if (!name || seen.has(name)) continue;
+    seen.add(name);
+    pins.push(name);
+  }
+  return pins;
+}
+
+/**
+ * Ports for a node instance. Static for every node except Custom Lua, whose
+ * pins come from its own pin-list properties.
+ */
+export function getEffectivePorts(
+  def: NodeDefinition,
+  propertyValues: Record<string, number | boolean | string>,
+): { inputs: PortDefinition[]; outputs: PortDefinition[] } {
+  if (def.type !== 'flow-custom-lua') {
+    return { inputs: def.inputs, outputs: def.outputs };
+  }
+  const toPorts = (raw: unknown, direction: PortDefinition['direction']): PortDefinition[] =>
+    parseCustomPins(String(raw ?? '')).map((name) => ({
+      id: name,
+      label: name,
+      type: 'any' as const,
+      direction,
+    }));
+  return {
+    inputs: toPorts(propertyValues['inputs'], 'input'),
+    outputs: toPorts(propertyValues['outputs'], 'output'),
+  };
 }

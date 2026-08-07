@@ -281,6 +281,41 @@ class SimEngineProcessManager {
     });
   }
 
+  /**
+   * Stop and WAIT for it to actually be gone.
+   *
+   * `stop()` sends SIGTERM and schedules SIGKILL 1500 ms later, which is fine while the app
+   * keeps running and useless at shutdown: `cleanupOnShutdown` is followed straight away by
+   * `app.exit(0)`, so that timer never fires. An engine that does not die on SIGTERM therefore
+   * outlives the app and keeps holding UDP 9002 - the physics port, which exactly one process
+   * can own - so the Trainer can no longer start its own flight controller and the only
+   * symptom is a refusal to launch blamed on an application that is not on screen.
+   *
+   * Escalates rather than trusting: SIGTERM, a short grace, then SIGKILL, then confirm.
+   */
+  async stopAndWait(graceMs = 800): Promise<void> {
+    const proc = this.process;
+    this.stop();
+    if (!proc || proc.exitCode !== null || proc.signalCode !== null) return;
+
+    const died = await new Promise<boolean>((resolve) => {
+      const timer = setTimeout(() => resolve(false), graceMs);
+      proc.once('exit', () => {
+        clearTimeout(timer);
+        resolve(true);
+      });
+    });
+    if (died) return;
+
+    try {
+      proc.kill('SIGKILL');
+    } catch {
+      /* already gone */
+    }
+    // A moment for the OS to reap it, so the port is genuinely free by the time we return.
+    await new Promise<void>((resolve) => setTimeout(resolve, 200));
+  }
+
   stop(): void {
     if (this.process) {
       try {

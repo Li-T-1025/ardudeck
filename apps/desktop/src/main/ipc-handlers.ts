@@ -4,7 +4,7 @@
  */
 
 import { ipcMain, BrowserWindow, dialog, app, shell, safeStorage } from 'electron';
-import { join, dirname } from 'path';
+import { join, dirname, basename } from 'path';
 import { existsSync, readFileSync } from 'fs';
 import { execFile as execFileCb } from 'node:child_process';
 import { promisify } from 'node:util';
@@ -33,6 +33,7 @@ import {
 } from '@ardudeck/comms';
 import { registerCompanionIpcHandlers } from './companion/companion-ipc-handlers.js';
 import { registerDroneBridgeIpcHandlers } from './dronebridge/dronebridge-ipc-handlers.js';
+import { mavlinkTee } from './mavlink-tee.js';
 import { setupOverlayHandlers, getApiKey } from './overlays/overlay-ipc-handlers.js';
 import { setupTrafficHandlers } from './traffic/traffic-ipc-handlers.js';
 import {
@@ -130,7 +131,7 @@ import { DEFAULT_USER_UNIT_PREFERENCES } from '../shared/user-units.js';
 import { initAutoUpdater, checkForUpdates, downloadUpdate, installUpdate } from './updater.js';
 import type { ParamValuePayload, ParameterProgress } from '../shared/parameter-types.js';
 import { PARAMETER_METADATA_URLS, mavTypeToVehicleType, type VehicleType, type ParameterMetadata, type ParameterMetadataStore } from '../shared/parameter-metadata.js';
-import type { AttitudeData, PositionData, GpsData, BatteryData, VfrHudData, FlightState, RcChannelsData, NavControllerData } from '../shared/telemetry-types.js';
+import type { AttitudeData, PositionData, GpsData, BatteryData, VfrHudData, FlightState, RcChannelsData, NavControllerData, GuidedTargetData } from '../shared/telemetry-types.js';
 import { COPTER_MODES, PLANE_MODES, ROVER_MODES, SUB_MODES } from '../shared/telemetry-types.js';
 import type { MissionItem, MissionProgress, MavFrame } from '../shared/mission-types.js';
 import { buildDjiWpml, parseDjiWpml } from '../shared/dji-wpml.js';
@@ -141,6 +142,10 @@ import type { DetectedBoard, FirmwareSource, FirmwareVehicleType, FirmwareManife
 import type { MotorTestStartRequest, MotorTestResponse, EscTelemetryData, EscMotorTelemetry } from '../shared/motor-test-types.js';
 import { getBoardInfoFromVersion } from '../shared/board-ids.js';
 import { detectBoards, fetchFirmwareVersions, downloadFirmware, copyCustomFirmware, flashWithDfu, flashWithAvrdude, flashWithSerialBootloader, flashWithArduPilotBootloader, getArduPilotBoards, getArduPilotVersions, getBetaflightBoards, getBetaflightVersions, resolveBetaflightDownloadUrl, getInavBoards, getInavVersions, type BoardInfo, type VersionGroup } from './firmware/index.js';
+import { scanForEdgeTxCards, probeVolume as probeEdgeTxVolume } from './edgetx/sd-detector.js';
+import { getPackage as getEdgeTxPackage, catalogInfo as edgeTxCatalogInfo } from './edgetx/package-registry.js';
+import { installPackage as installEdgeTxPackage, removePackage as removeEdgeTxPackage, readManifest as readEdgeTxManifest } from './edgetx/package-installer.js';
+import type { EdgeTxScanResult, InstalledPackageRecord } from '../shared/edgetx-types.js';
 import { registerMspHandlers, tryMspDetection, startMspTelemetry, stopMspTelemetry, cleanupMspConnection, exitCliModeIfActive, autoConfigureSitlPlatform, getMspVehicleType, resetSitlAutoConfig } from './msp/index.js';
 import { initCalibrationHandlers, cleanupCalibrationHandlers, handleCalibrationStatusText, handleCalibrationCommandAck, handleIncomingCommandLong, handleMagCalProgress, handleMagCalReport, isMavlinkCalibrationActive, cancelCalibration, type MavlinkCalibrationDeps } from './calibration/index.js';
 import { initMissionLibraryHandlers, cleanupMissionLibraryHandlers } from './mission-library/index.js';
@@ -171,9 +176,11 @@ import { writeFile, readFile } from 'node:fs/promises';
 import { networkInterfaces } from 'node:os';
 import { createDataFlashParser, runHealthChecks } from '@ardudeck/dataflash-parser';
 import { sitlProcess } from './sitl/sitl-process.js';
+import { simEngineProcess } from './sim/sim-engine-process.js';
 import { mediaEngine } from './media/media-engine.js';
 import { ardupilotSitlProcess, swarmSitlProcess, ardupilotSitlDownloader, ardupilotRcSender } from './sitl/index.js';
 import { startSimHandoverServer, stopSimHandoverServer } from './sim/sim-handover-server.js';
+import { resolveReconnectTarget } from './connection/reconnect-target.js';
 import { orchestratorProcess } from './orchestrator/orchestrator-process.js';
 import {
   initUnifiedLogger,
@@ -319,6 +326,26 @@ let connectGeneration = 0;
 let perfPktCount = 0;
 const perfMsgHist = new Map<number, number>();
 let perfLogTimer: ReturnType<typeof setInterval> | null = null;
+// Raw-packet broadcast batching. One webContents.send per packet saturates
+// both processes during log downloads (structured clone + IPC per 90-byte
+// LOG_DATA chunk capped the whole transfer at ~110KB/s); batching to 50ms
+// buckets keeps the inspector/safety-monitor feeds live at 1/25th the IPC
+// cost. The preload unpacks the array so renderer subscribers still see
+// single packets.
+interface RawPacketIpc {
+  msgid: number;
+  sysid: number;
+  compid: number;
+  seq: number;
+  payload: number[];
+  rxtime: number;
+  isMavlink2: boolean;
+  isSigned: boolean;
+}
+const PACKET_BATCH_FLUSH_MS = 50;
+const PACKET_BATCH_MAX = 2000;
+let packetBatch: RawPacketIpc[] = [];
+let packetBatchTimer: NodeJS.Timeout | null = null;
 // Tracks last armed state reported to renderer so we only log on transitions
 let lastReportedArmed: boolean | null = null;
 let mavlinkParser: MAVLinkParser | null = null;
@@ -375,7 +402,18 @@ const chatStore = new Store<{ conversations: Record<string, { messages: { role: 
 });
 
 // Recent log files
-interface RecentLogEntry { path: string; name: string; size: number; openedAt: number }
+interface RecentLogEntry {
+  path: string;
+  name: string;
+  size: number;
+  openedAt: number;
+  /** FC identity recorded at download time so the "Downloaded" badge can
+   * match reliably. FC log ids renumber as logs rotate, so id alone (or an
+   * id parsed out of the filename) lights up the WRONG row after a flight. */
+  fcLogId?: number;
+  fcTimeUtc?: number;
+  fcSizeBytes?: number;
+}
 const recentLogsStore = new Store<{ logs: RecentLogEntry[] }>({
   name: 'recent-logs',
   defaults: { logs: [] },
@@ -2050,6 +2088,17 @@ function isVehicleHeartbeat(vehicleType: number, autopilot: number, compid: numb
 // 60+ existing call sites but is no longer the sole target — every detached
 // window subscribed to the same channel receives the broadcast too. This is
 // how telemetry / status / param events reach pop-out HUDs and graphs.
+function flushPacketBatch(mainWindow: BrowserWindow): void {
+  if (packetBatchTimer) {
+    clearTimeout(packetBatchTimer);
+    packetBatchTimer = null;
+  }
+  if (packetBatch.length === 0) return;
+  const batch = packetBatch;
+  packetBatch = [];
+  safeSend(mainWindow, IPC_CHANNELS.MAVLINK_PACKET, batch);
+}
+
 function safeSend(mainWindow: BrowserWindow, channel: string, ...args: unknown[]): void {
   for (const win of getAllWindows()) {
     try {
@@ -2135,6 +2184,7 @@ const MSG_RC_CHANNELS_RAW = 35;
 const MSG_RC_CHANNELS = 65;
 const MSG_NAV_CONTROLLER_OUTPUT = 62;
 const MSG_VFR_HUD = 74;
+const MSG_POSITION_TARGET_GLOBAL_INT = 87;
 const MSG_COMMAND_ACK = 77;
 const MSG_TERRAIN_REPORT = 136;
 const MSG_WIND = 168;
@@ -2470,6 +2520,27 @@ function parseTelemetry(mainWindow: BrowserWindow, packet: MAVLinkPacket): void 
         wpDist: readUint16(payload, 24),
       };
       queueMavlinkTelemetry(mainWindow, { navController });
+      break;
+    }
+
+    case MSG_POSITION_TARGET_GLOBAL_INT: {
+      // POSITION_TARGET_GLOBAL_INT (87) wire order: time_boot_ms(4),
+      //   lat_int(4, i32 degE7), lon_int(4, i32 degE7), alt(4, f32),
+      //   vx/vy/vz/afx/afy/afz/yaw/yaw_rate (f32 each, @16..@47),
+      //   type_mask(2, u16 @48), coordinate_frame(1, u8 @50).
+      // The autopilot broadcasts its ACTIVE guided destination, so this mirrors
+      // gotos commanded by ANY GCS on the link. v2 zero-truncation: trailing
+      // zero bytes (frame=GLOBAL, low mask bits) are trimmed; the OOB-safe
+      // reads below return 0, their true value.
+      const guidedTarget: GuidedTargetData = {
+        lat: readInt32(payload, 4) / 1e7,
+        lon: readInt32(payload, 8) / 1e7,
+        alt: readFloat(payload, 12),
+        typeMask: readUint16(payload, 48),
+        frame: payload[50] ?? 0,
+        receivedAt: Date.now(),
+      };
+      queueMavlinkTelemetry(mainWindow, { guidedTarget });
       break;
     }
 
@@ -4147,6 +4218,10 @@ export function setupIpcHandlers(mainWindow: BrowserWindow): void {
     return async (data: Uint8Array) => {
       if (!mavlinkParser) return;
 
+      // Second-screen tee: mirror the raw stream before any parsing so the
+      // phone sees exactly what the radio delivered.
+      mavlinkTee.forward(data);
+
       // Link Doctor: keep a raw sample of what arrived while we waited for a
       // heartbeat, so a failed connect can say what the port was speaking.
       if (connectionState.isWaitingForHeartbeat && linkDoctorSampleBytes < 4096) {
@@ -4448,10 +4523,10 @@ export function setupIpcHandlers(mainWindow: BrowserWindow): void {
             parseTelemetry(mainWindow, packet);
 
             // Broadcast raw frame to renderer(s) for the MAVLink Inspector and
-            // any FieldGraph pop-outs. Stays cheap: payload is the small bytes
-            // already in memory; conversion is O(payload length). Renderer-side
-            // decoders only run for messages a live inspector/graph cares about.
-            safeSend(mainWindow, IPC_CHANNELS.MAVLINK_PACKET, {
+            // any FieldGraph pop-outs, batched into 50ms buckets (see
+            // flushPacketBatch). PACKET_BATCH_MAX bounds memory if the flush
+            // timer is starved by a busy event loop.
+            packetBatch.push({
               msgid: packet.msgid,
               sysid: packet.sysid,
               compid: packet.compid,
@@ -4461,6 +4536,11 @@ export function setupIpcHandlers(mainWindow: BrowserWindow): void {
               isMavlink2: packet.isMavlink2,
               isSigned: packet.isSigned,
             });
+            if (packetBatch.length >= PACKET_BATCH_MAX) {
+              flushPacketBatch(mainWindow);
+            } else if (!packetBatchTimer) {
+              packetBatchTimer = setTimeout(() => flushPacketBatch(mainWindow), PACKET_BATCH_FLUSH_MS);
+            }
 
             // TEMP perf probe (diagnosing in-flight telemetry freeze): measure the
             // raw packet broadcast rate + top message ids. This is the "flood" the
@@ -4553,6 +4633,13 @@ export function setupIpcHandlers(mainWindow: BrowserWindow): void {
           legacyStreamFallbackTimeout = null;
         }
         sessionRatesRequested = false; // Reboot resets the FC's in-RAM rates
+        // Release the dead transport NOW. Keeping the old SerialPort instance
+        // (and its fd) around while the board re-enumerates can leave the tty
+        // node busy/zombied on macOS, so every reconnect open fails until a
+        // manual connect closes it (8-minute stuck "Rebooting..." spinner).
+        cleanupTransportListeners();
+        try { if (currentTransport?.isOpen) currentTransport.close(); } catch { /* already gone */ }
+        currentTransport = null;
         sendLog(mainWindow, 'info', 'Connection closed for reboot, will reconnect...');
         return;
       }
@@ -4677,9 +4764,18 @@ export function setupIpcHandlers(mainWindow: BrowserWindow): void {
         }
 
         if (!portAvailable) {
-          sendLog(mainWindow, 'debug', `Port not available yet, retrying in ${retryMs}ms...`);
+          // Info, not debug: an invisible reason is exactly how the stuck
+          // "Rebooting..." spinner went undiagnosable in the field.
+          sendLog(mainWindow, 'info', `Port ${pendingReconnect.portPath} not available yet, retrying in ${retryMs}ms...`);
           reconnectTimer = setTimeout(() => attemptReconnect(), retryMs);
           return;
+        }
+
+        // Drop any stale transport left from the pre-reboot session before
+        // re-opening the port (an fd still open on it reads as busy).
+        if (currentTransport) {
+          try { if (currentTransport.isOpen) currentTransport.close(); } catch { /* ignore */ }
+          currentTransport = null;
         }
 
         // Port is back - attempt connection
@@ -4857,11 +4953,15 @@ export function setupIpcHandlers(mainWindow: BrowserWindow): void {
       }
 
       // Protocol detection failed - close and retry
+      sendLog(mainWindow, 'info', 'Reconnect: link opened but no heartbeat/protocol yet, retrying...');
       currentTransport?.close();
       currentTransport = null;
       reconnectTimer = setTimeout(() => attemptReconnect(), retryMs);
 
     } catch (err) {
+      // Never retry silently: a busy tty (stale fd) or open error looping
+      // invisibly is indistinguishable from a hang for the operator.
+      sendLog(mainWindow, 'warn', 'Reconnect attempt failed', err instanceof Error ? err.message : String(err));
       // Clean up any partially opened transport
       if (currentTransport) {
         try {
@@ -4918,6 +5018,11 @@ export function setupIpcHandlers(mainWindow: BrowserWindow): void {
           legacyStreamFallbackTimeout = null;
         }
         sessionRatesRequested = false; // Reboot resets the FC's in-RAM rates
+        // Release the dead transport NOW (see the matching branch in the
+        // initial-connect close handler for why: stale fd = busy tty).
+        cleanupTransportListeners();
+        try { if (currentTransport?.isOpen) currentTransport.close(); } catch { /* already gone */ }
+        currentTransport = null;
         sendLog(mainWindow, 'info', 'Connection closed for reboot, will reconnect...');
         return; // Don't update state - reconnect logic handles it
       }
@@ -4968,15 +5073,19 @@ export function setupIpcHandlers(mainWindow: BrowserWindow): void {
       reconnectTimer = null;
     }
 
-    // Store connection info for reconnection
-    const isTcpConnection = connectionState.connectionType === 'tcp' || connectionState.isSitl;
+    // Where to dial is decided by `resolveReconnectTarget`, which is a pure function so the
+    // rule it encodes can be tested: `connectionState` is only populated WHILE connected, so a
+    // reconnect scheduled after the link has already gone must fall back to the options the
+    // user last connected with. See that module for what happened when it did not.
+    const target = resolveReconnectTarget(connectionState, lastConnectOptions);
     pendingReconnect = {
       reason,
-      portPath: connectionState.portPath,
-      host: isTcpConnection ? '127.0.0.1' : undefined,
-      tcpPort: 5760,
-      protocol: connectionState.protocol || 'msp',
-      baudRate: 115200,
+      portPath: target.portPath,
+      host: target.host,
+      options: target.options,
+      tcpPort: target.tcpPort,
+      protocol: target.protocol,
+      baudRate: target.baudRate,
       startTime: Date.now() + delayMs, // Start timing from after initial delay
       attempt: 0,
       maxAttempts,
@@ -5196,6 +5305,10 @@ export function setupIpcHandlers(mainWindow: BrowserWindow): void {
 
         // Check if this is an expected close (reboot in progress)
         if (isReconnectPending()) {
+          // Release the dead transport NOW (stale fd = busy tty on macOS).
+          cleanupTransportListeners();
+          try { if (currentTransport?.isOpen) currentTransport.close(); } catch { /* already gone */ }
+          currentTransport = null;
           sendLog(mainWindow, 'info', 'Connection closed for reboot, will reconnect...');
           return; // Don't update state - reconnect logic handles it
         }
@@ -9340,6 +9453,232 @@ export function setupIpcHandlers(mainWindow: BrowserWindow): void {
   });
 
   // Download firmware
+  // --- EdgeTX radio SD-card packages -------------------------------------
+
+  /**
+   * Compute the ArduDeck HUD widget config from the connected vehicle's
+   * param cache. Values the vehicle can't provide are omitted so the widget
+   * keeps its own defaults.
+   */
+  function computeHudConfig(): Record<string, string | number> {
+    const num = (name: string): number | null => {
+      const p = receivedParams.get(name);
+      return p ? p.paramValue : null;
+    };
+    const cfg: Record<string, string | number> = {};
+    const vehicleName = connectionState.boardId || connectionState.vehicleType;
+    if (vehicleName) cfg.name = vehicleName;
+    const vmax = num('MOT_BAT_VOLT_MAX');
+    const cells = vmax && vmax > 0 ? Math.round(vmax / 4.2) : 0;
+    if (cells > 0) {
+      cfg.cells = cells;
+      const low = num('BATT_LOW_VOLT');
+      const crt = num('BATT_CRT_VOLT');
+      if (low && low > 0) cfg.low_cell = Number((low / cells).toFixed(2));
+      if (crt && crt > 0) cfg.crit_cell = Number((crt / cells).toFixed(2));
+    }
+    const cap = num('BATT_CAPACITY');
+    if (cap && cap > 0) cfg.capacity = Math.round(cap);
+    return cfg;
+  }
+
+  async function writeHudCfgFile(
+    win: BrowserWindow,
+    volumePath: string,
+    cfg: Record<string, string | number>,
+  ): Promise<{ ok: boolean; cfg?: Record<string, string | number>; error?: string }> {
+    const lines = [`# generated by ArduDeck ${new Date().toISOString()}`];
+    for (const [k, v] of Object.entries(cfg)) {
+      if (v !== '' && v !== null && v !== undefined) lines.push(`${k}=${v}`);
+    }
+    try {
+      await writeFile(join(volumePath, 'WIDGETS', 'ardudeck', 'hud.cfg'), lines.join('\n') + '\n', 'utf8');
+      sendLog(win, 'info', `ArduDeck HUD config written (${Object.keys(cfg).length} values)`);
+      return { ok: true, cfg };
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      sendLog(win, 'warn', 'Could not write HUD config', message);
+      return { ok: false, error: message };
+    }
+  }
+
+  async function generateHudConfig(
+    win: BrowserWindow,
+    volumePath: string,
+  ): Promise<{ ok: boolean; cfg?: Record<string, string | number>; error?: string }> {
+    return writeHudCfgFile(win, volumePath, computeHudConfig());
+  }
+
+  ipcMain.handle(IPC_CHANNELS.EDGETX_HUD_CONFIG_SUGGEST, async (): Promise<{ connected: boolean; cfg: Record<string, string | number> }> => {
+    return { connected: connectionState.isConnected, cfg: computeHudConfig() };
+  });
+
+  ipcMain.handle(IPC_CHANNELS.EDGETX_HUD_CONFIG_WRITE, async (
+    _,
+    volumePath: string,
+    cfg: Record<string, string | number>,
+  ) => {
+    if (!mainWindow) return { ok: false, error: 'no window' };
+    return writeHudCfgFile(mainWindow, volumePath, cfg);
+  });
+
+  ipcMain.handle(IPC_CHANNELS.EDGETX_HUD_CONFIG_GET, async (_, volumePath: string): Promise<Record<string, string> | null> => {
+    try {
+      const raw = await readFile(join(volumePath, 'WIDGETS', 'ardudeck', 'hud.cfg'), 'utf8');
+      const cfg: Record<string, string> = {};
+      for (const line of raw.split('\n')) {
+        const m = line.match(/^(\w+)=(.+)$/);
+        if (m) cfg[m[1]!] = m[2]!.trim();
+      }
+      return cfg;
+    } catch {
+      return null;
+    }
+  });
+
+  // Voice announcer phrases: same 16kHz wav set the EdgeTX widget ships,
+  // served from the bundled resources so the renderer never touches disk.
+  ipcMain.handle(IPC_CHANNELS.VOICE_GET_WAV, async (_, name: string): Promise<Uint8Array | null> => {
+    if (!/^[a-z0-9_]+$/.test(name)) return null;
+    try {
+      return await readFile(join(
+        app.getAppPath(), 'resources', 'edgetx', 'ardudeck-hud',
+        'SD', 'WIDGETS', 'ardudeck', 'snd', `${name}.wav`,
+      ));
+    } catch {
+      return null;
+    }
+  });
+
+  ipcMain.handle(IPC_CHANNELS.EDGETX_HUD_CONFIG_REGEN, async (_, volumePath: string) => {
+    if (!mainWindow) return { ok: false, error: 'no window' };
+    if (!connectionState.isConnected) {
+      return { ok: false, error: 'Connect the vehicle first - config values come from its parameters' };
+    }
+    return generateHudConfig(mainWindow, volumePath);
+  });
+
+  ipcMain.handle(IPC_CHANNELS.EDGETX_HUD_MAPS_WRITE, async (
+    _,
+    volumePath: string,
+    maps: Array<{ name: string; base64: string; lat: number; lon: number; mpp: number; w: number; h: number }>,
+    mission?: Array<{ seq: number; lat: number; lon: number }>,
+  ): Promise<{ ok: boolean; error?: string }> => {
+    try {
+      const card = await probeEdgeTxVolume(volumePath);
+      if (!card) return { ok: false, error: 'SD card is no longer mounted' };
+      const mapsDir = join(volumePath, 'WIDGETS', 'ardudeck', 'maps');
+      const { mkdir } = await import('node:fs/promises');
+      await mkdir(mapsDir, { recursive: true });
+      if (maps.length > 0) {
+        const lines = [`# generated by ArduDeck ${new Date().toISOString()}`];
+        for (let i = 0; i < maps.length; i++) {
+          const m = maps[i]!;
+          const file = `${m.name}.png`;
+          await writeFile(join(mapsDir, file), Buffer.from(m.base64, 'base64'));
+          lines.push(`map${i + 1}=${m.lat.toFixed(6)},${m.lon.toFixed(6)},${m.mpp.toFixed(3)},${m.w},${m.h},${file}`);
+        }
+        await writeFile(join(mapsDir, 'maps.cfg'), lines.join('\n') + '\n', 'utf8');
+        sendLog(mainWindow, 'info', `Field maps written (${maps.length} zoom levels)`);
+      }
+      if (mission) {
+        // mission overlay for the map tile; written on every apply so the
+        // route on the radio tracks the planner
+        const wpLines = mission.map((wp, i) => `wp${i + 1}=${wp.seq},${wp.lat.toFixed(6)},${wp.lon.toFixed(6)}`);
+        await writeFile(join(mapsDir, 'mission.cfg'), wpLines.join('\n') + '\n', 'utf8');
+        sendLog(mainWindow, 'info', `Mission overlay written (${mission.length} waypoints)`);
+      }
+      return { ok: true };
+    } catch (err) {
+      return { ok: false, error: err instanceof Error ? err.message : String(err) };
+    }
+  });
+
+  ipcMain.handle(IPC_CHANNELS.EDGETX_EJECT, async (_, volumePath: string): Promise<{ ok: boolean; error?: string }> => {
+    // Only eject volumes we identified as EdgeTX cards - never arbitrary paths.
+    const card = await probeEdgeTxVolume(volumePath);
+    if (!card) return { ok: false, error: 'Not a mounted EdgeTX SD card' };
+    const execFile = promisify(execFileCb);
+    try {
+      if (process.platform === 'darwin') {
+        await execFile('diskutil', ['eject', volumePath]);
+      } else if (process.platform === 'win32') {
+        const letter = volumePath.slice(0, 2); // "E:"
+        await execFile('powershell', ['-NoProfile', '-Command',
+          `(New-Object -comObject Shell.Application).Namespace(17).ParseName('${letter}').InvokeVerb('Eject')`]);
+      } else {
+        await execFile('umount', [volumePath]);
+      }
+      sendLog(mainWindow, 'info', `Ejected ${volumePath}`);
+      return { ok: true };
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      return { ok: false, error: message };
+    }
+  });
+
+  ipcMain.handle(IPC_CHANNELS.EDGETX_SCAN, async (): Promise<EdgeTxScanResult> => {
+    const cards = await scanForEdgeTxCards();
+    const installed: EdgeTxScanResult['installed'] = {};
+    for (const card of cards) {
+      installed[card.volumePath] = (await readEdgeTxManifest(card.volumePath)).packages;
+    }
+    return { cards, catalog: edgeTxCatalogInfo(), installed };
+  });
+
+  ipcMain.handle(IPC_CHANNELS.EDGETX_INSTALL, async (
+    _,
+    volumePath: string,
+    packageId: string,
+    variantId: string,
+  ): Promise<{ success: boolean; record?: InstalledPackageRecord; error?: string }> => {
+    const pkg = getEdgeTxPackage(packageId);
+    if (!pkg) return { success: false, error: `Unknown package: ${packageId}` };
+    const card = await probeEdgeTxVolume(volumePath);
+    if (!card) return { success: false, error: 'SD card is no longer mounted or is not an EdgeTX card' };
+    try {
+      sendLog(mainWindow, 'info', `Installing ${pkg.name} (${variantId}) to ${card.volumeName}`);
+      const record = await installEdgeTxPackage(volumePath, pkg, variantId, card.freeBytes, (p) => {
+        safeSend(mainWindow, IPC_CHANNELS.EDGETX_PROGRESS, { packageId, ...p });
+      });
+      // ArduDeck HUD: generate widget config from the connected vehicle so the
+      // radio side needs zero setup.
+      if (packageId === 'ardudeck-hud') {
+        await generateHudConfig(mainWindow, volumePath);
+      }
+      sendLog(mainWindow, 'info', `${pkg.name} ${record.version} installed (${record.files.length} files)`);
+      return { success: true, record };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      sendLog(mainWindow, 'error', `EdgeTX package install failed`, message);
+      return { success: false, error: message };
+    }
+  });
+
+  ipcMain.handle(IPC_CHANNELS.EDGETX_REMOVE, async (
+    _,
+    volumePath: string,
+    packageId: string,
+  ): Promise<{ success: boolean; error?: string }> => {
+    try {
+      await removeEdgeTxPackage(volumePath, packageId);
+      if (packageId === 'ardudeck-hud') {
+        // hud.cfg is generated after install, so it is not in the package
+        // manifest; clean it (and the now-empty dir) explicitly.
+        const { rm, rmdir } = await import('node:fs/promises');
+        await rm(join(volumePath, 'WIDGETS', 'ardudeck', 'hud.cfg'), { force: true });
+        await rm(join(volumePath, 'WIDGETS', 'ardudeck', 'maps'), { recursive: true, force: true });
+        try { await rmdir(join(volumePath, 'WIDGETS', 'ardudeck')); } catch { /* not empty; leave it */ }
+      }
+      sendLog(mainWindow, 'info', `EdgeTX package ${packageId} removed`);
+      return { success: true };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      sendLog(mainWindow, 'error', `EdgeTX package removal failed`, message);
+      return { success: false, error: message };
+    }
+  });
+
   ipcMain.handle(IPC_CHANNELS.FIRMWARE_DOWNLOAD, async (
     _,
     version: FirmwareVersion
@@ -10953,6 +11292,24 @@ export function setupIpcHandlers(mainWindow: BrowserWindow): void {
   // DroneBridge ESP32 (REST API)
   registerDroneBridgeIpcHandlers(mainWindow);
 
+  // MAVLink forwarding tee (mobile second-screen / secondary GCS). The
+  // injector reads currentTransport at call time so it survives reconnects.
+  mavlinkTee.setInjector((bytes) => {
+    currentTransport?.write(bytes).catch(() => {
+      // Link down mid-forward; the phone will retry with its own heartbeat.
+    });
+  });
+  ipcMain.handle(IPC_CHANNELS.MAVLINK_FORWARD_START, async (_e, opts: { listenPort?: number; endpoints?: { host: string; port: number }[] }) => {
+    const status = await mavlinkTee.start(opts ?? {});
+    sendLog(mainWindow, 'info', 'MAVLink forward started', `listen :${status.listenPort}, ${status.endpoints.length} endpoint(s)`);
+    return status;
+  });
+  ipcMain.handle(IPC_CHANNELS.MAVLINK_FORWARD_STOP, async () => {
+    await mavlinkTee.stop();
+    sendLog(mainWindow, 'info', 'MAVLink forward stopped');
+  });
+  ipcMain.handle(IPC_CHANNELS.MAVLINK_FORWARD_STATUS, () => mavlinkTee.status());
+
   // Map overlays (RainViewer radar, OpenAIP airspace/airports)
   setupOverlayHandlers();
 
@@ -10965,6 +11322,7 @@ export function setupIpcHandlers(mainWindow: BrowserWindow): void {
     userDataPath: app.getPath('userData'),
     isVehicleArmed: () => lastReportedArmed === true,
     setParam: (paramId, value) => buildFcAdapter().setParam(paramId, value),
+    setRcExternallyOwned: (owned) => ardupilotRcSender.setExternalOwner(owned),
     reconnectVehicle: async (reason, timeoutSec) => {
       scheduleReconnect({
         reason,
@@ -11024,7 +11382,7 @@ export function setupIpcHandlers(mainWindow: BrowserWindow): void {
     return logDownloadManager.requestLogList();
   });
 
-  ipcMain.handle(IPC_CHANNELS.LOG_DOWNLOAD, async (_, logId: number, logSize: number): Promise<string | null> => {
+  ipcMain.handle(IPC_CHANNELS.LOG_DOWNLOAD, async (_, logId: number, logSize: number, timeUtc?: number): Promise<string | null> => {
     if (!currentTransport || !logDownloadManager || !mainWindow) return null;
 
     const result = await dialog.showSaveDialog(mainWindow, {
@@ -11038,7 +11396,14 @@ export function setupIpcHandlers(mainWindow: BrowserWindow): void {
 
     if (result.canceled || !result.filePath) return null;
 
+    // Throttle progress to 4Hz: the manager reports per 90-byte chunk, and at
+    // full USB rate that is thousands of IPC sends + renderer re-renders per
+    // second, enough to starve the renderer for the whole download.
+    let lastProgressSent = 0;
     const data = await logDownloadManager.downloadLog(logId, logSize, (received, total) => {
+      const now = Date.now();
+      if (now - lastProgressSent < 250 && received < total) return;
+      lastProgressSent = now;
       safeSend(mainWindow!, IPC_CHANNELS.LOG_DOWNLOAD_PROGRESS, { logId, received, total });
     });
 
@@ -11048,6 +11413,22 @@ export function setupIpcHandlers(mainWindow: BrowserWindow): void {
     }
 
     await writeFile(result.filePath, data);
+    // Record the download in recents immediately (not only when the file is
+    // later opened) and stamp the FC identity so the list badge matches this
+    // exact log, not whatever log happens to carry the same id next flight.
+    {
+      const logs = recentLogsStore.get('logs').filter((l) => l.path !== result.filePath);
+      logs.unshift({
+        path: result.filePath,
+        name: basename(result.filePath),
+        size: data.length,
+        openedAt: Date.now(),
+        fcLogId: logId,
+        fcTimeUtc: timeUtc,
+        fcSizeBytes: logSize,
+      });
+      recentLogsStore.set('logs', logs.slice(0, 20));
+    }
     safeSend(mainWindow, IPC_CHANNELS.LOG_DOWNLOAD_COMPLETE, { logId, path: result.filePath, size: data.length });
     return result.filePath;
   });
@@ -11962,6 +12343,21 @@ export async function cleanupOnShutdown(): Promise<void> {
     sitlProcess.stop();
   } catch (err) {
     console.warn('[Shutdown] Error stopping SITL:', err);
+  }
+
+  try {
+    // Stop the flight model. It is a SEPARATE child process, and it was the one thing spawned
+    // here that shutdown never reaped: closing the window left `ardudeck-sim-engine` running
+    // and holding UDP 9002 forever.
+    //
+    // That port is the physics link, and exactly one process can own it. So an orphan from a
+    // closed ArduDeck silently blocks the Trainer from starting its own flight controller, and
+    // the only symptom is the Trainer refusing to launch while saying a flight controller is
+    // already running - which is true, and useless, because the application it belongs to is
+    // not on screen. Found after it blocked three separate launches in one session.
+    await simEngineProcess.stopAndWait();
+  } catch (err) {
+    console.warn('[Shutdown] Error stopping the sim engine:', err);
   }
 
   try {

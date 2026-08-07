@@ -5,6 +5,10 @@ use crate::motor::{motor_forces_faulted, MotorFault, MotorOutput};
 use crate::wake::{wake_at, RotorWake, WakeParams};
 
 const GROUND_FRICTION: f64 = 0.6;
+/// Below this ground speed (m/s) the vehicle counts as stationary, so static friction can hold
+/// it rather than the viscous term easing it along. Small enough that a genuine slide still
+/// slides, large enough that numerical noise cannot creep past it.
+const STATIC_FRICTION_SPEED: f64 = 0.05;
 const GROUND_CONTACT_EPS: f64 = 1e-3;
 /// Upper bound on the in-ground-effect thrust boost (spec 1.a): caps the boost a
 /// vehicle sitting on the deck sees, well inside the Cheeseman-Bennett singularity.
@@ -185,7 +189,20 @@ impl VehicleState {
     }
 }
 
+/// Roll, pitch and yaw inertia (kg m^2).
+///
+/// Follows `SIM_Frame::update_parameters`: take the frame's own figures when it has them, and
+/// only fall back to the "50% of the mass on a ring at half the motor radius" guess when it does
+/// not. The guess is not a model of anything, and it is wrong by a factor that grows as the frame
+/// shrinks, which is what made every small airframe oscillate on ArduPilot's stock gains.
 fn inertia(p: &MultirotorParams) -> (f64, f64, f64) {
+    if let Some([ixx, iyy, izz]) = p.moment_of_inertia {
+        // Guarded exactly like the fallback: a zero or negative axis would divide the torque by
+        // nothing and detonate the integrator on the first step.
+        if ixx > 0.0 && iyy > 0.0 && izz > 0.0 {
+            return (ixx, iyy, izz);
+        }
+    }
     let r = p.diagonal_size / 2.0;
     let base = p.mass * r * r;
     let ixx = f64::max(1e-4, 0.25 * base);
@@ -520,8 +537,37 @@ fn step_copter_core(
             Vec3::zero()
         };
         let weight = p.mass * env.gravity;
-        let fx = -sign(state.velocity.x) * (state.velocity.x.abs() * p.mass).min(GROUND_FRICTION * weight);
-        let fy = -sign(state.velocity.y) * (state.velocity.y.abs() * p.mass).min(GROUND_FRICTION * weight);
+        let limit = GROUND_FRICTION * weight;
+        let speed = state.velocity.x.hypot(state.velocity.y);
+        let driving = provisional.x.hypot(provisional.y);
+
+        // STATIC friction, which the model had none of.
+        //
+        // The kinetic term below is viscous: proportional to speed, so it decays motion toward
+        // zero without ever reaching it. A parked vehicle under any steady push settles at a
+        // constant slip instead of staying put, and with wind switched on that is a landed
+        // aircraft sliding slowly across the field forever. Real contact holds until the driving
+        // force exceeds the friction limit, so below that limit the horizontal force is
+        // cancelled outright rather than merely resisted.
+        let (fx, fy) = if speed < STATIC_FRICTION_SPEED && driving <= limit {
+            // Cancel the driving force AND whatever momentum is left, so it comes to rest rather
+            // than freezing at whatever crawl it happened to reach. Bounded by the friction limit
+            // in MAGNITUDE, not per axis, or a diagonal slide would get more grip than a
+            // straight one.
+            let want_x = -provisional.x - state.velocity.x * p.mass / dt;
+            let want_y = -provisional.y - state.velocity.y * p.mass / dt;
+            let want = want_x.hypot(want_y);
+            if want > limit {
+                (want_x * limit / want, want_y * limit / want)
+            } else {
+                (want_x, want_y)
+            }
+        } else {
+            (
+                -sign(state.velocity.x) * (state.velocity.x.abs() * p.mass).min(limit),
+                -sign(state.velocity.y) * (state.velocity.y.abs() * p.mass).min(limit),
+            )
+        };
         nf = nf.add(Vec3::new(fx, fy, 0.0));
         nf
     } else {
@@ -941,6 +987,52 @@ mod tests {
         assert!(s.position.z <= -h + 1e-3, "stays on the surface");
     }
 
+    /// A landed, disarmed vehicle must STAY where it was put.
+    ///
+    /// The friction term used to be viscous only: a force proportional to speed, which decays
+    /// motion toward zero without reaching it. Under any steady push, and a simulated wind is
+    /// exactly that, the vehicle settled at a constant slip and slid across the field for as
+    /// long as it sat there.
+    #[test]
+    fn a_parked_vehicle_does_not_slide_under_a_steady_wind() {
+        let p = params();
+        let h = 8.0;
+        // A real breeze, blowing across the vehicle the whole time.
+        let env = Environment { wind: Vec3::new(4.0, 2.0, 0.0), ..DEFAULT_ENVIRONMENT };
+
+        let mut s = initial_state();
+        s.position.z = -h;
+        let opts = StepOptions { ground_height: h, ..StepOptions::default() };
+
+        // Thirty seconds of sitting there with the motors stopped.
+        for _ in 0..(30.0 / DT) as usize {
+            s = step_copter(&[1000.0; 4], &s, &p, &env, DT, opts);
+        }
+
+        let drift = s.position.x.hypot(s.position.y);
+        assert!(drift < 0.05, "parked vehicle drifted {drift:.3} m in half a minute of wind");
+        let speed = s.velocity.x.hypot(s.velocity.y);
+        assert!(speed < 0.01, "parked vehicle was still moving at {speed:.4} m/s");
+    }
+
+    /// Static friction must not weld it to the ground: a real slide still slides.
+    #[test]
+    fn a_pushed_vehicle_still_slides_and_then_stops() {
+        let (p, e) = (params(), env());
+        let h = 8.0;
+        let mut s = initial_state();
+        s.position.z = -h;
+        s.velocity = Vec3::new(3.0, 0.0, 0.0);
+        let opts = StepOptions { ground_height: h, ..StepOptions::default() };
+
+        for _ in 0..(5.0 / DT) as usize {
+            s = step_copter(&[1000.0; 4], &s, &p, &e, DT, opts);
+        }
+        // It travelled, and then it came to rest rather than easing along forever.
+        assert!(s.position.x > 0.1, "a shove should actually move it, got {}", s.position.x);
+        assert!(s.velocity.x < 0.01, "and then stop, still at {} m/s", s.velocity.x);
+    }
+
     // ─── Multi-vehicle wake coupling (spec 3.1) ──────────────────────────────
 
     /// Capture a hovering vehicle's shed rotor wake at altitude `z`.
@@ -1101,6 +1193,45 @@ mod tests {
         assert!((d.torque_bf.x - torque.x).abs() < 1e-9);
         assert!((d.torque_bf.y - torque.y).abs() < 1e-9);
         assert!((d.torque_bf.z - torque.z).abs() < 1e-9);
+    }
+
+    #[test]
+    fn a_frame_that_states_its_inertia_is_flown_with_it() {
+        let p = params();
+        let (gx, _gy, gz) = inertia(&p);
+        // The guess, unchanged, so a frame file without the field still flies like stock SITL.
+        let r = p.diagonal_size / 2.0;
+        assert!((gx - 0.25 * p.mass * r * r).abs() < 1e-12);
+        assert!((gz - 0.5 * p.mass * r * r).abs() < 1e-12);
+
+        let stated = MultirotorParams { moment_of_inertia: Some([0.005, 0.006, 0.009]), ..p.clone() };
+        assert_eq!(inertia(&stated), (0.005, 0.006, 0.009));
+    }
+
+    #[test]
+    fn a_nonsense_inertia_falls_back_instead_of_dividing_by_it() {
+        // Torque is divided by these, so a zero axis is not a slightly wrong aircraft, it is an
+        // infinite angular acceleration on the first step.
+        let p = params();
+        for bad in [[0.0, 0.01, 0.01], [0.01, -1.0, 0.01], [0.01, 0.01, 0.0]] {
+            let q = MultirotorParams { moment_of_inertia: Some(bad), ..p.clone() };
+            assert_eq!(inertia(&q), inertia(&p), "{bad:?} should have fallen back");
+        }
+    }
+
+    #[test]
+    fn stating_the_real_inertia_calms_a_small_frame_down() {
+        // The whole point of the field. A 300 mm quad on ArduPilot's ring guess gets several
+        // times the roll acceleration of the frame its stock gains assume, which is a limit
+        // cycle rather than a tuning problem. Same torque, same airframe, real inertia.
+        let small = MultirotorParams { mass: 0.95, diagonal_size: 0.15, ..params() };
+        let (guess, _, _) = inertia(&small);
+        let real = MultirotorParams { moment_of_inertia: Some([0.005, 0.005, 0.009]), ..small.clone() };
+        let (stated, _, _) = inertia(&real);
+        assert!(
+            stated > guess * 3.0,
+            "the guess ({guess:.5}) should be several times below a real 300 mm quad ({stated:.5})"
+        );
     }
 
     #[test]

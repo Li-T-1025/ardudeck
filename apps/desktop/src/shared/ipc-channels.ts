@@ -262,6 +262,20 @@ export const IPC_CHANNELS = {
   SIM_OBSTACLES_SAVE: 'sim-obstacles:save',
 
   // Firmware flash
+  EDGETX_SCAN: 'edgetx:scan',
+  EDGETX_INSTALL: 'edgetx:install',
+  EDGETX_REMOVE: 'edgetx:remove',
+  EDGETX_PROGRESS: 'edgetx:progress',
+  EDGETX_HUD_CONFIG_GET: 'edgetx:hud-config-get',
+  EDGETX_HUD_CONFIG_REGEN: 'edgetx:hud-config-regen',
+  EDGETX_HUD_CONFIG_SUGGEST: 'edgetx:hud-config-suggest',
+  EDGETX_HUD_CONFIG_WRITE: 'edgetx:hud-config-write',
+  EDGETX_EJECT: 'edgetx:eject',
+  EDGETX_HUD_MAPS_WRITE: 'edgetx:hud-maps-write',
+
+  // Voice announcer (desktop): pre-generated phrase wavs shared with the
+  // EdgeTX widget bundle
+  VOICE_GET_WAV: 'voice:get-wav',
   FIRMWARE_DETECT_BOARD: 'firmware:detect-board',
   FIRMWARE_FETCH_MANIFEST: 'firmware:fetch-manifest',
   FIRMWARE_FETCH_BOARDS: 'firmware:fetch-boards',
@@ -299,6 +313,11 @@ export const IPC_CHANNELS = {
   DRONEBRIDGE_CLEAR_UDP_CLIENTS: 'dronebridge:clear-udp-clients',
   DRONEBRIDGE_READ_SERIAL: 'dronebridge:read-serial',
   DRONEBRIDGE_READ_SERIAL_RESET: 'dronebridge:read-serial-reset',
+
+  // MAVLink forwarding tee (mobile second-screen / secondary GCS)
+  MAVLINK_FORWARD_START: 'mavlink-forward:start',
+  MAVLINK_FORWARD_STOP: 'mavlink-forward:stop',
+  MAVLINK_FORWARD_STATUS: 'mavlink-forward:status',
 
   // MSP Connection (Betaflight/iNav/Cleanflight)
   MSP_CONNECT: 'msp:connect',

@@ -9,9 +9,19 @@ import { BaseTransport, TransportOptions, SerialPortInfo } from '../interfaces/t
 /**
  * Serial port transport for MAVLink communication
  */
+/**
+ * Cap for the polling-read buffer. The event-driven MAVLink path consumes
+ * data via the 'data' event and never calls read(), so without a cap the
+ * buffer accumulates every byte ever received for the life of the
+ * connection. 1MB is far more than any read() consumer (flashers,
+ * board detection) ever needs in flight; older bytes are dropped first.
+ */
+const MAX_RX_BUFFER_BYTES = 1024 * 1024;
+
 export class SerialTransport extends BaseTransport {
   private port: SerialPort | null = null;
   private rxBuffer: Uint8Array[] = [];
+  private rxBufferBytes = 0;
   private _portName: string;
   private _isOpen = false;
   private _dataBits: 5 | 6 | 7 | 8;
@@ -36,7 +46,7 @@ export class SerialTransport extends BaseTransport {
   }
 
   get bytesToRead(): number {
-    return this.rxBuffer.reduce((sum, chunk) => sum + chunk.length, 0);
+    return this.rxBufferBytes;
   }
 
   get bytesToWrite(): number {
@@ -65,6 +75,11 @@ export class SerialTransport extends BaseTransport {
       this.port.on('data', (data: Buffer) => {
         const uint8 = new Uint8Array(data);
         this.rxBuffer.push(uint8);
+        this.rxBufferBytes += uint8.length;
+        while (this.rxBufferBytes > MAX_RX_BUFFER_BYTES && this.rxBuffer.length > 1) {
+          const dropped = this.rxBuffer.shift()!;
+          this.rxBufferBytes -= dropped.length;
+        }
         this.emit('data', uint8);
       });
 
@@ -183,10 +198,12 @@ export class SerialTransport extends BaseTransport {
         buffer.set(chunk, offset + bytesRead);
         bytesRead += chunk.length;
         this.rxBuffer.shift();
+        this.rxBufferBytes -= chunk.length;
       } else {
         buffer.set(chunk.slice(0, needed), offset + bytesRead);
         this.rxBuffer[0] = chunk.slice(needed);
         bytesRead += needed;
+        this.rxBufferBytes -= needed;
       }
     }
 
@@ -234,6 +251,7 @@ export class SerialTransport extends BaseTransport {
 
   async discardInBuffer(): Promise<void> {
     this.rxBuffer = [];
+    this.rxBufferBytes = 0;
     if (this.port && this.isOpen) {
       return new Promise((resolve) => {
         this.port!.flush(() => {

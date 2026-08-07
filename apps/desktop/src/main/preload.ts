@@ -395,7 +395,7 @@ const api = {
       isSigned: boolean;
     }) => void,
   ) => {
-    const handler = (_: unknown, packet: {
+    type RawPacket = {
       msgid: number;
       sysid: number;
       compid: number;
@@ -404,7 +404,17 @@ const api = {
       rxtime: number;
       isMavlink2: boolean;
       isSigned: boolean;
-    }) => callback(packet);
+    };
+    // Main batches packets into arrays (50ms buckets) to keep IPC cost flat
+    // at high packet rates; unpack here so subscribers still see one packet
+    // per callback.
+    const handler = (_: unknown, packets: RawPacket | RawPacket[]) => {
+      if (Array.isArray(packets)) {
+        for (const p of packets) callback(p);
+      } else {
+        callback(packets);
+      }
+    };
     ipcRenderer.on(IPC_CHANNELS.MAVLINK_PACKET, handler);
     return () => ipcRenderer.removeListener(IPC_CHANNELS.MAVLINK_PACKET, handler);
   },
@@ -877,8 +887,8 @@ const api = {
   logListRequest: (): Promise<unknown[]> =>
     ipcRenderer.invoke(IPC_CHANNELS.LOG_LIST_REQUEST),
 
-  logDownload: (logId: number, logSize: number): Promise<string | null> =>
-    ipcRenderer.invoke(IPC_CHANNELS.LOG_DOWNLOAD, logId, logSize),
+  logDownload: (logId: number, logSize: number, timeUtc?: number): Promise<string | null> =>
+    ipcRenderer.invoke(IPC_CHANNELS.LOG_DOWNLOAD, logId, logSize, timeUtc),
 
   logDownloadCancel: (): Promise<void> =>
     ipcRenderer.invoke(IPC_CHANNELS.LOG_DOWNLOAD_CANCEL),
@@ -919,7 +929,7 @@ const api = {
   logChatLoad: (logPath: string): Promise<{ messages: { role: string; content: string }[]; insightCards: unknown[] } | null> =>
     ipcRenderer.invoke(IPC_CHANNELS.LOG_CHAT_LOAD, logPath),
 
-  logRecentGet: (): Promise<{ path: string; name: string; size: number; openedAt: number }[]> =>
+  logRecentGet: (): Promise<{ path: string; name: string; size: number; openedAt: number; fcLogId?: number; fcTimeUtc?: number; fcSizeBytes?: number }[]> =>
     ipcRenderer.invoke(IPC_CHANNELS.LOG_RECENT_GET),
 
   logRecentAdd: (entry: { path: string; name: string; size: number }): Promise<void> =>
@@ -1000,6 +1010,48 @@ const api = {
 
   downloadFirmware: (version: FirmwareVersion): Promise<{ success: boolean; filePath?: string; error?: string }> =>
     ipcRenderer.invoke(IPC_CHANNELS.FIRMWARE_DOWNLOAD, version),
+
+  edgetxScan: (): Promise<import('../shared/edgetx-types.js').EdgeTxScanResult> =>
+    ipcRenderer.invoke(IPC_CHANNELS.EDGETX_SCAN),
+
+  edgetxInstall: (volumePath: string, packageId: string, variantId: string): Promise<{ success: boolean; record?: import('../shared/edgetx-types.js').InstalledPackageRecord; error?: string }> =>
+    ipcRenderer.invoke(IPC_CHANNELS.EDGETX_INSTALL, volumePath, packageId, variantId),
+
+  edgetxRemove: (volumePath: string, packageId: string): Promise<{ success: boolean; error?: string }> =>
+    ipcRenderer.invoke(IPC_CHANNELS.EDGETX_REMOVE, volumePath, packageId),
+
+  edgetxHudConfigGet: (volumePath: string): Promise<Record<string, string> | null> =>
+    ipcRenderer.invoke(IPC_CHANNELS.EDGETX_HUD_CONFIG_GET, volumePath),
+
+  voiceGetWav: (name: string): Promise<Uint8Array | null> =>
+    ipcRenderer.invoke(IPC_CHANNELS.VOICE_GET_WAV, name),
+
+  edgetxHudConfigRegen: (volumePath: string): Promise<{ ok: boolean; cfg?: Record<string, string | number>; error?: string }> =>
+    ipcRenderer.invoke(IPC_CHANNELS.EDGETX_HUD_CONFIG_REGEN, volumePath),
+
+  edgetxHudConfigSuggest: (): Promise<{ connected: boolean; cfg: Record<string, string | number> }> =>
+    ipcRenderer.invoke(IPC_CHANNELS.EDGETX_HUD_CONFIG_SUGGEST),
+
+  edgetxHudConfigWrite: (volumePath: string, cfg: Record<string, string | number>): Promise<{ ok: boolean; cfg?: Record<string, string | number>; error?: string }> =>
+    ipcRenderer.invoke(IPC_CHANNELS.EDGETX_HUD_CONFIG_WRITE, volumePath, cfg),
+
+  edgetxEject: (volumePath: string): Promise<{ ok: boolean; error?: string }> =>
+    ipcRenderer.invoke(IPC_CHANNELS.EDGETX_EJECT, volumePath),
+
+  edgetxHudMapsWrite: (
+    volumePath: string,
+    maps: Array<{ name: string; base64: string; lat: number; lon: number; mpp: number; w: number; h: number }>,
+    mission?: Array<{ seq: number; lat: number; lon: number }>,
+  ): Promise<{ ok: boolean; error?: string }> =>
+    ipcRenderer.invoke(IPC_CHANNELS.EDGETX_HUD_MAPS_WRITE, volumePath, maps, mission),
+
+  onEdgetxProgress: (callback: (p: import('../shared/edgetx-types.js').InstallProgress & { packageId: string }) => void) => {
+    const handler = (_: unknown, p: import('../shared/edgetx-types.js').InstallProgress & { packageId: string }) => callback(p);
+    ipcRenderer.on(IPC_CHANNELS.EDGETX_PROGRESS, handler);
+    return () => {
+      ipcRenderer.removeListener(IPC_CHANNELS.EDGETX_PROGRESS, handler);
+    };
+  },
 
   flashFirmware: (firmwarePath: string, board: DetectedBoard, options?: FlashOptions): Promise<{ success: boolean; result?: FlashResult; error?: string }> =>
     ipcRenderer.invoke(IPC_CHANNELS.FIRMWARE_FLASH, firmwarePath, board, options),
@@ -1101,6 +1153,14 @@ const api = {
     ipcRenderer.on(IPC_CHANNELS.DRONEBRIDGE_DETECTED, handler);
     return () => ipcRenderer.removeListener(IPC_CHANNELS.DRONEBRIDGE_DETECTED, handler);
   },
+
+  // MAVLink forwarding tee (mobile second-screen / secondary GCS)
+  mavlinkForwardStart: (opts: { listenPort?: number; endpoints?: { host: string; port: number }[] }): Promise<unknown> =>
+    ipcRenderer.invoke(IPC_CHANNELS.MAVLINK_FORWARD_START, opts),
+  mavlinkForwardStop: (): Promise<void> =>
+    ipcRenderer.invoke(IPC_CHANNELS.MAVLINK_FORWARD_STOP),
+  mavlinkForwardStatus: (): Promise<unknown> =>
+    ipcRenderer.invoke(IPC_CHANNELS.MAVLINK_FORWARD_STATUS),
 
   // Firmware event listeners
   onFlashProgress: (callback: (progress: FlashProgress) => void) => {

@@ -318,6 +318,10 @@ interface SettingsStore {
   tourPromptsEnabled: boolean;
   setTourPromptsEnabled: (enabled: boolean) => void;
 
+  // Voice announcer
+  voiceAlertsMuted: boolean;
+  setVoiceAlertsMuted: (muted: boolean) => void;
+
   // Console
   showDebugLogs: boolean;
   setShowDebugLogs: (enabled: boolean) => void;
@@ -784,6 +788,11 @@ export const useSettingsStore = create<SettingsStore>()(
     set({ tourPromptsEnabled: enabled });
   },
 
+  voiceAlertsMuted: false,
+  setVoiceAlertsMuted: (muted: boolean) => {
+    set({ voiceAlertsMuted: muted });
+  },
+
   showDebugLogs: false,
   setShowDebugLogs: (enabled: boolean) => {
     set({ showDebugLogs: enabled });
@@ -958,6 +967,7 @@ export const useSettingsStore = create<SettingsStore>()(
             ? settingsRecord.defaultCommandAltFrame as AltReferenceFrame
             : 'relative'),
           tourPromptsEnabled: settingsRecord.tourPromptsEnabled !== false,
+          voiceAlertsMuted: !!settingsRecord.voiceAlertsMuted,
           showDebugLogs: !!settingsRecord.showDebugLogs,
           aiProvider: (settingsRecord.aiProvider as 'claude' | 'openai' | 'gemini' | null) ?? null,
           aiWarningDismissed: !!settingsRecord.aiWarningDismissed,
@@ -1005,6 +1015,7 @@ export const useSettingsStore = create<SettingsStore>()(
         advancedCommandsUnlocked: state.advancedCommandsUnlocked,
         defaultCommandAltFrame: state.defaultCommandAltFrame,
         tourPromptsEnabled: state.tourPromptsEnabled,
+        voiceAlertsMuted: state.voiceAlertsMuted,
         showDebugLogs: state.showDebugLogs,
         aiProvider: state.aiProvider,
         aiWarningDismissed: state.aiWarningDismissed,
@@ -1323,6 +1334,7 @@ useSettingsStore.subscribe(
     companionUnlocked: state.companionUnlocked,
     advancedCommandsUnlocked: state.advancedCommandsUnlocked,
     defaultCommandAltFrame: state.defaultCommandAltFrame,
+    voiceAlertsMuted: state.voiceAlertsMuted,
     showDebugLogs: state.showDebugLogs,
     aiProvider: state.aiProvider,
     aiWarningDismissed: state.aiWarningDismissed,
@@ -1355,6 +1367,7 @@ useSettingsStore.subscribe(
         curr.companionUnlocked !== prev.companionUnlocked ||
         curr.advancedCommandsUnlocked !== prev.advancedCommandsUnlocked ||
         curr.defaultCommandAltFrame !== prev.defaultCommandAltFrame ||
+        curr.voiceAlertsMuted !== prev.voiceAlertsMuted ||
         curr.showDebugLogs !== prev.showDebugLogs ||
         curr.aiProvider !== prev.aiProvider ||
         curr.aiWarningDismissed !== prev.aiWarningDismissed ||

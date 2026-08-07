@@ -156,6 +156,24 @@ export function simModelFor(config: ArduPilotSitlConfig): string {
   return config.model || DEFAULT_MODELS[config.vehicleType];
 }
 
+/**
+ * The model whose PHYSICS actually run, which is what FRAME_CLASS / FRAME_TYPE must match.
+ *
+ * NOT `simModelFor`: that answers `JSON:127.0.0.1` whenever ArduDeck's own engine is driving,
+ * which says nothing about the airframe and resolves to the quad fallback. With a custom frame
+ * active the layout comes from the MOTOR COUNT, so a 60 kg octa was being reported as a quad
+ * while its frame file said eight motors: a contradiction that gave the borrower four mounts
+ * for an eight-motor aircraft.
+ *
+ * One function, used by both the parameter writer and anything reporting the frame outward, so
+ * the two cannot drift again.
+ */
+export function paramModelFor(config: ArduPilotSitlConfig): string {
+  return config.vehicleType === 'copter' && config.customFramePath && config.customFrameMotors
+    ? sitlFrameForMotorCount(config.customFrameMotors)
+    : config.model || DEFAULT_MODELS[config.vehicleType];
+}
+
 // Model → FRAME_CLASS / FRAME_TYPE now lives in shared/sitl-frame-geometry.ts,
 // which pairs each SITL physics frame with the mixer that matches it and is
 // machine-verified against shared/ap-motor-layouts.json. See that file for why
@@ -387,6 +405,31 @@ class ArduPilotSitlProcessManager {
   }
 
   /**
+   * The airframe this stack is MIXING for, as FRAME_CLASS / FRAME_TYPE.
+   *
+   * Resolved from the FULL model string, exactly as `generateDefaultParams` does when it writes
+   * those two parameters, so this cannot report one airframe while the vehicle flies another.
+   * Deliberately not derived from `simModel`, which drops the `:suffix` and would answer "quad"
+   * for a custom octa frame.
+   */
+  /**
+   * The custom frame JSON this vehicle is simulated from, if there is one.
+   *
+   * It carries mass, prop, disc area and battery: the AIRCRAFT. `simFrame` above carries the
+   * layout. A borrower needs both, because adopting the layout alone leaves it flying a 3 kg
+   * default under gains tuned for whatever this really is, which diverges on the first input.
+   */
+  get simFramePath(): string | null {
+    return this._currentConfig?.customFramePath ?? null;
+  }
+
+  get simFrame(): { frameClass: number; frameType: number } | null {
+    if (!this._currentConfig || this._currentConfig.vehicleType !== 'copter') return null;
+    const { frameClass, frameType } = resolveCopterFrame(paramModelFor(this._currentConfig));
+    return { frameClass, frameType: frameType ?? 1 };
+  }
+
+  /**
    * Relaunch SITL at a new simulated origin.
    *
    * This exists because `-O` on SITL's command line outranks the SIM_OPOS_*
@@ -537,15 +580,7 @@ class ArduPilotSitlProcessManager {
       // win on conflicts. ArduPilot loads `--defaults a,b,c` left-to-right
       // with later files overriding earlier — same semantics Mission Planner
       // relies on for its identity.parm overlay.
-      // The model whose PHYSICS actually runs, which is what FRAME_CLASS/TYPE must
-      // match. With a custom frame active the layout comes from the motor count
-      // (see buildArgs), not from the Frame/Model dropdown, so prefer that here.
-      // Otherwise a user who activated an octa custom frame and then nudged the
-      // dropdown would get a mixer for one airframe and physics for another.
-      const model =
-        config.vehicleType === 'copter' && config.customFramePath && config.customFrameMotors
-          ? sitlFrameForMotorCount(config.customFrameMotors)
-          : config.model || DEFAULT_MODELS[config.vehicleType];
+      const model = paramModelFor(config);
       const defaultsStack: string[] = [];
 
       if (!config.defaultsFile) {

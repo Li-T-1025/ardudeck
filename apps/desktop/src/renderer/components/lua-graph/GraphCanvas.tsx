@@ -17,7 +17,7 @@ import {
 import '@xyflow/react/dist/style.css';
 import GraphNodeComponent from './GraphNodeComponent';
 import { useLuaGraphStore } from '../../stores/lua-graph-store';
-import { getNodeDefinition } from './node-library';
+import { getNodeDefinition, getEffectivePorts } from './node-library';
 import { useResolvedTheme } from '../../hooks/useTheme';
 import { CATEGORY_COLORS } from './lua-graph-types';
 
@@ -52,8 +52,10 @@ export function GraphCanvas() {
       const targetDef = getNodeDefinition(targetNode.data.definitionType);
       if (!sourceDef || !targetDef) return false;
 
-      const sourcePort = sourceDef.outputs.find((p) => p.id === connection.sourceHandle);
-      const targetPort = targetDef.inputs.find((p) => p.id === connection.targetHandle);
+      const sourcePorts = getEffectivePorts(sourceDef, sourceNode.data.propertyValues);
+      const targetPorts = getEffectivePorts(targetDef, targetNode.data.propertyValues);
+      const sourcePort = sourcePorts.outputs.find((p) => p.id === connection.sourceHandle);
+      const targetPort = targetPorts.inputs.find((p) => p.id === connection.targetHandle);
       if (!sourcePort || !targetPort) return false;
 
       // Allow 'any' type to connect to anything

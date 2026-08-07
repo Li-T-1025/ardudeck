@@ -62,6 +62,10 @@ Action nodes produce side effects like sending messages, controlling servos, or 
 | Trigger Relay | Trigger | Relay Number (0-5), State (ON/OFF) | `relay:on/off()` |
 | Log to File | Trigger, Value 1-3 (any) | File Name, Separator | `io.open/write/close` |
 | Set LED | Trigger, R, G, B (numbers) | LED Instance (0-15) | `serialLED:set_RGB()` |
+| Serial Write | Trigger, Data (any) | Instance, Baud Rate, Line Ending | `serial:find_serial()`, `port:write()` |
+| Network Send | Trigger, Data (any) | Protocol (UDP/TCP), IP, Port | `Socket()`, `sock:send()` |
+
+**Serial Write** sends the Data input out a flight controller UART. Set an unused `SERIALx_PROTOCOL` to 28 (Scripting) first; Instance picks the Nth such port (0 = first). **Network Send** needs a board with networking support and `NET_ENABLE = 1` (ArduPilot 4.5+); the connection is opened on first trigger.
 
 ## Timing
 
@@ -91,3 +95,6 @@ Utility nodes for organizing your graph.
 | Node | Purpose |
 | --- | --- |
 | Comment | A text label for documentation - no effect on compiled code |
+| Custom Lua | Inline your own Lua snippet with configurable pins |
+
+**Custom Lua** lets you drop hand-written Lua into the graph. Define input and output pins as comma-separated names in the inspector; each input pin becomes a local variable inside your snippet, and the snippet's `return` values (in output pin order) feed the output pins. Example: pins `dist, volt` in, `msg` out, code `return string.format("D=%.1f V=%.2f", dist, volt)`. Wire the output into Serial Write or Network Send to stream custom telemetry.

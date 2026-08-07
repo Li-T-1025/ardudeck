@@ -26,6 +26,10 @@ class FakeSitl implements SitlControl {
     return this.currentConfig ? 'JSON' : null;
   }
 
+  /** An octa, so a test can tell it apart from the quad any default would produce. */
+  simFrame: { frameClass: number; frameType: number } | null = { frameClass: 3, frameType: 0 };
+  simFramePath: string | null = '/frames/heavy_industrial_octa_14s.json';
+
   engineManaged = true;
   relaunchResult: { success: boolean; error?: string } = { success: true };
   relaunches: Array<{ lat: number; lng: number; alt: number; heading: number }> = [];
@@ -274,6 +278,26 @@ describe('SimHandoverService release and reclaim', () => {
   });
 });
 
+describe('RC ownership while the simulation is lent out', () => {
+  it('tells the RC sender to stand down on release, and takes it back on reclaim', async () => {
+    const calls: boolean[] = [];
+    const { deps } = makeDeps();
+    const service = new SimHandoverService({
+      ...deps,
+      setRcExternallyOwned: (owned: boolean) => calls.push(owned),
+    });
+
+    await service.release();
+    // The borrower flies with a real handset on a link this process cannot see. Without this,
+    // arming starts the fallback sender and its centred constants fight the handset, which reads
+    // as a switch toggling itself on and off several times a second.
+    expect(calls).toEqual([true]);
+
+    await service.reclaim();
+    expect(calls).toEqual([true, false]);
+  });
+});
+
 describe('SimHandoverServer over HTTP', () => {
   let dir: string;
   let server: SimHandoverServer;
@@ -316,6 +340,17 @@ describe('SimHandoverServer over HTTP', () => {
     expect(server.port).toBeGreaterThan(0);
   });
 
+  it('reports the airframe it mixes for, so a borrower can simulate THIS aircraft', async () => {
+    const { body } = await call('GET', '/sim/status');
+    // A stack mixing for an octa while the flight model is a quad commands pure roll and gets a
+    // roll/pitch blend back: a 45-degree rotation between mixer and plant, which is unflyable.
+    expect(body.frameClass).toBe(3);
+    expect(body.frameType).toBe(0);
+    // The layout alone is not the aircraft: without this the borrower flies a 3 kg default
+    // under gains tuned for a 60 kg machine, which diverges on the first stick input.
+    expect(body.framePath).toBe('/frames/heavy_industrial_octa_14s.json');
+  });
+
   it('GET /sim/status returns the contract shape', async () => {
     const { status, body } = await call('GET', '/sim/status');
     expect(status).toBe(200);
@@ -324,6 +359,9 @@ describe('SimHandoverServer over HTTP', () => {
         'armed',
         'canRelease',
         'engineRunning',
+        'frameClass',
+        'frameType',
+        'framePath',
         'homeAlt',
         'homeHdg',
         'homeLat',

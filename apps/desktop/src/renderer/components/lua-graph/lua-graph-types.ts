@@ -22,7 +22,8 @@ export interface PortDefinition {
 export interface NodeProperty {
   id: string;
   label: string;
-  type: 'number' | 'boolean' | 'string' | 'select' | 'channel';
+  /** 'code' renders as a multiline monospace editor in the inspector */
+  type: 'number' | 'boolean' | 'string' | 'select' | 'channel' | 'code';
   defaultValue: number | boolean | string;
   options?: { label: string; value: string | number }[];
   min?: number;

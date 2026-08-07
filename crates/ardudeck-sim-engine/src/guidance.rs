@@ -313,6 +313,7 @@ mod tests {
             disc_area: 1.82,
             mdrag_coef: 0.10,
             num_motors: 8.0,
+            moment_of_inertia: None,
         })
     }
 

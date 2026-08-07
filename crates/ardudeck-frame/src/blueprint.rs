@@ -40,9 +40,12 @@ pub struct Part {
     pub material_hint: MaterialHint,
     pub spin: Option<Spin>,
     /// Parts that turn as one rotor assembly (a motor's blades + blur disc)
-    /// share a `group` id (the motor index). The renderer parents each group
-    /// under a single spinning pivot so the blades and disc rotate together.
-    /// `None` for static parts.
+    /// share a `group` id, which IS the motor index: the same index this motor
+    /// has in `motor_factors` / `physics_geometry().motors`, and therefore the
+    /// same index its PWM occupies on the SITL wire. The renderer parents each
+    /// group under a single spinning pivot so the blades and disc rotate
+    /// together, and anything that has to name a motor (a lost prop, a failed
+    /// ESC) can point at the rotor the pilot can see. `None` for static parts.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub group: Option<u32>,
 }
@@ -143,7 +146,6 @@ pub fn build_blueprint(spec: &FrameGeomSpec) -> FrameBlueprint {
     }
 
     let rotor = RotorDims { stator_r, stator_h, hs, hb, prop_r, blades, blade_len, chord, blade_thick, pitch_angle, arm_r };
-    let mut gi: u32 = 0;
     for idxs in arm_groups.values() {
         let m0 = &g.motors[idxs[0]];
         let len = (m0.position.x.powi(2) + m0.position.y.powi(2)).sqrt();
@@ -161,8 +163,12 @@ pub fn build_blueprint(spec: &FrameGeomSpec) -> FrameBlueprint {
             // Coax: the lower (negative-z) motor hangs inverted UNDER the arm,
             // prop below. Everything else mounts on top, prop above.
             let vd = if is_coax && m.position.z < -1e-9 { -1.0 } else { 1.0 };
-            push_rotor(&mut parts, gi, m.position.x, m.position.y, vd, m.spin_dir, &rotor);
-            gi += 1;
+            // The group id is `i`, the motor's index in the factor table, NOT a running
+            // counter over arms. Arms are visited in angle order, so on any layout where
+            // the two orders differ (every coax class: OctaQuad, Y6, Coax) a counter named
+            // the wrong motor, and "the prop that just hit the wall" would have failed a
+            // motor somewhere else on the airframe.
+            push_rotor(&mut parts, i as u32, m.position.x, m.position.y, vd, m.spin_dir, &rotor);
         }
     }
 
@@ -474,6 +480,56 @@ mod tests {
         for i in 0..4u32 {
             let disc = bp.parts.iter().find(|p| p.kind == PartKind::Disc && p.group == Some(i));
             assert!(disc.is_some(), "no disc grouped with motor {i}");
+        }
+    }
+
+    /// A rotor's `group` has to BE its motor index, because a renderer that damages a
+    /// visible prop names the motor to fail by it. Arms are emitted in ANGLE order while
+    /// motors are numbered by the FACTOR TABLE, and those two orders disagree on every
+    /// layout there is - even a stock Quad X, where a running counter put group 1 on the
+    /// front-left arm while motor 1 is the back-left. Failing "the prop that just hit the
+    /// wall" would have cut the diagonally opposite motor.
+    #[test]
+    fn rotor_group_is_the_motor_index_even_when_arm_order_differs() {
+        for (class, ftype) in [
+            (FrameClass::Quad, FrameType::X),
+            (FrameClass::Hexa, FrameType::X),
+            (FrameClass::Octa, FrameType::Plus),
+            (FrameClass::OctaQuad, FrameType::X),
+            (FrameClass::Y6, FrameType::Y6B),
+        ] {
+            let spec = from_preset(class, ftype).unwrap();
+            let bp = build_blueprint(&spec);
+            let mounts = crate::physics::physics_geometry(&spec).motors;
+
+            for (i, mount) in mounts.iter().enumerate() {
+                let disc = bp
+                    .parts
+                    .iter()
+                    .find(|p| p.kind == PartKind::Disc && p.group == Some(i as u32))
+                    .unwrap_or_else(|| panic!("{class:?}/{ftype:?}: no rotor for motor {i}"));
+                // The rotor carrying group `i` must sit over the mount of motor `i`.
+                let dx = disc.position.x - mount.position.x;
+                let dy = disc.position.y - mount.position.y;
+                assert!(
+                    dx.hypot(dy) < 1e-6,
+                    "{class:?}/{ftype:?}: rotor {i} is at ({:.3}, {:.3}) but motor {i} mounts at ({:.3}, {:.3})",
+                    disc.position.x, disc.position.y, mount.position.x, mount.position.y,
+                );
+                // Coax pairs share an arm angle, so the vertical side is what tells them
+                // apart: the group must also be on the mount's own layer.
+                assert_eq!(
+                    disc.position.z > 0.0,
+                    mount.position.z >= 0.0,
+                    "{class:?}/{ftype:?}: rotor {i} is on the wrong side of the arm",
+                );
+                // And the same way round, or a lost prop would unload the wrong yaw axis.
+                let spin = disc.spin.expect("blur disc spins").dir;
+                assert_eq!(
+                    spin > 0.0, mount.spin_dir > 0.0,
+                    "{class:?}/{ftype:?}: rotor {i} turns against motor {i}",
+                );
+            }
         }
     }
 

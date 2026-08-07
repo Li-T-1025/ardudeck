@@ -15,7 +15,7 @@ import {
   addEdge,
 } from '@xyflow/react';
 import type { GraphNodeData, GraphEdgeData, GraphFile, NodeCategory } from '../components/lua-graph/lua-graph-types';
-import { getNodeDefinition } from '../components/lua-graph/node-library';
+import { getNodeDefinition, getEffectivePorts } from '../components/lua-graph/node-library';
 
 // ── Undo / Redo Snapshot ────────────────────────────────────────
 
@@ -206,8 +206,8 @@ export const useLuaGraphStore = create<LuaGraphStore>((set, get) => ({
   setSelectedNode: (id) => set({ selectedNodeId: id }),
 
   updateNodeProperty: (nodeId, propertyId, value) => {
-    set((state) => ({
-      nodes: state.nodes.map((n) =>
+    set((state) => {
+      const nodes = state.nodes.map((n) =>
         n.id === nodeId
           ? {
               ...n,
@@ -217,9 +217,26 @@ export const useLuaGraphStore = create<LuaGraphStore>((set, get) => ({
               },
             }
           : n,
-      ),
-      isDirty: true,
-    }));
+      );
+
+      // Custom Lua pin lists define the node's ports; drop edges whose
+      // handle no longer exists after a pin rename/removal.
+      let edges = state.edges;
+      const node = nodes.find((n) => n.id === nodeId);
+      const def = node && getNodeDefinition(node.data.definitionType);
+      if (node && def && def.type === 'flow-custom-lua' && (propertyId === 'inputs' || propertyId === 'outputs')) {
+        const ports = getEffectivePorts(def, node.data.propertyValues);
+        const inputIds = new Set(ports.inputs.map((p) => p.id));
+        const outputIds = new Set(ports.outputs.map((p) => p.id));
+        edges = edges.filter((e) => {
+          if (e.target === nodeId && !inputIds.has(e.targetHandle ?? '')) return false;
+          if (e.source === nodeId && !outputIds.has(e.sourceHandle ?? '')) return false;
+          return true;
+        });
+      }
+
+      return { nodes, edges, isDirty: true };
+    });
   },
 
   updateNodeLabel: (nodeId, label) => {

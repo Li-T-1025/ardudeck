@@ -5,8 +5,8 @@ import { create } from 'zustand';
 // `view` param) without duplicating the union.
 export const VIEW_IDS = [
   'telemetry', 'parameters', 'mission', 'library', 'settings', 'firmware', 'cli',
-  'sitl', 'sim', 'osd', 'report', 'calibration', 'lua-graph', 'modules', 'companion',
-  'logs', 'inspector',
+  'sitl', 'sim', 'osd', 'radio-hud', 'report', 'calibration', 'lua-graph', 'modules',
+  'companion', 'logs', 'inspector',
 ] as const;
 
 export type ViewId = (typeof VIEW_IDS)[number];

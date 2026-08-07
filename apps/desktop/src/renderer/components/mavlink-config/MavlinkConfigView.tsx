@@ -371,11 +371,11 @@ export const MavlinkConfigView: React.FC = () => {
     try {
       const success = await window.electronAPI?.mavlinkReboot();
       if (success) {
-        // Don't clear banner yet - keep it showing reconnection progress
-        // Set flag so we auto-refresh params when reconnection completes
-        if (rebootRequiredParams.length > 0) {
-          pendingParamRefresh.current = true;
-        } else {
+        // Don't clear banner yet - keep it showing reconnection progress.
+        // ALWAYS arm the completion watch: without it nothing ever clears
+        // `rebooting`, which is how the header-button path spun forever.
+        pendingParamRefresh.current = true;
+        if (rebootRequiredParams.length === 0) {
           showToast('Rebooting flight controller...', 'info');
         }
       } else {
@@ -397,6 +397,12 @@ export const MavlinkConfigView: React.FC = () => {
       setRebooting(false);
       setRebootRequiredParams([]);
       showToast('Reboot complete', 'success');
+    } else if (!connectionState.isConnected && !connectionState.isReconnecting) {
+      // Auto-reconnect gave up (timed out or was cancelled): stop the spinner
+      // so the operator can act; the banner reverts to its Reboot Now state.
+      pendingParamRefresh.current = false;
+      setRebooting(false);
+      showToast('Reconnect after reboot failed. Check the link and reconnect manually.', 'error');
     }
   }, [connectionState.isConnected, connectionState.isReconnecting, showToast]);
 

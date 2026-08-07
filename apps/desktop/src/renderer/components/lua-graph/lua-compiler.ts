@@ -5,7 +5,7 @@
  */
 import type { Node, Edge } from '@xyflow/react';
 import type { GraphNodeData, GraphEdgeData } from './lua-graph-types';
-import { getNodeDefinition } from './node-library';
+import { getNodeDefinition, parseCustomPins } from './node-library';
 
 // ── Types ───────────────────────────────────────────────────────
 
@@ -728,6 +728,67 @@ function compileNode(
     return;
   }
 
+  if (type === 'action-serial-write') {
+    // Scripting serial: user sets an unused SERIALx_PROTOCOL to 28, then
+    // find_serial(N) grabs the Nth such port. begin() must run once at load.
+    const inst = Math.floor(Number(prop('instance')) || 0);
+    const baud = Number(prop('baud')) || 57600;
+    const ending = String(prop('line_ending'));
+    const portVar = `_ser_${sanitizeVarName(node.id)}`;
+    ctx.prelude.push(`-- Serial output: scripting serial instance ${inst} (SERIALx_PROTOCOL = 28)`);
+    ctx.prelude.push(`local ${portVar} = serial:find_serial(${inst})`);
+    ctx.prelude.push(`if ${portVar} then ${portVar}:begin(${baud}) else gcs:send_text(3, 'Lua: scripting serial ${inst} not found (set a SERIALx_PROTOCOL to 28)') end`);
+
+    const trigger = input('trigger', 'true');
+    const data = input('data', '""');
+    const suffix = ending === 'lf' ? ' .. "\\n"' : ending === 'crlf' ? ' .. "\\r\\n"' : '';
+    const plVar = nextVar(ctx, 'ser_payload');
+    emit(ctx, `if ${trigger} and ${portVar} then`);
+    ctx.indent += 1;
+    emit(ctx, `local ${plVar} = tostring(${data})${suffix}`);
+    emit(ctx, `for _i = 1, #${plVar} do ${portVar}:write(${plVar}:byte(_i)) end`);
+    ctx.indent -= 1;
+    emit(ctx, 'end');
+    return;
+  }
+
+  if (type === 'action-socket-send') {
+    // Socket(1) = UDP datagram, Socket(0) = TCP stream. Connect lazily on
+    // first trigger (pcall-guarded: Socket is nil on boards without
+    // networking, and TCP connect can fail until the link is up).
+    const proto = String(prop('protocol'));
+    const ip = String(prop('ip')).replace(/"/g, '\\"');
+    const port = Math.floor(Number(prop('port')) || 14550);
+    const sockVar = `_sock_${sanitizeVarName(node.id)}`;
+    ctx.stateVars.set(sockVar, 'nil');
+
+    const trigger = input('trigger', 'true');
+    const data = input('data', '""');
+    const plVar = nextVar(ctx, 'net_payload');
+    emit(ctx, `-- Network send ${proto}://${ip}:${port} (needs NET_ENABLE = 1)`);
+    emit(ctx, `if ${trigger} then`);
+    ctx.indent += 1;
+    emit(ctx, `if not ${sockVar} then`);
+    ctx.indent += 1;
+    emit(ctx, 'pcall(function()');
+    ctx.indent += 1;
+    emit(ctx, `local _s = Socket(${proto === 'tcp' ? 0 : 1})`);
+    emit(ctx, `if _s and _s:connect("${ip}", ${port}) then ${sockVar} = _s end`);
+    ctx.indent -= 1;
+    emit(ctx, 'end)');
+    ctx.indent -= 1;
+    emit(ctx, 'end');
+    emit(ctx, `if ${sockVar} then`);
+    ctx.indent += 1;
+    emit(ctx, `local ${plVar} = tostring(${data})`);
+    emit(ctx, `${sockVar}:send(${plVar}, #${plVar})`);
+    ctx.indent -= 1;
+    emit(ctx, 'end');
+    ctx.indent -= 1;
+    emit(ctx, 'end');
+    return;
+  }
+
   // ── Timing ──────────────────────────────────────────────
 
   if (type === 'timing-run-every') {
@@ -871,6 +932,33 @@ function compileNode(
   if (type === 'flow-comment') {
     const text = String(prop('text'));
     emit(ctx, `-- ${text}`);
+    return;
+  }
+
+  if (type === 'flow-custom-lua') {
+    // User snippet inlined as an immediately-invoked function: input pins
+    // become arguments (so names can't collide across nodes), the snippet's
+    // return values land in the output pin variables.
+    const inputPins = parseCustomPins(String(prop('inputs')));
+    const outputPins = parseCustomPins(String(prop('outputs')));
+    const code = String(prop('code'));
+    const argExprs = inputPins.map((pin) => input(pin, 'nil'));
+
+    const outVars = outputPins.map((pin) => {
+      const v = nextVar(ctx, pin);
+      ctx.varMap.set(varKey(node.id, pin), v);
+      return v;
+    });
+
+    emit(ctx, `-- Custom Lua: ${node.data.label}`);
+    const assign = outVars.length > 0 ? `local ${outVars.join(', ')} = ` : 'local _ = ';
+    emit(ctx, `${assign}(function(${inputPins.join(', ')})`);
+    ctx.indent += 1;
+    for (const line of code.split('\n')) {
+      emit(ctx, line);
+    }
+    ctx.indent -= 1;
+    emit(ctx, `end)(${argExprs.join(', ')})`);
     return;
   }
 }

@@ -637,6 +637,52 @@ function createOrbitArrowIcon(rotationDeg: number): L.DivIcon {
   });
 }
 
+// ── Vehicle-authoritative guided target ─────────────────────────────────────
+// POSITION_TARGET_GLOBAL_INT (87) is the autopilot's own broadcast of its
+// active guided destination, so a goto commanded by ANY GCS on the link
+// (phone, second laptop) renders here with no app-to-app sync.
+const GUIDED_TARGET_MAX_AGE_MS = 5000;
+
+/** Fresh, position-valid vehicle-broadcast guided target, else null. */
+function useVehicleGuidedTarget(): { lat: number; lon: number; alt: number } | null {
+  const guidedTarget = useTelemetryStore((s) => s.guidedTarget);
+  const mode = useTelemetryStore((s) => s.flight.mode);
+  // Re-check freshness on a timer: ArduPilot stops broadcasting once the
+  // target clears, so there is no store update left to trigger the age-out.
+  const [, setAgeTick] = useState(0);
+  useEffect(() => {
+    if (!guidedTarget) return;
+    const id = setInterval(() => setAgeTick((t) => t + 1), 1000);
+    return () => clearInterval(id);
+  }, [guidedTarget]);
+  if (!guidedTarget) return null;
+  if (Date.now() - guidedTarget.receivedAt > GUIDED_TARGET_MAX_AGE_MS) return null;
+  // Position bits ignored, or the all-zero placeholder: not a spatial target.
+  if ((guidedTarget.typeMask & 0x3) !== 0) return null;
+  if (guidedTarget.lat === 0 && guidedTarget.lon === 0) return null;
+  // The autopilot broadcasts wp targets in AUTO / RTL too; only guided-family
+  // modes represent a commanded goto (the mission overlay covers the rest).
+  if (!mode.toUpperCase().includes('GUIDED')) return null;
+  return { lat: guidedTarget.lat, lon: guidedTarget.lon, alt: guidedTarget.alt };
+}
+
+/**
+ * Merge the locally-issued command target with the vehicle broadcast for
+ * display. For plain gotos the broadcast wins: it is the FC's accepted truth
+ * and echoes desktop-issued gotos at (approximately) the same spot, so
+ * rendering only it also dedupes the local marker. Script-held / multi-shape
+ * commands (orbit, spiral, land, ...) keep the richer local overlay; their
+ * broadcast is just the script's per-tick moving setpoint.
+ */
+function mergeGuidedTarget(
+  local: ActiveCommandTarget | null,
+  vehicle: { lat: number; lon: number; alt: number } | null,
+): ActiveCommandTarget | null {
+  if (!vehicle) return local;
+  if (local && local.type !== 'goto') return local;
+  return { type: 'goto', lat: vehicle.lat, lon: vehicle.lon, alt: vehicle.alt };
+}
+
 /**
  * Command layer - uses useImperativeMapLayer() to manage target marker and
  * target line. The COMMAND POPUP itself is rendered as a React overlay
@@ -1178,7 +1224,9 @@ const TelemetryMap3D = React.memo(function TelemetryMap3D() {
   // so the operator sees the same intent regardless of the active map mode.
   // Reads from the shared command-target store so the overlay survives the
   // 2D ↔ 3D switch (the bug this whole refactor was about).
-  const activeTarget3D = useActiveVehicleTarget();
+  const localTarget3D = useActiveVehicleTarget();
+  const vehicleGuidedTarget3D = useVehicleGuidedTarget();
+  const activeTarget3D = mergeGuidedTarget(localTarget3D, vehicleGuidedTarget3D);
   useEffect(() => {
     const map = mapInstanceRef.current;
     if (!map || !mapReady) return;
@@ -1980,7 +2028,12 @@ const TelemetryMap2D = React.memo(function TelemetryMap2D() {
   // panel remounts, and so the 3D map can render the same overlay. Keyed by
   // the active fleet vehicle so each drone keeps its own target: switching
   // selection must not steal the previous vehicle's line.
-  const activeTarget = useActiveVehicleTarget();
+  const localTarget = useActiveVehicleTarget();
+  // Displayed target: the vehicle's own POSITION_TARGET_GLOBAL_INT broadcast
+  // is authoritative for gotos, so targets commanded by another GCS appear
+  // and desktop-issued ones don't double-draw.
+  const vehicleGuidedTarget = useVehicleGuidedTarget();
+  const activeTarget = mergeGuidedTarget(localTarget, vehicleGuidedTarget);
   const setActiveTarget = useCallback((next: ActiveCommandTarget | null) => {
     useCommandTargetStore.getState().setTarget(commandTargetKey(), next);
   }, []);
@@ -2127,14 +2180,14 @@ const TelemetryMap2D = React.memo(function TelemetryMap2D() {
   //  - climbRtl: mode != GUIDED && != RTL (RTL is the expected next mode)
   //  - land:  mode != GUIDED && mode != LAND (LAND is the expected next mode)
   useEffect(() => {
-    if (!activeTarget) return;
+    if (!localTarget) return;
     const modeUpper = flight.mode.toUpperCase();
 
-    if (activeTarget.type === 'land') {
+    if (localTarget.type === 'land') {
       if (modeUpper !== 'GUIDED' && modeUpper !== 'LAND') setActiveTarget(null);
       return;
     }
-    if (activeTarget.type === 'climbRtl') {
+    if (localTarget.type === 'climbRtl') {
       if (modeUpper !== 'GUIDED' && modeUpper !== 'RTL') setActiveTarget(null);
       return;
     }
@@ -2142,14 +2195,14 @@ const TelemetryMap2D = React.memo(function TelemetryMap2D() {
       setActiveTarget(null);
       return;
     }
-    if (activeTarget.type === 'goto') {
+    if (localTarget.type === 'goto') {
       const dist = calculateDistance(
         vehiclePosition[0], vehiclePosition[1],
-        activeTarget.lat, activeTarget.lon,
+        localTarget.lat, localTarget.lon,
       );
       if (dist < 5) setActiveTarget(null);
     }
-  }, [activeTarget, flight.mode, vehiclePosition]);
+  }, [localTarget, flight.mode, vehiclePosition]);
 
   const clearTrail = useCallback(() => {
     setTrail([]);

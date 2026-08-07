@@ -92,6 +92,16 @@ const navItems: NavItem[] = [
     ),
   },
   {
+    id: 'radio-hud',
+    label: 'Radio HUD',
+    icon: (
+      <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <rect x="4" y="7" width="16" height="11" rx="2" strokeWidth={1.5} />
+        <path strokeLinecap="round" strokeWidth={1.5} d="M8 4l4 3 4-3M8 11h4M8 14h8" />
+      </svg>
+    ),
+  },
+  {
     id: 'sitl',
     label: 'SITL Simulator',
     icon: (

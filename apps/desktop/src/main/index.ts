@@ -73,6 +73,10 @@ setupDeepLinks(() => mainWindowRef);
 // This ensures electron-store saves to %APPDATA%/ardudeck/ instead of %APPDATA%/Electron/
 app.name = 'ardudeck';
 
+// Desktop app, not a web page: voice alerts (incl. the boot greeting) must
+// play without waiting for a first click.
+app.commandLine.appendSwitch('autoplay-policy', 'no-user-gesture-required');
+
 // Register tile-cache:// scheme BEFORE app.ready (Electron requirement)
 registerTileCacheScheme();
 registerModuleSchemePrivileges();

@@ -10,6 +10,7 @@ import { SettingsView } from './components/settings';
 import { FirmwareFlashView } from './components/firmware';
 import CliView from './components/cli/CliView';
 import { OsdView } from './components/osd/OsdView';
+import { RadioHudView } from './components/radio-hud/RadioHudView';
 import { ErrorBoundary } from './components/ui/ErrorBoundary';
 import ReportBugView from './components/report/ReportBugView';
 import SitlView from './components/sitl/SitlView';
@@ -46,6 +47,7 @@ import { useRallyStore } from './stores/rally-store';
 import { useLegacyConfigStore } from './stores/legacy-config-store';
 import { useCliStore, setupCliDataListener, cleanupCliDataListener } from './stores/cli-store';
 import { initializeSettings, useSettingsStore, type VehicleType, type ExperienceLevel } from './stores/settings-store';
+import { initAnnouncer } from './lib/announcer';
 import { ExperienceLevelDialog } from './components/ui/ExperienceLevelDialog';
 import { AppTourProvider } from './components/tours/AppTourProvider';
 import { useFlightControlStore } from './stores/flight-control-store';
@@ -436,6 +438,7 @@ function App() {
   // Initialize settings on mount
   useEffect(() => {
     initializeSettings();
+    initAnnouncer();
   }, []);
 
   // Crash recovery: if a mission was autosaved last session and nothing has
@@ -892,6 +895,11 @@ function App() {
       if (currentView === 'osd') {
         return <OsdView />;
       }
+      if (currentView === 'radio-hud') {
+        // Radio widget studio: SD-card work + telemetry-self-configuring
+        // widget, fully functional without a vehicle
+        return <RadioHudView />;
+      }
       if (currentView === 'library') {
         return <MissionLibraryView />;
       }
@@ -988,6 +996,8 @@ function App() {
         return <SitlView />;
       case 'osd':
         return <OsdView />;
+      case 'radio-hud':
+        return <RadioHudView />;
       case 'report':
         return <ReportBugView />;
       case 'calibration':

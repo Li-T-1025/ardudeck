@@ -123,7 +123,16 @@ async function parseAndAnalyze(path: string): Promise<string | null> {
   }
 }
 
-interface RecentLog { path: string; name: string; size: number; openedAt: number }
+interface RecentLog {
+  path: string;
+  name: string;
+  size: number;
+  openedAt: number;
+  /** FC identity stamped by the download handler; see downloadedById. */
+  fcLogId?: number;
+  fcTimeUtc?: number;
+  fcSizeBytes?: number;
+}
 
 export function LogListPanel() {
   const availableLogs = useLogStore((s) => s.availableLogs);
@@ -168,25 +177,34 @@ export function LogListPanel() {
   }, [availableLogs, filterQuery]);
 
   /**
-   * Map of FC log ID -> recent file path for that log, derived from the
-   * recently-downloaded set. Used to badge each row in the FC list with a
-   * "Downloaded" indicator so the user knows which logs already exist locally.
+   * Map of FC log ID -> recent file for that log, used to badge rows with a
+   * "Downloaded" indicator.
    *
-   * The convention from the main-process logDownload handler is that the
-   * saved filename includes the log id (e.g. `log_3.bin`) - we extract it
-   * cheaply rather than persisting a separate id mapping.
+   * FC log ids RENUMBER as logs rotate, so an id alone (or an id parsed out
+   * of the filename) lights up the wrong row after the next flight. Matching
+   * rules, strongest first:
+   * - entries stamped with FC identity at download time: id must match AND
+   *   timeUtc must match (when both sides have one; size breaks the tie when
+   *   either lacks a clock).
+   * - legacy entries (downloaded before stamping existed): filename id match
+   *   PLUS exact size match, so a new log reusing the id never matches.
    */
   const downloadedById = useMemo(() => {
     const map = new Map<number, RecentLog>();
-    for (const r of recentLogs) {
-      const m = r.name.match(/log[_-]?(\d+)/i);
-      if (m) {
-        const id = Number(m[1]);
-        if (Number.isFinite(id)) map.set(id, r);
-      }
+    for (const log of availableLogs) {
+      const match = recentLogs.find((r) => {
+        if (r.fcLogId != null) {
+          if (r.fcLogId !== log.id) return false;
+          if (r.fcTimeUtc && log.timeUtc) return r.fcTimeUtc === log.timeUtc;
+          return (r.fcSizeBytes ?? r.size) === log.size;
+        }
+        const m = r.name.match(/log[_-]?(\d+)/i);
+        return !!m && Number(m[1]) === log.id && r.size === log.size;
+      });
+      if (match) map.set(log.id, match);
     }
     return map;
-  }, [recentLogs]);
+  }, [recentLogs, availableLogs]);
 
   useEffect(() => {
     window.electronAPI.logRecentGet().then(setRecentLogs);
@@ -204,6 +222,10 @@ export function LogListPanel() {
       useLogStore.getState().setDownloadingLogId(null);
       useLogStore.getState().setDownloadProgress(0);
       setDownloadStats(null);
+      // Re-pull recents so the Downloaded badge appears NOW, not after the
+      // next app restart (the panel stays mounted in dockview, so the
+      // on-mount fetch never re-runs).
+      window.electronAPI.logRecentGet().then(setRecentLogs);
     });
 
     const cleanupError = window.electronAPI.onLogDownloadError(({ error }) => {
@@ -243,7 +265,7 @@ export function LogListPanel() {
     useLogStore.getState().setDownloadProgress(0);
     setDownloadStats(null);
 
-    const savedPath = await window.electronAPI.logDownload(log.id, log.size);
+    const savedPath = await window.electronAPI.logDownload(log.id, log.size, log.timeUtc);
     useLogStore.getState().setDownloadingLogId(null);
     if (!savedPath) return;
 

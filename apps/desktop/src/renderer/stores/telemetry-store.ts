@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { TelemetryState, AttitudeData, PositionData, GpsData, BatteryData, VfrHudData, WindData, FlightState, RcChannelsData, SensorHealth, NavControllerData } from '../../shared/telemetry-types';
+import type { TelemetryState, AttitudeData, PositionData, GpsData, BatteryData, VfrHudData, WindData, FlightState, RcChannelsData, SensorHealth, NavControllerData, GuidedTargetData } from '../../shared/telemetry-types';
 import type { VibrationData, EscTelemetryData, ServoOutputData } from '../../shared/motor-test-types';
 
 /** Batch telemetry update - all fields optional */
@@ -18,6 +18,7 @@ export interface TelemetryBatch {
   servoOutput?: ServoOutputData;
   sensorHealth?: SensorHealth;
   navController?: NavControllerData;
+  guidedTarget?: GuidedTargetData;
   /** Source vehicle key, tagged by the main process for per-vehicle routing. */
   __vehicleKey?: string;
 }
@@ -61,6 +62,7 @@ const initialState: TelemetryState = {
   servoOutput: null,
   sensorHealth: null,
   navController: null,
+  guidedTarget: null,
 };
 
 export const useTelemetryStore = create<TelemetryStore>((set) => ({
@@ -131,6 +133,9 @@ export const useTelemetryStore = create<TelemetryStore>((set) => ({
     }
     if (batch.navController) {
       updates.navController = batch.navController;
+    }
+    if (batch.guidedTarget) {
+      updates.guidedTarget = batch.guidedTarget;
     }
 
     set(updates);

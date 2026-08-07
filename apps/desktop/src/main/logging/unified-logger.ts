@@ -184,13 +184,22 @@ function flushBuffer(): void {
 /**
  * Send log entry to renderer for display
  */
+let sendingToRenderer = false;
+
 function sendToRenderer(entry: ConsoleLogEntry): void {
+  // A failed send makes Electron console.error "Error sending from
+  // webFrameMain", which the patched console routes back here: without
+  // this guard a dead renderer frame turns into infinite recursion.
+  if (sendingToRenderer) return;
   if (!mainWindow || mainWindow.isDestroyed()) return;
 
+  sendingToRenderer = true;
   try {
     mainWindow.webContents.send(IPC_CHANNELS.CONSOLE_LOG, entry);
   } catch {
     // Window may be closing
+  } finally {
+    sendingToRenderer = false;
   }
 }
 

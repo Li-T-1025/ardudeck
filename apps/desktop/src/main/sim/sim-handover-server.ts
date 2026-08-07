@@ -54,6 +54,22 @@ export interface SimHandoverStatus {
   engineRunning: boolean;
   /** The `-M` value SITL was launched with, e.g. "JSON" or "quad". */
   model: string | null;
+  /**
+   * The airframe this flight stack is MIXING for, as FRAME_CLASS / FRAME_TYPE.
+   *
+   * Reported so a borrower can simulate this aircraft rather than its own. A flight stack
+   * mixing for an octa while the flight model is a quad commands pure roll and gets a
+   * roll/pitch blend back, and the rate loop then drives the axis it was not correcting: a
+   * 45-degree rotation between mixer and plant, which diverges into a violent oscillation.
+   */
+  frameClass: number | null;
+  frameType: number | null;
+  /**
+   * Absolute path to the custom frame JSON, when this vehicle has one. Mass, props, disc area
+   * and battery live there; the class/type above are only the motor layout. A borrower that
+   * takes the layout without the aircraft flies a default airframe under this vehicle's gains.
+   */
+  framePath: string | null;
   homeLat: number | null;
   homeLon: number | null;
   homeAlt: number | null;
@@ -85,11 +101,17 @@ export interface SimHandoverDeps {
   sitl?: SitlControl;
   engine?: EngineControl;
   log?(level: 'info' | 'warn' | 'error', message: string): void;
+  /** Tell the RC sender that a borrower is feeding the flight controller, or that it is back. */
+  setRcExternallyOwned?(owned: boolean): void;
 }
 
 export interface SitlControl {
   readonly isRunning: boolean;
   readonly simModel: string | null;
+  /** The airframe the parameters mix for, so a borrower can simulate THIS aircraft. */
+  readonly simFrame: { frameClass: number; frameType: number } | null;
+  /** The custom frame JSON, which is where the mass and the power actually live. */
+  readonly simFramePath: string | null;
   readonly currentConfig: { homeLocation: { lat: number; lng: number; alt: number; heading: number } } | null;
   setEngineManaged(managed: boolean): void;
   relaunchWithHome(home: { lat: number; lng: number; alt: number; heading: number }): Promise<{ success: boolean; error?: string }>;
@@ -148,6 +170,9 @@ export class SimHandoverService {
       sitlRunning,
       engineRunning,
       model: this.sitl.simModel,
+      frameClass: this.sitl.simFrame?.frameClass ?? null,
+      frameType: this.sitl.simFrame?.frameType ?? null,
+      framePath: this.sitl.simFramePath,
       homeLat: home?.lat ?? null,
       homeLon: home?.lng ?? null,
       homeAlt: home?.alt ?? null,
@@ -204,11 +229,15 @@ export class SimHandoverService {
     // SITL lifecycle can race in and respawn it onto UDP 9002.
     this.sitl.setEngineManaged(false);
     this.engine.stop();
-    this.deps.log?.('info', 'sim handover: physics engine released to an external owner');
+    // The borrower flies with its own transmitter, on a link this process cannot see. Say so, or
+    // arming here starts the fallback RC sender and the two streams fight over every channel.
+    this.deps.setRcExternallyOwned?.(true);
+    this.deps.log?.('info', 'sim handover: physics engine and RC input released to an external owner');
     return { ok: true };
   }
 
   async reclaim(): Promise<{ ok: boolean; error?: string }> {
+    this.deps.setRcExternallyOwned?.(false);
     const res = await this.engine.restartLast();
     if (!res.success) {
       return { ok: false, error: res.error ?? 'could not restart the ArduDeck physics engine' };

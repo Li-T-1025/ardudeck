@@ -5,7 +5,7 @@
 import { useMemo } from 'react';
 import { Settings2, Timer } from 'lucide-react';
 import { useLuaGraphStore } from '../../stores/lua-graph-store';
-import { getNodeDefinition } from './node-library';
+import { getNodeDefinition, getEffectivePorts } from './node-library';
 import { CATEGORY_COLORS, CATEGORY_LABELS } from './lua-graph-types';
 
 export function InspectorPanel() {
@@ -107,6 +107,7 @@ export function InspectorPanel() {
 
   const categoryColor = CATEGORY_COLORS[selectedNode.data.category] ?? '#6b7280';
   const props = selectedNode.data.propertyValues;
+  const ports = getEffectivePorts(def, props);
 
   return (
     <div className="h-full overflow-y-auto">
@@ -155,6 +156,24 @@ export function InspectorPanel() {
                         </option>
                       ))}
                     </select>
+                  </div>
+                );
+              }
+
+              if (propDef.type === 'code') {
+                return (
+                  <div key={propDef.id}>
+                    <label className="text-[10px] text-content-secondary block mb-0.5">{propDef.label}</label>
+                    <textarea
+                      value={String(value)}
+                      onChange={(e) => updateNodeProperty(selectedNode.id, propDef.id, e.target.value)}
+                      rows={10}
+                      spellCheck={false}
+                      className="w-full text-[11px] font-mono leading-snug bg-surface-input border border-subtle rounded px-2 py-1.5 text-content focus:outline-none focus:border-blue-500/40 resize-y whitespace-pre"
+                    />
+                    <p className="text-[10px] text-content-tertiary mt-1">
+                      Input pins are available as local variables. Finish with <span className="font-mono">return</span> listing the output pins in order.
+                    </p>
                   </div>
                 );
               }
@@ -208,16 +227,16 @@ export function InspectorPanel() {
       )}
 
       {/* Port Info */}
-      {(def.inputs.length > 0 || def.outputs.length > 0) && (
+      {(ports.inputs.length > 0 || ports.outputs.length > 0) && (
         <div className="px-3 py-3 border-t border-subtle">
           <h4 className="text-[10px] font-medium uppercase tracking-wider text-content-secondary mb-2">
             Ports
           </h4>
-          {def.inputs.length > 0 && (
+          {ports.inputs.length > 0 && (
             <div className="mb-2">
               <span className="text-[10px] text-content-tertiary">Inputs</span>
               <div className="mt-1 flex flex-col gap-1">
-                {def.inputs.map((p) => (
+                {ports.inputs.map((p) => (
                   <div key={p.id} className="flex items-center gap-1.5 text-[10px]">
                     <div
                       className="w-1.5 h-1.5 rounded-full"
@@ -236,11 +255,11 @@ export function InspectorPanel() {
               </div>
             </div>
           )}
-          {def.outputs.length > 0 && (
+          {ports.outputs.length > 0 && (
             <div>
               <span className="text-[10px] text-content-tertiary">Outputs</span>
               <div className="mt-1 flex flex-col gap-1">
-                {def.outputs.map((p) => (
+                {ports.outputs.map((p) => (
                   <div key={p.id} className="flex items-center gap-1.5 text-[10px]">
                     <div
                       className="w-1.5 h-1.5 rounded-full"

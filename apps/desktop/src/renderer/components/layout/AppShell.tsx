@@ -3,6 +3,7 @@ import { useConnectionStore } from '../../stores/connection-store';
 import { useActiveVehicleStore } from '../../stores/active-vehicle-store';
 import { useUpdateStore } from '../../stores/update-store';
 import { useNavigationStore } from '../../stores/navigation-store';
+import { useSettingsStore } from '../../stores/settings-store';
 import { useTheme } from '../../hooks/useTheme';
 import { DebugConsole } from '../debug/DebugConsole';
 import { UpdateBanner } from './UpdateBanner';
@@ -20,6 +21,8 @@ export function AppShell({ children }: AppShellProps) {
   const { connectionState, disconnect } = useConnectionStore();
   const { currentVersion, status, fetchVersion } = useUpdateStore();
   const setView = useNavigationStore((s) => s.setView);
+  const voiceAlertsMuted = useSettingsStore((s) => s.voiceAlertsMuted);
+  const setVoiceAlertsMuted = useSettingsStore((s) => s.setVoiceAlertsMuted);
 
   // Fleet (multi-vehicle/swarm) connects over background transports that don't
   // set the primary connection flag. Surface it as its own status so the pill
@@ -57,6 +60,23 @@ export function AppShell({ children }: AppShellProps) {
         <h1 className="text-lg font-semibold text-content">ArduDeck</h1>
 
         <div className="ml-auto flex items-center gap-4 pr-6">
+          {/* Voice alerts mute */}
+          <button
+            onClick={() => setVoiceAlertsMuted(!voiceAlertsMuted)}
+            data-tip={voiceAlertsMuted ? 'Voice alerts muted. Click to unmute' : 'Voice alerts on. Click to mute'}
+            className={`transition-colors ${voiceAlertsMuted ? 'text-content-tertiary hover:text-content-secondary' : 'text-content-secondary hover:text-content'}`}
+          >
+            {voiceAlertsMuted ? (
+              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M17.25 9.75L19.5 12m0 0l2.25 2.25M19.5 12l2.25-2.25M19.5 12l-2.25 2.25m-10.5-6l4.72-4.72a.75.75 0 011.28.53v15.88a.75.75 0 01-1.28.53l-4.72-4.72H4.51c-.88 0-1.7-.51-1.94-1.36a9.02 9.02 0 010-4.86c.24-.85 1.06-1.36 1.94-1.36h2.24z" />
+              </svg>
+            ) : (
+              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M19.11 5.11a9 9 0 010 13.78M16.46 7.76a5.25 5.25 0 010 8.48M6.75 8.25l4.72-4.72a.75.75 0 011.28.53v15.88a.75.75 0 01-1.28.53l-4.72-4.72H4.51c-.88 0-1.7-.51-1.94-1.36a9.02 9.02 0 010-4.86c.24-.85 1.06-1.36 1.94-1.36h2.24z" />
+              </svg>
+            )}
+          </button>
+
           {/* Version badge */}
           {currentVersion && (
             <button

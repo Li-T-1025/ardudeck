@@ -47,10 +47,29 @@ class ArduPilotRcSender {
    * dead the instant you arm. When a real source is live, that fallback must be skipped.
    */
   get hasExternalSource(): boolean {
-    return Date.now() - this._lastExternalMs < 1000;
+    return this._externalOwner || Date.now() - this._lastExternalMs < 1000;
   }
 
   private _lastExternalMs = 0;
+  private _externalOwner = false;
+
+  /**
+   * Hand RC input to a borrower, or take it back.
+   *
+   * The heartbeat above only sees RC pushed through THIS app. When the simulation has been
+   * handed to the Trainer game, the game is flying it with a real USB handset over UDP, and
+   * nothing in this process can observe those packets. Arming would then decide there was no
+   * transmitter, start the fallback sender at 50 Hz, and the two streams would interleave: every
+   * channel flickers between the handset's value and a centred constant several times a second,
+   * so a switch reads as toggling itself on and off.
+   *
+   * Sticky rather than a heartbeat, because it is a statement about who owns the link, not
+   * evidence that a packet arrived.
+   */
+  setExternalOwner(owned: boolean): void {
+    this._externalOwner = owned;
+    if (owned) this.stop();
+  }
 
   /** Mark that an outside source just supplied channels. */
   noteExternalSource(): void {
