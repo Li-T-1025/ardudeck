@@ -26,7 +26,7 @@ interface RendererExports {
 
 interface LoadedModuleInfo {
   slug: string;
-  manifest: { entry?: { renderer?: string } } | null;
+  manifest: { entry?: { renderer?: string }; permissions?: string[] } | null;
   installPath: string;
 }
 
@@ -57,7 +57,7 @@ export function ModuleRuntime({ children }: { children: ReactNode }) {
         try {
           const mod = (await import(/* @vite-ignore */ url)) as RendererExports;
           if (typeof mod.activate === 'function') {
-            const host = createRendererHostApi(rec.slug, register);
+            const host = createRendererHostApi(rec.slug, register, rec.manifest?.permissions ?? []);
             await mod.activate(host);
             console.log(`[ModuleRuntime] activated ${rec.slug}`);
           } else {

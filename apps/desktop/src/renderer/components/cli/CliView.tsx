@@ -255,7 +255,7 @@ export default function CliView() {
       {/* Reboot/Reconnect overlay */}
       {rebootState !== 'idle' && (
         <div className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center">
-          <div className="bg-surface-input border border rounded-xl p-8 max-w-md mx-4 shadow-2xl text-center">
+          <div className="bg-surface-solid border border rounded-xl p-8 max-w-md mx-4 shadow-2xl text-center">
             {/* Icon based on state */}
             {rebootState === 'error' ? (
               <div className="w-16 h-16 rounded-full bg-red-500/20 flex items-center justify-center mx-auto mb-4">
@@ -316,7 +316,7 @@ export default function CliView() {
       {/* Export JSON Confirmation Modal */}
       {showExportConfirm && (
         <div className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center">
-          <div className="bg-surface-input border border rounded-xl p-6 max-w-md mx-4 shadow-2xl">
+          <div className="bg-surface-solid border border rounded-xl p-6 max-w-md mx-4 shadow-2xl">
             <div className="w-12 h-12 rounded-full bg-amber-500/20 flex items-center justify-center mx-auto mb-4">
               <svg className="w-6 h-6 text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4" />

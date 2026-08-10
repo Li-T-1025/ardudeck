@@ -69,11 +69,82 @@ const LIGHT: typeof DARK = {
 // synchronous, so children always read the palette set by their preview.
 let C = DARK;
 
-const SCREEN_W = 480;
-const SCREEN_H = 320;
+/** Radio screen classes the HUD runs on (ids match the installer's
+ *  RADIO_VARIANTS). Color radios get the widget (presets authored @480x320
+ *  and rescaled); B&W radios get the fixed-layout telemetry script. */
+interface ScreenModel {
+  variant: string;
+  label: string;
+  w: number;
+  h: number;
+  /** monochrome telemetry script target: fixed layout, no tile editing */
+  bw?: boolean;
+}
+const SCREEN_MODELS: ScreenModel[] = [
+  { variant: 'c480x320', label: 'TX15 (480x320)', w: 480, h: 320 },
+  { variant: 'c480x272', label: 'TX16S / T16 / T18 / X10 (480x272)', w: 480, h: 272 },
+  { variant: 'c800x480', label: 'TX16S mkIII (800x480)', w: 800, h: 480 },
+  { variant: 'c320x480', label: 'NV14 / EL18 (320x480 portrait)', w: 320, h: 480 },
+  { variant: 'bw128x64', label: 'Boxer / Zorro / TX12 / Pocket (128x64 B&W)', w: 128, h: 64, bw: true },
+  { variant: 'bw212x64', label: 'Taranis X9D (212x64 B&W)', w: 212, h: 64, bw: true },
+];
+
+// Active screen geometry; RadioHudView reassigns from the selected radio
+// model before rendering children (same module-state idiom as the palette
+// above - rendering is synchronous).
+let SCREEN_W = 480;
+let SCREEN_H = 320;
+let TICKER_TOP = SCREEN_H - 66;
 const TILE_REGION_TOP = 44;
-const TICKER_TOP = SCREEN_H - 66;
 const SNAP = 8;
+
+/** Fixed widget chrome: header ends at 48, ticker owns the bottom 72px.
+ *  Keep all geometry math in sync with loadable.lua. */
+const TILE_TOP = 48;
+const BOTTOM_CHROME = 72;
+
+/** Carry a tile onto another screen: SHRINK when the target is smaller,
+ *  never inflate (EdgeTX fonts don't scale - bigger screens mean room for
+ *  MORE instruments, not fatter ones), then clamp into bounds. */
+function fitTile(t: TileDef, from: { w: number; h: number }, to: { w: number; h: number }): TileDef {
+  const fx = Math.min(1, to.w / from.w);
+  const fy = Math.min(1, (to.h - TILE_TOP - BOTTOM_CHROME) / (from.h - TILE_TOP - BOTTOM_CHROME));
+  const w = Math.round(t.w * fx);
+  const h = Math.round(t.h * fy);
+  return {
+    ...t,
+    w,
+    h,
+    x: Math.max(0, Math.min(to.w - w, Math.round(t.x * fx))),
+    y: Math.max(TILE_TOP, Math.min(to.h - BOTTOM_CHROME - h + 6, Math.round(TILE_TOP + (t.y - TILE_TOP) * fy))),
+  };
+}
+const REF_SCREEN = { w: 480, h: 320 };
+
+/** Mirror of the widget's gridDefault: fills the screen with instruments at
+ *  natural size - last column is a full-band attitude ball, the rest fill
+ *  row-major by usefulness. @480x320 this is the classic 5-tile default. */
+function gridLayout(screen: { w: number; h: number }): TileDef[] {
+  const band = screen.h - TILE_TOP - BOTTOM_CHROME;
+  const cols = Math.max(2, Math.floor((screen.w - 8) / 152));
+  let pitch = Math.floor((screen.w - 8) / cols);
+  pitch -= pitch % 8;
+  const tw = pitch - 8;
+  const rows = Math.max(1, Math.floor((band + 8) / 104 + 0.5));
+  let th = Math.floor((band - (rows - 1) * 8) / rows);
+  th -= th % 8;
+  const ids = ['batt', 'home', 'alt', 'gps', 'spd', 'wind', 'link', 'timer',
+    'thr', 'imu', 'wp', 'compass', 'rng', 'txbat'];
+  const t: TileDef[] = [];
+  let n = 0;
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols - 1 && n < ids.length; c++, n++) {
+      t.push({ id: ids[n]!, x: 8 + c * pitch, y: TILE_TOP + r * (th + 8), w: tw, h: th, variant: 'default' });
+    }
+  }
+  t.push({ id: 'att', x: 8 + (cols - 1) * pitch, y: TILE_TOP, w: tw, h: band, variant: 'ball' });
+  return t;
+}
 
 interface TileDef {
   id: string;
@@ -84,15 +155,8 @@ interface TileDef {
   variant: string;
 }
 
-// Mirror of the Lua DEFAULT_LAYOUT. Everything on the 8px grid so snapped
-// drags line up with untouched tiles.
-const DEFAULT_LAYOUT: TileDef[] = [
-  { id: 'batt', x: 8, y: 48, w: 144, h: 96, variant: 'default' },
-  { id: 'home', x: 160, y: 48, w: 144, h: 96, variant: 'default' },
-  { id: 'alt', x: 8, y: 152, w: 144, h: 96, variant: 'default' },
-  { id: 'gps', x: 160, y: 152, w: 144, h: 96, variant: 'default' },
-  { id: 'att', x: 312, y: 48, w: 144, h: 200, variant: 'ball' },
-];
+// Mirror of the Lua DEFAULT_LAYOUT (the @480x320 grid = classic 5 tiles).
+const DEFAULT_LAYOUT: TileDef[] = gridLayout(REF_SCREEN);
 
 const TILE_META: Record<string, { label: string; minW: number; minH: number; variants?: string[] }> = {
   batt: { label: 'Battery', minW: 120, minH: 56, variants: ['default', 'icon'] },
@@ -782,30 +846,40 @@ function HudPreview({
       <div style={{ position: 'absolute', top: 0, width: '100%', height: 38, background: C.surface }}>
         {/* dim ghost of the EdgeTX corner affordance the radio draws there */}
         <div style={{ position: 'absolute', left: 4, top: 8, width: 38, height: 22, border: `1px dashed ${C.text3}`, borderRadius: 3, opacity: 0.35, fontSize: 8, color: C.text3, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>OS</div>
+        {/* narrow screens (320 portrait): dot alone carries arm state; the
+            word, TX chip and wordmark don't fit next to the mode pill
+            (mirrors the widget's `narrow` rule) */}
         <div style={{
-          position: 'absolute', left: 47, top: 14, width: 10, height: 10, borderRadius: 5,
+          position: 'absolute', left: 47, top: SCREEN_W < 400 ? 12 : 14,
+          width: SCREEN_W < 400 ? 14 : 10, height: SCREEN_W < 400 ? 14 : 10, borderRadius: 7,
           background: data.armed ? C.danger : 'transparent', border: data.armed ? 'none' : `1px solid ${C.text3}`,
         }} />
-        <div style={{ position: 'absolute', left: 64, top: 7, fontSize: 20, fontWeight: 700, color: data.armed ? C.danger : C.text2 }}>
-          {data.armed ? 'ARMED' : 'DISARMED'}
-        </div>
+        {SCREEN_W >= 400 && (
+          <div style={{ position: 'absolute', left: 64, top: 7, fontSize: 20, fontWeight: 700, color: data.armed ? C.danger : C.text2 }}>
+            {data.armed ? 'ARMED' : 'DISARMED'}
+          </div>
+        )}
         <div style={{ position: 'absolute', left: '50%', top: 5, transform: 'translateX(-50%)', background: C.pillOn, padding: '2px 10px', height: 28, display: 'flex', alignItems: 'center' }}>
           <span style={{ fontSize: 19, fontWeight: 600, color: C.success }}>{data.mode}</span>
         </div>
         {/* brand cluster as a flex row: everything centers on the same
             midline by construction. Light mode uses the dark-tile logo. */}
         <div style={{ position: 'absolute', right: 8, top: 0, height: 38, display: 'flex', alignItems: 'center', gap: 8 }}>
-          {/* TX battery chip (handset vitals; live values are radio-side) */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginRight: 4 }}>
-            <div style={{ position: 'relative', width: 14, height: 10, border: `1px solid ${C.text2}` }}>
-              <div style={{ position: 'absolute', left: 1, top: 1, bottom: 1, width: '72%', background: C.success }} />
-              <div style={{ position: 'absolute', right: -3, top: 2, width: 2, height: 4, background: C.text2 }} />
-            </div>
-            <span style={{ fontSize: 12, color: C.text2 }}>7.9</span>
-          </div>
+          {SCREEN_W >= 400 && (
+            <>
+              {/* TX battery chip (handset vitals; live values are radio-side) */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginRight: 4 }}>
+                <div style={{ position: 'relative', width: 14, height: 10, border: `1px solid ${C.text2}` }}>
+                  <div style={{ position: 'absolute', left: 1, top: 1, bottom: 1, width: '72%', background: C.success }} />
+                  <div style={{ position: 'absolute', right: -3, top: 2, width: 2, height: 4, background: C.text2 }} />
+                </div>
+                <span style={{ fontSize: 12, color: C.text2 }}>7.9</span>
+              </div>
+            </>
+          )}
           <span style={{ fontSize: 12, color: data.lq > 70 ? C.text2 : C.warn, marginRight: 4 }}>LQ {data.lq}</span>
           <img src={cfg.theme === 'light' ? logoLightUrl : logoUrl} style={{ width: 20, height: 20, borderRadius: cfg.theme === 'light' ? 4 : 0 }} alt="" />
-          <span style={{ fontSize: 12, color: C.text }}>ArduDeck</span>
+          {SCREEN_W >= 400 && <span style={{ fontSize: 12, color: C.text }}>ArduDeck</span>}
         </div>
       </div>
 
@@ -882,12 +956,293 @@ function HudPreview({
 
 // Studio state survives view switches and app restarts; a detected card's
 // config still wins when one is loaded.
+/** Battery context handed to slot formatters (mirrors effBattery/battPct). */
+interface BwBatt { cells: number; pct: number | null }
+
+/** Data-slot fields for the B&W script. KEEP IDS IN SYNC with FIELDS in
+ *  SDBW/.../ArduDk.lua. */
+const BW_FIELDS: Record<string, { label: string; fmt: (d: PreviewData, b: BwBatt) => string }> = {
+  volt: { label: 'Voltage', fmt: (d) => `${d.voltV.toFixed(1)}V` },
+  cellv: { label: 'Cell voltage', fmt: (d, b) => (b.cells > 0 ? `${(d.voltV / b.cells).toFixed(2)}v/c` : '--v/c') },
+  pct: { label: 'Battery %', fmt: (_d, b) => (b.pct != null ? `${Math.round(b.pct)}%` : '--%') },
+  cellpct: { label: 'Cell V + %', fmt: (d, b) => `${b.cells > 0 ? `${(d.voltV / b.cells).toFixed(2)}v/c` : ''}${b.pct != null ? ` ${Math.round(b.pct)}%` : ''}` || '--' },
+  curr: { label: 'Current', fmt: (d) => `${d.currA.toFixed(1)}A` },
+  mah: { label: 'mAh used', fmt: (d) => `${d.mahUsed}mAh` },
+  alt: { label: 'Altitude', fmt: (d) => `A${Math.round(d.altM)}m` },
+  spd: { label: 'Ground speed', fmt: (d) => `S${d.hspd.toFixed(1)}` },
+  vspd: { label: 'Climb rate', fmt: (d) => `V${d.vspd >= 0 ? '+' : ''}${d.vspd.toFixed(1)}` },
+  sat: { label: 'Sats / fix', fmt: (d) => `${d.sats}s${d.fix >= 3 ? '3D' : d.fix === 2 ? '2D' : '--'}` },
+  home: { label: 'Home distance', fmt: (d) => `H${Math.round(d.homeDist)}m` },
+  wind: { label: 'Wind', fmt: (d) => `w${d.windMs.toFixed(1)}m` },
+  hdop: { label: 'HDOP', fmt: (d) => `hd${d.hdop.toFixed(1)}` },
+  rng: { label: 'Rangefinder', fmt: (d) => `r${d.range.toFixed(1)}m` },
+  imu: { label: 'IMU temp', fmt: (d) => `i${Math.round(d.imuTemp)}C` },
+  wp: { label: 'Waypoint', fmt: (d) => (d.wpNum > 0 ? `wp${d.wpNum} ${Math.round(d.wpDist)}m` : 'wp--') },
+  thr: { label: 'Throttle', fmt: (d) => `t${Math.round(d.throttle)}%` },
+  yaw: { label: 'Heading', fmt: (d) => String(Math.round(d.yaw) % 360).padStart(3, '0') },
+  none: { label: '(empty)', fmt: () => '' },
+};
+
+/** Large top-left readout choices (mirrors BIG in ArduDk.lua). */
+const BW_BIG: Record<string, { label: string; fmt: (d: PreviewData, b: BwBatt) => [string, string] }> = {
+  volt: { label: 'Voltage', fmt: (d) => [d.voltV.toFixed(1), 'V'] },
+  pct: { label: 'Battery %', fmt: (_d, b) => [b.pct != null ? String(Math.round(b.pct)) : '--', '%'] },
+  alt: { label: 'Altitude', fmt: (d) => [String(Math.round(d.altM)), 'm'] },
+  spd: { label: 'Ground speed', fmt: (d) => [d.hspd.toFixed(1), 'm/s'] },
+};
+
+const BW_MONO = 'ui-monospace, SFMono-Regular, monospace';
+const BW_INK = '#242b1f';
+const BW_GLASS = '#c9d2bd';
+const BW_FIELD_OPTIONS = Object.entries(BW_FIELDS).map(([v, f]) => [v, f.label] as [string, string]);
+
+/** MODULE-scope (stable identity): defined inside BwPreview these would be
+ *  a new component type on every telemetry re-render, remounting the
+ *  <select> and instantly closing its just-opened dropdown. */
+function BwPick({ s, SML, x, y, w, value, options, onPick }: {
+  s: number; SML: number; x: number; y: number; w: number; value: string;
+  options: Array<[string, string]>; onPick: (v: string) => void;
+}) {
+  return (
+    <select
+      value={value}
+      onClick={(e) => e.stopPropagation()}
+      onChange={(e) => onPick(e.target.value)}
+      style={{
+        position: 'absolute', left: x * s, top: y * s - 2, width: w * s,
+        fontSize: SML - 2, fontFamily: BW_MONO, fontWeight: 700, color: BW_INK,
+        background: 'rgba(255,255,255,0.6)', border: `1px dashed ${BW_INK}`, borderRadius: 2,
+      }}
+    >
+      {options.map(([v, label]) => <option key={v} value={v}>{label}</option>)}
+    </select>
+  );
+}
+
+function BwSlotRows({ s, SML, list, listKey, x, count, i0 = 0, editing, data, batt, onSet }: {
+  s: number; SML: number; list: string[]; listKey: 'left' | 'cslots' | 'slots' | 'wslots';
+  x: number; count: number; i0?: number; editing: boolean;
+  data: PreviewData; batt: BwBatt; onSet: (i: number, v: string) => void;
+}) {
+  return (
+    <>
+      {Array.from({ length: count }, (_, i) => {
+        const id = list[i0 + i] ?? 'none';
+        const y = (listKey === 'left' ? 27 : 9) + i * 8;
+        return editing ? (
+          <BwPick key={i} s={s} SML={SML} x={x} y={y} w={42} value={id}
+            options={BW_FIELD_OPTIONS} onPick={(v) => onSet(i0 + i, v)} />
+        ) : (
+          <div key={i} style={{
+            position: 'absolute', left: x * s, top: (listKey === 'left' && i === 3 ? 49 : y) * s,
+            fontSize: SML, lineHeight: 1, fontFamily: BW_MONO, fontWeight: 700,
+            color: BW_INK, whiteSpace: 'nowrap',
+          }}>{BW_FIELDS[id]?.fmt(data, batt) ?? ''}</div>
+        );
+      })}
+    </>
+  );
+}
+
+/** Full B&W layout config (everything between the strips is a slot). */
+interface BwLayout {
+  big: string;
+  left: string[];
+  center: 'horizon' | 'slots';
+  cslots: string[];
+  slots: string[];
+  wslots: string[];
+}
+const DEFAULT_BW_LAYOUT: BwLayout = {
+  big: 'volt',
+  left: ['cellpct', 'curr', 'mah', 'thr'],
+  center: 'horizon',
+  cslots: ['alt', 'spd', 'vspd', 'sat', 'home', 'wind', 'hdop', 'rng', 'wp', 'yaw'],
+  slots: ['alt', 'spd', 'vspd', 'sat', 'home'],
+  wslots: ['wind', 'hdop', 'rng', 'imu', 'wp'],
+};
+
+/** 1-bit mirror of the B&W telemetry script (SDBW/.../ArduDk.lua): dark
+ *  pixels on light LCD glass (that's what these displays ARE), fixed
+ *  chrome + editable data slots, click flips pages like the radio's
+ *  rotary. Keep positions in sync with the script's drawFly/drawNav. */
+function BwPreview({ mode, data, cfg, screenW, editing, layout, onLayout }: {
+  mode: PreviewMode; data: PreviewData; cfg: HudCfg; screenW: number;
+  editing: boolean; layout: BwLayout;
+  onLayout: (next: BwLayout) => void;
+}) {
+  const [page, setPage] = useState(1);
+  const s = screenW > 150 ? 2 : 3; // 128->384px, 212->424px: fits the column
+  const INK = '#242b1f';
+  const GLASS = '#c9d2bd';
+  const SML = Math.round(6.6 * s);
+  const batt: BwBatt = {
+    cells: cfg.cells > 0 ? cfg.cells : (data.voltV > 6 ? Math.floor(data.voltV / 4.3) + 1 : 0),
+    pct: cfg.capacity > 0
+      ? Math.max(0, Math.min(100, ((cfg.capacity - data.mahUsed) / cfg.capacity) * 100))
+      : data.remainingPct,
+  };
+  const mono = 'ui-monospace, SFMono-Regular, monospace';
+  const Txt = ({ x, y, size, inv, children }: { x: number; y: number; size?: number; inv?: boolean; children: React.ReactNode }) => (
+    <div style={{
+      position: 'absolute', left: x * s, top: y * s, fontSize: size ?? SML, lineHeight: 1,
+      fontFamily: mono, fontWeight: 700,
+      color: inv ? GLASS : INK, whiteSpace: 'nowrap',
+    }}>{children}</div>
+  );
+  const Strip = ({ y }: { y: number }) => (
+    <div style={{ position: 'absolute', left: 0, top: y * s, width: '100%', height: 8 * s, background: INK }} />
+  );
+  const setList = (key: 'left' | 'cslots' | 'slots' | 'wslots', i: number, v: string) => {
+    const next = [...layout[key]];
+    next[i] = v;
+    onLayout({ ...layout, [key]: next });
+  };
+  const timer = `${String(Math.floor(data.flightSecs / 60)).padStart(2, '0')}:${String(data.flightSecs % 60).padStart(2, '0')}`;
+  const ladder = mode === 'no-link' ? ['NO LINK', 'check RX power / binding']
+    : mode === 'no-mavlink' ? ['NO MAVLINK', 'ELRS MAVLink mode off?']
+    : mode === 'streams-off' ? ['STREAMS OFF', 'connect ArduDeck once'] : null;
+  // horizon geometry, same math as the Lua
+  const wide = screenW > 150;
+  const hx = wide ? 62 : 50;
+  const hw = wide ? 64 : 42;
+  const hcx = (hx + hw / 2) * s;
+  const hcy = (9 + 23) * s;
+  const roll = (data.roll * Math.PI) / 180;
+  const len = (hw / 2 - 3) * s;
+  const pmax = Math.max(0, (23 - 2) * s - Math.abs(Math.sin(roll)) * len);
+  const p = Math.max(-pmax, Math.min(pmax, (data.pitch / 60) * 23 * s));
+  const ca = Math.cos(roll);
+  const sa = Math.sin(roll);
+  const homeA = ((data.homeBearing - data.yaw) * Math.PI) / 180;
+  const rx = hx + hw + 4;
+  const [bigNum, bigUnit] = (BW_BIG[layout.big] ?? BW_BIG.volt!).fmt(data, batt);
+  const Arrow = ({ cx, cy, r }: { cx: number; cy: number; r: number }) => {
+    const tx = (cx + Math.sin(homeA) * r) * s;
+    const ty = (cy - Math.cos(homeA) * r) * s;
+    return (
+      <svg style={{ position: 'absolute', left: 0, top: 0, pointerEvents: 'none' }} width={screenW * s} height={64 * s}>
+        {[2.6, -2.6].map((o) => (
+          <line key={o} x1={(cx + Math.sin(homeA + o) * r) * s} y1={(cy - Math.cos(homeA + o) * r) * s}
+            x2={tx} y2={ty} stroke={INK} strokeWidth={s} />
+        ))}
+        <line x1={cx * s} y1={cy * s} x2={tx} y2={ty} stroke={INK} strokeWidth={s} />
+      </svg>
+    );
+  };
+  return (
+    <div>
+      {/* bezel as padding on a wrapper: border-box would otherwise eat 12px
+          of the 64-row canvas and clip the bottom strip */}
+      <div style={{ display: 'inline-block', padding: 6, background: '#1b1d1a', borderRadius: 8, cursor: 'pointer' }}
+        onClick={() => setPage(page === 1 ? 2 : 1)}
+        data-tip="Click to flip pages (rotary / +/- on the radio)"
+      >
+        <div style={{
+          position: 'relative', width: screenW * s, height: 64 * s, background: GLASS,
+          overflow: 'hidden', boxShadow: 'inset 0 0 18px rgba(30,40,20,0.25)',
+        }}>
+          {ladder ? (
+            <>
+              <Txt x={screenW / 2 - ladder[0]!.length * 3.4} y={18} size={SML * 2}>{ladder[0]}</Txt>
+              <Txt x={screenW / 2 - ladder[1]!.length * 1.7} y={40}>{ladder[1]}</Txt>
+              <Txt x={1} y={56.6}>ArduDeck</Txt>
+            </>
+          ) : (
+            <>
+              <Strip y={0} />
+              <Txt x={1} y={0.6} inv>{data.mode}</Txt>
+              <Txt x={screenW / 2 - 12} y={0.6} inv>{timer}</Txt>
+              <Txt x={screenW - 24} y={0.6} inv>RS{data.lq}</Txt>
+              <Strip y={56} />
+              <Txt x={1} y={56.6} inv>
+                {data.messages[0]?.text.slice(0, Math.floor(screenW / 5))
+                  ?? `${cfg.name || 'ArduDeck'}  ${data.armed ? 'ARMED' : 'DISARMED'}`}
+              </Txt>
+              {page === 1 ? (
+                <>
+                  {editing ? (
+                    <BwPick s={s} SML={SML} x={0} y={12} w={46} value={layout.big}
+                      options={Object.entries(BW_BIG).map(([v, b]) => [v, b.label] as [string, string])}
+                      onPick={(v) => onLayout({ ...layout, big: v })} />
+                  ) : (
+                    <>
+                      <Txt x={0} y={10} size={SML * 2.2}>{bigNum}</Txt>
+                      <Txt x={44} y={10}>{bigUnit}</Txt>
+                    </>
+                  )}
+                  <BwSlotRows s={s} SML={SML} list={layout.left} listKey="left" x={0} count={4}
+                    editing={editing} data={data} batt={batt} onSet={(i, v) => setList('left', i, v)} />
+                  {layout.center === 'slots' ? (
+                    <>
+                      <BwSlotRows s={s} SML={SML} list={layout.cslots} listKey="cslots" x={hx} count={5}
+                        editing={editing} data={data} batt={batt} onSet={(i, v) => setList('cslots', i, v)} />
+                      <BwSlotRows s={s} SML={SML} list={layout.cslots} listKey="cslots" x={hx + hw / 2 + 2} count={5} i0={5}
+                        editing={editing} data={data} batt={batt} onSet={(i, v) => setList('cslots', i, v)} />
+                    </>
+                  ) : (
+                    <>
+                      {/* artificial horizon */}
+                      <div style={{ position: 'absolute', left: hx * s, top: 9 * s, width: hw * s, height: 46 * s, border: `${s}px solid ${INK}` }} />
+                      <svg style={{ position: 'absolute', left: 0, top: 0, pointerEvents: 'none' }} width={screenW * s} height={64 * s}>
+                        <line x1={hcx - ca * len + sa * p} y1={hcy + sa * len + ca * p}
+                          x2={hcx + ca * len + sa * p} y2={hcy - sa * len + ca * p} stroke={INK} strokeWidth={s} />
+                        <line x1={hcx - 5 * s} y1={hcy} x2={hcx - 2 * s} y2={hcy} stroke={INK} strokeWidth={s} />
+                        <line x1={hcx + 2 * s} y1={hcy} x2={hcx + 5 * s} y2={hcy} stroke={INK} strokeWidth={s} />
+                        <rect x={hcx - s} y={hcy - s} width={2 * s} height={2 * s} fill={INK} />
+                      </svg>
+                      <div style={{ position: 'absolute', left: hcx - 10 * s, top: (9 + 46 - 8) * s, width: 20 * s, height: 8 * s, background: INK }} />
+                      <Txt x={hx + hw / 2 - 8} y={9 + 46 - 7.4} inv>{String(Math.round(data.yaw) % 360).padStart(3, '0')}</Txt>
+                    </>
+                  )}
+                  {editing && (
+                    <BwPick s={s} SML={SML} x={hx} y={layout.center === 'slots' ? 51 : 22} w={hw} value={layout.center}
+                      options={[['horizon', 'Horizon'], ['slots', 'Data slots']]}
+                      onPick={(v) => onLayout({ ...layout, center: v as BwLayout['center'] })} />
+                  )}
+                  <BwSlotRows s={s} SML={SML} list={layout.slots} listKey="slots" x={rx} count={5}
+                    editing={editing} data={data} batt={batt} onSet={(i, v) => setList('slots', i, v)} />
+                  {!editing && data.homeDist > 0 && <Arrow cx={rx + 8} cy={52} r={5} />}
+                  {wide && <BwSlotRows s={s} SML={SML} list={layout.wslots} listKey="wslots" x={rx + 46} count={5}
+                    editing={editing} data={data} batt={batt} onSet={(i, v) => setList('wslots', i, v)} />}
+                </>
+              ) : (
+                <>
+                  <Txt x={0} y={10} size={SML * 1.2}>{data.lat != null ? data.lat.toFixed(6) : 'no position'}</Txt>
+                  <Txt x={0} y={20} size={SML * 1.2}>{data.lon != null ? data.lon.toFixed(6) : ''}</Txt>
+                  <Txt x={0} y={30}>{`home ${Math.round(data.homeDist)}m brg ${Math.round(data.homeBearing)}`}</Txt>
+                  <Txt x={0} y={38}>{data.wpNum > 0 ? `wp ${data.wpNum}  ${Math.round(data.wpDist)}m brg ${Math.round(data.wpBearing)}` : 'no mission wp'}</Txt>
+                  <Txt x={0} y={46}>{`wind ${data.windMs.toFixed(1)}m/s ${Math.round(data.windDirDeg)}  thr ${Math.round(data.throttle)}%`}</Txt>
+                  <Txt x={screenW - 50} y={10}>{`alt ${Math.round(data.altM)}m`}</Txt>
+                  <Txt x={screenW - 50} y={18}>{`hdp ${data.hdop.toFixed(1)}`}</Txt>
+                  <Txt x={screenW - 50} y={26}>{`vsp ${data.vspd >= 0 ? '+' : ''}${data.vspd.toFixed(1)}`}</Txt>
+                  {data.homeDist > 0 && <Arrow cx={screenW - 40} cy={40} r={6} />}
+                </>
+              )}
+            </>
+          )}
+        </div>
+      </div>
+      <p className="mt-1.5 text-[11px] text-content-tertiary" style={{ maxWidth: screenW * s + 12 }}>
+        Page {page}/2, click to flip (rotary or +/- on the radio). Everything between the status strips is an editable slot: the big readout, both side columns, and the center panel (horizon or two more data columns). Voice alerts and the diagnostic ladder work the same as on color radios.
+        <span className="text-amber-400"> Experimental: not yet verified on real monochrome hardware.</span>
+      </p>
+    </div>
+  );
+}
+
 const STUDIO_STORAGE_KEY = 'radio-hud.studio';
 
 interface PersistedStudio {
   cfg: HudCfg;
   pages: TileDef[][];
   mapCenter: { lat: number; lon: number };
+  /** selected radio screen class; absent in pre-multiscreen saves (=TX15) */
+  screen?: { w: number; h: number };
+  /** B&W script slot layout (older saves may carry bwSlots/bwWslots only) */
+  bw?: BwLayout;
+  bwSlots?: string[];
+  bwWslots?: string[];
 }
 
 function loadPersistedStudio(): PersistedStudio | null {
@@ -905,8 +1260,29 @@ function loadPersistedStudio(): PersistedStudio | null {
 export function RadioHudView() {
   const persisted = useMemo(loadPersistedStudio, []);
   const [cfg, setCfg] = useState<HudCfg>(persisted?.cfg ?? DEFAULT_CFG);
+  const [screen, setScreen] = useState<{ w: number; h: number }>(persisted?.screen ?? REF_SCREEN);
+  // WYSIWYG canvas: the module geometry follows the selected radio model
+  SCREEN_W = screen.w;
+  SCREEN_H = screen.h;
+  TICKER_TOP = screen.h - 66;
+  const isBw = !!SCREEN_MODELS.find((m) => m.w === screen.w && m.h === screen.h)?.bw;
+  const [bw, setBw] = useState<BwLayout>(persisted?.bw ?? {
+    ...DEFAULT_BW_LAYOUT,
+    // migrate pre-full-slot saves that only carried the right columns
+    ...(persisted?.bwSlots ? { slots: persisted.bwSlots } : {}),
+    ...(persisted?.bwWslots ? { wslots: persisted.bwWslots } : {}),
+  });
   // layout pages; the radio swipes between them (or pins via the Page option)
   const [pages, setPages] = useState<TileDef[][]>(persisted?.pages ?? [DEFAULT_LAYOUT]);
+  // switching radio model rescales every page (same math as the widget);
+  // B&W targets have a fixed script layout, so tiles pass through untouched
+  // and are still there when the user switches back to a color model
+  const changeScreen = (m: ScreenModel) => {
+    if (!m.bw && !isBw) {
+      setPages((prev) => prev.map((p) => p.map((t) => fitTile(t, screen, m))));
+    }
+    setScreen({ w: m.w, h: m.h });
+  };
   const [activePage, setActivePage] = useState(0);
   const tiles = pages[activePage] ?? pages[0]!;
   const setTiles = useCallback((next: TileDef[]) => {
@@ -939,11 +1315,11 @@ export function RadioHudView() {
   // persist studio state (cfg, pages, field center) across view switches
   useEffect(() => {
     try {
-      localStorage.setItem(STUDIO_STORAGE_KEY, JSON.stringify({ cfg, pages, mapCenter } satisfies PersistedStudio));
+      localStorage.setItem(STUDIO_STORAGE_KEY, JSON.stringify({ cfg, pages, mapCenter, screen, bw } satisfies PersistedStudio));
     } catch {
       // storage full/unavailable; state simply won't survive a reload
     }
-  }, [cfg, pages, mapCenter]);
+  }, [cfg, pages, mapCenter, screen, bw]);
 
   // default the field center to the vehicle's position when one appears
   useEffect(() => {
@@ -1020,8 +1396,9 @@ export function RadioHudView() {
 
   const loadedFromCard = useRef(false);
 
-  // Preview scale: the canvas is a fixed 480x320; on narrow windows we
-  // scale it down to the column width so it never overflows or wraps away.
+  // Preview scale: the canvas is the selected radio's resolution; on narrow
+  // windows we scale it down to the column width so it never overflows.
+  // Re-runs on model change (observe() fires once immediately).
   const previewBoxRef = useRef<HTMLDivElement>(null);
   const [previewScale, setPreviewScale] = useState(1);
   useEffect(() => {
@@ -1032,7 +1409,7 @@ export function RadioHudView() {
     });
     observer.observe(el);
     return () => observer.disconnect();
-  }, []);
+  }, [screen]);
 
   const loadFromCard = useCallback(async (volumePath: string) => {
     const flat = await window.electronAPI.edgetxHudConfigGet(volumePath);
@@ -1065,6 +1442,20 @@ export function RadioHudView() {
     if (parsedTiles.length > 0) {
       setPages(parsedTiles);
       setActivePage(0);
+      // tiles on the card are authored for the screen stamped in the cfg
+      // (pre-multiscreen cards carry none = TX15); follow it
+      const sm = (flat.screen ?? '480x320').match(/^(\d+)x(\d+)$/);
+      if (sm) setScreen({ w: Number(sm[1]), h: Number(sm[2]) });
+    }
+    if (flat.bw_slot1 || flat.bw_big) {
+      setBw((prev) => ({
+        big: flat.bw_big ?? prev.big,
+        center: flat.bw_center === 'slots' ? 'slots' : 'horizon',
+        left: prev.left.map((d, i) => flat[`bw_l${i + 1}`] ?? d),
+        cslots: prev.cslots.map((d, i) => flat[`bw_c${i + 1}`] ?? d),
+        slots: prev.slots.map((d, i) => flat[`bw_slot${i + 1}`] ?? d),
+        wslots: prev.wslots.map((d, i) => flat[`bw_wslot${i + 1}`] ?? d),
+      }));
     }
     return true;
   }, []);
@@ -1153,7 +1544,8 @@ export function RadioHudView() {
     // Always refresh the widget files: bundled source, instant, and it
     // guarantees the radio runs the same code this preview mirrors.
     setApplyState('Installing widget…');
-    const install = await window.electronAPI.edgetxInstall(target.volumePath, 'ardudeck-hud', 'c480x320');
+    const variant = SCREEN_MODELS.find((m) => m.w === screen.w && m.h === screen.h)?.variant ?? 'c480x320';
+    const install = await window.electronAPI.edgetxInstall(target.volumePath, 'ardudeck-hud', variant);
     if (!install.success) {
       setApplyState(null);
       setApplyError(install.error ?? 'Widget install failed');
@@ -1170,6 +1562,17 @@ export function RadioHudView() {
     if (cfg.capacity > 0) cfgOut.capacity = cfg.capacity;
     cfgOut.demo = cfg.demo ? 1 : 0;
     cfgOut.theme = cfg.theme;
+    // authored canvas: the widget rescales tiles if its LCD differs (e.g.
+    // the SD card later moves to another radio)
+    cfgOut.screen = `${screen.w}x${screen.h}`;
+    if (isBw) {
+      cfgOut.bw_big = bw.big;
+      cfgOut.bw_center = bw.center;
+      bw.left.forEach((id, i) => { cfgOut[`bw_l${i + 1}`] = id; });
+      bw.cslots.forEach((id, i) => { cfgOut[`bw_c${i + 1}`] = id; });
+      bw.slots.forEach((id, i) => { cfgOut[`bw_slot${i + 1}`] = id; });
+      bw.wslots.forEach((id, i) => { cfgOut[`bw_wslot${i + 1}`] = id; });
+    }
     pages.forEach((pageTiles, p) => {
       const prefix = p === 0 ? 'tile' : `p${p + 1}_tile`;
       pageTiles.forEach((t, i) => {
@@ -1187,7 +1590,7 @@ export function RadioHudView() {
     const missionWps = useMissionStore.getState().missionItems
       .filter((i) => i.latitude !== 0 && i.longitude !== 0)
       .map((i) => ({ seq: i.seq, lat: i.latitude, lon: i.longitude }));
-    if ((fieldMaps && fieldMaps.length > 0) || missionWps.length > 0) {
+    if (!isBw && ((fieldMaps && fieldMaps.length > 0) || missionWps.length > 0)) {
       setApplyState('Writing field maps…');
       const mapsResult = await window.electronAPI.edgetxHudMapsWrite(target.volumePath, fieldMaps ?? [], missionWps);
       if (!mapsResult.ok) {
@@ -1265,7 +1668,7 @@ export function RadioHudView() {
           {/* left column: preview + field maps below it */}
           <div className="space-y-2 w-full lg:w-auto max-w-[512px]">
             <div className="flex items-center gap-2 flex-wrap">
-              <span className="text-xs text-content-secondary" data-tip="Faithful mirror of layout and colors at 480x320 (TX15 class); the radio renders its own font">Preview</span>
+              <span className="text-xs text-content-secondary" data-tip="Faithful mirror of layout and colors at the selected radio's resolution; the radio renders its own font">Preview</span>
               <select
                 value={previewMode}
                 onChange={(e) => setPreviewMode(e.target.value as PreviewMode)}
@@ -1279,31 +1682,61 @@ export function RadioHudView() {
                 <option value="no-mavlink">State: NO MAVLINK</option>
                 <option value="streams-off">State: STREAMS OFF</option>
               </select>
+              <select
+                value={`${screen.w}x${screen.h}`}
+                onChange={(e) => {
+                  const m = SCREEN_MODELS.find((sm) => `${sm.w}x${sm.h}` === e.target.value);
+                  if (m) changeScreen(m);
+                }}
+                data-tour="hud-model"
+                data-tip="Radio model - layouts rescale to its screen"
+                className="px-2 py-1 text-xs bg-surface-input border border-subtle rounded text-content"
+              >
+                {SCREEN_MODELS.map((m) => (
+                  <option key={m.variant} value={`${m.w}x${m.h}`}>{m.label}</option>
+                ))}
+              </select>
+              {isBw && (
+                <span
+                  data-tip="B&W support has not been flown on real hardware yet - fonts and spacing may need a nudge after the first field test. Please report what you see."
+                  className="px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide rounded-full bg-amber-500/15 text-amber-400 border border-amber-500/40"
+                >
+                  Experimental
+                </span>
+              )}
               <button
                 onClick={() => setEditing(!editing)}
+                data-tour="hud-edit"
                 className={`px-3 py-1 text-xs rounded border transition-colors ${editing
                   ? 'bg-teal-500/20 text-teal-300 border-teal-500/40'
                   : 'bg-surface-input text-content-secondary border-subtle hover:text-content'}`}
               >
-                {editing ? 'Done editing' : 'Edit layout'}
+                {editing ? 'Done editing' : isBw ? 'Edit slots' : 'Edit layout'}
               </button>
-              {editing && (
+              {editing && !isBw && (
                 <select
                   value=""
                   onChange={(e) => {
+                    if (e.target.value === '__grid') {
+                      setTiles(gridLayout(screen));
+                      return;
+                    }
                     const preset = LAYOUT_PRESETS[e.target.value];
-                    if (preset) setTiles(preset.map((t) => ({ ...t })));
+                    if (preset) setTiles(preset.map((t) => fitTile(t, REF_SCREEN, screen)));
                   }}
                   className="px-2 py-1 text-xs bg-surface-input border border-subtle rounded text-content-secondary"
                 >
                   <option value="" disabled>Preset…</option>
+                  <option value="__grid">Auto grid (fill this screen)</option>
                   {Object.keys(LAYOUT_PRESETS).map((name) => (
                     <option key={name} value={name}>{name}</option>
                   ))}
                 </select>
               )}
 
-              {/* page tabs: the radio swipes between these */}
+              {/* page tabs: the radio swipes between these (color only -
+                  the B&W script has its own 2 fixed pages) */}
+              {!isBw && (
               <div className="flex items-center gap-1 ml-auto">
                 {pages.map((_, i) => (
                   <button
@@ -1341,11 +1774,17 @@ export function RadioHudView() {
                         >
                           Empty page
                         </button>
+                        <button
+                          onClick={() => addPage(gridLayout(screen))}
+                          className="w-full text-left px-2 py-1.5 text-xs text-content hover:bg-surface-input rounded"
+                        >
+                          Auto grid (fill this screen)
+                        </button>
                         <div className="my-1 border-t border-subtle" />
                         {Object.entries(LAYOUT_PRESETS).map(([name, preset]) => (
                           <button
                             key={name}
-                            onClick={() => addPage(preset.map((t) => ({ ...t })))}
+                            onClick={() => addPage(preset.map((t) => fitTile(t, REF_SCREEN, screen)))}
                             className="w-full text-left px-2 py-1.5 text-xs text-content-secondary hover:text-content hover:bg-surface-input rounded"
                           >
                             {name}
@@ -1369,17 +1808,23 @@ export function RadioHudView() {
                   </button>
                 )}
               </div>
+              )}
             </div>
 
-            {/* scales the fixed 480x320 canvas down to the available width */}
-            <div ref={previewBoxRef} className="rounded-lg overflow-hidden border border-subtle shadow-lg"
-              style={{ width: '100%', maxWidth: SCREEN_W, height: SCREEN_H * previewScale }}>
-              <div style={{ transform: `scale(${previewScale})`, transformOrigin: 'top left', width: SCREEN_W, height: SCREEN_H }}>
-                <HudPreview mode={previewMode} data={previewData} cfg={previewCfg} tiles={tiles} editing={editing} onTilesChange={setTiles} />
+            {isBw ? (
+              <BwPreview mode={previewMode} data={previewData} cfg={previewCfg} screenW={screen.w}
+                editing={editing} layout={bw} onLayout={setBw} />
+            ) : (
+              /* scales the native canvas down to the available width */
+              <div ref={previewBoxRef} className="rounded-lg overflow-hidden border border-subtle shadow-lg"
+                style={{ width: '100%', maxWidth: SCREEN_W, height: SCREEN_H * previewScale }}>
+                <div style={{ transform: `scale(${previewScale})`, transformOrigin: 'top left', width: SCREEN_W, height: SCREEN_H }}>
+                  <HudPreview mode={previewMode} data={previewData} cfg={previewCfg} tiles={tiles} editing={editing} onTilesChange={setTiles} />
+                </div>
               </div>
-            </div>
+            )}
 
-            {editing && (
+            {editing && !isBw && (
               <div className="flex items-center gap-1.5 flex-wrap" style={{ maxWidth: SCREEN_W }}>
                 <span className="text-[11px] text-content-tertiary">Add tile:</span>
                 {unplacedTiles.map((id) => (
@@ -1401,8 +1846,10 @@ export function RadioHudView() {
               </div>
             )}
 
-            {/* field maps live under the preview - same width, no dead space */}
-            <div className="bg-surface-raised border border-subtle rounded-xl p-3 space-y-2" style={{ maxWidth: SCREEN_W }}>
+            {/* field maps live under the preview - same width, no dead
+                space. B&W radios have no map tile, so no card. */}
+            {!isBw && (
+            <div data-tour="hud-maps" className="bg-surface-raised border border-subtle rounded-xl p-3 space-y-2" style={{ maxWidth: SCREEN_W }}>
               <div className="flex items-center justify-between gap-2 flex-wrap">
                 <h3 className="text-sm font-medium text-content"
                   data-tip="Offline satellite images for the Map tile. Click your field; the rings show each zoom's coverage">
@@ -1457,11 +1904,12 @@ export function RadioHudView() {
               </div>
               {mapGenState && <p className="text-[11px] text-content-secondary">{mapGenState}</p>}
             </div>
+            )}
           </div>
 
           {/* right column: dense config */}
           <div className="w-full lg:flex-1 lg:min-w-[300px] max-w-[512px] lg:max-w-md">
-            <div className="bg-surface-raised border border-subtle rounded-xl p-3 space-y-2.5">
+            <div data-tour="hud-config" className="bg-surface-raised border border-subtle rounded-xl p-3 space-y-2.5">
               <div className="flex items-center justify-between">
                 <h3 className="text-sm font-medium text-content"
                   data-tip="Everything here is an override. Left on auto, the widget configures itself from the vehicle's telemetry - no ArduDeck or FC connection needed">
@@ -1578,6 +2026,7 @@ export function RadioHudView() {
         <button
           onClick={handleApply}
           disabled={applyState !== null && applyState.endsWith('…')}
+          data-tour="hud-apply"
           data-tip="Install/refresh the widget and write this config to the SD card. Afterwards on the radio: App layout, full-screen widget, ArduDeck"
           className="px-4 py-1.5 text-sm whitespace-nowrap bg-blue-600 hover:bg-blue-500 disabled:opacity-60 text-white rounded-lg transition-colors"
         >

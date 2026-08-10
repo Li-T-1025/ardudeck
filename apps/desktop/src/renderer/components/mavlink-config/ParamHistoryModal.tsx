@@ -113,7 +113,7 @@ const ParamHistoryModal: React.FC<Props> = ({ boardUid, boardName, onClose, show
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-      <div className="bg-surface border rounded-xl shadow-2xl max-w-2xl w-full mx-4 max-h-[80vh] flex flex-col">
+      <div className="bg-surface-solid border rounded-xl shadow-2xl max-w-2xl w-full mx-4 max-h-[80vh] flex flex-col">
         {/* Header */}
         <div className="px-6 py-4 border-b border-subtle flex items-center justify-between">
           <div className="flex items-center gap-3">

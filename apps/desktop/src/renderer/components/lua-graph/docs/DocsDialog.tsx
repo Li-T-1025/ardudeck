@@ -42,7 +42,7 @@ export function DocsDialog({ onClose }: DocsDialogProps) {
 
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50">
-      <div className="bg-surface rounded-2xl border border-subtle w-full max-w-4xl mx-4 shadow-2xl overflow-hidden flex flex-col max-h-[85vh]">
+      <div className="bg-surface-solid rounded-2xl border border-subtle w-full max-w-4xl mx-4 shadow-2xl overflow-hidden flex flex-col max-h-[85vh]">
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-subtle shrink-0">
           <div className="flex items-center gap-3">

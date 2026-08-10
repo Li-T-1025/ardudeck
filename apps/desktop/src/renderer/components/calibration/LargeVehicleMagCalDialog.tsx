@@ -78,7 +78,7 @@ export function LargeVehicleMagCalDialog({ onClose }: LargeVehicleMagCalDialogPr
       onKeyDown={onKeyDown}
     >
       <div
-        className="bg-surface-raised rounded-xl border border-subtle w-full max-w-md mx-4 shadow-2xl"
+        className="bg-surface-solid rounded-xl border border-subtle w-full max-w-md mx-4 shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}

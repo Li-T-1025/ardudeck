@@ -700,6 +700,7 @@ function LinkInstrument(): JSX.Element {
   const connected = useLinkUp();
   const rssi = useTelemetryStore((s) => s.rcChannels.rssi);
   const chancount = useTelemetryStore((s) => s.rcChannels.chancount);
+  const radioStatus = useTelemetryStore((s) => s.radioStatus);
   const age = useHeartbeatAgeMs();
 
   const dotColor =
@@ -709,8 +710,13 @@ function LinkInstrument(): JSX.Element {
         ? GAUGE_COLORS.amber
         : GAUGE_COLORS.green;
   // 255 = "unknown" per MAVLink; 0 chancount means no RC data at all.
-  const rssiKnown = connected && chancount > 0 && rssi !== 255;
-  const rssiPct = Math.round((Math.min(rssi, 254) / 254) * 100);
+  // RC-side RSSI first; fall back to the telemetry modem's RADIO_STATUS
+  // (SiK/RFD900/ELRS) when the FC reports no usable RC RSSI.
+  const rcRssiKnown = connected && chancount > 0 && rssi !== 255;
+  const radioRssiKnown = connected && radioStatus !== null && radioStatus.rssi !== 255;
+  const rssiKnown = rcRssiKnown || radioRssiKnown;
+  const effectiveRssi = rcRssiKnown ? rssi : radioStatus?.rssi ?? 0;
+  const rssiPct = Math.round((Math.min(effectiveRssi, 254) / 254) * 100);
 
   return (
     <InstrumentStrip label="Link">

@@ -38,7 +38,7 @@ const AddModeModal: React.FC<AddModeModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm">
-      <div className="bg-surface-input rounded-xl border border shadow-2xl w-full max-w-md mx-4 max-h-[80vh] flex flex-col">
+      <div className="bg-surface-solid rounded-xl border border shadow-2xl w-full max-w-md mx-4 max-h-[80vh] flex flex-col">
         {/* Header */}
         <div className="px-4 py-3 border-b border-subtle flex items-center justify-between">
           <h3 className="font-semibold text-content">Add Mode</h3>
@@ -143,7 +143,7 @@ const EditModeModal: React.FC<EditModeModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm">
-      <div className="bg-surface-input rounded-xl border border shadow-2xl w-full max-w-md mx-4">
+      <div className="bg-surface-solid rounded-xl border border shadow-2xl w-full max-w-md mx-4">
         {/* Header */}
         <div className="px-4 py-3 border-b border-subtle flex items-center justify-between">
           <div className="flex items-center gap-3">

@@ -225,7 +225,7 @@ export default function ReceiverWizard({ isOpen, onClose, isInav }: ReceiverWiza
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm">
-      <div className="bg-surface rounded-2xl border w-full max-w-lg mx-4 shadow-2xl">
+      <div className="bg-surface-solid rounded-2xl border w-full max-w-lg mx-4 shadow-2xl">
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-subtle">
           <div className="flex items-center gap-3">

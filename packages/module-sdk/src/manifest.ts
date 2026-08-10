@@ -1,5 +1,5 @@
 export type MountPointName = 'floatingOverlay' | 'cameraOverlay';
-export type ModulePermission = 'pty' | 'filesystem' | 'network';
+export type ModulePermission = 'pty' | 'filesystem' | 'network' | 'vault';
 
 export interface ModuleManifest {
   manifestVersion: 1;
@@ -15,7 +15,7 @@ export interface ModuleManifest {
 const SEMVER_RE = /^\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?$/;
 const SLUG_RE = /^[a-z][a-z0-9]*(\.[a-z][a-z0-9-]*)+$/;
 const VALID_MOUNT_POINTS: MountPointName[] = ['floatingOverlay', 'cameraOverlay'];
-const VALID_PERMISSIONS: ModulePermission[] = ['pty', 'filesystem', 'network'];
+const VALID_PERMISSIONS: ModulePermission[] = ['pty', 'filesystem', 'network', 'vault'];
 
 export type ParseResult =
   | { ok: true; manifest: ModuleManifest }
@@ -32,7 +32,11 @@ export function parseModuleManifest(raw: unknown): ParseResult {
   if (!entry || typeof entry !== 'object') return { ok: false, error: 'entry required' };
   const hasMain = typeof entry.main === 'string';
   const hasRenderer = typeof entry.renderer === 'string';
-  if (!hasMain && !hasRenderer) return { ok: false, error: 'entry.main or entry.renderer required' };
+  // Neither entry is allowed: a pure "activator" cargo ships no code and only
+  // unlocks built-in features via the host's capability map (see README,
+  // "Gating built-in features"). The loaders simply have nothing to load.
+  if (entry.main !== undefined && !hasMain) return { ok: false, error: 'entry.main must be a string' };
+  if (entry.renderer !== undefined && !hasRenderer) return { ok: false, error: 'entry.renderer must be a string' };
   const mountPoints = m.mountPoints as unknown;
   if (mountPoints !== undefined) {
     if (!Array.isArray(mountPoints)) return { ok: false, error: 'mountPoints must be array' };

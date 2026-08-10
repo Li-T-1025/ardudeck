@@ -575,7 +575,7 @@ function ModalShell({ children, onCancel }: { children: React.ReactNode; onCance
       onClick={onCancel}
     >
       <div
-        className="bg-surface border border-default rounded-lg p-5 max-w-md w-full mx-4 shadow-2xl"
+        className="bg-surface-solid border border-default rounded-lg p-5 max-w-md w-full mx-4 shadow-2xl"
         onClick={e => e.stopPropagation()}
       >
         {children}

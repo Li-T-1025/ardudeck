@@ -6,7 +6,7 @@ import { create } from 'zustand';
 export const VIEW_IDS = [
   'telemetry', 'parameters', 'mission', 'library', 'settings', 'firmware', 'cli',
   'sitl', 'sim', 'osd', 'radio-hud', 'report', 'calibration', 'lua-graph', 'modules',
-  'companion', 'logs', 'inspector',
+  'companion', 'logs', 'inspector', 'vault',
 ] as const;
 
 export type ViewId = (typeof VIEW_IDS)[number];

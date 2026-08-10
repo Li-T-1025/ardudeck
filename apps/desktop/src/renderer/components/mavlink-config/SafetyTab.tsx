@@ -555,7 +555,7 @@ const SafetyTab: React.FC = () => {
       {/* Confirmation Modal (preset apply / disable arming checks) */}
       {confirmAction && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-surface border rounded-xl shadow-2xl max-w-lg w-full mx-4 max-h-[80vh] flex flex-col">
+          <div className="bg-surface-solid border rounded-xl shadow-2xl max-w-lg w-full mx-4 max-h-[80vh] flex flex-col">
             {confirmAction.type === 'preset' ? (
               <>
                 <div className="px-6 py-4 border-b border-subtle">

@@ -199,6 +199,29 @@ export const IPC_CHANNELS = {
   PARAM_METADATA_FETCH: 'param:metadata-fetch',
   PARAM_METADATA_RESULT: 'param:metadata-result',
 
+  // Fleet vault (local git repo + GitHub sync)
+  FLEET_REPO_STATUS: 'fleet-repo:status',
+  FLEET_REPO_SNAPSHOT_PARAMS: 'fleet-repo:snapshot-params',
+  FLEET_REPO_SNAPSHOT_MISSION: 'fleet-repo:snapshot-mission',
+  FLEET_REPO_SNAPSHOT_AREA: 'fleet-repo:snapshot-area',
+  FLEET_REPO_HISTORY: 'fleet-repo:history',
+  FLEET_REPO_READ_FILE: 'fleet-repo:read-file',
+  FLEET_REPO_LIST_UNITS: 'fleet-repo:list-units',
+  FLEET_REPO_LIST_SITES: 'fleet-repo:list-sites',
+  FLEET_REPO_OPEN_DIR: 'fleet-repo:open-dir',
+  FLEET_REPO_GH_DEVICE_START: 'fleet-repo:gh-device-start',
+  FLEET_REPO_GH_DEVICE_POLL: 'fleet-repo:gh-device-poll',
+  FLEET_REPO_GH_SET_TOKEN: 'fleet-repo:gh-set-token',
+  FLEET_REPO_GH_DISCONNECT: 'fleet-repo:gh-disconnect',
+  FLEET_REPO_GH_CREATE_REPO: 'fleet-repo:gh-create-repo',
+  FLEET_REPO_GH_SYNC: 'fleet-repo:gh-sync',
+  FLEET_REPO_SET_CUSTOM_REMOTE: 'fleet-repo:set-custom-remote',
+  FLEET_REPO_SET_AUTO_SYNC: 'fleet-repo:set-auto-sync',
+  FLEET_REPO_RENAME_UNIT: 'fleet-repo:rename-unit',
+  FLEET_REPO_LINK_UNIT: 'fleet-repo:link-unit',
+  FLEET_REPO_GH_LIST_REPOS: 'fleet-repo:gh-list-repos',
+  FLEET_REPO_GH_USE_EXISTING: 'fleet-repo:gh-use-existing',
+
   // Mission planning
   MISSION_DOWNLOAD: 'mission:download',
   MISSION_UPLOAD: 'mission:upload',
@@ -615,6 +638,7 @@ export const IPC_CHANNELS = {
   MODULE_DEEP_LINK_INSTALL: 'module:deep-link-install',
   // ardudeck://open?view=<id> -> navigate the renderer to a built-in view
   NAV_DEEP_LINK_OPEN: 'nav:deep-link-open',
+  NAV_OPEN_VIEW: 'nav:open-view',  // renderer (any window) -> main: focus main window + navigate it to a view
 
   // Module Host (runtime API exposed to loaded modules)
   MODULE_HOST_LIST_LOADED: 'module-host:list-loaded',
@@ -1960,4 +1984,58 @@ export interface TileCacheDownloadRegion {
   layers: string[];
   downloadedAt: number;
   tileCount: number;
+}
+
+// ============================================================================
+// Fleet vault (local git repo + GitHub sync)
+// ============================================================================
+
+export interface FleetRepoStatus {
+  path: string;
+  initialized: boolean;
+  commitCount: number;
+  /** Push automatically after every snapshot */
+  autoSync: boolean;
+  github: {
+    connected: boolean;
+    /** 'github' = app-managed repo; 'custom' = user-provided HTTPS remote */
+    mode: 'github' | 'custom';
+    login?: string;
+    /** Repo name (github mode) or remote URL (custom mode) */
+    repo?: string;
+    lastSyncAt?: number;
+    lastSyncError?: string;
+  };
+}
+
+export interface FleetRepoHistoryEntry {
+  oid: string;
+  message: string;
+  timestamp: number;
+  /** Repo-relative paths this commit touched (vs first parent) */
+  files: string[];
+}
+
+export interface FleetRepoUnit {
+  uid: string;
+  name: string;
+  vehicleType?: string;
+  sitl?: boolean;
+  /** Additional board ids that map to this unit (identity scheme changes, replaced FC) */
+  aliases?: string[];
+  lastSnapshotAt?: number;
+  paramCount?: number;
+}
+
+export interface FleetRepoSite {
+  site: string;
+  hasBoundary: boolean;
+  missions: string[];
+}
+
+export interface GithubDeviceStart {
+  userCode: string;
+  verificationUri: string;
+  interval: number;
+  deviceCode: string;
 }

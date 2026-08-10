@@ -14,6 +14,8 @@ import { AutoAdjustAltitudeDialog } from './AutoAdjustAltitudeDialog';
 import type { PlanResult, PlannerWaypoint } from './terrain-altitude-planner';
 import { hasValidCoordinates, mavFrameToAltFrame } from '../../../shared/mission-types';
 import { formatAltitudeFromMeters } from '../../../shared/user-units.js';
+import { VaultSyncBadge } from '../vault/VaultSyncBadge';
+import { useCargoEnabled, MISSION_LIBRARY_CARGO_SLUG } from '../../modules/capabilities';
 
 type ToastType = 'success' | 'error' | 'info';
 
@@ -76,6 +78,7 @@ function MissionModeControls() {
 
   return (
     <div className="flex items-center gap-1.5">
+      <VaultSyncBadge />
       {/* Simple / Advanced toggle - only relevant for ArduPilot (iNav has only 8 commands) */}
       {!isInav && (
         <div className="flex items-center rounded-lg overflow-hidden border border-subtle">
@@ -158,11 +161,14 @@ function MissionModeControls() {
 function SaveMenu({
   enabled,
   multipleGroups,
+  showLibrary,
   onLibrary,
   onExport,
 }: {
   enabled: boolean;
   multipleGroups: boolean;
+  /** Library option is gated behind the mission-library cargo */
+  showLibrary: boolean;
   onLibrary: () => void;
   onExport: (format: 'waypoints' | 'plan' | 'kmz') => void;
 }) {
@@ -204,14 +210,18 @@ function SaveMenu({
             className="fixed z-[9999] w-[260px] bg-surface-raised backdrop-blur-xl border border-default rounded-lg shadow-2xl py-1"
             style={{ top: pos.top, right: pos.right }}
           >
-            <button
-              onClick={() => { onLibrary(); setOpen(false); }}
-              className="w-full text-left px-3 py-2 text-xs text-content hover:bg-surface-input transition-colors"
-            >
-              <span className="font-medium text-purple-300">Save to Library</span>
-              <span className="block text-[10px] text-content-tertiary mt-0.5">Keep the whole plan in ArduDeck (groups + surveys, editable)</span>
-            </button>
-            <div className="my-1 h-px bg-subtle" />
+            {showLibrary && (
+              <>
+                <button
+                  onClick={() => { onLibrary(); setOpen(false); }}
+                  className="w-full text-left px-3 py-2 text-xs text-content hover:bg-surface-input transition-colors"
+                >
+                  <span className="font-medium text-purple-300">Save to Library</span>
+                  <span className="block text-[10px] text-content-tertiary mt-0.5">Keep the whole plan in ArduDeck (groups + surveys, editable)</span>
+                </button>
+                <div className="my-1 h-px bg-subtle" />
+              </>
+            )}
             <button
               onClick={() => { onExport('waypoints'); setOpen(false); }}
               className="w-full text-left px-3 py-2 text-xs text-content hover:bg-surface-input transition-colors"
@@ -353,6 +363,7 @@ export function MissionToolbar({ onResetLayout, showToast }: MissionToolbarProps
 
   // Save to Library modal state
   const [showSaveLibraryModal, setShowSaveLibraryModal] = useState(false);
+  const libraryEnabled = useCargoEnabled(MISSION_LIBRARY_CARGO_SLUG);
 
   // Mode-aware handlers
   const handleDownload = async () => {
@@ -631,6 +642,7 @@ export function MissionToolbar({ onResetLayout, showToast }: MissionToolbarProps
           <SaveMenu
             enabled={missionHasItems}
             multipleGroups={multipleGroups}
+            showLibrary={libraryEnabled}
             onLibrary={() => setShowSaveLibraryModal(true)}
             onExport={(fmt) => { void handleSaveFile(fmt); }}
           />
@@ -811,7 +823,7 @@ export function MissionToolbar({ onResetLayout, showToast }: MissionToolbarProps
       )}
 
       {/* Save to Library modal */}
-      {showSaveLibraryModal && (
+      {libraryEnabled && showSaveLibraryModal && (
         <SaveMissionModal
           onClose={() => setShowSaveLibraryModal(false)}
           onSaved={() => showToast?.('Mission saved to library', 'success')}

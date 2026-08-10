@@ -66,14 +66,59 @@ local CFG = {
   pages = nil,
 }
 
--- 8px-grid aligned so configurator snapping lines up with defaults
-local DEFAULT_LAYOUT = {
-  { id = 'batt',    x = 8,   y = 48,  w = 144, h = 96,  variant = 'default' },
-  { id = 'home',    x = 160, y = 48,  w = 144, h = 96,  variant = 'default' },
-  { id = 'alt',     x = 8,   y = 152, w = 144, h = 96,  variant = 'default' },
-  { id = 'gps',     x = 160, y = 152, w = 144, h = 96,  variant = 'default' },
-  { id = 'att',     x = 312, y = 48,  w = 144, h = 200, variant = 'ball' },
-}
+-- Layouts are authored on a reference canvas (hud.cfg screen=WxH, 480x320
+-- when absent). Widget chrome is fixed-height: header ends at y=48, the
+-- message ticker owns the bottom 72px. Tile geometry rescales into this
+-- radio's actual LCD: x/w by width ratio, y/h inside the usable band.
+local TILE_TOP, BOTTOM_CHROME = 48, 72
+local function rescaleTiles(tiles, aw, ah)
+  if (aw == LCD_W and ah == LCD_H) or ah - TILE_TOP - BOTTOM_CHROME <= 0 then return end
+  local fx = LCD_W / aw
+  local fy = (LCD_H - TILE_TOP - BOTTOM_CHROME) / (ah - TILE_TOP - BOTTOM_CHROME)
+  for i = 1, #tiles do
+    local t = tiles[i]
+    t.x = math.floor(t.x * fx + 0.5)
+    t.w = math.floor(t.w * fx + 0.5)
+    t.y = math.floor(TILE_TOP + (t.y - TILE_TOP) * fy + 0.5)
+    t.h = math.floor(t.h * fy + 0.5)
+  end
+end
+
+-- Default layout is GENERATED for this radio's screen: more pixels = more
+-- instruments at natural size, never inflated tiles (EdgeTX fonts don't
+-- scale, so upscaled tiles are just emptier boxes). Last column is a
+-- full-band attitude ball; the rest fill row-major by usefulness. On
+-- 480x320 this reproduces the classic 5-tile TX15 default exactly.
+-- 8px grid so configurator snapping lines up. KEEP IN SYNC with the
+-- studio's gridLayout (RadioHudView.tsx).
+local function gridDefault()
+  local band = LCD_H - TILE_TOP - BOTTOM_CHROME
+  local cols = math.max(2, math.floor((LCD_W - 8) / 152))
+  local pitch = math.floor((LCD_W - 8) / cols)
+  pitch = pitch - (pitch % 8)
+  local tw = pitch - 8
+  local rows = math.max(1, math.floor((band + 8) / 104 + 0.5))
+  local th = math.floor((band - (rows - 1) * 8) / rows)
+  th = th - (th % 8)
+  local ids = { 'batt', 'home', 'alt', 'gps', 'spd', 'wind', 'link', 'timer',
+    'thr', 'imu', 'wp', 'compass', 'rng', 'txbat' }
+  local t = {}
+  local n = 1
+  for r = 1, rows do
+    for c = 1, cols - 1 do
+      local id = ids[n]
+      if id then
+        n = n + 1
+        t[#t + 1] = { id = id, x = 8 + (c - 1) * pitch, y = TILE_TOP + (r - 1) * (th + 8),
+          w = tw, h = th, variant = 'default' }
+      end
+    end
+  end
+  t[#t + 1] = { id = 'att', x = 8 + (cols - 1) * pitch, y = TILE_TOP,
+    w = tw, h = band, variant = 'ball' }
+  return t
+end
+local DEFAULT_LAYOUT = gridDefault()
 
 -- Placed AFTER CFG/DEFAULT_LAYOUT declarations: locals referenced from a
 -- function defined above their declaration silently resolve to nil globals.
@@ -149,6 +194,7 @@ local function loadConfig()
   io.close(f)
   if type(raw) ~= 'string' then return end
   local pages = {}
+  local authW, authH = 480, 320
   local function addTile(page, v)
     local id, x, y, w, h, variant = string.match(v, '(%w+),(%d+),(%d+),(%d+),(%d+),?(%w*)')
     if id then
@@ -166,6 +212,9 @@ local function loadConfig()
   for k, v in string.gmatch(raw, '([%w_]+)=([^\r\n]+)') do
     if k == 'name' then CFG.name = v
     elseif k == 'theme' then CFG.theme = v
+    elseif k == 'screen' then
+      local sw, sh = string.match(v, '(%d+)x(%d+)')
+      if sw then authW, authH = tonumber(sw), tonumber(sh) end
     elseif string.match(k, '^tile%d+$') then
       addTile(1, v)
     elseif string.match(k, '^p%d+_tile%d+$') then
@@ -176,7 +225,10 @@ local function loadConfig()
     -- compact away any gaps so #CFG.pages is reliable
     local list = {}
     for i = 1, 8 do
-      if pages[i] then list[#list + 1] = pages[i] end
+      if pages[i] then
+        rescaleTiles(pages[i], authW, authH)
+        list[#list + 1] = pages[i]
+      end
     end
     CFG.pages = list
     CFG.tiles = list[1]
@@ -1203,13 +1255,18 @@ local function drawLive()
   -- top bar (brand invariant)
   lcd.drawFilledRectangle(0, 0, LCD_W, 38, T.SURFACE)
   -- left margin clears the EdgeTX fullscreen corner affordance on touch UIs
+  -- narrow screens (320 portrait): the word ARMED and the wordmark don't
+  -- fit next to the mode pill - the dot alone carries arm state
+  local narrow = LCD_W < 400
   local armColor = V.armed and T.DANGER or T.TEXT_2
   if V.armed then
-    lcd.drawFilledCircle(52, 19, 5, T.DANGER)
+    lcd.drawFilledCircle(52, 19, narrow and 7 or 5, T.DANGER)
   else
-    lcd.drawCircle(52, 19, 5, T.TEXT_3)
+    lcd.drawCircle(52, 19, narrow and 7 or 5, T.TEXT_3)
   end
-  lcd.drawText(64, 7, V.armed and 'ARMED' or 'DISARMED', MIDSIZE + armColor)
+  if not narrow then
+    lcd.drawText(64, 7, V.armed and 'ARMED' or 'DISARMED', MIDSIZE + armColor)
+  end
   local modeName = MODES[V.modeNum] or ('MODE ' .. tostring(V.modeNum))
   local mw = lcd.sizeText(modeName, MIDSIZE) + 20
   local mx = (LCD_W - mw) / 2
@@ -1220,9 +1277,14 @@ local function drawLive()
   -- height. Light mode uses the dark-tile logo (brand direction); wordmark
   -- follows the asset (white on dark, near-black on light). The corner is
   -- the theme tap target.
-  local tw = lcd.sizeText('ArduDeck', SMLSIZE)
-  lcd.drawText(LCD_W - 8, 19, 'ArduDeck', SMLSIZE + RIGHT + VCENTER + T.TEXT)
-  local logoX = LCD_W - 8 - tw - 28
+  local logoX
+  if narrow then
+    logoX = LCD_W - 8 - 20 -- logo only; no room for the wordmark
+  else
+    local tw = lcd.sizeText('ArduDeck', SMLSIZE)
+    lcd.drawText(LCD_W - 8, 19, 'ArduDeck', SMLSIZE + RIGHT + VCENTER + T.TEXT)
+    logoX = LCD_W - 8 - tw - 28
+  end
   local bmp = currentTheme == 'light' and logoBmpLight or logoBmp
   if bmp then
     lcd.drawBitmap(bmp, logoX, 9)
@@ -1233,8 +1295,9 @@ local function drawLive()
     lcd.drawText(lqX, 19, 'LQ ' .. lq, SMLSIZE + RIGHT + VCENTER + (lq > 70 and T.TEXT_2 or T.WARN))
     lqX = lqX - lcd.sizeText('LQ ' .. lq, SMLSIZE) - 14
   end
-  -- TX battery chip: always-visible handset vitals (glyph + voltage)
-  local txv = getValue('tx-voltage') or 0
+  -- TX battery chip: always-visible handset vitals (glyph + voltage);
+  -- dropped on narrow screens (would run into the mode pill)
+  local txv = narrow and 0 or (getValue('tx-voltage') or 0)
   if txv > 0 then
     local vMin, vMax = 6.6, 8.4
     local ok, gs = pcall(getGeneralSettings)

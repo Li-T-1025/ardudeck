@@ -3444,7 +3444,7 @@ function VehicleEditModal({
   return (
     <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50" onClick={onClose}>
       <div
-        className="bg-surface-raised rounded-xl border border-border w-full max-w-lg mx-4 overflow-hidden shadow-2xl"
+        className="bg-surface-solid rounded-xl border border-border w-full max-w-lg mx-4 overflow-hidden shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}

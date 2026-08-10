@@ -402,6 +402,86 @@ export const FEATURE_TOURS: FeatureTour[] = [
       },
     ],
   },
+  {
+    id: 'radio-hud-beta1',
+    view: 'radio-hud',
+    version: '0.1.0',
+    title: 'Your radio becomes a mini GCS',
+    blurb:
+      'Design an ArduDeck telemetry screen for your EdgeTX radio - live preview, drag-and-drop layout, offline field maps, voice alerts - and push it to the SD card in one click.',
+    steps: [
+      {
+        selector: '[data-tour="hud-model"]',
+        predicate: present('[data-tour="hud-model"]'),
+        content: (
+          <div className="space-y-2">
+            <div className="text-sm font-semibold">Pick your radio</div>
+            <p className="text-xs leading-relaxed opacity-90">
+              Color radios (TX15, TX16S, NV14...) get the full widget - the preview is a faithful
+              mirror of that screen. Monochrome radios (Boxer, Zorro, TX12, X9D) get a dense
+              1-bit telemetry script with the same voice alerts. Layouts rescale when you switch.
+            </p>
+          </div>
+        ),
+      },
+      {
+        selector: '[data-tour="hud-edit"]',
+        predicate: present('[data-tour="hud-edit"]'),
+        content: (
+          <div className="space-y-2">
+            <div className="text-sm font-semibold">Make the screen yours</div>
+            <p className="text-xs leading-relaxed opacity-90">
+              On color radios: drag, resize and swap <strong>17 instrument tiles</strong> across
+              up to 8 swipeable pages (or start from a preset). On monochrome: every data slot,
+              the big readout and the center panel (horizon or data wall) are assignable in place.
+            </p>
+          </div>
+        ),
+      },
+      {
+        selector: '[data-tour="hud-config"]',
+        predicate: present('[data-tour="hud-config"]'),
+        content: (
+          <div className="space-y-2">
+            <div className="text-sm font-semibold">Zero-config by default</div>
+            <p className="text-xs leading-relaxed opacity-90">
+              Everything here is an <strong>override</strong>. Left on auto, the widget configures
+              itself from the vehicle's own telemetry over ELRS - cell count, capacity, battery %
+              - no ArduDeck connection needed in the field.
+            </p>
+          </div>
+        ),
+      },
+      {
+        selector: '[data-tour="hud-maps"]',
+        predicate: present('[data-tour="hud-maps"]'),
+        content: (
+          <div className="space-y-2">
+            <div className="text-sm font-semibold">Offline maps on the radio</div>
+            <p className="text-xs leading-relaxed opacity-90">
+              Click your flying field and ArduDeck stitches <strong>satellite images at three
+              zoom levels</strong> for the Map tile - vehicle, home, trail and your planned
+              mission drawn on top, fully offline. Tap the tile on the radio to switch zoom.
+            </p>
+          </div>
+        ),
+      },
+      {
+        selector: '[data-tour="hud-apply"]',
+        predicate: present('[data-tour="hud-apply"]'),
+        content: (
+          <div className="space-y-2">
+            <div className="text-sm font-semibold">One click to the radio</div>
+            <p className="text-xs leading-relaxed opacity-90">
+              Plug the radio in via USB (choose <strong>USB Storage</strong> on its screen) and
+              hit <strong>Apply</strong> - widget, config, voice pack and maps land on the SD
+              card together. Then on the radio: App layout, full-screen widget, ArduDeck.
+            </p>
+          </div>
+        ),
+      },
+    ],
+  },
 ];
 
 export function getToursForView(view: string): FeatureTour[] {

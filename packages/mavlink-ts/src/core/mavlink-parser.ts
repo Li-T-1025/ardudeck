@@ -209,14 +209,14 @@ export class MAVLinkParser {
         continue;
       }
 
-      // Validate payload length. Only the upper bound is enforced: MAVLink v2
-      // trims trailing zero payload bytes, so valid frames may be shorter
-      // than the nominal message length. The CRC is the authoritative check.
-      if (packet.payloadLength > msgInfo.maxLength) {
-        this.stats.badLength++;
-        this.consume(1);
-        continue;
-      }
+      // Payload length is NOT validated against the registry. Shorter is
+      // normal (v2 trims trailing zeros) and LONGER is normal too: the
+      // registry's maxLength is frozen at generation time, while the spec
+      // keeps growing messages via extensions (e.g. MISSION_CURRENT gained
+      // mission_id/fence_id/rally_points_id, 6 -> 18 bytes), and rejecting
+      // those silently killed every MISSION_CURRENT from ArduPilot 4.5+.
+      // The CRC is the authoritative check either way - CRC_EXTRA covers
+      // base fields only, so extended packets validate with the same value.
 
       // Calculate and validate CRC
       const crcLength = isMavlink2

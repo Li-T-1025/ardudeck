@@ -41,6 +41,13 @@ export interface ParamPackResult {
   params: PackedParam[];
   totalParams: number;
   withDefaults: boolean;
+  /**
+   * True when every entry announced in the header was decoded. False means
+   * the file was truncated or corrupt mid-stream; callers MUST NOT treat the
+   * partial list as a full parameter set (missing params look like a board
+   * without them, e.g. the PID tab failing scheme detection).
+   */
+  complete: boolean;
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -112,14 +119,17 @@ export function parseParamPack(data: Uint8Array): ParamPackResult | null {
   const totalParams = view.getUint16(4, true);
 
   if (numParams === 0) {
-    return { params: [], totalParams, withDefaults };
+    return { params: [], totalParams, withDefaults, complete: true };
   }
 
   const params: PackedParam[] = [];
   let offset = 6;
   let lastName = '';
+  // Counts every decoded entry including skipped NONE placeholders, so it can
+  // be compared against the header's numParams to detect truncation.
+  let entriesDecoded = 0;
 
-  while (offset < data.length && params.length < numParams) {
+  while (offset < data.length && entriesDecoded < numParams) {
     // Skip zero padding bytes (used to prevent params spanning FTP chunk boundaries)
     while (offset < data.length && data[offset] === 0) {
       offset++;
@@ -133,7 +143,10 @@ export function parseParamPack(data: Uint8Array): ParamPackResult | null {
     const hasDefault = (flags & 0x01) !== 0;
 
     // Skip NONE type entries
-    if (ptype === PACK_TYPE_NONE) continue;
+    if (ptype === PACK_TYPE_NONE) {
+      entriesDecoded++;
+      continue;
+    }
 
     // Check we have at least the name info byte
     if (offset >= data.length) break;
@@ -179,7 +192,8 @@ export function parseParamPack(data: Uint8Array): ParamPackResult | null {
       type: packedTypeToMavType(ptype),
       defaultValue,
     });
+    entriesDecoded++;
   }
 
-  return { params, totalParams, withDefaults };
+  return { params, totalParams, withDefaults, complete: entriesDecoded >= numParams };
 }

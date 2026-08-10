@@ -77,7 +77,7 @@ export const QuickSetupWizard: React.FC = () => {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm">
       {/* Modal container */}
-      <div className="bg-surface-input rounded-2xl border border shadow-2xl w-full max-w-2xl mx-4 max-h-[90vh] flex flex-col">
+      <div className="bg-surface-solid rounded-2xl border border shadow-2xl w-full max-w-2xl mx-4 max-h-[90vh] flex flex-col">
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-subtle">
           <div className="flex items-center gap-3">

@@ -237,7 +237,7 @@ export const MotorTestTab: React.FC = () => {
       {/* Safety confirmation dialog */}
       {showSafetyDialog && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm">
-          <div className="bg-surface border-red-500/40 rounded-2xl p-6 max-w-md w-full mx-4 shadow-2xl">
+          <div className="bg-surface-solid border-red-500/40 rounded-2xl p-6 max-w-md w-full mx-4 shadow-2xl">
             <div className="flex items-center gap-3 mb-4">
               <div className="w-12 h-12 rounded-full bg-red-500/15 border-red-500/30 flex items-center justify-center">
                 <AlertTriangle className="w-6 h-6 text-red-400" />

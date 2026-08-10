@@ -11,6 +11,9 @@
   /* Backgrounds */
   --bg-base: #0a0a0f;
   --bg-surface: rgb(31 41 55 / 0.5);
+  /* Opaque surface for modal/dialog panels: bg-surface is intentionally
+     translucent in dark mode, which lets the page bleed through dialogs */
+  --bg-surface-solid: #1a2231;
   --bg-surface-raised: rgb(55 65 81 / 0.5);
   --bg-inset: #374151;
   --bg-input: rgb(17 24 39 / 0.5);
@@ -105,6 +108,7 @@
   /* Backgrounds */
   --bg-base: #f5f6f8;
   --bg-surface: #ffffff;
+  --bg-surface-solid: #ffffff;
   --bg-surface-raised: #e5e7ec;
   --bg-inset: #e0e2e7;
   --bg-input: #ffffff;

@@ -2182,6 +2182,7 @@ const MSG_ATTITUDE = 30;
 const MSG_GLOBAL_POSITION_INT = 33;
 const MSG_RC_CHANNELS_RAW = 35;
 const MSG_RC_CHANNELS = 65;
+const MSG_RADIO_STATUS = 109;
 const MSG_NAV_CONTROLLER_OUTPUT = 62;
 const MSG_VFR_HUD = 74;
 const MSG_POSITION_TARGET_GLOBAL_INT = 87;
@@ -2693,6 +2694,26 @@ function parseTelemetry(mainWindow: BrowserWindow, packet: MAVLinkPacket): void 
       break;
     }
 
+    case MSG_RADIO_STATUS: {
+      // RADIO_STATUS (109) from the telemetry modem (SiK/RFD900/ELRS gateway).
+      // v2 wire order (size-sorted): rxerrors(u16)@0, fixed(u16)@2, rssi@4,
+      // remrssi@5, txbuf@6, noise@7, remnoise@8. Zero-pad: an idle link with
+      // zero errors truncates the tail away.
+      const p = padTo(payload, 9);
+      queueMavlinkTelemetry(mainWindow, {
+        radioStatus: {
+          rxErrors: readUint16(p, 0),
+          fixed: readUint16(p, 2),
+          rssi: p[4]!,
+          remRssi: p[5]!,
+          txbuf: p[6]!,
+          noise: p[7]!,
+          remNoise: p[8]!,
+        },
+      });
+      break;
+    }
+
     case MSG_NAMED_VALUE_FLOAT: {
       // NAMED_VALUE_FLOAT (251):
       //   timeBootMs(U32)@0, value(F32)@4, name(char[10])@8
@@ -3113,24 +3134,24 @@ function parseTelemetry(mainWindow: BrowserWindow, packet: MAVLinkPacket): void 
     }
 
     case MSG_MISSION_CURRENT: {
-      // FC reports current waypoint
-      // Handle both MAVLink v1 (2 bytes) and v2 (6 bytes) formats
-      let seq: number;
-      if (payload.length >= 2) {
-        seq = payload[0]! | (payload[1]! << 8); // Little-endian uint16
-        safeSend(mainWindow, IPC_CHANNELS.MISSION_CURRENT, seq);
-      }
+      // FC reports current waypoint. v2 zero-truncation: seq 0 arrives as an
+      // EMPTY payload, so zero-pad instead of length-guarding (a guard here
+      // silently ate the "back at waypoint 0" report).
+      const p = padTo(payload, 2);
+      const seq = p[0]! | (p[1]! << 8); // Little-endian uint16
+      safeSend(mainWindow, IPC_CHANNELS.MISSION_CURRENT, seq);
       break;
     }
 
     case MSG_MISSION_ITEM_REACHED: {
-      // FC reached a waypoint
+      // FC reached a waypoint. Sole field is uint16 seq; for every waypoint
+      // below 256 the high byte is zero and v2 truncation trims it, so the
+      // packet arrives 1 byte long - zero-pad, never length-guard.
       try {
-        if (payload.length >= 2) {
-          const seq = payload[0]! | (payload[1]! << 8);
-          safeSend(mainWindow, IPC_CHANNELS.MISSION_REACHED, seq);
-          sendLog(mainWindow, 'info', `Reached waypoint ${seq}`);
-        }
+        const p = padTo(payload, 2);
+        const seq = p[0]! | (p[1]! << 8);
+        safeSend(mainWindow, IPC_CHANNELS.MISSION_REACHED, seq);
+        sendLog(mainWindow, 'info', `Reached waypoint ${seq}`);
       } catch (err) {
         sendLog(mainWindow, 'error', 'Failed to parse MISSION_ITEM_REACHED', String(err));
       }
@@ -3140,16 +3161,16 @@ function parseTelemetry(mainWindow: BrowserWindow, packet: MAVLinkPacket): void 
     case MSG_FENCE_STATUS: {
       // FENCE_STATUS (162) - breach_status(1), breach_count(2), breach_type(1), breach_time(4)
       // Wire order (MAVLink v2 size-sorted): breach_time(4), breach_count(2), breach_status(1), breach_type(1)
+      // All-zero "no breach" reports truncate to nothing under v2 - zero-pad.
       try {
-        if (payload.length >= 8) {
-          const status: FenceStatus = {
-            breachTime: readUint32(payload, 0),
-            breachCount: readUint16(payload, 4),
-            breachStatus: payload[6]!,
-            breachType: payload[7]!,
-          };
-          safeSend(mainWindow, IPC_CHANNELS.FENCE_STATUS, status);
-        }
+        const p = padTo(payload, 8);
+        const status: FenceStatus = {
+          breachTime: readUint32(p, 0),
+          breachCount: readUint16(p, 4),
+          breachStatus: p[6]!,
+          breachType: p[7]!,
+        };
+        safeSend(mainWindow, IPC_CHANNELS.FENCE_STATUS, status);
       } catch (err) {
         sendLog(mainWindow, 'error', 'Failed to parse FENCE_STATUS', String(err));
       }
@@ -6415,6 +6436,16 @@ export function setupIpcHandlers(mainWindow: BrowserWindow): void {
       sendLog(mainWindow, 'warn', 'FTP: param.pck parse failed or empty');
       return false;
     }
+    // A truncated pck decodes cleanly up to the cut and used to be delivered
+    // as the full set, leaving the renderer with silently missing params
+    // (e.g. PID tab failing scheme detection until a manual refresh). Treat
+    // incomplete as failure so the traditional download (with gap-fill
+    // recovery) takes over.
+    if (!result.complete || result.params.length < result.totalParams) {
+      sendLog(mainWindow, 'warn',
+        `FTP: param.pck incomplete (${result.params.length}/${result.totalParams}), falling back to traditional download`);
+      return false;
+    }
 
     const ftpElapsed = ((Date.now() - ftpStartTime) / 1000).toFixed(1);
     sendLog(mainWindow, 'info', `Downloaded ${result.params.length} parameters via MAVLink FTP in ${ftpElapsed}s`);
@@ -8484,6 +8515,146 @@ export function setupIpcHandlers(mainWindow: BrowserWindow): void {
     board.checkpoints = board.checkpoints.filter(c => c.id !== checkpointId);
     paramHistoryStore.set('boards', boards);
     return { success: true };
+  });
+
+  // Focus the main window and navigate it to a view. Used by secondary
+  // windows (area editor) whose UI links back into the main app.
+  ipcMain.handle(IPC_CHANNELS.NAV_OPEN_VIEW, async (_, view: string) => {
+    if (!mainWindow || mainWindow.isDestroyed()) return;
+    if (mainWindow.isMinimized()) mainWindow.restore();
+    mainWindow.show();
+    mainWindow.focus();
+    safeSend(mainWindow, IPC_CHANNELS.NAV_DEEP_LINK_OPEN, { view });
+  });
+
+  // ============================================================================
+  // Fleet vault (local git repo + GitHub sync)
+  // ============================================================================
+  // isomorphic-git is imported lazily so app startup doesn't pay for it.
+
+  const vault = () => import('./fleet-repo/fleet-repo-manager');
+
+  ipcMain.handle(IPC_CHANNELS.FLEET_REPO_STATUS, async () => (await vault()).status());
+
+  ipcMain.handle(IPC_CHANNELS.FLEET_REPO_SNAPSHOT_PARAMS, async (
+    _,
+    uid: string,
+    boardName: string,
+    params: Array<{ id: string; value: number }>,
+    vehicleType?: string,
+    note?: string,
+    sitl?: boolean,
+  ) => {
+    try {
+      const result = await (await vault()).snapshotParams(uid, boardName, params, vehicleType, note, sitl);
+      if (result.changed) sendLog(mainWindow, 'info', `Vault: snapshot of ${params.length} params for ${boardName}`);
+      return { success: true, ...result };
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Snapshot failed';
+      sendLog(mainWindow, 'error', 'Vault: param snapshot failed', message);
+      return { success: false, error: message };
+    }
+  });
+
+  ipcMain.handle(IPC_CHANNELS.FLEET_REPO_SNAPSHOT_MISSION, async (
+    _,
+    site: string,
+    missionName: string,
+    items: MissionItem[],
+  ) => {
+    try {
+      const result = await (await vault()).snapshotMission(site, missionName, formatWaypointsFile(items));
+      return { success: true, ...result };
+    } catch (err) {
+      return { success: false, error: err instanceof Error ? err.message : 'Snapshot failed' };
+    }
+  });
+
+  ipcMain.handle(IPC_CHANNELS.FLEET_REPO_SNAPSHOT_AREA, async (
+    _,
+    site: string,
+    kmlContent: string,
+  ) => {
+    try {
+      const result = await (await vault()).snapshotArea(site, kmlContent);
+      return { success: true, ...result };
+    } catch (err) {
+      return { success: false, error: err instanceof Error ? err.message : 'Snapshot failed' };
+    }
+  });
+
+  ipcMain.handle(IPC_CHANNELS.FLEET_REPO_HISTORY, async (_, limit?: number) => {
+    try {
+      return await (await vault()).history(limit);
+    } catch {
+      return [];
+    }
+  });
+
+  ipcMain.handle(IPC_CHANNELS.FLEET_REPO_READ_FILE, async (
+    _,
+    filepath: string,
+    oid?: string,
+  ) => {
+    const v = await vault();
+    return oid ? v.readFileAtCommit(oid, filepath) : v.readWorkingFile(filepath);
+  });
+
+  ipcMain.handle(IPC_CHANNELS.FLEET_REPO_LIST_UNITS, async () => (await vault()).listUnits());
+  ipcMain.handle(IPC_CHANNELS.FLEET_REPO_LIST_SITES, async () => (await vault()).listSites());
+  ipcMain.handle(IPC_CHANNELS.FLEET_REPO_OPEN_DIR, async () => (await vault()).openRepoDir());
+
+  ipcMain.handle(IPC_CHANNELS.FLEET_REPO_GH_DEVICE_START, async () => {
+    try {
+      return { success: true, ...(await (await vault()).githubDeviceStart()) };
+    } catch (err) {
+      return { success: false, error: err instanceof Error ? err.message : 'Device flow failed' };
+    }
+  });
+
+  ipcMain.handle(IPC_CHANNELS.FLEET_REPO_GH_DEVICE_POLL, async (_, deviceCode: string) =>
+    (await vault()).githubDevicePoll(deviceCode));
+
+  ipcMain.handle(IPC_CHANNELS.FLEET_REPO_GH_SET_TOKEN, async (_, token: string) =>
+    (await vault()).githubSetToken(token));
+
+  ipcMain.handle(IPC_CHANNELS.FLEET_REPO_GH_DISCONNECT, async () => {
+    (await vault()).githubDisconnect();
+    return { success: true };
+  });
+
+  ipcMain.handle(IPC_CHANNELS.FLEET_REPO_GH_CREATE_REPO, async (_, repoName: string) =>
+    (await vault()).githubCreateRepo(repoName));
+
+  ipcMain.handle(IPC_CHANNELS.FLEET_REPO_SET_CUSTOM_REMOTE, async (
+    _,
+    url: string,
+    token: string,
+    username?: string,
+  ) => (await vault()).setCustomRemote(url, token, username));
+
+  ipcMain.handle(IPC_CHANNELS.FLEET_REPO_RENAME_UNIT, async (_, uid: string, name: string) =>
+    (await vault()).renameUnit(uid, name));
+
+  ipcMain.handle(IPC_CHANNELS.FLEET_REPO_LINK_UNIT, async (_, unitUid: string, aliasUid: string) =>
+    (await vault()).linkUnit(unitUid, aliasUid));
+
+  ipcMain.handle(IPC_CHANNELS.FLEET_REPO_SET_AUTO_SYNC, async (_, enabled: boolean) => {
+    (await vault()).setAutoSync(enabled);
+    return { success: true };
+  });
+
+  ipcMain.handle(IPC_CHANNELS.FLEET_REPO_GH_LIST_REPOS, async () =>
+    (await vault()).githubListRepos());
+
+  ipcMain.handle(IPC_CHANNELS.FLEET_REPO_GH_USE_EXISTING, async (_, fullName: string) =>
+    (await vault()).githubUseExistingRepo(fullName));
+
+  ipcMain.handle(IPC_CHANNELS.FLEET_REPO_GH_SYNC, async () => {
+    const result = await (await vault()).githubSync();
+    if (result.success) sendLog(mainWindow, 'info', 'Vault: synced with GitHub');
+    else sendLog(mainWindow, 'warn', 'Vault: sync failed', result.error);
+    return result;
   });
 
   // ============================================================================

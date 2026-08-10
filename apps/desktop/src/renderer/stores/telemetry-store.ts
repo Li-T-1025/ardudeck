@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { TelemetryState, AttitudeData, PositionData, GpsData, BatteryData, VfrHudData, WindData, FlightState, RcChannelsData, SensorHealth, NavControllerData, GuidedTargetData } from '../../shared/telemetry-types';
+import type { TelemetryState, AttitudeData, PositionData, GpsData, BatteryData, VfrHudData, WindData, FlightState, RcChannelsData, RadioStatusData, SensorHealth, NavControllerData, GuidedTargetData } from '../../shared/telemetry-types';
 import type { VibrationData, EscTelemetryData, ServoOutputData } from '../../shared/motor-test-types';
 
 /** Batch telemetry update - all fields optional */
@@ -13,6 +13,7 @@ export interface TelemetryBatch {
   wind?: WindData;
   flight?: FlightState;
   rcChannels?: RcChannelsData;
+  radioStatus?: RadioStatusData;
   vibration?: VibrationData;
   escTelemetry?: EscTelemetryData;
   servoOutput?: ServoOutputData;
@@ -57,6 +58,7 @@ const initialState: TelemetryState = {
   wind: { direction: 0, speed: 0, speedZ: 0 },
   flight: { mode: 'Unknown', modeNum: 0, armed: false, isFlying: false },
   rcChannels: { channels: [], chancount: 0, rssi: 0 },
+  radioStatus: null,
   vibration: null,
   escTelemetry: null,
   servoOutput: null,
@@ -115,6 +117,9 @@ export const useTelemetryStore = create<TelemetryStore>((set) => ({
     if (batch.rcChannels) {
       updates.rcChannels = batch.rcChannels;
       updates.lastRcChannels = now;
+    }
+    if (batch.radioStatus) {
+      updates.radioStatus = batch.radioStatus;
     }
     if (batch.vibration) {
       updates.vibration = batch.vibration;

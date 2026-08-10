@@ -74,7 +74,7 @@ export function UploadPreviewModal({ open, onClose, onConfirm }: UploadPreviewMo
 
   return (
     <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50">
-      <div className="bg-surface-raised rounded-xl border border-subtle w-full max-w-lg mx-4 overflow-hidden shadow-2xl">
+      <div className="bg-surface-solid rounded-xl border border-subtle w-full max-w-lg mx-4 overflow-hidden shadow-2xl">
         <div className="px-6 py-4 border-b border-subtle">
           <h2 className="text-lg font-semibold text-content">Upload to vehicle</h2>
           <p className="text-xs text-content-secondary mt-1">

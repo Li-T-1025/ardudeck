@@ -46,7 +46,7 @@ export function DriftBadge({ profile }: DriftBadgeProps) {
       {open && (
         <div className="fixed inset-0 bg-surface-overlay flex items-center justify-center z-[75] p-4" onClick={() => setOpen(false)}>
           <div
-            className="bg-surface-raised rounded-xl border border-subtle w-full max-w-lg max-h-[70vh] flex flex-col shadow-2xl"
+            className="bg-surface-solid rounded-xl border border-subtle w-full max-w-lg max-h-[70vh] flex flex-col shadow-2xl"
             onClick={e => e.stopPropagation()}
           >
             <div className="flex items-center justify-between px-5 py-4 border-b border-subtle">

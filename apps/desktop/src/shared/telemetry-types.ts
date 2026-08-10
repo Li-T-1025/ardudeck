@@ -100,6 +100,17 @@ export interface RcChannelsData {
   rssi: number;         // 0-255
 }
 
+/** RADIO_STATUS (109) from a telemetry modem (SiK, RFD900, ELRS gateway) */
+export interface RadioStatusData {
+  rssi: number;      // local receive RSSI, device-scaled 0-254 (255 = unknown)
+  remRssi: number;   // remote receive RSSI, same scale
+  txbuf: number;     // free tx buffer %, 0-100
+  noise: number;     // local background noise
+  remNoise: number;  // remote background noise
+  rxErrors: number;  // receive error count
+  fixed: number;     // errors corrected by FEC
+}
+
 /** MAVLink SYS_STATUS sensor health bitmasks */
 export interface SensorHealth {
   present: number;   // bitmask of sensors present on the vehicle
@@ -141,6 +152,7 @@ export interface TelemetryState {
   wind: WindData;
   flight: FlightState;
   rcChannels: RcChannelsData;
+  radioStatus: RadioStatusData | null;
   vibration: VibrationData | null;
   escTelemetry: EscTelemetryData | null;
   servoOutput: ServoOutputData | null;

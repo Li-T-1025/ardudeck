@@ -659,6 +659,52 @@ const api = {
   restoreParamCheckpoint: (boardUid: string, checkpointId: string): Promise<{ success: boolean; changes?: ParamChange[] }> =>
     ipcRenderer.invoke(IPC_CHANNELS.PARAM_HISTORY_RESTORE, boardUid, checkpointId),
 
+  // Fleet vault (local git repo + GitHub sync)
+  fleetRepoStatus: (): Promise<import('../shared/ipc-channels').FleetRepoStatus> =>
+    ipcRenderer.invoke(IPC_CHANNELS.FLEET_REPO_STATUS),
+  fleetRepoSnapshotParams: (uid: string, boardName: string, params: Array<{ id: string; value: number }>, vehicleType?: string, note?: string, sitl?: boolean): Promise<{ success: boolean; changed?: boolean; oid?: string; error?: string }> =>
+    ipcRenderer.invoke(IPC_CHANNELS.FLEET_REPO_SNAPSHOT_PARAMS, uid, boardName, params, vehicleType, note, sitl),
+  fleetRepoRenameUnit: (uid: string, name: string): Promise<{ success: boolean; error?: string }> =>
+    ipcRenderer.invoke(IPC_CHANNELS.FLEET_REPO_RENAME_UNIT, uid, name),
+  fleetRepoLinkUnit: (unitUid: string, aliasUid: string): Promise<{ success: boolean; error?: string }> =>
+    ipcRenderer.invoke(IPC_CHANNELS.FLEET_REPO_LINK_UNIT, unitUid, aliasUid),
+  fleetRepoSnapshotMission: (site: string, missionName: string, items: MissionItem[]): Promise<{ success: boolean; changed?: boolean; oid?: string; error?: string }> =>
+    ipcRenderer.invoke(IPC_CHANNELS.FLEET_REPO_SNAPSHOT_MISSION, site, missionName, items),
+  fleetRepoSnapshotArea: (site: string, kmlContent: string): Promise<{ success: boolean; changed?: boolean; oid?: string; error?: string }> =>
+    ipcRenderer.invoke(IPC_CHANNELS.FLEET_REPO_SNAPSHOT_AREA, site, kmlContent),
+  fleetRepoHistory: (limit?: number): Promise<import('../shared/ipc-channels').FleetRepoHistoryEntry[]> =>
+    ipcRenderer.invoke(IPC_CHANNELS.FLEET_REPO_HISTORY, limit),
+  fleetRepoReadFile: (filepath: string, oid?: string): Promise<string | null> =>
+    ipcRenderer.invoke(IPC_CHANNELS.FLEET_REPO_READ_FILE, filepath, oid),
+  fleetRepoListUnits: (): Promise<import('../shared/ipc-channels').FleetRepoUnit[]> =>
+    ipcRenderer.invoke(IPC_CHANNELS.FLEET_REPO_LIST_UNITS),
+  fleetRepoListSites: (): Promise<import('../shared/ipc-channels').FleetRepoSite[]> =>
+    ipcRenderer.invoke(IPC_CHANNELS.FLEET_REPO_LIST_SITES),
+  fleetRepoOpenDir: (): Promise<void> =>
+    ipcRenderer.invoke(IPC_CHANNELS.FLEET_REPO_OPEN_DIR),
+  fleetRepoGhDeviceStart: (): Promise<{ success: boolean; userCode?: string; verificationUri?: string; interval?: number; deviceCode?: string; error?: string }> =>
+    ipcRenderer.invoke(IPC_CHANNELS.FLEET_REPO_GH_DEVICE_START),
+  fleetRepoGhDevicePoll: (deviceCode: string): Promise<{ state: 'pending' | 'ok' | 'error'; login?: string; error?: string }> =>
+    ipcRenderer.invoke(IPC_CHANNELS.FLEET_REPO_GH_DEVICE_POLL, deviceCode),
+  fleetRepoGhSetToken: (token: string): Promise<{ success: boolean; login?: string; error?: string }> =>
+    ipcRenderer.invoke(IPC_CHANNELS.FLEET_REPO_GH_SET_TOKEN, token),
+  fleetRepoGhDisconnect: (): Promise<{ success: boolean }> =>
+    ipcRenderer.invoke(IPC_CHANNELS.FLEET_REPO_GH_DISCONNECT),
+  fleetRepoGhCreateRepo: (repoName: string): Promise<{ success: boolean; error?: string }> =>
+    ipcRenderer.invoke(IPC_CHANNELS.FLEET_REPO_GH_CREATE_REPO, repoName),
+  fleetRepoGhSync: (): Promise<{ success: boolean; error?: string }> =>
+    ipcRenderer.invoke(IPC_CHANNELS.FLEET_REPO_GH_SYNC),
+  fleetRepoSetCustomRemote: (url: string, token: string, username?: string): Promise<{ success: boolean; error?: string }> =>
+    ipcRenderer.invoke(IPC_CHANNELS.FLEET_REPO_SET_CUSTOM_REMOTE, url, token, username),
+  fleetRepoSetAutoSync: (enabled: boolean): Promise<{ success: boolean }> =>
+    ipcRenderer.invoke(IPC_CHANNELS.FLEET_REPO_SET_AUTO_SYNC, enabled),
+  fleetRepoGhListRepos: (): Promise<{ success: boolean; repos?: Array<{ fullName: string; private: boolean; pushedAt?: string }>; error?: string }> =>
+    ipcRenderer.invoke(IPC_CHANNELS.FLEET_REPO_GH_LIST_REPOS),
+  fleetRepoGhUseExisting: (fullName: string): Promise<{ success: boolean; error?: string }> =>
+    ipcRenderer.invoke(IPC_CHANNELS.FLEET_REPO_GH_USE_EXISTING, fullName),
+  navOpenView: (view: string): Promise<void> =>
+    ipcRenderer.invoke(IPC_CHANNELS.NAV_OPEN_VIEW, view),
+
   deleteParamCheckpoint: (boardUid: string, checkpointId: string): Promise<{ success: boolean }> =>
     ipcRenderer.invoke(IPC_CHANNELS.PARAM_HISTORY_DELETE, boardUid, checkpointId),
 

@@ -511,7 +511,7 @@ export function CompanionStoreDialog({ onClose }: CompanionStoreDialogProps) {
 
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50">
-      <div className="bg-surface-input rounded-2xl border border-subtle w-full max-w-2xl mx-4 shadow-2xl overflow-hidden">
+      <div className="bg-surface-solid rounded-2xl border border-subtle w-full max-w-2xl mx-4 shadow-2xl overflow-hidden">
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-subtle">
           <div className="flex items-center gap-3">

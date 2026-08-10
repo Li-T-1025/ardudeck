@@ -215,6 +215,44 @@ export interface ModulePanelRegistration {
   component: ComponentType;
 }
 
+// ── Fleet vault (requires the 'vault' manifest permission) ──────
+
+export interface VaultStatusInfo {
+  initialized: boolean;
+  commitCount: number;
+  /** Snapshots are pushed to the remote automatically */
+  autoSync: boolean;
+  /** An online remote (GitHub or custom) is connected and configured */
+  backupConfigured: boolean;
+  lastSyncAt?: number;
+}
+
+export interface VaultUnitInfo {
+  uid: string;
+  name: string;
+  vehicleType?: string;
+  sitl?: boolean;
+  lastSnapshotAt?: number;
+  paramCount?: number;
+}
+
+export interface VaultHistoryEntryInfo {
+  oid: string;
+  message: string;
+  timestamp: number;
+  /** Repo-relative paths this snapshot touched */
+  files: string[];
+}
+
+/** Identity of the vehicle currently on the link, in vault terms */
+export interface VehicleIdentity {
+  uid: string;
+  name: string;
+  sitl: boolean;
+  /** True when the user picked this unit manually ("Working on") */
+  overridden?: boolean;
+}
+
 export interface RendererHostApi {
   moduleSlug: string;
   telemetry: {
@@ -245,6 +283,35 @@ export interface RendererHostApi {
   invoke(channel: string, data: unknown): Promise<unknown>;
   log(level: 'info' | 'warn' | 'error', ...args: unknown[]): void;
   registerMountPoint(name: MountPointName, component: ComponentType): void;
+  /**
+   * Fleet vault access (snapshots, history, sync). Requires the 'vault'
+   * manifest permission; every method rejects without it. The vault engine
+   * and its setup UI (GitHub connect, restore) stay host-owned - modules can
+   * read history, take snapshots and trigger sync, not manage credentials.
+   */
+  vault: {
+    status(): Promise<VaultStatusInfo>;
+    listUnits(): Promise<VaultUnitInfo[]>;
+    history(limit?: number): Promise<VaultHistoryEntryInfo[]>;
+    /** Read a file from the vault (current, or at a history entry's oid) */
+    readFile(path: string, oid?: string): Promise<string | null>;
+    /** Snapshot the connected vehicle's parameters (host identity rules apply) */
+    snapshotParams(note?: string): Promise<{ success: boolean; changed?: boolean; error?: string }>;
+    sync(): Promise<{ success: boolean; error?: string }>;
+  };
+  /**
+   * Which vehicle the app currently attributes work to (auto-detected or
+   * user-overridden). Null while disconnected or unidentified.
+   */
+  vehicleIdentity: {
+    get(): VehicleIdentity | null;
+    subscribe(listener: (identity: VehicleIdentity | null) => void): () => void;
+  };
+  /** Host lifecycle events modules can react to */
+  events: {
+    /** Fires after parameters were successfully written to flash */
+    onParamsFlashed(listener: (info: { paramCount: number }) => void): () => void;
+  };
   /**
    * Contribute a panel to the host-owned module dock (one collision-free tray
    * the host renders in a corner). The module supplies only the panel body; the

@@ -59,6 +59,19 @@ function getDeviceName(): string {
 // Activate License
 // --------------------------------------------------------------------------
 
+/** Numeric dotted-version compare; pre-release suffixes are ignored. */
+function compareSemver(a: string, b: string): number {
+  const aParts = a.split('-')[0]!.split('.').map(Number);
+  const bParts = b.split('-')[0]!.split('.').map(Number);
+  for (let i = 0; i < Math.max(aParts.length, bParts.length); i++) {
+    const aVal = aParts[i] || 0;
+    const bVal = bParts[i] || 0;
+    if (aVal < bVal) return -1;
+    if (aVal > bVal) return 1;
+  }
+  return 0;
+}
+
 export async function activateLicense(
   key: string,
   onProgress: (p: ModuleProgress) => void,
@@ -193,6 +206,17 @@ export async function activateLicense(
       const parsed = parseModuleManifest(JSON.parse(manifestRaw));
       if (!parsed.ok) {
         throw new Error(`Invalid manifest for ${slug}: ${parsed.error}`);
+      }
+
+      // Refuse cargo that needs a newer app: a module built against host APIs
+      // or capability gates this version doesn't have would install "fine" and
+      // then break at runtime (or silently gate nothing).
+      const minVersion = parsed.manifest.minArduDeckVersion;
+      if (minVersion && compareSemver(app.getVersion(), minVersion) < 0) {
+        await rm(installPath, { recursive: true, force: true });
+        throw new Error(
+          `${parsed.manifest.name} needs ArduDeck ${minVersion} or newer (you have ${app.getVersion()}). Update ArduDeck first.`,
+        );
       }
 
       newModules.push({

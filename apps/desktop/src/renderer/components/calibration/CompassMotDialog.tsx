@@ -146,7 +146,7 @@ export function CompassMotDialog({ onClose }: CompassMotDialogProps) {
       onClick={handleClose}
     >
       <div
-        className="bg-surface-raised rounded-xl border border-subtle w-full max-w-lg mx-4 shadow-2xl max-h-[90vh] overflow-y-auto"
+        className="bg-surface-solid rounded-xl border border-subtle w-full max-w-lg mx-4 shadow-2xl max-h-[90vh] overflow-y-auto"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}

@@ -2366,7 +2366,7 @@ export function MspConfigView() {
       {/* Platform Change Overlay */}
       {platformChangeState !== 'idle' && (
         <div className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center">
-          <div className="bg-surface border rounded-xl p-8 max-w-md mx-4 shadow-2xl text-center">
+          <div className="bg-surface-solid border rounded-xl p-8 max-w-md mx-4 shadow-2xl text-center">
             {/* Icon based on state */}
             {platformChangeState === 'error' ? (
               <div className="w-16 h-16 rounded-full bg-red-500/20 flex items-center justify-center mx-auto mb-4">

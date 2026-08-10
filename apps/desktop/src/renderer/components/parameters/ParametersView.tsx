@@ -1085,7 +1085,7 @@ export function ParametersView() {
       {/* Write to Flash Confirmation Modal */}
       {showWriteConfirm && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-surface border rounded-xl shadow-2xl max-w-lg w-full mx-4 max-h-[80vh] flex flex-col">
+          <div className="bg-surface-solid border rounded-xl shadow-2xl max-w-lg w-full mx-4 max-h-[80vh] flex flex-col">
             <div className="px-6 py-4 border-b border-subtle">
               <h3 className="text-lg font-semibold text-content">Write Parameters to Flash</h3>
               <p className="text-sm text-content-secondary mt-1">
@@ -1150,7 +1150,7 @@ export function ParametersView() {
       {/* File Compare Modal */}
       {showCompareModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-surface border rounded-xl shadow-2xl max-w-2xl w-full mx-4 max-h-[80vh] flex flex-col">
+          <div className="bg-surface-solid border rounded-xl shadow-2xl max-w-2xl w-full mx-4 max-h-[80vh] flex flex-col">
             <div className="px-6 py-4 border-b border-subtle">
               <h3 className="text-lg font-semibold text-content">Compare Parameters</h3>
               <p className="text-sm text-content-secondary mt-1">

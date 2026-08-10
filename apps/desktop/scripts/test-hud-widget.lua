@@ -244,5 +244,16 @@ local okLive, errLive = pcall(function () M.refresh(w, nil, nil) end)
 check('refresh (LIVE path) runs', okLive and 1 or 0, 1)
 if not okLive then print('  refresh error: ' .. tostring(errLive)) end
 
+-- Resolution independence: a TX16S-class LCD (480x272) must load and render
+-- the default (480x320-authored) layout without crashing - layouts rescale
+-- into the fixed-chrome band (header 48 / ticker 72).
+LCD_W, LCD_H = 480, 272
+local M272 = assert(loadfile('resources/edgetx/ardudeck-hud/SD/WIDGETS/ardudeck/loadable.lua'))()
+local w272 = M272.create({ x = 0, y = 0, w = 480, h = 272 }, {})
+local ok272, err272 = pcall(function () M272.refresh(w272, nil, nil) end)
+check('refresh @480x272 runs', ok272 and 1 or 0, 1)
+if not ok272 then print('  refresh error: ' .. tostring(err272)) end
+LCD_W, LCD_H = 480, 320
+
 print(failures == 0 and 'ALL PASS' or (failures .. ' FAILURES'))
 os.exit(failures == 0 and 0 or 1)

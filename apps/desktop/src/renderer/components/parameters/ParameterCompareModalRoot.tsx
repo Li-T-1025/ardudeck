@@ -59,7 +59,7 @@ function CompareModal() {
 
   return (
     <div className="fixed inset-0 bg-surface-overlay flex items-center justify-center z-[120]">
-      <div className="bg-surface border border-subtle rounded-xl shadow-2xl max-w-2xl w-full mx-4 max-h-[640px] h-[640px] flex flex-col overflow-hidden">
+      <div className="bg-surface-solid border border-subtle rounded-xl shadow-2xl max-w-2xl w-full mx-4 max-h-[640px] h-[640px] flex flex-col overflow-hidden">
         {fileApplyResult ? (
           <SummaryView
             result={fileApplyResult}

@@ -81,7 +81,7 @@ export function VehicleTemplatePicker({ onSelect, onImportFromConnected, onClose
 
   return (
     <div className="fixed inset-0 bg-surface-overlay flex items-center justify-center z-[70] p-4">
-      <div className="bg-surface-raised rounded-xl border border-subtle w-full max-w-5xl max-h-[85vh] flex flex-col shadow-2xl">
+      <div className="bg-surface-solid rounded-xl border border-subtle w-full max-w-5xl max-h-[85vh] flex flex-col shadow-2xl">
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-subtle">
           <div>

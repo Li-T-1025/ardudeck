@@ -61,6 +61,11 @@ import ParamHistoryModal from './ParamHistoryModal';
 import { MotorTestTab } from './motor-test/MotorTestTab';
 import ServoOutputTab from './servo-output/ServoOutputTab';
 import { FilesTab } from './FilesTab';
+import { VaultSyncBadge } from '../vault/VaultSyncBadge';
+import { VaultAutoSyncToggle } from '../vault/VaultAutoSyncToggle';
+import { useFleetRepoStore } from '../../stores/fleet-repo-store';
+import { emitParamsFlashed } from '../../modules/module-host-renderer';
+import { isCargoEnabled, VAULT_CARGO_SLUG } from '../../modules/capabilities';
 
 // Toast notification state
 type ToastType = 'success' | 'error' | 'info';
@@ -348,6 +353,12 @@ export const MavlinkConfigView: React.FC = () => {
 
       const result = await window.electronAPI?.writeParamsToFlash();
       if (result?.success) {
+        // Vault backup: full param snapshot after a successful flash write.
+        // Auto-sync pushes it to the remote from the main side.
+        if (isCargoEnabled(VAULT_CARGO_SLUG) && useFleetRepoStore.getState().status?.autoSync) {
+          void useFleetRepoStore.getState().snapshotParams('after flash write');
+        }
+        emitParamsFlashed({ paramCount: modified.length });
         // Check if any written params require a reboot
         const rebootParams = modified.filter(p => isRebootRequired(p.id)).map(p => p.id);
         if (rebootParams.length > 0) {
@@ -480,6 +491,7 @@ export const MavlinkConfigView: React.FC = () => {
           </div>
 
           <div className="flex items-center gap-3">
+            <VaultSyncBadge variant="button" />
             {isLoading && (
               <div className="flex items-center gap-2 px-3 py-1.5 bg-blue-500/10 border-blue-500/30 rounded-lg">
                 <Loader2 className="w-4 h-4 text-blue-400 animate-spin" />
@@ -680,7 +692,7 @@ export const MavlinkConfigView: React.FC = () => {
           restart a live flight controller. */}
       {showRebootConfirm && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-surface border rounded-xl shadow-2xl max-w-sm w-full mx-4">
+          <div className="bg-surface-solid border rounded-xl shadow-2xl max-w-sm w-full mx-4">
             <div className="px-6 py-4 border-b border-subtle">
               <h3 className="text-lg font-semibold text-content flex items-center gap-2">
                 <AlertTriangle className="w-5 h-5 text-amber-400 shrink-0" />
@@ -712,7 +724,7 @@ export const MavlinkConfigView: React.FC = () => {
       {/* Write to Flash Confirmation Modal */}
       {showWriteConfirm && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-surface border rounded-xl shadow-2xl max-w-lg w-full mx-4 max-h-[80vh] flex flex-col">
+          <div className="bg-surface-solid border rounded-xl shadow-2xl max-w-lg w-full mx-4 max-h-[80vh] flex flex-col">
             <div className="px-6 py-4 border-b border-subtle">
               <h3 className="text-lg font-semibold text-content">Write Parameters to Flash</h3>
               <p className="text-sm text-content-secondary mt-1">
@@ -756,7 +768,9 @@ export const MavlinkConfigView: React.FC = () => {
               </table>
             </div>
 
-            <div className="px-6 py-4 border-t border-subtle flex justify-end gap-3">
+            <div className="px-6 py-4 border-t border-subtle flex items-center gap-3">
+              <VaultAutoSyncToggle />
+              <div className="flex-1" />
               <button
                 onClick={() => setShowWriteConfirm(false)}
                 className="px-4 py-2 text-sm text-content-secondary hover:text-content transition-colors"

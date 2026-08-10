@@ -13,6 +13,7 @@ export default {
         surface: {
           base: 'var(--bg-base)',
           DEFAULT: 'var(--bg-surface)',
+          solid: 'var(--bg-surface-solid)',
           raised: 'var(--bg-surface-raised)',
           inset: 'var(--bg-inset)',
           input: 'var(--bg-input)',

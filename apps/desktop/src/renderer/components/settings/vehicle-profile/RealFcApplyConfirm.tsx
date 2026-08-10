@@ -36,7 +36,7 @@ export function RealFcApplyConfirm({
 
   return (
     <div className="fixed inset-0 bg-surface-overlay flex items-center justify-center z-[80] p-4">
-      <div className="bg-surface-raised rounded-xl border border-amber-500/40 w-full max-w-lg shadow-2xl">
+      <div className="bg-surface-solid rounded-xl border border-amber-500/40 w-full max-w-lg shadow-2xl">
         <div className="px-5 pt-5 pb-4">
           <div className="flex items-start gap-3">
             <div className="w-10 h-10 rounded-lg bg-amber-500/15 flex items-center justify-center shrink-0">

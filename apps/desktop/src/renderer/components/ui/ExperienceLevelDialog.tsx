@@ -8,7 +8,7 @@ interface ExperienceLevelDialogProps {
 export function ExperienceLevelDialog({ onSelect }: ExperienceLevelDialogProps) {
   return (
     <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50">
-      <div className="bg-surface-input rounded-2xl border border-subtle w-full max-w-lg mx-4 shadow-2xl overflow-hidden">
+      <div className="bg-surface-solid rounded-2xl border border-subtle w-full max-w-lg mx-4 shadow-2xl overflow-hidden">
         {/* Header */}
         <div className="px-6 pt-6 pb-2 text-center">
           <h2 className="text-lg font-semibold text-content">Welcome to ArduDeck</h2>

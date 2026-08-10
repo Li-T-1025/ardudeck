@@ -25,8 +25,19 @@ export interface Capability {
   osdElements?: string[];
 }
 
+/** Cargo slug that enables the entire Fleet Vault surface. */
+export const VAULT_CARGO_SLUG = 'com.ardudeck.vault';
+/** Cargo slug that enables the Mission Library surface. */
+export const MISSION_LIBRARY_CARGO_SLUG = 'com.ardudeck.mission-library';
+
 export const CAPABILITIES: Capability[] = [
   // Example (not active): { slug: 'com.ardudeck.area-editor', viewId: 'mission' },
+  // Fleet Vault: nav view plus every vault surface embedded in other screens
+  // (sync badges, auto-backup chips) - those consult useCargoEnabled directly.
+  { slug: VAULT_CARGO_SLUG, viewId: 'vault' },
+  // Mission Library: nav view plus the "Save to Library" entry in the mission
+  // toolbar's save menu (gated via useCargoEnabled in MissionToolbar).
+  { slug: MISSION_LIBRARY_CARGO_SLUG, viewId: 'library' },
 ];
 
 const GATED_VIEWS: ReadonlyMap<ViewId, string> = new Map(
@@ -46,6 +57,11 @@ export function useCargoEnabled(slug: string): boolean {
     () => modules.some((m) => m.slug === slug && m.enabled !== false),
     [modules, slug],
   );
+}
+
+/** Non-hook variant for imperative call sites (event handlers, stores). */
+export function isCargoEnabled(slug: string): boolean {
+  return useModuleStore.getState().modules.some((m) => m.slug === slug && m.enabled !== false);
 }
 
 /** Ids from the chosen Capability field whose gating cargo is missing or off. */
@@ -73,11 +89,16 @@ export function useGatedOffOsdElements(): ReadonlySet<string> {
   return useGatedOffIds('osdElements');
 }
 
-/** Reactive set of activatable module slugs currently enabled on this device. */
+/**
+ * Reactive set of module slugs currently enabled on this device. A slug only
+ * has gating power when it appears in CAPABILITIES, so including installable
+ * (bundle-shipping) cargo alongside activatable cargo is harmless and lets a
+ * bundle cargo gate built-in surfaces too (the Fleet Vault pattern).
+ */
 export function useEnabledCapabilitySlugs(): ReadonlySet<string> {
   const modules = useModuleStore((s) => s.modules);
   return useMemo(
-    () => new Set(modules.filter((m) => m.activatable && m.enabled !== false).map((m) => m.slug)),
+    () => new Set(modules.filter((m) => m.enabled !== false).map((m) => m.slug)),
     [modules],
   );
 }

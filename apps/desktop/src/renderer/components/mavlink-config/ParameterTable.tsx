@@ -9,6 +9,10 @@ import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { History, AlertTriangle, RotateCw, Loader2, Star, CheckCircle, XCircle, Info, ExternalLink, Cpu, Pencil, Check } from 'lucide-react';
 import { useParameterStore, type SortColumn } from '../../stores/parameter-store';
+import { useFleetRepoStore } from '../../stores/fleet-repo-store';
+import { VaultAutoSyncToggle } from '../vault/VaultAutoSyncToggle';
+import { emitParamsFlashed } from '../../modules/module-host-renderer';
+import { isCargoEnabled, VAULT_CARGO_SLUG } from '../../modules/capabilities';
 import { useSettingsStore } from '../../stores/settings-store';
 import { PARAMETER_GROUPS } from '../../../shared/parameter-groups';
 import { useConnectionStore } from '../../stores/connection-store';
@@ -256,6 +260,12 @@ const ParameterTable: React.FC = () => {
 
       const result = await window.electronAPI?.writeParamsToFlash();
       if (result?.success) {
+        // Vault backup: full param snapshot after a successful flash write.
+        // Auto-sync (if enabled) pushes it to the remote from the main side.
+        if (isCargoEnabled(VAULT_CARGO_SLUG) && useFleetRepoStore.getState().status?.autoSync) {
+          void useFleetRepoStore.getState().snapshotParams('after flash write');
+        }
+        emitParamsFlashed({ paramCount: modified.length });
         // Check if any written params require a reboot
         const rebootParams = modified.filter(p => isRebootRequired(p.id)).map(p => p.id);
         if (rebootParams.length > 0) {
@@ -1220,7 +1230,7 @@ const ParameterTable: React.FC = () => {
       {/* Write to Flash Confirmation Modal */}
       {showWriteConfirm && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-surface border rounded-xl shadow-2xl max-w-lg w-full mx-4 max-h-[80vh] flex flex-col">
+          <div className="bg-surface-solid border rounded-xl shadow-2xl max-w-lg w-full mx-4 max-h-[80vh] flex flex-col">
             <div className="px-6 py-4 border-b border-subtle">
               <h3 className="text-lg font-semibold text-content">Write Parameters to Flash</h3>
               <p className="text-sm text-content-secondary mt-1">
@@ -1264,7 +1274,9 @@ const ParameterTable: React.FC = () => {
               </table>
             </div>
 
-            <div className="px-6 py-4 border-t border-subtle flex justify-end gap-3">
+            <div className="px-6 py-4 border-t border-subtle flex items-center gap-3">
+              <VaultAutoSyncToggle />
+              <div className="flex-1" />
               <button
                 onClick={() => setShowWriteConfirm(false)}
                 className="px-4 py-2 text-sm text-content-secondary hover:text-content transition-colors"
@@ -1295,7 +1307,7 @@ const ParameterTable: React.FC = () => {
       {/* File Compare Modal: shows compare view OR post-apply summary */}
       {showCompareModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-surface border rounded-xl shadow-2xl max-w-2xl w-full mx-4 max-h-[640px] h-[640px] flex flex-col overflow-hidden">
+          <div className="bg-surface-solid border rounded-xl shadow-2xl max-w-2xl w-full mx-4 max-h-[640px] h-[640px] flex flex-col overflow-hidden">
 
             {fileApplyResult ? (
               /* Post-apply summary view */
@@ -1557,7 +1569,7 @@ const ParameterTable: React.FC = () => {
       {/* Reboot Cycle Results Modal */}
       {cycleResult && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-surface border rounded-xl shadow-2xl max-w-lg w-full mx-4 flex flex-col">
+          <div className="bg-surface-solid border rounded-xl shadow-2xl max-w-lg w-full mx-4 flex flex-col">
             <div className="px-6 py-4 border-b border-subtle">
               <h3 className="text-lg font-semibold text-content">Reboot Cycle Complete</h3>
             </div>

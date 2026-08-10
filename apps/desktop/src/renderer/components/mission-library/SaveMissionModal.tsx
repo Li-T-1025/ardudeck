@@ -71,7 +71,7 @@ export function SaveMissionModal({ onClose, onSaved, importedItems, importedHome
 
   return (
     <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50">
-      <div className="bg-surface-raised rounded-xl border border-subtle w-full max-w-md mx-4 overflow-hidden shadow-2xl">
+      <div className="bg-surface-solid rounded-xl border border-subtle w-full max-w-md mx-4 overflow-hidden shadow-2xl">
         {/* Header */}
         <div className="px-6 py-4 border-b border-subtle">
           <div className="flex items-center gap-3">

@@ -52,7 +52,8 @@ export const RADIO_VARIANTS: RadioVariant[] = [
   { id: 'c480x272', label: '480x272 color', radios: 'TX16S / TX16S mkII, T16, T18, Horus X10S/X12S' },
   { id: 'c800x480', label: '800x480 color', radios: 'TX16S mkIII' },
   { id: 'c320x480', label: '320x480 portrait color', radios: 'Flysky NV14 / EL18' },
-  { id: 'bw128x64', label: '128x64 B&W', radios: 'Zorro, TX12, T-Lite/T-Pro, QX7, X9 Lite' },
+  { id: 'bw128x64', label: '128x64 B&W', radios: 'Zorro, TX12, MT12, Boxer, Pocket, T-Lite/T-Pro, QX7, X9 Lite' },
+  { id: 'bw212x64', label: '212x64 B&W', radios: 'Taranis X9D/X9D+/X9E' },
 ];
 
 export const EDGETX_PACKAGES: EdgeTxPackage[] = [
@@ -81,14 +82,23 @@ export const EDGETX_PACKAGES: EdgeTxPackage[] = [
     id: 'ardudeck-hud',
     name: 'ArduDeck HUD',
     description:
-      'Glanceable ArduDeck-styled flight screen: big honest numbers, armed/mode bar, live STATUSTEXT ticker, and a diagnostic ladder that tells you exactly why telemetry is missing instead of "no telemetry". Config is generated from your connected vehicle. 480x320 color radios (TX15).',
+      'Glanceable ArduDeck-styled flight screen: big honest numbers, armed/mode bar, live STATUSTEXT ticker, and a diagnostic ladder that tells you exactly why telemetry is missing instead of "no telemetry". Config is generated from your connected vehicle. All color radios; layouts rescale to the screen. B&W radios get a dense telemetry script - experimental, not yet verified on real monochrome hardware.',
     homepage: 'https://ardudeck.com',
     license: 'GPL-3.0',
-    source: { kind: 'bundled', dir: 'ardudeck-hud', version: '0.2.0' },
+    source: { kind: 'bundled', dir: 'ardudeck-hud', version: '0.3.0' },
+    // One payload for every color class: the widget rescales layouts to
+    // LCD_W/LCD_H at load (hud.cfg carries the authored screen=WxH).
+    // B&W radios have no widget API: they get a telemetry SCRIPT (SDBW)
+    // plus the color payload for the shared voice pack + hud.cfg path.
     mappings: {
       c480x320: [{ archivePath: 'SD' }],
+      c480x272: [{ archivePath: 'SD' }],
+      c800x480: [{ archivePath: 'SD' }],
+      c320x480: [{ archivePath: 'SD' }],
+      bw128x64: [{ archivePath: 'SD' }, { archivePath: 'SDBW' }],
+      bw212x64: [{ archivePath: 'SD' }, { archivePath: 'SDBW' }],
     },
-    variants: RADIO_VARIANTS.filter((v) => v.id === 'c480x320'),
+    variants: RADIO_VARIANTS,
   },
 ];
 

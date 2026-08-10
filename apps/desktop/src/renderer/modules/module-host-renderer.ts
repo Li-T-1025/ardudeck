@@ -6,6 +6,11 @@ import { useNavigationStore } from '../stores/navigation-store';
 import { useParameterStore } from '../stores/parameter-store';
 import { useMissionStore } from '../stores/mission-store';
 import { useCommandTargetStore, commandTargetKey } from '../stores/command-target-store';
+import {
+  useFleetRepoStore,
+  getCurrentVaultUnit,
+  subscribeCurrentVaultUnit,
+} from '../stores/fleet-repo-store';
 import { useHudStore } from '../stores/hud-store';
 import { useHudOverlayStore } from '../stores/hud-overlay-store';
 import { buildHudProjection } from '../components/camera/hud/hud-projection';
@@ -29,6 +34,23 @@ import {
 
 type RegisterFn = (slug: string, name: MountPointName, component: ComponentType) => void;
 
+// ── Host lifecycle events ───────────────────────────────────────
+// Emitted by core surfaces (write-to-flash paths), consumed by modules via
+// host.events. Module listeners must never break the emitter.
+
+const paramsFlashedListeners = new Set<(info: { paramCount: number }) => void>();
+
+/** Core calls this after a successful write-to-flash. */
+export function emitParamsFlashed(info: { paramCount: number }): void {
+  for (const listener of paramsFlashedListeners) {
+    try {
+      listener(info);
+    } catch (err) {
+      console.error('[module-host] paramsFlashed listener threw', err);
+    }
+  }
+}
+
 function currentHudProjection(): HudProjection | null {
   if (!useHudOverlayStore.getState().active) return null;
   return buildHudProjection(useHudStore.getState().config);
@@ -49,7 +71,14 @@ export function unregisterModuleSurveyGenerators(slug: string): void {
 export function createRendererHostApi(
   slug: string,
   register: RegisterFn,
+  permissions: readonly string[] = [],
 ): RendererHostApi {
+  const requireVault = () => {
+    if (!permissions.includes('vault')) {
+      throw new Error(`[module:${slug}] vault access requires the 'vault' manifest permission`);
+    }
+  };
+
   return {
     moduleSlug: slug,
 
@@ -165,6 +194,57 @@ export function createRendererHostApi(
         if (!surveyGeneratorsBySlug.get(slug)?.has(id)) return;
         unregisterSurveyGenerator(id);
         surveyGeneratorsBySlug.get(slug)?.delete(id);
+      },
+    },
+
+    vault: {
+      status: async () => {
+        requireVault();
+        const s = await window.electronAPI.fleetRepoStatus();
+        return {
+          initialized: s.initialized,
+          commitCount: s.commitCount,
+          autoSync: s.autoSync,
+          backupConfigured: s.github.connected && Boolean(s.github.repo),
+          lastSyncAt: s.github.lastSyncAt,
+        };
+      },
+      listUnits: async () => {
+        requireVault();
+        return window.electronAPI.fleetRepoListUnits();
+      },
+      history: async (limit?: number) => {
+        requireVault();
+        return window.electronAPI.fleetRepoHistory(limit);
+      },
+      readFile: async (path: string, oid?: string) => {
+        requireVault();
+        return window.electronAPI.fleetRepoReadFile(path, oid);
+      },
+      snapshotParams: async (note?: string) => {
+        requireVault();
+        // Store action, not raw IPC: it applies identity rules (override,
+        // SITL quarantine) and refreshes vault state for every consumer.
+        const ok = await useFleetRepoStore.getState().snapshotParams(note);
+        return ok
+          ? { success: true }
+          : { success: false, error: useFleetRepoStore.getState().lastError ?? 'Snapshot failed' };
+      },
+      sync: async () => {
+        requireVault();
+        return window.electronAPI.fleetRepoGhSync();
+      },
+    },
+
+    vehicleIdentity: {
+      get: () => getCurrentVaultUnit(),
+      subscribe: (listener) => subscribeCurrentVaultUnit(listener),
+    },
+
+    events: {
+      onParamsFlashed: (listener) => {
+        paramsFlashedListeners.add(listener);
+        return () => paramsFlashedListeners.delete(listener);
       },
     },
 

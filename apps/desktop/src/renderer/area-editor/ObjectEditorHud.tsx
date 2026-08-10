@@ -18,6 +18,7 @@ import { objectWorldRing, objectWorldBranches } from './area-object';
 import { colorForIndex } from './objects-geo';
 import { computeAreaHud, aggregateAreaHud, type AreaHud } from './area-editor-hud';
 import { formatDurationSec } from '../utils/flight-briefing';
+import { VaultSyncBadge } from '../components/vault/VaultSyncBadge';
 import { formatSurveyAreaHa, formatSurveyDistanceM } from './survey-units';
 import { UNIT_LABELS, type AreaUnit, type DistanceUnit } from '../../shared/user-units.js';
 import type { SurveyConfig, SurveyResult } from '../components/survey/survey-types';
@@ -123,6 +124,7 @@ export function ObjectEditorHud(): JSX.Element {
         <div className="flex items-center justify-between gap-2">
           <p className="text-xs font-semibold text-content">Flight Briefing</p>
           <div className="flex items-center gap-1.5">
+            <VaultSyncBadge />
             <span
               className="px-2 py-0.5 rounded-md text-[11px] font-medium bg-surface-input text-content-secondary"
               data-tip={`Area in ${UNIT_LABELS.area[areaUnit]}, distance in ${UNIT_LABELS.distance[distanceUnit]}`}

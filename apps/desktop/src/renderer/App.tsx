@@ -24,6 +24,7 @@ import { ModuleDock } from './modules/ModuleDock';
 import { CompanionDashboard } from './components/companion/CompanionDashboard';
 import { LogsView } from './components/logs/LogsView';
 import { MavlinkInspectorView } from './components/inspector/MavlinkInspectorView';
+import { VaultView } from './components/vault/VaultView';
 import { setupWorkspaceSync } from './stores/workspace-store';
 import { startInspector } from './stores/inspector-store';
 import { startSafetyMonitor, refreshContext as refreshSafetyMonitorContext } from './safety-monitor/source';
@@ -94,10 +95,11 @@ interface WelcomeCard {
 
 const WELCOME_CARDS: WelcomeCard[] = [
   { title: 'Mission Planning', desc: 'Waypoints, surveys & geofences', color: 'orange', view: 'mission', iconPath: 'M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7' },
-  { title: 'Area Editor', desc: 'Draw mission areas on a live map', color: 'teal', badge: 'New', run: () => { window.electronAPI?.openAreaEditor?.().catch(() => undefined); }, iconPath: 'M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z' },
+  { title: 'Area Editor', desc: 'Draw mission areas on a live map', color: 'teal', run: () => { window.electronAPI?.openAreaEditor?.().catch(() => undefined); }, iconPath: 'M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z' },
+  { title: 'Radio HUD', desc: 'ArduDeck telemetry screen on your EdgeTX radio', color: 'teal', badge: 'New', view: 'radio-hud', iconPath: 'M3 7a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2V7zm4 12h10M9 21h6M7 9h4v4H7V9zm7 0h3M14 12h3' },
   { title: 'Firmware Flash', desc: 'Flash firmware over USB or DFU', color: 'amber', view: 'firmware', iconPath: 'M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z' },
   { title: 'SITL Simulator', desc: 'Test firmware without hardware', color: 'purple', view: 'sitl', iconPath: 'M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z' },
-  { title: '3D Sim World', desc: 'Fly SITL in a persistent 3D world', color: 'emerald', badge: 'New', run: () => { window.electronAPI?.openDetachedWindow?.({ componentId: 'sim-world', title: '3D Sim World', initialBounds: { width: 1280, height: 800 } }); }, iconPath: 'M21 12a9 9 0 11-18 0 9 9 0 0118 0zM3.6 9h16.8M3.6 15h16.8M12 3a15 15 0 010 18M12 3a15 15 0 000 18' },
+  { title: '3D Sim World', desc: 'Fly SITL in a persistent 3D world', color: 'emerald', run: () => { window.electronAPI?.openDetachedWindow?.({ componentId: 'sim-world', title: '3D Sim World', initialBounds: { width: 1280, height: 800 } }); }, iconPath: 'M21 12a9 9 0 11-18 0 9 9 0 0118 0zM3.6 9h16.8M3.6 15h16.8M12 3a15 15 0 010 18M12 3a15 15 0 000 18' },
   { title: 'Flight Log Analysis', desc: 'AI-powered flight log review', color: 'blue', view: 'logs', iconPath: 'M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z' },
   { title: 'Mission Library', desc: 'Browse & manage saved plans', color: 'indigo', view: 'library', iconPath: 'M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253' },
 ];
@@ -140,7 +142,7 @@ function VehicleMismatchDialog({
 }) {
   return (
     <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50">
-      <div className="bg-surface-raised rounded-xl border border-amber-500/50 w-full max-w-md mx-4 overflow-hidden shadow-2xl">
+      <div className="bg-surface-solid rounded-xl border border-amber-500/50 w-full max-w-md mx-4 overflow-hidden shadow-2xl">
         {/* Header */}
         <div className="px-6 py-4 border-b border-subtle bg-amber-500/10">
           <div className="flex items-center gap-3">
@@ -909,6 +911,10 @@ function App() {
       if (currentView === 'lua-graph') {
         return <LuaGraphView />;
       }
+      if (currentView === 'vault') {
+        // Local-first: history, diffs, GitHub setup and sync all work offline
+        return <VaultView />;
+      }
       if (currentView === 'modules') {
         return <ModuleManagerView />;
       }
@@ -1012,6 +1018,8 @@ function App() {
         return <LogsView />;
       case 'inspector':
         return <MavlinkInspectorView />;
+      case 'vault':
+        return <VaultView />;
       case 'telemetry':
       default:
         return <TelemetryDashboard />;
@@ -1086,7 +1094,7 @@ function App() {
       {/* CLI exit confirmation dialog */}
       {showCliExitDialog && (
         <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50">
-          <div className="bg-surface-raised rounded-xl border border-amber-500/50 w-full max-w-md mx-4 overflow-hidden shadow-2xl">
+          <div className="bg-surface-solid rounded-xl border border-amber-500/50 w-full max-w-md mx-4 overflow-hidden shadow-2xl">
             {/* Header */}
             <div className="px-6 py-4 border-b border-subtle bg-amber-500/10">
               <div className="flex items-center gap-3">

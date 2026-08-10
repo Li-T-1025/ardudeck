@@ -82,7 +82,7 @@ describe('parseModuleManifest', () => {
     expect(result.ok).toBe(false);
   });
 
-  it('requires at least one entry', () => {
+  it('accepts an empty entry (pure activator cargo that only gates built-ins)', () => {
     const result = parseModuleManifest({
       manifestVersion: 1,
       slug: 'a.b',
@@ -90,7 +90,7 @@ describe('parseModuleManifest', () => {
       version: '0.1.0',
       entry: {},
     });
-    expect(result.ok).toBe(false);
+    expect(result.ok).toBe(true);
   });
 
   it('rejects bad slug format', () => {
