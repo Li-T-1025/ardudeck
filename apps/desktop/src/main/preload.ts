@@ -15,7 +15,7 @@ import type { AuthoredObstacle } from '../shared/sim-obstacle-types.js';
 import type { TrafficBatch, TrafficConfig, TrafficSource, ViewportBbox } from '../shared/traffic-types.js';
 import type { NtripConfig, NtripStatus, NtripSourcetableResult } from '../shared/ntrip-types.js';
 import type { SystemInfo, NetworkInfo, MetricsData, ProcessInfo, LogEntry, FileEntry, ServiceInfo, ServiceAction, ContainerInfo, ContainerAction, ExtensionInfo } from '@ardudeck/companion-types';
-import type { InstalledModule, ModuleProgress, UpdateAvailable } from '../shared/module-types.js';
+import type { CargoDetail, InstalledModule, ModuleProgress, PublicCargo, UpdateAvailable } from '../shared/module-types.js';
 import type { ParamChange, ParamCheckpoint } from '../shared/param-history-types.js';
 import type { AttitudeData, PositionData, GpsData, BatteryData, VfrHudData, WindData, FlightState, RcChannelsData } from '../shared/telemetry-types.js';
 import type { MotorTestStartRequest, MotorTestResponse } from '../shared/motor-test-types.js';
@@ -2151,6 +2151,15 @@ const api = {
 
   moduleSetEnabled: (slug: string, enabled: boolean): Promise<{ success: boolean; modules?: InstalledModule[]; error?: string }> =>
     ipcRenderer.invoke(IPC_CHANNELS.MODULE_SET_ENABLED, slug, enabled),
+
+  moduleCatalogList: (): Promise<{ cargos: PublicCargo[]; error?: string }> =>
+    ipcRenderer.invoke(IPC_CHANNELS.MODULE_CATALOG_LIST),
+
+  moduleCatalogDetail: (slug: string): Promise<{ detail: CargoDetail | null; error?: string }> =>
+    ipcRenderer.invoke(IPC_CHANNELS.MODULE_CATALOG_DETAIL, slug),
+
+  moduleInstallFree: (slug: string): Promise<{ success: boolean; error?: string }> =>
+    ipcRenderer.invoke(IPC_CHANNELS.MODULE_INSTALL_FREE, slug),
 
   onModuleProgress: (callback: (progress: ModuleProgress) => void) => {
     const handler = (_: unknown, progress: ModuleProgress) => callback(progress);

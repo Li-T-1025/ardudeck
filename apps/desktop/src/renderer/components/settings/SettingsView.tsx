@@ -22,7 +22,8 @@ import { StallSpeedCalcButton } from './vehicle-profile/StallSpeedCalcButton';
 import { inferProfileFromParams } from '../../lib/vehicle-templates/import';
 import { saveParmToFile } from '../../lib/vehicle-templates/export-parm';
 import { getTemplate, defaultTemplateForType } from '../../lib/vehicle-templates/registry';
-import { Download } from 'lucide-react';
+import { Download, ArrowRight, Gauge, SlidersHorizontal, Map as MapIcon, FlaskConical, Info, type LucideIcon } from 'lucide-react';
+import { isWeatherBriefingAvailable, ADVISOR_CARGO_SLUG, useCargoEnabled } from '../../modules/capabilities';
 import type { VehicleTemplate } from '../../lib/vehicle-templates/types';
 import {
   AREA_INPUT_PRECISION,
@@ -469,6 +470,8 @@ function WeatherWidget({ vehicleType }: { vehicleType?: VehicleType }) {
   const [userLocation, setUserLocation] = useState<{ lat: number; lon: number } | null>(null);
   const [locationSource, setLocationSource] = useState<'vehicle' | 'device' | null>(null);
   const speedUnit = useSettingsStore((s) => s.unitPreferences.speed);
+  const setView = useNavigationStore((s) => s.setView);
+  const briefingAvailable = isWeatherBriefingAvailable();
 
   // Fallback: Get user's device location if vehicle GPS is not available
   useEffect(() => {
@@ -808,6 +811,16 @@ function WeatherWidget({ vehicleType }: { vehicleType?: VehicleType }) {
             )}
             {getVehicleLabel()} conditions
           </div>
+          {briefingAvailable && (
+            <button
+              onClick={() => setView('weather')}
+              className="mt-1.5 inline-flex items-center gap-1 text-[11px] font-medium text-content-secondary hover:text-content transition-colors"
+              data-tip="Open the full pre-flight weather briefing"
+            >
+              View in detail
+              <ArrowRight className="w-3 h-3" />
+            </button>
+          )}
         </div>
       </div>
 
@@ -1088,6 +1101,27 @@ function ArduPilotFlightStats() {
 /**
  * Settings View - App-level configuration with cool visualizations
  */
+type SettingsCategoryId = 'vehicle' | 'configuration' | 'maps' | 'advanced' | 'about';
+
+const SETTINGS_CATEGORIES: { id: SettingsCategoryId; label: string; icon: LucideIcon }[] = [
+  { id: 'vehicle', label: 'Vehicle', icon: Gauge },
+  { id: 'configuration', label: 'Configuration', icon: SlidersHorizontal },
+  { id: 'maps', label: 'Maps', icon: MapIcon },
+  { id: 'advanced', label: 'Advanced', icon: FlaskConical },
+  { id: 'about', label: 'About', icon: Info },
+];
+
+// Per-tab colour coding, same convention as the Parameters group tabs: the icon
+// carries its category colour always (dimmed when inactive) and the active pill
+// fills with it. Palette colours, so the /20 /30 opacity suffixes are allowed.
+const CATEGORY_COLORS: Record<SettingsCategoryId, { active: string; icon: string }> = {
+  vehicle:       { active: 'bg-blue-500/20 text-blue-400 border-blue-500/30',        icon: 'text-blue-400' },
+  configuration: { active: 'bg-purple-500/20 text-purple-400 border-purple-500/30',  icon: 'text-purple-400' },
+  maps:          { active: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30', icon: 'text-emerald-400' },
+  advanced:      { active: 'bg-orange-500/20 text-orange-400 border-orange-500/30',   icon: 'text-orange-400' },
+  about:         { active: 'bg-cyan-500/20 text-cyan-400 border-cyan-500/30',         icon: 'text-cyan-400' },
+};
+
 export function SettingsView() {
   const {
     missionDefaults,
@@ -1127,6 +1161,7 @@ export function SettingsView() {
   }, [scrollTarget]);
 
   const { connectionState } = useConnectionStore();
+  const [selectedCategory, setSelectedCategory] = useState<SettingsCategoryId>('vehicle');
   const [editingVehicleId, setEditingVehicleId] = useState<string | null>(null);
   const [showTemplatePicker, setShowTemplatePicker] = useState(false);
   const [missionLocalValues, setMissionLocalValues] = useState<Record<string, string>>({});
@@ -1287,16 +1322,45 @@ export function SettingsView() {
   };
 
   return (
-    <div className="h-full overflow-auto bg-surface-input">
-      <div className="max-w-6xl mx-auto p-6">
-        {/* Header */}
-        <div className="mb-6">
+    <div className="h-full flex flex-col bg-surface-input">
+      {/* Header */}
+      <div className="shrink-0 px-6 pt-6 pb-4">
+        <div className="max-w-6xl mx-auto">
           <h1 className="text-2xl font-semibold text-content">Settings</h1>
           <p className="text-content-secondary text-sm mt-1">
             Configure mission defaults and vehicle profiles
           </p>
         </div>
+      </div>
 
+      {/* Category tabs */}
+      <div className="shrink-0 px-4 py-2 border-b border-subtle bg-surface-overlay-subtle overflow-x-auto">
+        <div className="max-w-6xl mx-auto flex gap-1">
+          {SETTINGS_CATEGORIES.map((cat) => {
+            const isActive = selectedCategory === cat.id;
+            const Icon = cat.icon;
+            const colors = CATEGORY_COLORS[cat.id];
+            return (
+              <button
+                key={cat.id}
+                onClick={() => setSelectedCategory(cat.id)}
+                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors flex items-center gap-1.5 whitespace-nowrap ${
+                  isActive
+                    ? colors.active
+                    : 'text-content-secondary hover:text-content hover:bg-surface'
+                }`}
+              >
+                <Icon className={`w-3.5 h-3.5 ${colors.icon}${isActive ? '' : ' opacity-50'}`} />
+                {cat.label}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Scrollable content */}
+      <div className="flex-1 overflow-auto">
+        <div className="max-w-6xl mx-auto p-6">
         {/* Profile Compatibility Warning */}
         {connectionState.isConnected && !profileCompatibility.compatible && activeVehicle && connectionState.fcVariant && (
           <ProfileCompatibilityBanner
@@ -1308,6 +1372,8 @@ export function SettingsView() {
           />
         )}
 
+        {selectedCategory === 'vehicle' && (
+        <>
         {/* ============================================ */}
         {/* SECTION: Vehicle & Status Info */}
         {/* ============================================ */}
@@ -1512,7 +1578,11 @@ export function SettingsView() {
             </section>
           )}
         </div>
+        </>
+        )}
 
+        {selectedCategory === 'configuration' && (
+        <>
         {/* ============================================ */}
         {/* SECTION: Configuration */}
         {/* ============================================ */}
@@ -1865,7 +1935,11 @@ export function SettingsView() {
             </section>
           </div>
         </div>
+        </>
+        )}
 
+        {selectedCategory === 'maps' && (
+        <>
         {/* ============================================ */}
         {/* SECTION: Offline Maps */}
         {/* ============================================ */}
@@ -1903,22 +1977,21 @@ export function SettingsView() {
 
           <TrafficSettingsCard />
         </div>
+        </>
+        )}
 
-        {/* SECTION: Console */}
-        {/* ============================================ */}
-        <ConsoleSettingsSection />
+        {selectedCategory === 'advanced' && (
+          <>
+            {/* SECTION: Console */}
+            <ConsoleSettingsSection />
+            {/* SECTION: Experimental Features (AI Flight Analysis lives here). */}
+            <ExperimentalFeaturesSection />
+            <AiAnalysisSection />
+          </>
+        )}
 
-        {/* SECTION: AI Analysis */}
-        {/* ============================================ */}
-        <AiAnalysisSection />
-
-        {/* SECTION: Experimental Features */}
-        {/* ============================================ */}
-        <ExperimentalFeaturesSection />
-
-        {/* SECTION: About */}
-        {/* ============================================ */}
-        <AboutSection />
+        {selectedCategory === 'about' && <AboutSection />}
+        </div>
       </div>
     </div>
   );
@@ -2014,17 +2087,24 @@ function ConsoleSettingsSection() {
 }
 
 function AiAnalysisSection() {
+  const advisorEnabled = useCargoEnabled(ADVISOR_CARGO_SLUG);
   const aiProvider = useSettingsStore((s) => s.aiProvider);
   const setAiProvider = useSettingsStore((s) => s.setAiProvider);
   const [apiKey, setApiKey] = useState('');
   const [hasKey, setHasKey] = useState(false);
   const [saving, setSaving] = useState(false);
 
+  // Claude Advisor is Claude-only. A single enable toggle backs Claude.
   const providers = [
     { id: 'claude' as const, name: 'Claude', color: 'bg-orange-500' },
-    { id: 'openai' as const, name: 'OpenAI', color: 'bg-emerald-500' },
-    { id: 'gemini' as const, name: 'Gemini', color: 'bg-blue-500' },
   ];
+
+  // Normalize a stale persisted provider (an earlier build offered OpenAI and
+  // Gemini). Any non-null, non-claude value is coerced to 'claude' so the UI
+  // never sits in a dead state pointing at a provider it no longer offers.
+  useEffect(() => {
+    if (aiProvider && aiProvider !== 'claude') setAiProvider('claude');
+  }, [aiProvider, setAiProvider]);
 
   // Load existing key status on provider change
   useEffect(() => {
@@ -2050,6 +2130,8 @@ function AiAnalysisSection() {
     setHasKey(false);
     setAiProvider(null);
   };
+
+  if (!advisorEnabled) return null;
 
   return (
     <div className="mt-8">

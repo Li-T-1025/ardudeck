@@ -13,6 +13,9 @@ import {
   heartbeatAll,
   updateModule,
   setModuleEnabled,
+  listPublicCargos,
+  getCargoDetail,
+  installFreeCargo,
 } from './module-manager.js';
 import { getLoadedModules, loadAllModules } from './module-registry.js';
 import { killPty, resizePty, spawnPty, writePty } from './module-pty-service.js';
@@ -78,6 +81,40 @@ export function setupModuleIpc(mainWindow: BrowserWindow): void {
   ipcMain.handle(IPC_CHANNELS.MODULE_SET_ENABLED, (_, slug: string, enabled: boolean) => {
     try {
       return { success: true, modules: setModuleEnabled(slug, enabled) };
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      return { success: false, error: message };
+    }
+  });
+
+  // Browse the public, free Hangar catalog
+  ipcMain.handle(IPC_CHANNELS.MODULE_CATALOG_LIST, async () => {
+    try {
+      return { cargos: await listPublicCargos() };
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      console.error('[ModuleIPC] Catalog list error:', err);
+      return { cargos: [], error: message };
+    }
+  });
+
+  // Fetch the full marketing detail for one public cargo (preview blocks)
+  ipcMain.handle(IPC_CHANNELS.MODULE_CATALOG_DETAIL, async (_, slug: string) => {
+    try {
+      return { detail: await getCargoDetail(slug) };
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      console.error('[ModuleIPC] Catalog detail error:', err);
+      return { detail: null, error: message };
+    }
+  });
+
+  // One-click install a free public cargo by slug
+  ipcMain.handle(IPC_CHANNELS.MODULE_INSTALL_FREE, async (_, slug: string) => {
+    try {
+      return await installFreeCargo(slug, (progress) => {
+        mainWindow.webContents.send(IPC_CHANNELS.MODULE_PROGRESS, progress);
+      });
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       return { success: false, error: message };

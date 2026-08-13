@@ -79,16 +79,26 @@ export function createRendererHostApi(
     }
   };
 
+  // A Zustand store's getState() carries its action functions, which are not
+  // structured-cloneable. Handing a raw store snapshot to a module that then
+  // sends it over its own IPC (the Claude Advisor "ask" call) throws "An object
+  // could not be cloned". Return data-only snapshots (drop the function props).
+  const dataOnly = (state: object): Record<string, unknown> => {
+    const out: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(state)) if (typeof v !== 'function') out[k] = v;
+    return out;
+  };
+
   return {
     moduleSlug: slug,
 
     telemetry: {
-      getSnapshot: () => useTelemetryStore.getState() as unknown,
+      getSnapshot: () => dataOnly(useTelemetryStore.getState()),
       subscribe: (listener) => useTelemetryStore.subscribe(listener as (s: unknown) => void),
     },
 
     connection: {
-      getState: () => useConnectionStore.getState() as unknown,
+      getState: () => dataOnly(useConnectionStore.getState()),
       subscribe: (listener) => useConnectionStore.subscribe(listener as (s: unknown) => void),
     },
 

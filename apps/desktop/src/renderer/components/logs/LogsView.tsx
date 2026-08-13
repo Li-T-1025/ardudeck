@@ -5,6 +5,7 @@ import { HealthReportPanel } from './HealthReportPanel';
 import { LogExplorerPanel } from './LogExplorerPanel';
 import { AiAnalysisPanel } from './AiAnalysisPanel';
 import { FleetForensicsPanel } from './FleetForensicsPanel';
+import { ADVISOR_CARGO_SLUG, useCargoEnabled } from '../../modules/capabilities';
 
 export function LogsView() {
   const activeTab = useLogStore((s) => s.activeTab);
@@ -12,12 +13,14 @@ export function LogsView() {
   const currentLog = useLogStore((s) => s.currentLog);
   const aiProvider = useSettingsStore((s) => s.aiProvider);
   const aiMessages = useLogStore((s) => s.aiMessages);
+  const advisorEnabled = useCargoEnabled(ADVISOR_CARGO_SLUG);
+  const aiEnabled = advisorEnabled && !!aiProvider;
 
   const tabs = [
     { id: 'list' as const, label: 'Log List' },
     { id: 'report' as const, label: 'Health Report', disabled: !currentLog },
     { id: 'explorer' as const, label: 'Explorer', disabled: !currentLog },
-    ...(aiProvider ? [{ id: 'ai' as const, label: 'AI Analysis', disabled: !currentLog }] : []),
+    ...(aiEnabled ? [{ id: 'ai' as const, label: 'AI Analysis', disabled: !currentLog }] : []),
     { id: 'fleet' as const, label: 'Fleet Forensics' },
   ];
 
@@ -55,7 +58,7 @@ export function LogsView() {
         {activeTab === 'list' && <LogListPanel />}
         {activeTab === 'report' && currentLog && <HealthReportPanel />}
         {activeTab === 'explorer' && currentLog && <LogExplorerPanel />}
-        {activeTab === 'ai' && currentLog && <AiAnalysisPanel />}
+        {activeTab === 'ai' && aiEnabled && currentLog && <AiAnalysisPanel />}
         {activeTab === 'fleet' && <FleetForensicsPanel />}
       </div>
     </div>

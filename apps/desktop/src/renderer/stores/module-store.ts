@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { InstalledModule, ModuleProgress, UpdateAvailable } from '../../shared/module-types.js';
+import type { CargoDetail, InstalledModule, ModuleProgress, PublicCargo, UpdateAvailable } from '../../shared/module-types.js';
 
 interface ModuleState {
   // State
@@ -18,6 +18,21 @@ interface ModuleState {
   /** Why the last update check failed, or null if it succeeded. */
   updatesError: string | null;
 
+  // Browse catalog (public, free Hangar cargos)
+  catalog: PublicCargo[];
+  catalogLoading: boolean;
+  catalogError: string | null;
+  /** Slug currently being installed from the browse catalog, or null. */
+  installingSlug: string | null;
+
+  // Cargo detail (marketing preview shown in the detail modal)
+  /** Slug whose detail modal is open, or null when closed. */
+  openDetailSlug: string | null;
+  /** The fetched detail for the open cargo, or null while loading / on error. */
+  detail: CargoDetail | null;
+  detailLoading: boolean;
+  detailError: string | null;
+
   // Actions
   loadModules: () => Promise<void>;
   activateLicense: (key: string) => Promise<{ success: boolean; error?: string }>;
@@ -34,6 +49,17 @@ interface ModuleState {
   setEnabled: (slug: string, enabled: boolean) => Promise<{ success: boolean; error?: string }>;
   setProgress: (progress: ModuleProgress | null) => void;
   clearError: () => void;
+  /** Load the public, free Hangar catalog for the browse section. */
+  fetchCatalog: () => Promise<void>;
+  /**
+   * One-click install a free public cargo by slug, then refresh the installed
+   * list. Returns success; installable cargo needs a restart to load.
+   */
+  installFree: (slug: string) => Promise<{ success: boolean; error?: string }>;
+  /** Open the detail modal for a cargo and fetch its marketing preview. */
+  openDetail: (slug: string) => Promise<void>;
+  /** Close the detail modal and drop the fetched detail. */
+  closeDetail: () => void;
 }
 
 export const useModuleStore = create<ModuleState>((set, get) => ({
@@ -47,6 +73,14 @@ export const useModuleStore = create<ModuleState>((set, get) => ({
   checkingUpdates: false,
   updatesCheckedAt: null,
   updatesError: null,
+  catalog: [],
+  catalogLoading: false,
+  catalogError: null,
+  installingSlug: null,
+  openDetailSlug: null,
+  detail: null,
+  detailLoading: false,
+  detailError: null,
 
   loadModules: async () => {
     set({ isLoading: true, error: null });
@@ -168,4 +202,58 @@ export const useModuleStore = create<ModuleState>((set, get) => ({
   setProgress: (progress) => set({ progress }),
 
   clearError: () => set({ error: null }),
+
+  fetchCatalog: async () => {
+    set({ catalogLoading: true, catalogError: null });
+    try {
+      const result = await window.electronAPI.moduleCatalogList();
+      set({
+        catalog: result.cargos,
+        catalogError: result.error ?? null,
+        catalogLoading: false,
+      });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      set({ catalogError: message, catalogLoading: false });
+    }
+  },
+
+  installFree: async (slug: string) => {
+    set({ installingSlug: slug, error: null, progress: null });
+    try {
+      const result = await window.electronAPI.moduleInstallFree(slug);
+      if (!result.success) {
+        set({ installingSlug: null, error: result.error || 'Install failed' });
+        return result;
+      }
+      await get().loadModules();
+      set({ installingSlug: null });
+      return result;
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      set({ installingSlug: null, error: message });
+      return { success: false, error: message };
+    }
+  },
+
+  openDetail: async (slug: string) => {
+    set({ openDetailSlug: slug, detail: null, detailLoading: true, detailError: null });
+    try {
+      const result = await window.electronAPI.moduleCatalogDetail(slug);
+      // A newer open may have superseded this one while the fetch was in
+      // flight; ignore the stale result so the modal shows the right cargo.
+      if (get().openDetailSlug !== slug) return;
+      set({
+        detail: result.detail,
+        detailError: result.error ?? null,
+        detailLoading: false,
+      });
+    } catch (err) {
+      if (get().openDetailSlug !== slug) return;
+      const message = err instanceof Error ? err.message : String(err);
+      set({ detailError: message, detailLoading: false });
+    }
+  },
+
+  closeDetail: () => set({ openDetailSlug: null, detail: null, detailLoading: false, detailError: null }),
 }));

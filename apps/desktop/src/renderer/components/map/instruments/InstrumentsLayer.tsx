@@ -24,6 +24,7 @@ import {
   INSTRUMENT_SCALE_MAX,
   INSTRUMENT_SCALE_STEP,
   INSTRUMENT_OPACITY_MIN,
+  type InstrumentDisplayMode,
 } from '../../../stores/map-instruments-store';
 import { MAP_INSTRUMENTS, type MapInstrumentDef } from './registry';
 
@@ -37,6 +38,26 @@ function clampScale(v: number): number {
   const stepped = Math.round(v / INSTRUMENT_SCALE_STEP) * INSTRUMENT_SCALE_STEP;
   const rounded = Math.round(stepped * 100) / 100;
   return Math.max(INSTRUMENT_SCALE_MIN, Math.min(INSTRUMENT_SCALE_MAX, rounded));
+}
+
+// A tiny glyph previewing each display variant, so the picker shows what each
+// mode looks like rather than just naming it.
+function variantGlyph(id: string): JSX.Element {
+  const p = { width: 20, height: 20, viewBox: '0 0 20 20', fill: 'none' } as const;
+  switch (id) {
+    case 'analog':
+      return (<svg {...p}><circle cx="10" cy="10" r="6.5" stroke="currentColor" strokeWidth="1.4" /><path d="M10 10L13 6.2" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" /><circle cx="10" cy="10" r="1.1" fill="currentColor" /></svg>);
+    case 'numeric':
+      return (<svg {...p}><rect x="3" y="5.5" width="14" height="9" rx="2" stroke="currentColor" strokeWidth="1.3" /><text x="10" y="12.6" fontSize="7.5" fontWeight="700" textAnchor="middle" fill="currentColor" fontFamily="monospace">12</text></svg>);
+    case 'strip':
+      return (<svg {...p}><g fill="currentColor"><rect x="2.5" y="8.4" width="2.3" height="3.2" rx=".6" /><rect x="5.6" y="8.4" width="2.3" height="3.2" rx=".6" /><rect x="8.7" y="8.4" width="2.3" height="3.2" rx=".6" /><rect x="11.8" y="8.4" width="2.3" height="3.2" rx=".6" opacity=".38" /><rect x="14.9" y="8.4" width="2.3" height="3.2" rx=".6" opacity=".38" /></g></svg>);
+    case 'cell':
+      return (<svg {...p}><rect x="5.5" y="3.5" width="9" height="13" rx="2" stroke="currentColor" strokeWidth="1.3" /><path d="M7.8 13.5H12.2" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" /></svg>);
+    case 'inline':
+      return (<svg {...p}><rect x="3" y="8" width="14" height="4" rx="2" stroke="currentColor" strokeWidth="1.2" /><rect x="3.9" y="8.9" width="7" height="2.2" rx="1.1" fill="currentColor" /></svg>);
+    default:
+      return (<svg {...p}><circle cx="10" cy="10" r="2.6" fill="currentColor" /></svg>);
+  }
 }
 
 function InstrumentConfigPopover({
@@ -60,9 +81,13 @@ function InstrumentConfigPopover({
   const belowTop = anchorRect.bottom + 6;
   const top = belowTop + 150 > window.innerHeight ? Math.max(8, anchorRect.top - 156) : belowTop;
 
-  const segBtn = (active: boolean) =>
-    'flex-1 px-2 py-1 text-xs rounded transition-colors ' +
-    (active ? 'bg-blue-600 text-white' : 'text-content-secondary hover:bg-surface-raised hover:text-content');
+  // Analog (the default Component) plus the numeric card and any extra
+  // variants the registry offers. Only a single option means no picker.
+  const displayOptions: Array<{ id: string; label: string }> = [
+    { id: 'analog', label: 'Analog' },
+    ...(instrument.NumericComponent ? [{ id: 'numeric', label: 'Numeric' }] : []),
+    ...(instrument.variants ?? []).map((v) => ({ id: v.id, label: v.label })),
+  ];
 
   return createPortal(
     <>
@@ -76,16 +101,30 @@ function InstrumentConfigPopover({
           {instrument.label}
         </div>
         <div className="p-2 space-y-2.5">
-          {instrument.NumericComponent && (
+          {displayOptions.length > 1 && (
             <div>
-              <div className="text-[10px] uppercase tracking-wide text-content-tertiary mb-1">Display</div>
-              <div className="flex gap-0.5 p-0.5 rounded bg-surface-raised">
-                <button type="button" className={segBtn(mode === 'analog')} onClick={() => setDisplayMode(instrument.id, 'analog')}>
-                  Analog
-                </button>
-                <button type="button" className={segBtn(mode === 'numeric')} onClick={() => setDisplayMode(instrument.id, 'numeric')}>
-                  Numeric
-                </button>
+              <div className="text-[10px] uppercase tracking-wide text-content-tertiary mb-1.5">Display</div>
+              <div className="grid grid-cols-3 gap-1.5">
+                {displayOptions.map((opt) => {
+                  const active = mode === opt.id;
+                  return (
+                    <button
+                      key={opt.id}
+                      type="button"
+                      onClick={() => setDisplayMode(instrument.id, opt.id as InstrumentDisplayMode)}
+                      data-tip={`${opt.label} display`}
+                      className={
+                        'flex flex-col items-center justify-center gap-1 py-1.5 rounded-md border transition-colors ' +
+                        (active
+                          ? 'border-blue-500/60 bg-blue-500/10 text-blue-400'
+                          : 'border-subtle text-content-secondary hover:border-default hover:text-content hover:bg-surface-raised')
+                      }
+                    >
+                      <span className="w-5 h-5 flex items-center justify-center">{variantGlyph(opt.id)}</span>
+                      <span className="text-[10px] leading-none">{opt.label}</span>
+                    </button>
+                  );
+                })}
               </div>
             </div>
           )}
@@ -134,7 +173,12 @@ function InstrumentSlot({ instrument }: { instrument: MapInstrumentDef }): JSX.E
   const resize = useRef<{ startX: number; startY: number; startScale: number } | null>(null);
   const scale = liveScale ?? storedScale;
   const opacity = ownOpacity ?? globalOpacity;
-  const Component = mode === 'numeric' && instrument.NumericComponent ? instrument.NumericComponent : instrument.Component;
+  const selectedVariant = instrument.variants?.find((v) => v.id === mode);
+  const Component = selectedVariant
+    ? selectedVariant.Component
+    : mode === 'numeric' && instrument.NumericComponent
+      ? instrument.NumericComponent
+      : instrument.Component;
 
   // Stable composite ref: an inline arrow here would be a NEW function every
   // render, so React would re-invoke it (null, el) each render, and the drag
@@ -180,7 +224,9 @@ function InstrumentSlot({ instrument }: { instrument: MapInstrumentDef }): JSX.E
     window.addEventListener('pointerup', onUp);
   };
 
-  const roundInstrument = !instrument.NumericComponent || mode === 'analog';
+  // Round bezel geometry (gear/grip on the bezel) only for the analog round
+  // gauge; the numeric card and every compact variant are rectangular.
+  const roundInstrument = !selectedVariant && (!instrument.NumericComponent || mode === 'analog');
 
   return (
     <div

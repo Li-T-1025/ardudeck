@@ -14,6 +14,8 @@ import type {
   ActivateResponse,
   HeartbeatResponse,
   CheckUpdatesResponse,
+  PublicCargo,
+  CargoDetail,
 } from '../../shared/module-types.js';
 
 const DEFAULT_BASE_URL = 'https://hangar.ardudeck.com';
@@ -50,6 +52,20 @@ async function jsonPost<T>(path: string, body: Record<string, unknown>): Promise
   return res.json() as Promise<T>;
 }
 
+async function jsonGet<T>(path: string): Promise<T> {
+  const url = `${getBaseUrl()}${path}`;
+  let res: Response;
+  try {
+    res = await fetch(url, { method: 'GET' });
+  } catch {
+    throw new Error(`Could not reach the Hangar at ${getBaseUrl()}. Check your connection and try again.`);
+  }
+  if (!res.ok) {
+    throw new Error(await hangarError(res));
+  }
+  return res.json() as Promise<T>;
+}
+
 /**
  * Build a clean error message from a failed response. The API returns JSON
  * errors ({ message }); a non-JSON body (e.g. an HTML gateway/"no such app"
@@ -65,6 +81,38 @@ async function hangarError(res: Response): Promise<string> {
     // body is not JSON — fall through to the generic message
   }
   return `Hangar unavailable (${res.status}). The service may be down or HANGAR_URL is misconfigured.`;
+}
+
+/**
+ * List the public, free cargos published in the Hangar. No auth: the endpoint
+ * only ever returns public, published, versioned cargos.
+ */
+export async function fetchPublicCargos(): Promise<PublicCargo[]> {
+  return jsonGet<PublicCargo[]>('/public/cargos');
+}
+
+/**
+ * Fetch the full detail for one public cargo, including its marketing preview
+ * blocks and the untruncated description. No auth: the endpoint 404s private
+ * cargos for anonymous callers.
+ */
+export async function fetchCargoDetail(slug: string): Promise<CargoDetail> {
+  return jsonGet<CargoDetail>(`/public/catalog/${encodeURIComponent(slug)}`);
+}
+
+/**
+ * Request a signed free license key for a public cargo. The returned key feeds
+ * the normal activation flow, so free cargos install exactly like paid ones.
+ */
+export async function requestFreeInstall(
+  slug: string,
+  deviceId: string,
+  deviceName: string,
+): Promise<{ key: string; slug: string; moduleName: string }> {
+  return jsonPost<{ key: string; slug: string; moduleName: string }>(
+    `/public/cargos/${encodeURIComponent(slug)}/install`,
+    { deviceId, deviceName },
+  );
 }
 
 /**

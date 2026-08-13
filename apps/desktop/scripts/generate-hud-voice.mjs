@@ -20,8 +20,10 @@ if (!API_KEY) {
   process.exit(1);
 }
 
-// Default voice: "Rachel". Pass any voice id as argv[2].
-const VOICE_ID = process.argv[2] ?? '21m00Tcm4TlvDq8ikWAM';
+// ArduDeck brand voice. Pass a different voice id as argv[2] to override.
+// (Was mistakenly defaulting to "Rachel" 21m00Tcm4TlvDq8ikWAM, which produced
+//  an off-brand pack when run without an argument.)
+const VOICE_ID = process.argv[2] ?? 'lcMyyd2HUfFzxdCaC4Ta';
 const SAMPLE_RATE = 16000;
 
 const PHRASES = {
@@ -109,6 +111,18 @@ const PHRASES = {
   mode_follow: 'Follow',
   mode_simple: 'Simple',
   mode_dock: 'Dock',
+  // Mission waypoint announcements. "Heading to waypoint" + composed number
+  // words; the announcer stitches numberToWavs() so 0-999 needs ~30 clips.
+  // Phrased "heading to" so it reads as the current target, never "reached".
+  waypoint: 'Waypoint',
+  wp_to: 'Heading to waypoint',
+  num_0: 'zero', num_1: 'one', num_2: 'two', num_3: 'three', num_4: 'four',
+  num_5: 'five', num_6: 'six', num_7: 'seven', num_8: 'eight', num_9: 'nine',
+  num_10: 'ten', num_11: 'eleven', num_12: 'twelve', num_13: 'thirteen',
+  num_14: 'fourteen', num_15: 'fifteen', num_16: 'sixteen', num_17: 'seventeen',
+  num_18: 'eighteen', num_19: 'nineteen', num_20: 'twenty', num_30: 'thirty',
+  num_40: 'forty', num_50: 'fifty', num_60: 'sixty', num_70: 'seventy',
+  num_80: 'eighty', num_90: 'ninety', num_hundred: 'hundred',
 };
 
 const outDir = path.join(
@@ -150,7 +164,9 @@ for (const [name, text] of Object.entries(PHRASES)) {
       method: 'POST',
       headers: { 'xi-api-key': API_KEY, 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        text,
+        // Trailing period gives the TTS a falling, finished intonation and a
+        // clean tail instead of a clipped, question-like ending.
+        text: /[.!?]$/.test(text) ? text : `${text}.`,
         model_id: 'eleven_multilingual_v2',
         voice_settings: { stability: 0.5, similarity_boost: 0.75 },
       }),

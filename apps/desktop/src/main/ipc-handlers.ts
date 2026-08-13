@@ -773,6 +773,8 @@ const TELEM_STREAM_MESSAGES: { msgId: number; cat: 'attitude' | 'position' | 'ot
   { msgId: 35, cat: 'other' },           // RC_CHANNELS_RAW (fallback for ELRS-over-MAVLink)
   { msgId: 65, cat: 'other' },           // RC_CHANNELS
   { msgId: 74, cat: 'other' },           // VFR_HUD
+  { msgId: 42, cat: 'other', hz: 2 },    // MISSION_CURRENT (current WP; not honored via SRx on TCP, must request)
+  { msgId: 62, cat: 'other', hz: 2 },    // NAV_CONTROLLER_OUTPUT (wp distance/bearing/xtrack)
   { msgId: 36, cat: 'other' },           // SERVO_OUTPUT_RAW
   { msgId: 27, cat: 'other' },           // RAW_IMU
   { msgId: 29, cat: 'other' },           // SCALED_PRESSURE
@@ -902,6 +904,8 @@ async function requestStreamsOnTransport(
     { msgId: 1,  hz: rates.other },     // SYS_STATUS (battery)
     { msgId: 65, hz: rates.other },     // RC_CHANNELS
     { msgId: 74, hz: rates.other },     // VFR_HUD
+    { msgId: 42, hz: 2 },               // MISSION_CURRENT (current WP)
+    { msgId: 62, hz: 2 },               // NAV_CONTROLLER_OUTPUT (wp distance/bearing)
     { msgId: 27, hz: rates.other },     // RAW_IMU
   ];
 

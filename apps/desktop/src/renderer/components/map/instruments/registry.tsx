@@ -16,8 +16,6 @@
 import { useEffect, useState, type CSSProperties } from 'react';
 import { create } from 'zustand';
 import { useTelemetryStore } from '../../../stores/telemetry-store';
-import { useConnectionStore } from '../../../stores/connection-store';
-import { useActiveVehicleStore } from '../../../stores/active-vehicle-store';
 import { useMissionStore } from '../../../stores/mission-store';
 import { useSettingsStore } from '../../../stores/settings-store';
 import {
@@ -36,6 +34,17 @@ import { AttitudeIndicator } from '../../panels/AttitudePanel';
 import { RoundGauge, GAUGE_COLORS, gaugeArcPath, gaugePoint, valueToAngle, type GaugeScale } from './RoundGauge';
 import { InstrumentStrip } from './InstrumentStrip';
 import { FlightControlInstrument } from './FlightControlInstrument';
+import { CompactReadout, type ReadoutSource } from './CompactReadout';
+import { useLinkUp } from './useLinkUp';
+
+/** An alternative rendering of an instrument, chosen per-instrument and
+ * persisted alongside the analog/numeric choice. */
+export interface MapInstrumentVariant {
+  /** Persisted key; also the value stored in the display-mode map. */
+  id: string;
+  label: string;
+  Component: () => JSX.Element;
+}
 
 export interface MapInstrumentDef {
   id: string;
@@ -45,6 +54,18 @@ export interface MapInstrumentDef {
   Component: () => JSX.Element;
   /** Numeric readout alternative; instruments without one are analog-only. */
   NumericComponent?: () => JSX.Element;
+  /** Extra display forms (strip/cell/inline) offered beside analog/numeric.
+   * Instruments without any behave exactly as before. */
+  variants?: MapInstrumentVariant[];
+}
+
+/** The three compact-readout treatments every wired scalar source offers. */
+function compactVariants(source: ReadoutSource): MapInstrumentVariant[] {
+  return [
+    { id: 'strip', label: 'Strip', Component: () => <CompactReadout source={source} treatment="strip" /> },
+    { id: 'cell', label: 'Cell', Component: () => <CompactReadout source={source} treatment="cell" /> },
+    { id: 'inline', label: 'Inline', Component: () => <CompactReadout source={source} treatment="inline" /> },
+  ];
 }
 
 /**
@@ -59,16 +80,6 @@ export const useMapHomeStore = create<{
   home: null,
   setHome: (home) => set({ home }),
 }));
-
-// Same rule as QuickStatsBar: fleet/swarm links never set
-// connectionState.isConnected, so a known fleet vehicle also counts as a link.
-// Without any link the telemetry store holds zero-defaults; painting those red
-// would read as a failing vehicle, so gauges park the needle and dash out.
-function useLinkUp(): boolean {
-  const isConnected = useConnectionStore((s) => s.connectionState.isConnected);
-  const fleetVehicleCount = useActiveVehicleStore((s) => Object.keys(s.knownVehicles).length);
-  return isConnected || fleetVehicleCount > 0;
-}
 
 function trimmed(value: number, decimals: number): string {
   return String(Number(value.toFixed(decimals)));
@@ -920,17 +931,17 @@ function AttitudeBallInstrument(): JSX.Element {
 export const MAP_INSTRUMENTS: MapInstrumentDef[] = [
   { id: 'attitude', label: 'Attitude ball', defaultClassName: 'absolute bottom-3 left-1/2 -translate-x-1/2 z-[1000]', defaultVisible: true, Component: AttitudeBallInstrument },
   { id: 'flight-data', label: 'Flight data', defaultClassName: 'absolute bottom-2 left-2 z-[1000]', defaultVisible: true, Component: FlightDataInstrument },
-  { id: 'battery', label: 'Battery', defaultClassName: 'absolute left-3 top-16 z-[1000]', defaultVisible: false, Component: BatteryInstrument, NumericComponent: BatteryNumeric },
-  { id: 'gps', label: 'GPS', defaultClassName: 'absolute left-3 top-[176px] z-[1000]', defaultVisible: false, Component: GpsInstrument, NumericComponent: GpsNumeric },
-  { id: 'altitude', label: 'Altitude', defaultClassName: 'absolute left-3 top-[288px] z-[1000]', defaultVisible: false, Component: AltitudeInstrument, NumericComponent: AltitudeNumeric },
-  { id: 'speed', label: 'Speed', defaultClassName: 'absolute left-3 top-[400px] z-[1000]', defaultVisible: false, Component: SpeedInstrument, NumericComponent: SpeedNumeric },
-  { id: 'heading', label: 'Compass (HDG)', defaultClassName: 'absolute bottom-3 left-[calc(50%+88px)] z-[1000]', defaultVisible: true, Component: HeadingInstrument, NumericComponent: HeadingNumeric },
-  { id: 'vsi', label: 'VSI', defaultClassName: 'absolute left-3 top-[512px] z-[1000]', defaultVisible: false, Component: VsiInstrument, NumericComponent: VsiNumeric },
-  { id: 'home', label: 'Home', defaultClassName: 'absolute left-3 top-[624px] z-[1000]', defaultVisible: false, Component: HomeInstrument, NumericComponent: HomeNumeric },
+  { id: 'battery', label: 'Battery', defaultClassName: 'absolute left-3 top-16 z-[1000]', defaultVisible: false, Component: BatteryInstrument, NumericComponent: BatteryNumeric, variants: compactVariants('battery') },
+  { id: 'gps', label: 'GPS', defaultClassName: 'absolute left-3 top-[176px] z-[1000]', defaultVisible: false, Component: GpsInstrument, NumericComponent: GpsNumeric, variants: compactVariants('gps') },
+  { id: 'altitude', label: 'Altitude', defaultClassName: 'absolute left-3 top-[288px] z-[1000]', defaultVisible: false, Component: AltitudeInstrument, NumericComponent: AltitudeNumeric, variants: compactVariants('altitude') },
+  { id: 'speed', label: 'Speed', defaultClassName: 'absolute left-3 top-[400px] z-[1000]', defaultVisible: false, Component: SpeedInstrument, NumericComponent: SpeedNumeric, variants: compactVariants('speed') },
+  { id: 'heading', label: 'Compass (HDG)', defaultClassName: 'absolute bottom-3 left-[calc(50%+88px)] z-[1000]', defaultVisible: true, Component: HeadingInstrument, NumericComponent: HeadingNumeric, variants: compactVariants('heading') },
+  { id: 'vsi', label: 'VSI', defaultClassName: 'absolute left-3 top-[512px] z-[1000]', defaultVisible: false, Component: VsiInstrument, NumericComponent: VsiNumeric, variants: compactVariants('vsi') },
+  { id: 'home', label: 'Home', defaultClassName: 'absolute left-3 top-[624px] z-[1000]', defaultVisible: false, Component: HomeInstrument, NumericComponent: HomeNumeric, variants: compactVariants('home') },
   // Strips stack in a second column beside the left-edge gauges (gauge is
   // 104px wide at left-3, so 124px clears it) under the Instruments button.
   { id: 'flight-mode', label: 'Flight mode', defaultClassName: 'absolute left-[124px] top-16 z-[1000]', defaultVisible: false, Component: FlightModeInstrument },
-  { id: 'link', label: 'Link', defaultClassName: 'absolute left-[124px] top-[128px] z-[1000]', defaultVisible: false, Component: LinkInstrument },
+  { id: 'link', label: 'Link', defaultClassName: 'absolute left-[124px] top-[128px] z-[1000]', defaultVisible: false, Component: LinkInstrument, variants: compactVariants('link') },
   { id: 'mission', label: 'Mission', defaultClassName: 'absolute left-[124px] top-[192px] z-[1000]', defaultVisible: false, Component: MissionInstrument },
   { id: 'annunciator', label: 'Annunciator', defaultClassName: 'absolute left-[124px] top-[268px] z-[1000]', defaultVisible: false, Component: AnnunciatorInstrument },
   { id: 'controls', label: 'Flight control', defaultClassName: 'absolute left-[124px] top-[420px] z-[1000]', defaultVisible: false, Component: FlightControlInstrument },

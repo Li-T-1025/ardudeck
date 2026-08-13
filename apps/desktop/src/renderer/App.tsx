@@ -25,6 +25,7 @@ import { CompanionDashboard } from './components/companion/CompanionDashboard';
 import { LogsView } from './components/logs/LogsView';
 import { MavlinkInspectorView } from './components/inspector/MavlinkInspectorView';
 import { VaultView } from './components/vault/VaultView';
+import { WeatherBriefingView } from './components/weather/WeatherBriefingView';
 import { setupWorkspaceSync } from './stores/workspace-store';
 import { startInspector } from './stores/inspector-store';
 import { startSafetyMonitor, refreshContext as refreshSafetyMonitorContext } from './safety-monitor/source';
@@ -927,6 +928,10 @@ function App() {
       if (currentView === 'inspector') {
         return <MavlinkInspectorView />;
       }
+      if (currentView === 'weather') {
+        // Briefing works offline: falls back to home / map center when no vehicle.
+        return <WeatherBriefingView />;
+      }
       if (currentView === 'settings') {
         return <SettingsView />;
       }
@@ -948,9 +953,12 @@ function App() {
             </p>
 
             {/* Feature cards - quick links to the most-used tools. Every card
-                works without a connected vehicle. Defined in WELCOME_CARDS. */}
+                works without a connected vehicle. Defined in WELCOME_CARDS. A card
+                pointing at a cargo-gated view is hidden until its cargo is
+                installed, same gate NavigationRail uses, so a blank app never
+                offers an entry into a feature that is not on board. */}
             <div data-tour="welcome-cards" className="grid grid-cols-3 auto-rows-fr gap-3 text-left">
-              {WELCOME_CARDS.map((card) => {
+              {WELCOME_CARDS.filter((card) => !card.view || isViewAvailable(card.view, enabledCapabilitySlugs)).map((card) => {
                 const s = WELCOME_CARD_STYLES[card.color];
                 return (
                   <button
@@ -1018,6 +1026,8 @@ function App() {
         return <LogsView />;
       case 'inspector':
         return <MavlinkInspectorView />;
+      case 'weather':
+        return <WeatherBriefingView />;
       case 'vault':
         return <VaultView />;
       case 'telemetry':

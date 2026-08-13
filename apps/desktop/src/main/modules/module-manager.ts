@@ -13,8 +13,10 @@ import { verifyLicenseKey, verifyBundleSignature } from './license-validator.js'
 import * as hangar from './hangar-client.js';
 import { extractBundle } from './module-extract.js';
 import type {
+  CargoDetail,
   InstalledModule,
   ModuleProgress,
+  PublicCargo,
   UpdateAvailable,
 } from '../../shared/module-types.js';
 
@@ -254,6 +256,49 @@ export async function activateLicense(
   onProgress({ stage: 'complete', message: `Activated ${newModules.length} module(s)`, percent: 100 });
 
   return { success: true };
+}
+
+// --------------------------------------------------------------------------
+// Public Catalog / Free Install
+// --------------------------------------------------------------------------
+
+/** Browse the public, free cargos published in the Hangar. */
+export async function listPublicCargos(): Promise<PublicCargo[]> {
+  return hangar.fetchPublicCargos();
+}
+
+/** Fetch the full marketing detail for one public cargo by slug. */
+export async function getCargoDetail(slug: string): Promise<CargoDetail> {
+  return hangar.fetchCargoDetail(slug);
+}
+
+/**
+ * Install a free public cargo by slug. Fetches a signed free license key from
+ * the Hangar for this device, then runs the normal activation flow with it, so
+ * download, verify, extract and persistence are shared with paid activation.
+ */
+export async function installFreeCargo(
+  slug: string,
+  onProgress: (p: ModuleProgress) => void,
+): Promise<{ success: boolean; error?: string }> {
+  onProgress({ stage: 'activating', message: `Requesting ${slug} from the Hangar...` });
+
+  const deviceId = getDeviceId();
+  const deviceName = getDeviceName();
+
+  let key: string;
+  try {
+    const result = await hangar.requestFreeInstall(slug, deviceId, deviceName);
+    key = result.key;
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    onProgress({ stage: 'error', message: `Install failed: ${msg}` });
+    return { success: false, error: msg };
+  }
+
+  // reactivate: the free key may already be on record from a prior install, and
+  // re-running is how a reinstall/update works.
+  return activateLicense(key, onProgress, { reactivate: true });
 }
 
 // --------------------------------------------------------------------------

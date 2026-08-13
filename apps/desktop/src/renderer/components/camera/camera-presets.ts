@@ -61,6 +61,13 @@ export const CAMERA_PRESETS: CameraPreset[] = [
     note: 'Any RTSP source. The hub republishes it as low-latency WebRTC.',
   },
   {
+    id: 'ardudeck-sim',
+    label: 'ArduDeck Simulator (FPV feed)',
+    kind: 'rtp-udp',
+    url: 'http://127.0.0.1:9000/',
+    note: 'Tick "Stream FPV to ArduDeck" in the simulator launcher. The sim SERVES on this port, so use its address if it runs on another machine.',
+  },
+  {
     id: 'rtp-udp',
     label: 'Custom RTP / UDP (H.264)',
     kind: 'rtp-udp',

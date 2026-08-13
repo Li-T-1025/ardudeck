@@ -75,6 +75,16 @@ const navItems: NavItem[] = [
     ),
   },
   {
+    id: 'weather',
+    label: 'Weather Briefing',
+    icon: (
+      <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 15a4 4 0 004 4h9a5 5 0 001-9.9A6 6 0 006.34 8.03 4.5 4.5 0 003 15z" />
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17.5 8.5A3.5 3.5 0 0121 5" />
+      </svg>
+    ),
+  },
+  {
     id: 'settings',
     label: 'Settings',
     icon: (

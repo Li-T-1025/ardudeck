@@ -81,6 +81,9 @@ export function FlightControlInstrument(): JSX.Element {
   const missionModes = MISSION_MODES[vehicleClass];
   const capabilities = VEHICLE_CAPABILITIES[vehicleClass];
   const isInAuto = flight.modeNum === missionModes.auto;
+  // Paused = sitting in the mission's pause mode (Brake/Loiter/Hold) with a
+  // mission loaded. RESUME (back to AUTO) continues from the current WP.
+  const isPaused = flight.modeNum === missionModes.pause && missionCount > 0;
   const altitudeUnit = useSettingsStore((s) => s.unitPreferences.altitude);
 
   const sendMode = useCallback(async (modeNum: number): Promise<boolean> => {
@@ -318,79 +321,119 @@ export function FlightControlInstrument(): JSX.Element {
             type="button"
             onClick={() => setTakeoffOpen((v) => !v)}
             disabled={!connected || takeoffBusy}
-            data-tip={takeoffPresentation.buttonHint}
+            data-tip={takeoffOpen ? 'Cancel takeoff' : takeoffPresentation.buttonHint}
             className={btnBase}
-            style={{ color: GAUGE_COLORS.green, border: '1px solid rgba(52,211,153,0.5)' }}
+            style={{
+              color: GAUGE_COLORS.green,
+              border: '1px solid rgba(52,211,153,0.5)',
+              background: takeoffOpen ? 'rgba(52,211,153,0.18)' : undefined,
+            }}
           >
             {takeoffBusy ? '...' : 'TAKEOFF'}
           </button>
         )}
-        {isInAuto ? (
-          <button
-            type="button"
-            onClick={() => mode.requestMode(missionModes.pause, { skipConfirm: true })}
-            disabled={!connected}
-            data-tip={`Pause mission (${missionModes.pauseLabel})`}
-            className={btnBase + ' flex-1'}
-            style={{ color: GAUGE_COLORS.amber, background: 'rgba(245,158,11,0.12)', border: '1px solid rgba(245,158,11,0.5)' }}
-          >
-            PAUSE
-          </button>
+        {takeoffOpen ? (
+          // Takeoff arming REPLACES Start/RTL in-place: the altitude + Go take
+          // over the row so Start can't be misclicked while arming a takeoff.
+          <>
+            <input
+              type="number"
+              value={takeoffAltDisplay}
+              min={Number(altitudeValueFromMeters(1, altitudeUnit).toFixed(takeoffPrecision))}
+              max={Number(altitudeValueFromMeters(100, altitudeUnit).toFixed(takeoffPrecision))}
+              step={altitudeUnit === 'km' ? 0.001 : 1}
+              onChange={(e) => {
+                const v = Number(e.target.value);
+                if (Number.isFinite(v)) setTakeoffAltM(toMetersFromAltitudeUnit(v, altitudeUnit));
+              }}
+              aria-label={takeoffPresentation.dialogPrompt}
+              data-tip={takeoffPresentation.dialogPrompt}
+              className="flex-1 min-w-0 w-14 px-1.5 text-[11px] rounded bg-surface-input border border-default text-content focus:outline-none focus:border-blue-500 tabular-nums"
+            />
+            <span className="self-center text-[10px] text-[var(--gauge-text-dim)]">{UNIT_LABELS.altitude[altitudeUnit]}</span>
+            <button
+              type="button"
+              onClick={runTakeoff}
+              disabled={takeoffBusy}
+              data-tip={`${takeoffPresentation.dialogPrompt}: ${formatAltitudeFromMeters(takeoffAltM, altitudeUnit)}`}
+              className={btnBase + ' flex-1 bg-blue-600 text-white hover:bg-blue-500'}
+            >
+              {takeoffBusy ? '...' : 'GO'}
+            </button>
+          </>
+        ) : isInAuto ? (
+          <>
+            <button
+              type="button"
+              onClick={() => mode.requestMode(missionModes.pause, { skipConfirm: true })}
+              disabled={!connected}
+              data-tip={`Pause mission (${missionModes.pauseLabel})`}
+              className={btnBase + ' flex-1'}
+              style={{ color: GAUGE_COLORS.amber, background: 'rgba(245,158,11,0.12)', border: '1px solid rgba(245,158,11,0.5)' }}
+            >
+              PAUSE
+            </button>
+            <button
+              type="button"
+              onClick={() => mode.requestMode(missionModes.abort)}
+              disabled={!connected}
+              data-tip={`Abort to ${missionModes.abortLabel}`}
+              className={btnBase}
+              style={{ color: GAUGE_COLORS.red, border: '1px solid rgba(248,113,113,0.5)' }}
+            >
+              {missionModes.abortLabel.toUpperCase()}
+            </button>
+          </>
+        ) : isPaused ? (
+          <>
+            <button
+              type="button"
+              onClick={startMission}
+              disabled={!connected}
+              data-tip="Resume mission (back to Auto)"
+              className={btnBase + ' flex-1 bg-blue-600 text-white hover:bg-blue-500'}
+            >
+              RESUME
+            </button>
+            <button
+              type="button"
+              onClick={() => mode.requestMode(missionModes.abort)}
+              disabled={!connected}
+              data-tip={`Abort to ${missionModes.abortLabel}`}
+              className={btnBase}
+              style={{ color: GAUGE_COLORS.red, border: '1px solid rgba(248,113,113,0.5)' }}
+            >
+              {missionModes.abortLabel.toUpperCase()}
+            </button>
+          </>
         ) : (
-          <button
-            type="button"
-            onClick={onStart}
-            disabled={!connected || missionCount === 0}
-            data-tip={
-              missionCount === 0 ? 'No mission loaded'
-                : missionDirty ? 'Mission not uploaded to the vehicle yet'
-                : `Start mission (${missionCount} wp)`
-            }
-            className={btnBase + ' flex-1 bg-blue-600 text-white hover:bg-blue-500'}
-          >
-            START{missionDirty && missionCount > 0 ? ' !' : ''}
-          </button>
+          <>
+            <button
+              type="button"
+              onClick={onStart}
+              disabled={!connected || missionCount === 0}
+              data-tip={
+                missionCount === 0 ? 'No mission loaded'
+                  : missionDirty ? 'Mission not uploaded to the vehicle yet'
+                  : `Start mission (${missionCount} wp)`
+              }
+              className={btnBase + ' flex-1 bg-blue-600 text-white hover:bg-blue-500'}
+            >
+              START{missionDirty && missionCount > 0 ? ' !' : ''}
+            </button>
+            <button
+              type="button"
+              onClick={() => mode.requestMode(missionModes.abort)}
+              disabled={!connected}
+              data-tip={`Abort to ${missionModes.abortLabel}`}
+              className={btnBase}
+              style={{ color: GAUGE_COLORS.red, border: '1px solid rgba(248,113,113,0.5)' }}
+            >
+              {missionModes.abortLabel.toUpperCase()}
+            </button>
+          </>
         )}
-        <button
-          type="button"
-          onClick={() => mode.requestMode(missionModes.abort)}
-          disabled={!connected}
-          data-tip={`Abort to ${missionModes.abortLabel}`}
-          className={btnBase}
-          style={{ color: GAUGE_COLORS.red, border: '1px solid rgba(248,113,113,0.5)' }}
-        >
-          {missionModes.abortLabel.toUpperCase()}
-        </button>
       </div>
-
-      {takeoffOpen && inlineRow(
-        <>
-          <span className="text-[10px] leading-none flex-1 min-w-0 truncate">{takeoffPresentation.dialogPrompt}</span>
-          <input
-            type="number"
-            value={takeoffAltDisplay}
-            min={Number(altitudeValueFromMeters(1, altitudeUnit).toFixed(takeoffPrecision))}
-            max={Number(altitudeValueFromMeters(100, altitudeUnit).toFixed(takeoffPrecision))}
-            step={altitudeUnit === 'km' ? 0.001 : 1}
-            onChange={(e) => {
-              const v = Number(e.target.value);
-              if (Number.isFinite(v)) setTakeoffAltM(toMetersFromAltitudeUnit(v, altitudeUnit));
-            }}
-            className="w-14 px-1.5 py-1 text-[11px] rounded bg-surface-input border border-default text-content focus:outline-none focus:border-blue-500 tabular-nums"
-          />
-          <span className="text-[10px] text-[var(--gauge-text-dim)]">{UNIT_LABELS.altitude[altitudeUnit]}</span>
-          <button
-            type="button"
-            onClick={runTakeoff}
-            className="text-[10px] font-semibold px-2 py-1 rounded bg-blue-600 text-white hover:bg-blue-500 whitespace-nowrap"
-          >
-            Go
-          </button>
-          <button type="button" onClick={() => setTakeoffOpen(false)} className="text-[10px] px-1.5 py-1 rounded text-[var(--gauge-text-dim)] hover:text-[var(--gauge-text)]">
-            ✕
-          </button>
-        </>,
-      )}
 
       {statusMsg && (
         <div

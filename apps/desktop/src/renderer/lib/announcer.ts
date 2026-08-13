@@ -11,6 +11,7 @@ import { useMessagesStore } from '../stores/messages-store';
 import { useConnectionStore } from '../stores/connection-store';
 import { useActiveVehicleStore } from '../stores/active-vehicle-store';
 import { useSettingsStore } from '../stores/settings-store';
+import { useMissionStore } from '../stores/mission-store';
 
 /** Statustext substrings -> phrase wav (first hit wins, case-insensitive).
  *  Mirrors MSG_SOUNDS in the widget's loadable.lua. */
@@ -217,6 +218,44 @@ function modeItem(mode: string): QueueItem {
   return { wav, key: `mode:${mode}` };
 }
 
+/**
+ * A whole number as a list of phrase wavs (English), composed from the small
+ * number set: 0-20 + tens + "hundred". Covers 0-999 with real words; above
+ * that, falls back to digit-by-digit (always available). e.g. 123 ->
+ * [num_1, num_hundred, num_20, num_3].
+ */
+function numberToWavs(n: number): string[] {
+  if (n < 0 || !Number.isFinite(n)) return [];
+  n = Math.floor(n);
+  if (n <= 20) return [`num_${n}`];
+  if (n < 100) {
+    const tens = Math.floor(n / 10) * 10;
+    const unit = n % 10;
+    return unit ? [`num_${tens}`, `num_${unit}`] : [`num_${tens}`];
+  }
+  if (n < 1000) {
+    const h = Math.floor(n / 100);
+    const rem = n % 100;
+    return rem ? [`num_${h}`, 'num_hundred', ...numberToWavs(rem)] : [`num_${h}`, 'num_hundred'];
+  }
+  return String(n).split('').map((d) => `num_${d}`);
+}
+
+/**
+ * Play several phrase wavs back-to-back as one utterance (e.g. "Waypoint" +
+ * number words). Deduped once by `key`; the parts bypass announce()'s
+ * per-wav dedupe (number words legitimately repeat within one utterance).
+ */
+function announceSequence(wavs: string[], key: string): void {
+  if (muted() || !linkUp() || wavs.length === 0) return;
+  const now = Date.now();
+  if (now - (lastSpokenAt.get(key) ?? 0) < DEDUPE_MS) return;
+  lastSpokenAt.set(key, now);
+  if (queue.length >= 5) return; // don't stack stale utterances
+  for (const wav of wavs) queue.push({ wav, key: `${key}:part` });
+  void playNext();
+}
+
 /** Baselines so we never announce the state we happened to connect into. */
 let seeded = false;
 let prevArmed = false;
@@ -228,11 +267,14 @@ let prevStale = false;
 /** lowest battery threshold already announced this flight */
 let battAnnounced = 101;
 let lastMsgTimestamp = 0;
+/** last waypoint spoken, so a re-broadcast of the same current WP is silent */
+let prevWaypoint = -1;
 
 function reseed(): void {
   seeded = false;
   battAnnounced = 101;
   hadFix = false;
+  prevWaypoint = -1;
   queue.length = 0;
   lastMsgTimestamp = Date.now();
 }
@@ -363,6 +405,28 @@ export function initAnnouncer(): void {
         ? { wav: 'telemetry_lost', key: 'telem', critical: true }
         : { wav: 'telemetry_ok', key: 'telem' });
     }
+  }));
+
+  // Waypoint progress: speak "Waypoint N" as the FC advances through an AUTO
+  // mission. Gated on armed + AUTO so RTL/guided WP churn stays quiet, and on
+  // a real change so a re-broadcast of the same current WP doesn't repeat.
+  unsubs.push(useMissionStore.subscribe((s) => {
+    if (!linkUp()) return;
+    const seq = s.currentSeq;
+    const { armed, mode } = useTelemetryStore.getState().flight;
+    // seq is the 0-based store index (home stripped); seq 0 is the first
+    // real waypoint = display "WP 1", so allow >= 0.
+    if (seq == null || seq < 0 || !armed || mode.toUpperCase() !== 'AUTO') {
+      prevWaypoint = seq ?? -1;
+      return;
+    }
+    if (seq === prevWaypoint) return;
+    prevWaypoint = seq;
+    // Speak the SAME 1-based number the mission instrument shows (it renders
+    // currentSeq + 1); the raw store seq is 0-based, so voice would trail the
+    // display by one. This is the current target ("now flying to WP N"),
+    // not a "reached" event.
+    announceSequence(['wp_to', ...numberToWavs(seq + 1)], `wp:${seq}`);
   }));
 
   // switching the active fleet vehicle changes every value at once; reseed

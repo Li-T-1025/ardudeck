@@ -1265,17 +1265,26 @@ export const useMissionStore = create<MissionStore>((set, get) => ({
       return true;
     });
 
-    const { groups, missionItems: existingItems } = get();
+    const { groups, missionItems: existingItems, isDirty: wasDirty } = get();
 
     // A fresh download from the FC REPLACES the previous FC-imported mission
     // instead of stacking another copy. Every re-download (reconnect, re-fetch,
     // AUTO progress) was appending ~N waypoints, growing the mission into the
     // thousands and piling duplicate markers on the map until it lagged / OOM'd.
-    // Local edits and file-imported groups are preserved.
+    //
+    // What we preserve depends on whether the local mission has UNSAVED edits:
+    //  - clean (isDirty false): the local mission already equals what's on the
+    //    FC (it was just uploaded, or is itself a prior FC download), so a
+    //    download must REPLACE everything - keeping the local copy too would
+    //    double-show the same survey/mission on the map (the reported bug).
+    //  - dirty (isDirty true): the user has local work not on the vehicle;
+    //    preserve their non-FC groups and add the FC copy as a separate group.
     const isFcGroup = (g: Group): boolean => 'importedFrom' in g && g.importedFrom === 'fc';
     const priorFcGroupIds = new Set(groups.filter(isFcGroup).map(g => g.id));
-    const keptGroups = groups.filter(g => !isFcGroup(g));
-    const keptItems = existingItems.filter(it => !it.groupId || !priorFcGroupIds.has(it.groupId));
+    const keptGroups = wasDirty ? groups.filter(g => !isFcGroup(g)) : [];
+    const keptItems = wasDirty
+      ? existingItems.filter(it => !it.groupId || !priorFcGroupIds.has(it.groupId))
+      : [];
 
     // Create a fresh imported group for this download. Stamp items into it,
     // append after any KEPT items, and renumber globally so the table seq stays
@@ -1314,9 +1323,9 @@ export const useMissionStore = create<MissionStore>((set, get) => ({
       selectedGroupId: importedGroup.id,
       isLoading: false,
       progress: null,
-      // Imports are NOT considered "the user's edits" — leave isDirty as-is.
-      // Otherwise the toolbar would falsely show unsaved changes after a
-      // read-from-FC of a fresh session.
+      // A clean download makes the local mission EQUAL the vehicle's, so it is
+      // not dirty. When we preserved dirty local edits, they remain unsaved.
+      isDirty: wasDirty,
       error: null,
       lastSuccessMessage: `Downloaded ${stampedNewItems.length} waypoints from flight controller into "${importedGroup.name}"`,
       loadCounter: get().loadCounter + 1,

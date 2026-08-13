@@ -32,6 +32,7 @@ export function useDetachedSubscriptions(): void {
   const updateBatch = useTelemetryStore((s) => s.updateBatch);
   const addStatusMessage = useMessagesStore((s) => s.addMessage);
   const applyMissionMirror = useMissionStore((s) => s.applyMissionMirror);
+  const setMissionItems = useMissionStore((s) => s.setMissionItems);
   const setCurrentSeq = useMissionStore((s) => s.setCurrentSeq);
   const setFenceItems = useFenceStore((s) => s.setFenceItems);
 
@@ -120,6 +121,11 @@ export function useDetachedSubscriptions(): void {
     // world show the mission instead of an empty store.
     void api.requestMissionMirror?.().then((snap) => { if (snap) applyMissionMirror(snap); }).catch(() => {});
     cleanups.push(api.onMissionMirror?.((snap) => applyMissionMirror(snap)) ?? (() => {}));
+    // MISSION_COMPLETE is broadcast to every window, so a download this window
+    // triggers itself (the 3D sim world requests one on connect) populates the
+    // local store directly - not only when the main window happens to re-mirror.
+    // The main mirror still arrives right after and reconciles to its grouping.
+    cleanups.push(api.onMissionComplete((items) => setMissionItems(items)));
     // Live active-waypoint index still streams directly to every window.
     cleanups.push(api.onMissionCurrent((seq) => setCurrentSeq(seq)));
     cleanups.push(api.onFenceComplete((items) => setFenceItems(items)));
@@ -138,6 +144,7 @@ export function useDetachedSubscriptions(): void {
     updateBatch,
     addStatusMessage,
     applyMissionMirror,
+    setMissionItems,
     setCurrentSeq,
     setFenceItems,
   ]);

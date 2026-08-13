@@ -5,6 +5,7 @@ import { HealthCheckCard } from './HealthCheckCard';
 import { AiWarningDialog } from './AiAnalysisPanel';
 import type { ExplorerPreset, HealthCheckResult } from '@ardudeck/dataflash-parser';
 import { formatAltitudeFromMeters, formatCapacityFromMah, formatSpeedFromMetersPerSecond } from '../../../shared/user-units.js';
+import { ADVISOR_CARGO_SLUG, useCargoEnabled } from '../../modules/capabilities';
 
 function computeFlightStats(log: ReturnType<typeof useLogStore.getState>['currentLog']) {
   if (!log) return null;
@@ -51,6 +52,8 @@ export function HealthReportPanel() {
   const currentLog = useLogStore((s) => s.currentLog);
   const currentLogPath = useLogStore((s) => s.currentLogPath);
   const aiProvider = useSettingsStore((s) => s.aiProvider);
+  const advisorEnabled = useCargoEnabled(ADVISOR_CARGO_SLUG);
+  const aiEnabled = advisorEnabled && !!aiProvider;
   const aiWarningDismissed = useSettingsStore((s) => s.aiWarningDismissed);
   const altitudeUnit = useSettingsStore((s) => s.unitPreferences.altitude);
   const electricCapacityUnit = useSettingsStore((s) => s.unitPreferences.electricCapacity);
@@ -235,7 +238,7 @@ Return 3-6 cards. Most important issues first.`;
         )}
 
         {/* AI Analyze button */}
-        {aiProvider && (
+        {aiEnabled && (
           <div className="mt-4 pt-4 border-t border-subtle">
             {aiInsightCards.length > 0 ? (
               <button
@@ -274,7 +277,7 @@ Return 3-6 cards. Most important issues first.`;
       </div>
 
       {/* AI insight cards (above automated checks) */}
-      {aiProvider && (aiInsightCards.length > 0 || isAiInsightLoading) && (
+      {aiEnabled && (aiInsightCards.length > 0 || isAiInsightLoading) && (
         <div>
           <div className="flex items-center gap-2 mb-3">
             <svg className="w-4 h-4 text-purple-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -300,7 +303,7 @@ Return 3-6 cards. Most important issues first.`;
                   key={card.id}
                   result={card}
                   aiLabel="Ask AI"
-                  onAskAi={aiProvider
+                  onAskAi={aiEnabled
                     ? () => handleAskAi(`Regarding the "${card.name}" finding: ${card.summary}${card.details ? `\nDetails: ${card.details}` : ''}${card.recommendation ? `\nRecommendation was: ${card.recommendation}` : ''}\n\nCan you explain this further and suggest specific steps to address it?`)
                     : undefined}
                 />
@@ -311,7 +314,7 @@ Return 3-6 cards. Most important issues first.`;
       )}
 
       {/* Automated health check cards */}
-      {aiProvider && (aiInsightCards.length > 0 || isAiInsightLoading) && (
+      {aiEnabled && (aiInsightCards.length > 0 || isAiInsightLoading) && (
         <div className="flex items-center gap-2 mb-0">
           <h3 className="text-sm font-semibold text-content-secondary">Automated Checks</h3>
         </div>
@@ -336,7 +339,7 @@ Return 3-6 cards. Most important issues first.`;
                 }
                 store.setActiveTab('explorer');
               } : undefined}
-              onAskAi={aiProvider && (result.status === 'fail' || result.status === 'warn')
+              onAskAi={aiEnabled && (result.status === 'fail' || result.status === 'warn')
                 ? () => handleAskAi(`Analyze the ${result.name} issue in detail:\nStatus: ${result.status}\nSummary: ${result.summary}${result.details ? `\nDetails: ${result.details}` : ''}${result.recommendation ? `\nRecommendation: ${result.recommendation}` : ''}\n\nWhat's the likely cause and how do I fix it?`)
                 : undefined}
             />

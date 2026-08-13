@@ -141,6 +141,7 @@ describe('computeMissionBriefing', () => {
   it('formats wind checks using the selected wind speed unit while keeping native meters per second', () => {
     const weather = {
       windSpeedMs: 10, windGustMs: 12, windDirDeg: 270, tempC: 18, precipMm: 0,
+      precipProbPct: 0, cloudCoverPct: 0, visibilityM: 20000, pressureHpa: 1013,
       sunriseIso: null, sunsetIso: null, currentTimeIso: null, fetchedAtMs: 0,
     };
     const briefing = computeMissionBriefing({ ...base, located: legPoints(3), weather, windSpeedUnit: 'kt' });
@@ -168,6 +169,7 @@ describe('computeMissionBriefing', () => {
   it('computes daylight margin in the site timezone', () => {
     const weather = {
       windSpeedMs: 3, windGustMs: 5, windDirDeg: 270, tempC: 18, precipMm: 0,
+      precipProbPct: 0, cloudCoverPct: 0, visibilityM: 20000, pressureHpa: 1013,
       sunriseIso: '2026-06-15T05:00', sunsetIso: '2026-06-15T21:00',
       currentTimeIso: '2026-06-15T18:00', fetchedAtMs: 0,
     };
@@ -184,6 +186,7 @@ describe('computeMissionBriefing', () => {
   it('reports negative daylight margin when a long mission overruns sunset', () => {
     const weather = {
       windSpeedMs: 3, windGustMs: 5, windDirDeg: 270, tempC: 18, precipMm: 0,
+      precipProbPct: 0, cloudCoverPct: 0, visibilityM: 20000, pressureHpa: 1013,
       sunriseIso: '2026-06-15T05:00', sunsetIso: '2026-06-15T21:00',
       currentTimeIso: '2026-06-15T20:30', fetchedAtMs: 0,
     };

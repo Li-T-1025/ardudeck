@@ -27,8 +27,23 @@ export interface Capability {
 
 /** Cargo slug that enables the entire Fleet Vault surface. */
 export const VAULT_CARGO_SLUG = 'com.ardudeck.vault';
+/** Cargo slug that enables the Pre-Flight Weather Briefing surface. */
+export const WEATHER_CARGO_SLUG = 'com.ardudeck.weather';
+
+/**
+ * Whether the Pre-Flight Weather Briefing view is reachable. Gated on its cargo:
+ * the view and its settings-card "View in detail" entry appear only while the
+ * Weather Briefing cargo is installed and not toggled off.
+ */
+export function isWeatherBriefingAvailable(): boolean {
+  return isCargoEnabled(WEATHER_CARGO_SLUG);
+}
 /** Cargo slug that enables the Mission Library surface. */
 export const MISSION_LIBRARY_CARGO_SLUG = 'com.ardudeck.mission-library';
+// Public API-key Claude Advisor cargo. Enables both the live advisor panel and
+// the AI flight-log analysis surfaces. Note the slug is `ardudeck.advisor`, NOT
+// the `com.ardudeck.*` convention used by the other cargo above.
+export const ADVISOR_CARGO_SLUG = 'ardudeck.advisor';
 
 export const CAPABILITIES: Capability[] = [
   // Example (not active): { slug: 'com.ardudeck.area-editor', viewId: 'mission' },
@@ -38,6 +53,9 @@ export const CAPABILITIES: Capability[] = [
   // Mission Library: nav view plus the "Save to Library" entry in the mission
   // toolbar's save menu (gated via useCargoEnabled in MissionToolbar).
   { slug: MISSION_LIBRARY_CARGO_SLUG, viewId: 'library' },
+  // Pre-Flight Weather Briefing: nav view plus the "View in detail" button on
+  // the Vehicle & Status weather card (gated via isWeatherBriefingAvailable).
+  { slug: WEATHER_CARGO_SLUG, viewId: 'weather' },
 ];
 
 const GATED_VIEWS: ReadonlyMap<ViewId, string> = new Map(

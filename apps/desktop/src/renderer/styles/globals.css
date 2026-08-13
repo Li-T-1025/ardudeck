@@ -1042,3 +1042,52 @@ select,
   stroke-linecap: round;
 }
 
+/* ============================================================
+   Pre-Flight Weather Briefing motion
+   Entrance stagger, a low-key accent pulse for CAUTION / NO-GO,
+   and a slow ambient sway on the wind vector. Every non-essential
+   motion is gated behind prefers-reduced-motion so reduced-motion
+   users get the final state with no movement.
+   ============================================================ */
+@keyframes wx-rise {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.wx-rise {
+  animation: wx-rise 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes wx-accent-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+.wx-accent-pulse {
+  animation: wx-accent-pulse 2.6s ease-in-out infinite;
+}
+
+/* Slow left-right sway, composed on top of the inline bearing rotation of
+   the parent group so the wind vector reads as live air, not a frozen arrow. */
+@keyframes wx-vane-sway {
+  0%, 100% { transform: rotate(-2deg); }
+  50% { transform: rotate(2deg); }
+}
+.wx-vane-sway {
+  animation: wx-vane-sway 5.5s ease-in-out infinite;
+  transform-box: view-box;
+  transform-origin: 100px 100px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .wx-rise,
+  .wx-accent-pulse,
+  .wx-vane-sway {
+    animation: none !important;
+  }
+}
+

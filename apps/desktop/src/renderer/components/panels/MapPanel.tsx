@@ -76,6 +76,8 @@ import { WindControls } from '../map/overlays/WindControls';
 import { WindRoseCard } from '../map/overlays/WindRoseCard';
 import { ApiKeyDialog } from '../map/overlays/ApiKeyDialog';
 import { useOverlayStore } from '../../stores/overlay-store';
+import { useMapSplitStore, MAP_SPLIT_RATIO_MIN, MAP_SPLIT_RATIO_MAX } from '../../stores/map-split-store';
+import { PANEL_COMPONENTS, PANEL_RENDERERS, type PanelId } from './index';
 
 const TELEMETRY_LAYERS = {
   osm: MAP_LAYERS.osm,
@@ -1006,6 +1008,172 @@ function LayerSwitcher({
       )}
     </div>
   );
+}
+
+// Split control. Sets the in-map split target: the chosen panel shares the map
+// panel's content area (map on the left, panel on the right, draggable divider
+// between) while the floating instruments overlay stays on top of BOTH halves.
+// The split lives entirely inside MapPanel (see SplitDivider / SecondSurface) so
+// there is no dockview involvement here. Vision leads as the suggested split.
+function SplitControl() {
+  const [isOpen, setIsOpen] = useState(false);
+  const target = useMapSplitStore((s) => s.target);
+  const setTarget = useMapSplitStore((s) => s.setTarget);
+
+  // Splittable panels: everything in the registry we have a renderer for,
+  // except the map itself. Vision leads.
+  const options = useMemo(() => {
+    const ids = (Object.keys(PANEL_COMPONENTS) as PanelId[]).filter(
+      (id) => id !== 'map' && PANEL_RENDERERS[id],
+    );
+    ids.sort((a, b) => (a === 'camera' ? -1 : b === 'camera' ? 1 : 0));
+    return ids;
+  }, []);
+
+  return (
+    <div className="relative">
+      <button
+        onClick={() => setIsOpen(!isOpen)}
+        className={`px-2 py-1 text-xs rounded shadow-lg transition-colors flex items-center gap-1.5 ${
+          target ? 'bg-blue-600 text-white' : 'bg-surface text-content hover:bg-surface-raised'
+        }`}
+        data-tip={target ? `Split with ${PANEL_COMPONENTS[target].title}` : 'Split the map with another panel'}
+      >
+        <svg className="w-3.5 h-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+          <rect x="3" y="4" width="18" height="16" rx="1.5" />
+          <line x1="12" y1="4" x2="12" y2="20" />
+        </svg>
+        {target ? PANEL_COMPONENTS[target].title : 'Split'}
+      </button>
+
+      {isOpen && (
+        <>
+          <div className="fixed inset-0 z-[999]" onClick={() => setIsOpen(false)} />
+          <div className="absolute right-0 top-full mt-1 bg-surface-solid border border-subtle rounded shadow-xl z-[1000] py-1 min-w-[160px] max-h-[320px] overflow-y-auto">
+            {target && (
+              <>
+                <button
+                  onClick={() => {
+                    setTarget(null);
+                    setIsOpen(false);
+                  }}
+                  className="w-full px-3 py-1.5 text-left text-xs text-content hover:bg-surface-raised transition-colors flex items-center gap-1.5"
+                >
+                  <svg className="w-3.5 h-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                  Close split
+                </button>
+                <div className="my-1 border-t border-subtle" />
+              </>
+            )}
+            {options.map((id) => (
+              <button
+                key={id}
+                onClick={() => {
+                  setTarget(id);
+                  setIsOpen(false);
+                }}
+                className={`w-full px-3 py-1.5 text-left text-xs transition-colors ${
+                  id === target ? 'bg-blue-600 text-white' : 'text-content hover:bg-surface-raised'
+                }`}
+              >
+                Split with {PANEL_COMPONENTS[id].title}
+              </button>
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+// Second surface rendered in the right half of the split. Resolves the chosen
+// panel id to its component (prop-free, like dockview renders them) and lets it
+// fill the half. Renders nothing for an unknown id.
+function SecondSurface({ panelId }: { panelId: PanelId }) {
+  const Component = PANEL_RENDERERS[panelId];
+  if (!Component) return null;
+  return (
+    <div className="h-full w-full overflow-hidden bg-surface">
+      <Component />
+    </div>
+  );
+}
+
+// Draggable divider between the map half and the second surface. Reports the new
+// map (left) fraction as the pointer moves, computed against the content row's
+// width. A clear button sits at the top so the operator can unsplit from here.
+function SplitDivider({
+  rowRef,
+  onRatio,
+  onDragEnd,
+  onClose,
+}: {
+  rowRef: React.RefObject<HTMLDivElement>;
+  onRatio: (ratio: number) => void;
+  onDragEnd: () => void;
+  onClose: () => void;
+}) {
+  const [dragging, setDragging] = useState(false);
+
+  const handlePointerDown = useCallback((e: React.PointerEvent) => {
+    e.preventDefault();
+    (e.target as HTMLElement).setPointerCapture(e.pointerId);
+    setDragging(true);
+
+    const handleMove = (ev: PointerEvent) => {
+      const row = rowRef.current;
+      if (!row) return;
+      const rect = row.getBoundingClientRect();
+      if (rect.width <= 0) return;
+      onRatio((ev.clientX - rect.left) / rect.width);
+    };
+    const handleUp = (ev: PointerEvent) => {
+      (e.target as HTMLElement).releasePointerCapture?.(ev.pointerId);
+      window.removeEventListener('pointermove', handleMove);
+      window.removeEventListener('pointerup', handleUp);
+      setDragging(false);
+      onDragEnd();
+    };
+    window.addEventListener('pointermove', handleMove);
+    window.addEventListener('pointerup', handleUp);
+  }, [rowRef, onRatio, onDragEnd]);
+
+  return (
+    <div
+      onPointerDown={handlePointerDown}
+      className={`group relative z-[1200] w-1.5 h-full shrink-0 cursor-col-resize flex items-stretch justify-center ${
+        dragging ? 'bg-blue-500' : 'bg-subtle hover:bg-blue-500/60'
+      } transition-colors`}
+      data-tip="Drag to resize, or use the X to close the split"
+    >
+      <button
+        onPointerDown={(e) => e.stopPropagation()}
+        onClick={onClose}
+        className="absolute top-2 left-1/2 -translate-x-1/2 z-[1201] w-5 h-5 rounded-full bg-surface-solid border border-subtle text-content-secondary hover:text-content hover:bg-surface-raised shadow-lg flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+        data-tip="Close split"
+      >
+        <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+        </svg>
+      </button>
+    </div>
+  );
+}
+
+// Captures the Leaflet map instance for the parent so it can invalidateSize()
+// when the map half's width changes (split toggle / divider drag), which Leaflet
+// needs or the map paints grey.
+function MapRefBridge({ mapRef }: { mapRef: React.MutableRefObject<L.Map | null> }) {
+  const map = useMap();
+  useEffect(() => {
+    mapRef.current = map;
+    return () => {
+      if (mapRef.current === map) mapRef.current = null;
+    };
+  }, [map, mapRef]);
+  return null;
 }
 
 // Compass overlay. 3D view only: the 2D map replaced it with the 'heading'
@@ -2219,6 +2387,50 @@ const TelemetryMap2D = React.memo(function TelemetryMap2D() {
     setFollowVehicle(true);
   }, []);
 
+  // ── In-map split ──────────────────────────────────────────────────────────
+  // A second panel (Vision first) can share the map panel's content area: map on
+  // the left, panel on the right, with a draggable divider. The floating
+  // instruments overlay (rendered as a sibling below) stays on top of the WHOLE
+  // panel, spanning both halves. The Leaflet map must be told its width changed
+  // (invalidateSize) or it paints grey tiles.
+  const splitTarget = useMapSplitStore((s) => s.target);
+  const splitRatio = useMapSplitStore((s) => s.ratio);
+  const setSplitRatio = useMapSplitStore((s) => s.setRatio);
+  const clearSplit = useMapSplitStore((s) => s.clear);
+  const leafletMapRef = useRef<L.Map | null>(null);
+  const splitRowRef = useRef<HTMLDivElement>(null);
+  // While dragging the divider we keep the ratio local (smooth, no persist spam)
+  // and commit it to the store on release. A ref carries the latest value into
+  // the pointerup handler, whose closure captured drag-start state.
+  const [dragRatio, setDragRatio] = useState<number | null>(null);
+  const dragRatioRef = useRef<number | null>(null);
+  const effectiveRatio = dragRatio ?? splitRatio;
+
+  const invalidateMapSize = useCallback(() => {
+    const map = leafletMapRef.current;
+    if (!map) return;
+    try { map.invalidateSize(); } catch { /* map not initialised yet */ }
+  }, []);
+
+  // Repaint after the new width has been applied to the DOM (split toggled, or
+  // ratio changed during/after a drag).
+  useEffect(() => {
+    const id = requestAnimationFrame(invalidateMapSize);
+    return () => cancelAnimationFrame(id);
+  }, [splitTarget, effectiveRatio, invalidateMapSize]);
+
+  const handleSplitRatio = useCallback((ratio: number) => {
+    const clamped = Math.max(MAP_SPLIT_RATIO_MIN, Math.min(MAP_SPLIT_RATIO_MAX, ratio));
+    dragRatioRef.current = clamped;
+    setDragRatio(clamped);
+  }, []);
+  const handleSplitDragEnd = useCallback(() => {
+    const r = dragRatioRef.current;
+    if (r != null) setSplitRatio(r);
+    dragRatioRef.current = null;
+    setDragRatio(null);
+  }, [setSplitRatio]);
+
   const layer = TELEMETRY_LAYERS[currentLayer];
 
   return (
@@ -2258,6 +2470,7 @@ const TelemetryMap2D = React.memo(function TelemetryMap2D() {
           onToggleTerrain={() => setShowTerrain(!showTerrain)}
           extra={<MissionPathsToggle />}
         />
+        <SplitControl />
         <button
           onClick={() => setFollowVehicle(!followVehicle)}
           className={`px-2 py-1 text-xs rounded shadow-lg transition-colors flex items-center gap-1.5 ${
@@ -2433,7 +2646,15 @@ const TelemetryMap2D = React.memo(function TelemetryMap2D() {
         {flight.armed ? 'ARMED' : 'DISARMED'}
       </div>
 
-      {/* Map container */}
+      {/* Content area: the Leaflet map, plus an optional in-map split second
+          surface to its right with a draggable divider. The floating overlays
+          above (toolbars, instruments) are siblings of this row, so they stay on
+          top of the WHOLE panel and span BOTH halves. */}
+      <div ref={splitRowRef} className="flex-1 min-h-0 flex">
+        <div
+          className="relative h-full min-w-0"
+          style={{ flexGrow: splitTarget ? effectiveRatio : 1, flexBasis: 0 }}
+        >
       <MapContainer
         center={vehiclePosition}
         zoom={17}
@@ -2442,6 +2663,7 @@ const TelemetryMap2D = React.memo(function TelemetryMap2D() {
         zoomControl={false}
         attributionControl={false}
       >
+        <MapRefBridge mapRef={leafletMapRef} />
         <SmoothWheelZoom />
         <TelemetryViewportSync />
         <MapBoundsTracker onBoundsChange={handleBoundsChange} />
@@ -2578,6 +2800,26 @@ const TelemetryMap2D = React.memo(function TelemetryMap2D() {
           onClearRoi={handleClearRoi}
         />
       </MapContainer>
+        </div>
+
+        {/* In-map split: divider + second surface (Vision first). */}
+        {splitTarget && (
+          <>
+            <SplitDivider
+              rowRef={splitRowRef}
+              onRatio={handleSplitRatio}
+              onDragEnd={handleSplitDragEnd}
+              onClose={clearSplit}
+            />
+            <div
+              className="relative h-full min-w-0"
+              style={{ flexGrow: 1 - effectiveRatio, flexBasis: 0 }}
+            >
+              <SecondSurface panelId={splitTarget} />
+            </div>
+          </>
+        )}
+      </div>
 
       {/* Offline cache-area control panel (visible only in cache mode). */}
       <OfflineCachePanel activeLayer={currentLayer} />

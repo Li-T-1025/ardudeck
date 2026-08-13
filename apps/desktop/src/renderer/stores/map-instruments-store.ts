@@ -35,7 +35,11 @@ function layoutPosKeys(): string[] {
   return MAP_INSTRUMENTS.map((i) => 'instrument:' + i.id);
 }
 
-export type InstrumentDisplayMode = 'analog' | 'numeric';
+/** The analog gauge, the numeric card, or one of the registry's extra
+ * variants (the compact strip/cell/inline readouts). Missing = analog. */
+export type InstrumentDisplayMode = 'analog' | 'numeric' | 'strip' | 'cell' | 'inline';
+
+const DISPLAY_MODES: readonly InstrumentDisplayMode[] = ['analog', 'numeric', 'strip', 'cell', 'inline'];
 
 export interface InstrumentLayoutSnapshot {
   visible: Record<string, boolean>;
@@ -99,7 +103,7 @@ function sanitizeDisplayMode(parsed: unknown): Record<string, InstrumentDisplayM
   const out: Record<string, InstrumentDisplayMode> = {};
   if (parsed && typeof parsed === 'object') {
     for (const [k, v] of Object.entries(parsed as Record<string, unknown>)) {
-      if (v === 'analog' || v === 'numeric') out[k] = v;
+      if (typeof v === 'string' && (DISPLAY_MODES as readonly string[]).includes(v)) out[k] = v as InstrumentDisplayMode;
     }
   }
   return out;
