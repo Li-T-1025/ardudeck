@@ -1,5 +1,5 @@
 import { GuidesButton } from './GuidesButton';
-import { useState, useEffect, useMemo, useRef } from 'react';
+import { Fragment, useState, useEffect, useMemo, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useConnectionStore } from '../../stores/connection-store';
 import { useMissionStore } from '../../stores/mission-store';
@@ -7,7 +7,8 @@ import { useSurveyStore } from '../../stores/survey-store';
 import { useFenceStore } from '../../stores/fence-store';
 import { useRallyStore } from '../../stores/rally-store';
 import { useEditModeStore, type EditMode, type MapMode } from '../../stores/edit-mode-store';
-import { useSettingsStore } from '../../stores/settings-store';
+import { useSettingsStore, type MissionFirmware } from '../../stores/settings-store';
+import { effectiveMissionFirmware } from '../../utils/mission-firmware';
 import { SaveMissionModal } from '../mission-library/SaveMissionModal';
 import { UploadPreviewModal } from './UploadPreviewModal';
 import { AutoAdjustAltitudeDialog } from './AutoAdjustAltitudeDialog';
@@ -62,6 +63,19 @@ function ModeButton({
   );
 }
 
+/** Offline mission-planning targets. One accent colour per flight stack. */
+const MISSION_FIRMWARE_OPTIONS = [
+  { id: 'ardupilot', label: 'ArduPilot', title: 'ArduPilot mission commands' },
+  { id: 'px4', label: 'PX4', title: 'PX4 mission commands' },
+  { id: 'inav', label: 'iNav', title: 'iNav mission commands (8 waypoint types)' },
+] as const satisfies ReadonlyArray<{ id: MissionFirmware; label: string; title: string }>;
+
+const MISSION_FIRMWARE_ACCENT: Record<MissionFirmware, { border: string; divider: string; active: string }> = {
+  ardupilot: { border: 'border-sky-500/40', divider: 'bg-sky-500/30', active: 'bg-sky-600/80 text-white' },
+  px4: { border: 'border-emerald-500/40', divider: 'bg-emerald-500/30', active: 'bg-emerald-600/80 text-white' },
+  inav: { border: 'border-violet-500/40', divider: 'bg-violet-500/30', active: 'bg-violet-600/80 text-white' },
+};
+
 function MissionModeControls() {
   const advancedLabels = useSettingsStore((s) => s.missionDefaults.advancedMissionLabels);
   const missionFirmware = useSettingsStore((s) => s.missionDefaults.missionFirmware);
@@ -69,11 +83,8 @@ function MissionModeControls() {
   const { connectionState } = useConnectionStore();
   const isConnected = connectionState.isConnected;
 
-  // Auto-detect firmware when connected
-  const detectedFirmware = isConnected
-    ? (connectionState.protocol === 'msp' && connectionState.fcVariant === 'INAV' ? 'inav' : 'ardupilot')
-    : null;
-  const effectiveFirmware = detectedFirmware ?? missionFirmware;
+  // Same rule as the waypoint table, from one shared detector.
+  const effectiveFirmware = effectiveMissionFirmware(connectionState, missionFirmware);
   const isInav = effectiveFirmware === 'inav';
 
   return (
@@ -115,34 +126,28 @@ function MissionModeControls() {
         </div>
       )}
 
-      {/* Firmware selector - only when disconnected */}
+      {/* Firmware selector - only when disconnected. Connected, the link
+          decides and this is hidden, so the two can never disagree.
+          Class names are spelled out in full: Tailwind scans source
+          statically, so an interpolated `bg-${color}-600` is purged. */}
       {!isConnected && (
-        <div className={`flex items-center rounded-lg overflow-hidden border transition-colors ${
-          isInav ? 'border-violet-500/40' : 'border-sky-500/40'
-        }`}>
-          <button
-            onClick={() => updateMissionDefaults({ missionFirmware: 'ardupilot' })}
-            className={`px-2.5 py-1.5 text-xs font-medium transition-colors ${
-              !isInav
-                ? 'bg-sky-600/80 text-white'
-                : 'text-content-secondary hover:bg-surface-raised'
-            }`}
-            title="ArduPilot mission commands"
-          >
-            ArduPilot
-          </button>
-          <div className={`w-px h-5 transition-colors ${isInav ? 'bg-violet-500/30' : 'bg-sky-500/30'}`} />
-          <button
-            onClick={() => updateMissionDefaults({ missionFirmware: 'inav' })}
-            className={`px-2.5 py-1.5 text-xs font-medium transition-colors ${
-              isInav
-                ? 'bg-violet-600/80 text-white'
-                : 'text-content-secondary hover:bg-surface-raised'
-            }`}
-            title="iNav mission commands (8 waypoint types)"
-          >
-            iNav
-          </button>
+        <div className={`flex items-center rounded-lg overflow-hidden border transition-colors ${MISSION_FIRMWARE_ACCENT[effectiveFirmware].border}`}>
+          {MISSION_FIRMWARE_OPTIONS.map((option, i) => (
+            <Fragment key={option.id}>
+              {i > 0 && <div className={`w-px h-5 transition-colors ${MISSION_FIRMWARE_ACCENT[effectiveFirmware].divider}`} />}
+              <button
+                onClick={() => updateMissionDefaults({ missionFirmware: option.id })}
+                className={`px-2.5 py-1.5 text-xs font-medium transition-colors ${
+                  effectiveFirmware === option.id
+                    ? MISSION_FIRMWARE_ACCENT[option.id].active
+                    : 'text-content-secondary hover:bg-surface-raised'
+                }`}
+                title={option.title}
+              >
+                {option.label}
+              </button>
+            </Fragment>
+          ))}
         </div>
       )}
 
@@ -294,6 +299,13 @@ export function MissionToolbar({ onResetLayout, showToast }: MissionToolbarProps
   const fenceIsUploading = fenceIsLoading && fenceStore.progress?.operation === 'upload';
 
   // Rally store
+  const isPx4 = connectionState.firmware === 'px4';
+  // Connecting a PX4 vehicle while the Rally tab is open hides that tab, which
+  // would strand the editor on a panel with no way back to the mission.
+  useEffect(() => {
+    if (isPx4 && activeMode === 'rally') setActiveMode('mission');
+  }, [isPx4, activeMode, setActiveMode]);
+
   const rallyStore = useRallyStore();
   const rallyHasItems = rallyStore.rallyPoints.length > 0;
   const rallyIsLoading = rallyStore.isLoading;
@@ -511,15 +523,21 @@ export function MissionToolbar({ onResetLayout, showToast }: MissionToolbarProps
           color="green"
           hasModified={fenceIsDirty}
         />
-        <div className="w-px h-5 bg-subtle" />
-        <ModeButton
-          mode="rally"
-          label="Rally"
-          activeMode={activeMode}
-          onClick={() => setActiveMode('rally')}
-          color="orange"
-          hasModified={rallyIsDirty}
-        />
+        {/* Rally points are an ArduPilot concept; PX4 has no equivalent
+            mission type, so the tab would only ever fail on upload. */}
+        {!isPx4 && (
+          <>
+            <div className="w-px h-5 bg-subtle" />
+            <ModeButton
+              mode="rally"
+              label="Rally"
+              activeMode={activeMode}
+              onClick={() => setActiveMode('rally')}
+              color="orange"
+              hasModified={rallyIsDirty}
+            />
+          </>
+        )}
       </div>
 
       {/* Separator */}

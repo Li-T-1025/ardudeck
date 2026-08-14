@@ -17,6 +17,13 @@ export interface ParameterMetadata {
   rebootRequired?: boolean;
   readOnly?: boolean;
   bitmask?: Record<number, string>; // For bitmask params
+  /**
+   * PX4 `volatile`: the vehicle writes this parameter itself (calibration
+   * results, flight-time counters, mode hashes). NOT the same as readOnly -
+   * these stay editable, exactly as they are in QGC. It only means a value you
+   * set can be overwritten by the FC later, which is worth telling the user.
+   */
+  volatile?: boolean;
 }
 
 /**

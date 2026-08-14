@@ -133,6 +133,9 @@ import type { ParamValuePayload, ParameterProgress } from '../shared/parameter-t
 import { PARAMETER_METADATA_URLS, mavTypeToVehicleType, type VehicleType, type ParameterMetadata, type ParameterMetadataStore } from '../shared/parameter-metadata.js';
 import { persistsStreamRates, cappedLegacyRates } from '../shared/stream-rates.js';
 import { getPx4ParameterMetadata } from './px4-parameter-metadata.js';
+import { formatPx4Event, px4EventSeverity, setPx4EventMetadata } from './px4-events/index.js';
+import { COMP_METADATA_TYPE, fetchPx4ComponentMetadata } from './px4-component-info/index.js';
+import { px4CellVoltageAtThreshold } from '../shared/px4-battery.js';
 import type { AttitudeData, PositionData, GpsData, BatteryData, VfrHudData, FlightState, RcChannelsData, NavControllerData, GuidedTargetData } from '../shared/telemetry-types.js';
 import { COPTER_MODES, PLANE_MODES, ROVER_MODES, SUB_MODES, getPx4ModeName } from '../shared/telemetry-types.js';
 import type { MissionItem, MissionProgress, MavFrame } from '../shared/mission-types.js';
@@ -1323,6 +1326,97 @@ async function sendCommandLongToVehicle(
 }
 
 /**
+ * Ask the vehicle for its component metadata URI, then walk the component
+ * information chain to pull its own parameter and event definitions.
+ *
+ * PX4 only, once per link, entirely best-effort: a vehicle that does not
+ * implement the service simply times out and the bundled metadata stays in
+ * place. Requests COMPONENT_METADATA (397) first and falls back to the
+ * deprecated COMPONENT_INFORMATION (395) for older firmware.
+ */
+async function refreshPx4ComponentMetadata(mainWindow: BrowserWindow): Promise<void> {
+  if (px4ComponentInfoStarted || connectionState.firmware !== 'px4') return;
+  px4ComponentInfoStarted = true;
+
+  const targetSys = connectionState.systemId ?? 1;
+  const targetComp = 1;
+
+  const requestUri = async (msgid: number): Promise<string | null> => {
+    const uri = new Promise<string | null>((resolve) => {
+      pendingComponentMetadata = resolve;
+      setTimeout(() => {
+        if (pendingComponentMetadata === resolve) {
+          pendingComponentMetadata = null;
+          resolve(null);
+        }
+      }, 5000);
+    });
+    await sendCommandLongToVehicle(null, 512 /* MAV_CMD_REQUEST_MESSAGE */, { param1: msgid });
+    return uri;
+  };
+
+  try {
+    const generalUri = (await requestUri(MSG_COMPONENT_METADATA))
+      ?? (await requestUri(MSG_COMPONENT_INFORMATION));
+    if (!generalUri) {
+      sendLog(mainWindow, 'debug', 'PX4 component info: vehicle did not report a metadata URI');
+      return;
+    }
+
+    // MAVLink FTP has one response route (the module-level ftpClient), so wait
+    // for the parameter download to release it rather than corrupting both.
+    for (let waited = 0; ftpClient && waited < 60_000; waited += 500) {
+      await new Promise((r) => setTimeout(r, 500));
+    }
+    if (ftpClient) {
+      sendLog(mainWindow, 'warn', 'PX4 component info: FTP still busy, skipping metadata fetch');
+      return;
+    }
+
+    const client = new MavlinkFtpClient({
+      sendPacket: async (ftpPayload: Uint8Array) => {
+        const ftpMsg = serializeFileTransferProtocol({
+          targetNetwork: 0,
+          targetSystem: targetSys,
+          targetComponent: targetComp,
+          payload: Array.from(ftpPayload),
+        });
+        const packet = await sendMavlinkPacket(FILE_TRANSFER_PROTOCOL_ID, ftpMsg, FILE_TRANSFER_PROTOCOL_CRC_EXTRA);
+        await currentTransport!.write(packet);
+        connectionState.packetsSent++;
+      },
+      log: (level, message) => sendLog(mainWindow, level === 'error' ? 'error' : level === 'warn' ? 'warn' : 'debug', message),
+    });
+    ftpClient = client;
+
+    try {
+      const result = await fetchPx4ComponentMetadata(
+        { type: COMP_METADATA_TYPE.GENERAL, uri: generalUri },
+        {
+          downloadFile: (ftpPath) => client.downloadFile(ftpPath),
+          log: (level, message) => sendLog(mainWindow, level === 'debug' ? 'debug' : level, message),
+          cacheDir: join(app.getPath('userData'), 'px4-component-metadata-cache'),
+        },
+      );
+
+      if (result.events) setPx4EventMetadata(result.events);
+      if (result.parameters) {
+        // Vehicle definitions win over the bundled file, but keep the bundled
+        // entries for anything the vehicle did not describe.
+        px4VehicleParamMetadata = { ...getPx4ParameterMetadata(), ...result.parameters };
+        metadataCache.set('px4', px4VehicleParamMetadata);
+        safeSend(mainWindow, IPC_CHANNELS.PARAM_METADATA_RESULT, { metadata: px4VehicleParamMetadata });
+      }
+    } finally {
+      await client.cleanup().catch(() => {});
+      if (ftpClient === client) ftpClient = null;
+    }
+  } catch (err) {
+    sendLog(mainWindow, 'warn', `PX4 component info: ${(err as Error).message}`);
+  }
+}
+
+/**
  * Build a Transport for a background (non-primary) connection. Pure factory:
  * does not open, attach listeners, or touch module state. Kept separate from
  * the primary COMMS_CONNECT switch so that path stays bit-for-bit unchanged.
@@ -2313,6 +2407,27 @@ const MSG_TERRAIN_REPORT = 136;
 const MSG_WIND = 168;
 const MSG_NAMED_VALUE_FLOAT = 251;
 const MSG_STATUSTEXT = 253;
+// PX4 events interface. Since v1.13 PX4 reports most user-facing warnings and
+// errors here rather than as STATUSTEXT, so without this the Messages panel is
+// blind to PX4 arming refusals and failsafe reasons.
+const MSG_EVENT = 410;
+
+/**
+ * Last EVENT sequence rendered per `sysid:compid`. Events are broadcast and may
+ * be re-sent when a GCS requests a gap, so the same sequence can arrive twice.
+ */
+const lastEventSequence = new Map<string, number>();
+
+// Component information service: the vehicle's own parameter/event definitions.
+const MSG_COMPONENT_INFORMATION = 395; // deprecated, kept as a fallback
+const MSG_COMPONENT_METADATA = 397;
+
+/** Resolver for an in-flight COMPONENT_METADATA/INFORMATION request. */
+let pendingComponentMetadata: ((uri: string | null) => void) | null = null;
+/** Parameter metadata downloaded from the vehicle, overriding the bundled set. */
+let px4VehicleParamMetadata: ParameterMetadataStore | null = null;
+/** Guards against running the component-info walk more than once per link. */
+let px4ComponentInfoStarted = false;
 
 // Mission message IDs
 const MSG_MISSION_ITEM = 39;
@@ -2856,6 +2971,81 @@ function parseTelemetry(mainWindow: BrowserWindow, packet: MAVLinkPacket): void 
         ingestNamedValueFloat(name, value);
       } catch (err) {
         sendLog(mainWindow, 'warn', `NAMED_VALUE_FLOAT parse failed: ${err instanceof Error ? err.message : err}`);
+      }
+      break;
+    }
+
+    case MSG_COMPONENT_METADATA:
+    case MSG_COMPONENT_INFORMATION: {
+      // The general metadata URI sits at a DIFFERENT offset in each message,
+      // because the deprecated one carries a second CRC ahead of the strings:
+      //   COMPONENT_METADATA(397):    time_boot_ms@0, file_crc@4, uri@8   (108)
+      //   COMPONENT_INFORMATION(395): time_boot_ms@0, general_crc@4,
+      //                               peripherals_crc@8, general_uri@12  (212)
+      // Reading 395 at offset 8 lands on the peripherals CRC and yields an
+      // empty string (confirmed against PX4 SITL, which answers both).
+      //
+      // Zero-pad first: the URI is null-padded and MAVLink v2 strips the
+      // trailing zeros, so SITL's 397 arrives as 51 bytes, not 108.
+      if (!pendingComponentMetadata) break;
+      const isDeprecated = packet.msgid === MSG_COMPONENT_INFORMATION;
+      const total = isDeprecated ? 212 : 108;
+      const uriOffset = isDeprecated ? 12 : 8;
+      const full = new Uint8Array(total);
+      full.set(payload.subarray(0, Math.min(payload.length, total)));
+      const uri = new TextDecoder()
+        .decode(full.subarray(uriOffset, uriOffset + 100))
+        .replace(/\0.*$/, '')
+        .trim();
+      const resolve = pendingComponentMetadata;
+      pendingComponentMetadata = null;
+      resolve(uri || null);
+      break;
+    }
+
+    case MSG_EVENT: {
+      // EVENT layout: id(U32)@0, event_time_boot_ms(U32)@4, sequence(U16)@8,
+      // destination_component(U8)@10, destination_system(U8)@11,
+      // log_levels(U8)@12, arguments(U8[40])@13. Total 53.
+      //
+      // MAVLink v2 truncates trailing zero bytes, and an all-zero argument
+      // block is the COMMON case here (most events carry no arguments), so
+      // zero-pad to the full length before reading rather than length-guarding.
+      const full = new Uint8Array(53);
+      full.set(payload.subarray(0, Math.min(payload.length, 53)));
+
+      const eventId = readUint32(full, 0);
+      const sequence = readUint16(full, 8);
+      const logLevels = full[12]!;
+
+      const seqKey = `${packet.sysid}:${packet.compid}`;
+      if (lastEventSequence.get(seqKey) === sequence) break;
+      lastEventSequence.set(seqKey, sequence);
+
+      const formatted = formatPx4Event(eventId, full.subarray(13), logLevels);
+      const severity = formatted ? formatted.severity : px4EventSeverity(logLevels);
+      // Protocol/Disabled levels are machine-facing, never shown.
+      if (severity === null) break;
+
+      let text: string;
+      if (formatted) {
+        // Arming-check failures are PX4's equivalent of ArduPilot's "PreArm:"
+        // messages. Labelling them the same keeps one Messages panel readable
+        // across both firmwares, and matches the announcer's prearm phrase.
+        text = formatted.group === 'arming_check' ? `PreArm: ${formatted.text}` : formatted.text;
+      } else {
+        // Unknown id: a custom PX4 build, or metadata older than the firmware.
+        // Stay quiet for informational events, but never swallow a warning or
+        // worse - an unexplained id beats silence when something is wrong.
+        if (severity > 4) break;
+        text = `PX4 event ${eventId}`;
+      }
+
+      const severityLabel = SEVERITY_LABELS[severity] ?? 'INFO';
+      mainWindow.webContents.send(IPC_CHANNELS.MAVLINK_STATUSTEXT, { severity, severityLabel, text });
+      statustextHistory.push({ ts: Date.now(), severity, severityLabel, text });
+      if (statustextHistory.length > MAX_STATUSTEXT_HISTORY) {
+        statustextHistory = statustextHistory.slice(-MAX_STATUSTEXT_HISTORY);
       }
       break;
     }
@@ -6066,6 +6256,15 @@ export function setupIpcHandlers(mainWindow: BrowserWindow): void {
         ftpClient.cleanup().catch(() => {});
         ftpClient = null;
       }
+      // Vehicle-supplied PX4 metadata belongs to the link that supplied it; the
+      // next vehicle may run different firmware, so fall back to the bundled
+      // definitions until it reports its own.
+      px4ComponentInfoStarted = false;
+      px4VehicleParamMetadata = null;
+      pendingComponentMetadata = null;
+      lastEventSequence.clear();
+      metadataCache.delete('px4');
+      setPx4EventMetadata(null);
       signingKeyMismatch = false;
       connectionState = {
         isConnected: false,
@@ -6969,7 +7168,13 @@ export function setupIpcHandlers(mainWindow: BrowserWindow): void {
     // PX4 has no live XML endpoint - serve the bundled QGC JSON instead.
     // Metadata is per-firmware, not per-vehicle, so we key the cache on 'px4'.
     if (connectionState.firmware === 'px4') {
-      const cached = metadataCache.get('px4');
+      // Ask the vehicle for its OWN definitions in the background. That covers
+      // custom and newer builds the bundled file predates; when it lands it is
+      // pushed over PARAM_METADATA_RESULT. Never block the UI on it: the
+      // transfer runs over MAVLink FTP and can take a while on a slow link.
+      if (mainWindow) void refreshPx4ComponentMetadata(mainWindow);
+
+      const cached = px4VehicleParamMetadata ?? metadataCache.get('px4');
       if (cached) {
         return { success: true, metadata: cached };
       }
@@ -8768,7 +8973,12 @@ export function setupIpcHandlers(mainWindow: BrowserWindow): void {
     sitl?: boolean,
   ) => {
     try {
-      const result = await (await vault()).snapshotParams(uid, boardName, params, vehicleType, note, sitl);
+      // The stack is taken from the live link rather than passed in: these are
+      // the connected vehicle's parameters, and main is the only place that
+      // knows which flight stack produced them.
+      const result = await (await vault()).snapshotParams(
+        uid, boardName, params, vehicleType, note, sitl, connectionState.firmware,
+      );
       if (result.changed) sendLog(mainWindow, 'info', `Vault: snapshot of ${params.length} params for ${boardName}`);
       return { success: true, ...result };
     } catch (err) {
@@ -9861,6 +10071,37 @@ export function setupIpcHandlers(mainWindow: BrowserWindow): void {
     const cfg: Record<string, string | number> = {};
     const vehicleName = connectionState.boardId || connectionState.vehicleType;
     if (vehicleName) cfg.name = vehicleName;
+
+    if (connectionState.firmware === 'px4') {
+      // PX4 names AND means something different here, so this is not a rename:
+      //   BAT1_N_CELLS    cell count outright (no dividing a pack voltage)
+      //   BAT1_V_CHARGED  full CELL voltage      BAT1_V_EMPTY  empty CELL voltage
+      //   BAT_LOW_THR / BAT_CRIT_THR   fractions of remaining capacity (0..0.5,
+      //                                units "norm"), NOT voltages
+      // The widget wants per-cell warning voltages, so map the thresholds back
+      // through PX4's own linear voltage model: a threshold of t sits at
+      // v_empty + t * (v_charged - v_empty). Taking BAT_LOW_THR as a voltage
+      // would put the warning at 0.15 V per cell.
+      const cells = num('BAT1_N_CELLS');
+      if (cells && cells > 0) cfg.cells = Math.round(cells);
+
+      const vFull = num('BAT1_V_CHARGED');
+      const vEmpty = num('BAT1_V_EMPTY');
+      const low = num('BAT_LOW_THR');
+      const crit = num('BAT_CRIT_THR');
+      if (vFull !== null && vEmpty !== null) {
+        const lowCell = low === null ? null : px4CellVoltageAtThreshold(vEmpty, vFull, low);
+        const critCell = crit === null ? null : px4CellVoltageAtThreshold(vEmpty, vFull, crit);
+        if (lowCell !== null) cfg.low_cell = lowCell;
+        if (critCell !== null) cfg.crit_cell = critCell;
+      }
+
+      // PX4 ships BAT1_CAPACITY as -1 when the user has not set it.
+      const px4Cap = num('BAT1_CAPACITY');
+      if (px4Cap && px4Cap > 0) cfg.capacity = Math.round(px4Cap);
+      return cfg;
+    }
+
     const vmax = num('MOT_BAT_VOLT_MAX');
     const cells = vmax && vmax > 0 ? Math.round(vmax / 4.2) : 0;
     if (cells > 0) {
@@ -11817,11 +12058,17 @@ export function setupIpcHandlers(mainWindow: BrowserWindow): void {
   ipcMain.handle(IPC_CHANNELS.LOG_DOWNLOAD, async (_, logId: number, logSize: number, timeUtc?: number): Promise<string | null> => {
     if (!currentTransport || !logDownloadManager || !mainWindow) return null;
 
+    // PX4 logs are ULog (.ulg), ArduPilot logs are DataFlash (.bin). ArduDeck
+    // itself sniffs the format from the magic bytes either way, but the
+    // extension has to be right for the file to be usable elsewhere: Flight
+    // Review and PlotJuggler reject a ULog named .bin.
+    const isUlog = connectionState.firmware === 'px4';
+    const logExt = isUlog ? 'ulg' : 'bin';
     const result = await dialog.showSaveDialog(mainWindow, {
       title: 'Save Flight Log',
-      defaultPath: `log_${logId}.bin`,
+      defaultPath: `log_${logId}.${logExt}`,
       filters: [
-        { name: 'Flight Logs', extensions: ['bin'] },
+        { name: isUlog ? 'PX4 ULog' : 'ArduPilot Flight Logs', extensions: [logExt] },
         { name: 'All Files', extensions: ['*'] },
       ],
     });

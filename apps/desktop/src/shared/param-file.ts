@@ -21,6 +21,23 @@ export function formatParamFile(params: ParamEntry[], header: Record<string, str
   return lines.join('\n');
 }
 
+/**
+ * Read the `# Key: value` header block a vault snapshot carries. Stops at the
+ * first non-comment line, so a param named like a header can never be mistaken
+ * for one. Keys are returned verbatim ('Source', 'Board', 'Firmware', ...).
+ */
+export function parseParamFileHeader(content: string): Record<string, string> {
+  const header: Record<string, string> = {};
+  for (const raw of content.split('\n')) {
+    const line = raw.trim();
+    if (!line) continue;
+    if (!line.startsWith('#')) break;
+    const match = /^#\s*([^:]+):\s*(.*)$/.exec(line);
+    if (match) header[match[1]!.trim()] = match[2]!.trim();
+  }
+  return header;
+}
+
 export function parseParamFile(content: string): ParamEntry[] {
   const out: ParamEntry[] = [];
   for (const raw of content.split('\n')) {

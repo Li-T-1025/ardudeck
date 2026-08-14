@@ -652,6 +652,17 @@ const api = {
   fetchParameterMetadata: (mavType: number): Promise<{ success: boolean; metadata?: ParameterMetadataStore; error?: string }> =>
     ipcRenderer.invoke(IPC_CHANNELS.PARAM_METADATA_FETCH, mavType),
 
+  /**
+   * Late metadata upgrade. PX4 vehicles serve their own parameter definitions
+   * over MAVLink FTP; that transfer finishes after the initial fetch resolved
+   * with the bundled set, so the better copy arrives here.
+   */
+  onParameterMetadataUpdate: (callback: (msg: { metadata: ParameterMetadataStore }) => void) => {
+    const handler = (_: unknown, msg: { metadata: ParameterMetadataStore }) => callback(msg);
+    ipcRenderer.on(IPC_CHANNELS.PARAM_METADATA_RESULT, handler);
+    return () => ipcRenderer.removeListener(IPC_CHANNELS.PARAM_METADATA_RESULT, handler);
+  },
+
   // Parameter file operations
   writeParamsToFlash: (): Promise<{ success: boolean; error?: string }> =>
     ipcRenderer.invoke(IPC_CHANNELS.PARAM_WRITE_FLASH),

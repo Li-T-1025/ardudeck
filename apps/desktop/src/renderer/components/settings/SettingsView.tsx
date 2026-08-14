@@ -2381,6 +2381,10 @@ function ExperimentalFeaturesSection() {
 
 function ScriptInstallerActions() {
   const [modalOpen, setModalOpen] = useState(false);
+  // ArduPilot Lua only: the installer uploads to /APM/scripts/ and sets
+  // SCR_ENABLE. PX4 has no scripting engine, so there is nothing to install.
+  const firmware = useConnectionStore((s) => s.connectionState.firmware);
+  if (firmware === 'px4') return null;
   return (
     <div className="mt-3 pt-3 border-t border-subtle/50 flex items-center justify-between">
       <span className="text-[11px] text-content-tertiary">

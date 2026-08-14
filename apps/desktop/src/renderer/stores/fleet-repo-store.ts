@@ -11,7 +11,7 @@ import type {
   FleetRepoUnit,
   FleetRepoSite,
 } from '../../shared/ipc-channels';
-import { parseParamFile } from '../../shared/param-file';
+import { parseParamFile, parseParamFileHeader } from '../../shared/param-file';
 import { isCalibrationParam } from '../../shared/calibration-params';
 import { useParameterStore } from './parameter-store';
 import { useSettingsStore } from './settings-store';
@@ -40,6 +40,11 @@ export interface SnapshotDiff {
   liveAvailable: boolean;
   /** Param download still in progress: comparing now would be misleading */
   liveLoading: boolean;
+  /**
+   * Flight stack that produced the snapshot, from its `# Firmware:` header.
+   * Undefined for snapshots taken before the stamp existed.
+   */
+  snapshotFirmware?: string;
 }
 
 interface FleetRepoState {
@@ -80,6 +85,48 @@ interface FleetRepoState {
   restoreSnapshot: (includeCalibration: boolean) => Promise<{ applied: number; failed: number }>;
 
   sync: () => Promise<void>;
+}
+
+/**
+ * Does a snapshot's flight stack match the vehicle it is about to be written
+ * to? A board keeps its hardware uid across a reflash, so the SAME vault unit
+ * can hold both ArduPilot and PX4 snapshots; restoring across that boundary
+ * writes parameter names the running stack has never heard of.
+ *
+ * Unknown on either side means allow: snapshots taken before the Firmware
+ * stamp existed carry no stack, and refusing those would break every restore
+ * of an older snapshot.
+ */
+export function isRestoreFirmwareMatch(
+  snapshotFirmware: string | undefined,
+  liveFirmware: string | undefined,
+): boolean {
+  if (!snapshotFirmware || !liveFirmware) return true;
+  return snapshotFirmware === liveFirmware;
+}
+
+/**
+ * May a snapshot belonging to `snapshotUid` be restored onto the vehicle the
+ * vault currently resolves to?
+ *
+ * Alias-aware, matching how the main-side repo resolves units: a unit folder
+ * keeps aliases for board ids it has been known by (identity scheme changes,
+ * swapped FCs), so the live board id may differ from the folder id and still be
+ * the same aircraft. An explicit "Working on" override wins, since that is the
+ * user asserting which unit is on the link.
+ *
+ * Pure so the rule is testable without a link or a repo.
+ */
+export function isRestoreTargetMatch(
+  snapshotUid: string,
+  unitOverride: string | null,
+  boardUid: string | null,
+  snapshotUnitAliases: string[] | undefined,
+): boolean {
+  const targetUid = unitOverride ?? boardUid;
+  if (!targetUid) return false;
+  if (snapshotUid === targetUid) return true;
+  return snapshotUnitAliases?.includes(targetUid) ?? false;
 }
 
 function currentBoard(): { uid: string; name: string; vehicleType?: string; sitl: boolean } | null {
@@ -368,6 +415,8 @@ export const useFleetRepoStore = create<FleetRepoState>()((set, get) => ({
       return;
     }
     const snapshot = parseParamFile(content);
+    // 'Firmware' is absent on snapshots taken before the stamp existed.
+    const snapshotFirmware = parseParamFileHeader(content).Firmware;
     const paramState = useParameterStore.getState();
     const live = new Map(paramState.parameters);
     // A half-downloaded param table would report hundreds of "missing on
@@ -404,6 +453,7 @@ export const useFleetRepoStore = create<FleetRepoState>()((set, get) => ({
         totalInSnapshot: snapshot.length,
         liveAvailable,
         liveLoading,
+        snapshotFirmware,
       },
       diffLoading: false,
     });
@@ -414,6 +464,35 @@ export const useFleetRepoStore = create<FleetRepoState>()((set, get) => ({
   restoreSnapshot: async (includeCalibration) => {
     const diff = get().diff;
     if (!diff) return { applied: 0, failed: 0 };
+
+    // A snapshot may only be written back to the vehicle it came from. The
+    // history list is repo-wide and opening any commit loads its diff, so
+    // without this check hitting Restore while looking at another aircraft's
+    // snapshot would push ITS parameters into whatever is on the link. The
+    // deliberate way to do that is the "Working on" override, which is an
+    // explicit statement that the connected vehicle IS that unit.
+    const owner = get().units.find((u) => u.uid === diff.uid);
+    if (!isRestoreTargetMatch(diff.uid, get().unitOverride, currentBoard()?.uid ?? null, owner?.aliases)) {
+      const ownerName = owner?.name ?? diff.uid;
+      set({
+        lastError: `That snapshot belongs to ${ownerName}, not the connected vehicle. Open a snapshot from this vehicle's history, or set "Working on" to ${ownerName} if this is that aircraft.`,
+        lastNotice: null,
+      });
+      return { applied: 0, failed: 0 };
+    }
+
+    // Same unit is not the same flight stack. A reflashed board keeps its uid,
+    // so a unit's history can span ArduPilot and PX4; writing one stack's
+    // parameter names to the other is meaningless at best.
+    const liveFirmware = useConnectionStore.getState().connectionState.firmware;
+    if (!isRestoreFirmwareMatch(diff.snapshotFirmware, liveFirmware)) {
+      set({
+        lastError: `That snapshot was taken from ${diff.snapshotFirmware}, but this vehicle is running ${liveFirmware}. Its parameter names do not carry across flight stacks.`,
+        lastNotice: null,
+      });
+      return { applied: 0, failed: 0 };
+    }
+
     const rows = diff.changed.filter((r) => includeCalibration || !r.calibration);
     const setParameter = useParameterStore.getState().setParameter;
     set({ restoreBusy: true, restoreProgress: { done: 0, total: rows.length } });

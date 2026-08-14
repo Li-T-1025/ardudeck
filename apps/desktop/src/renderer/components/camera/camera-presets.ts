@@ -63,9 +63,9 @@ export const CAMERA_PRESETS: CameraPreset[] = [
   {
     id: 'ardudeck-sim',
     label: 'ArduDeck Simulator (FPV feed)',
-    kind: 'rtp-udp',
-    url: 'http://127.0.0.1:9000/',
-    note: 'Tick "Stream FPV to ArduDeck" in the simulator launcher. The sim SERVES on this port, so use its address if it runs on another machine.',
+    kind: 'rtsp',
+    url: 'rtsp://127.0.0.1:8654/fpv',
+    note: 'Tick "Stream FPV to ArduDeck" in the simulator launcher. Swap in the simulator machine\'s address if it runs elsewhere. Port 8654 is the simulator\'s own media hub, kept clear of this one\'s 8554.',
   },
   {
     id: 'rtp-udp',

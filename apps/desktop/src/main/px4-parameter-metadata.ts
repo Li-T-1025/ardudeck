@@ -93,8 +93,12 @@ export function parsePx4ParameterMetadata(json: unknown): ParameterMetadataStore
       metadata.rebootRequired = true;
     }
 
+    // PX4's `volatile` marks params the FC writes itself (CAL_* calibration
+    // results, LND_FLIGHT_T_*, COM_MODE*_HASH, ASPD_SCALE_*, EKF2_MAG_DECL).
+    // It is NOT ArduPilot's @ReadOnly: 104 of these are legitimately settable
+    // by hand and QGC keeps them editable, so flag them without locking them.
     if (entry.volatile === true) {
-      metadata.readOnly = true;
+      metadata.volatile = true;
     }
 
     if (Array.isArray(entry.values)) {

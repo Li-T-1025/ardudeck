@@ -48,8 +48,30 @@ import { bearingDeg, haversineMeters } from '../../utils/osd/live-telemetry';
 import { MountPoint } from '../../modules/MountPoint';
 
 /** Whether a vehicle's telemetry carries a usable GPS fix (matches useFleet). */
-function hasGpsFix(t: VehicleTelemetry | undefined): t is VehicleTelemetry & { gps: NonNullable<VehicleTelemetry['gps']> } {
-  return !!t?.gps && (t.gps.fixType ?? 0) >= 2 && (t.gps.lat !== 0 || t.gps.lon !== 0);
+/**
+ * Best available global position for a fleet vehicle. Prefer a real GPS fix,
+ * but fall back to the EKF / global position (GLOBAL_POSITION_INT) that the HUD
+ * and terrain-follow already use, so the 3D world anchors whenever telemetry
+ * shows a position, not only when raw GPS_RAW_INT reports a fix. A vehicle can
+ * have a valid fused position with no raw GPS fix (non-GPS nav, or the fleet
+ * store simply never received GPS_RAW for it), which used to leave the world
+ * with no origin even though telemetry worked. Returns null when neither
+ * source has a position.
+ */
+function vehicleLatLon(t: VehicleTelemetry | undefined): { lat: number; lon: number } | null {
+  const g = t?.gps;
+  if (g && (g.fixType ?? 0) >= 2 && (g.lat !== 0 || g.lon !== 0)) return { lat: g.lat, lon: g.lon };
+  const p = t?.position;
+  if (p && (p.lat !== 0 || p.lon !== 0)) return { lat: p.lat, lon: p.lon };
+  return null;
+}
+
+/** The flat telemetry store's position (what the HUD/terrain-follow use), or
+ *  null before a fix. The last-resort origin anchor for a single primary
+ *  vehicle whose fleet-store row lacks any position. */
+function flatLatLon(): { lat: number; lon: number } | null {
+  const p = useTelemetryStore.getState().position;
+  return p.lat !== 0 || p.lon !== 0 ? { lat: p.lat, lon: p.lon } : null;
 }
 
 const CAMERA_MODES: Array<{ value: SimCameraMode; label: string; tip: string }> = [
@@ -346,14 +368,16 @@ export default function SimWorldView() {
         const overrides = useVehicleAppearanceStore.getState().overrides;
         const activeKey = useActiveVehicleStore.getState().activeVehicleKey;
 
-        // Lock the shared origin to the first vehicle with a fix (prefer the
-        // active one so the world stays centred on what the operator is flying).
+        // Lock the shared origin to the first vehicle with a position (prefer
+        // the active one so the world stays centred on what the operator is
+        // flying). Accepts a GPS fix or the fused EKF position, and finally the
+        // flat telemetry store, so it anchors on any position telemetry shows.
         if (!geoOriginRef.current) {
           const seed =
-            known.find((v) => v.key === activeKey && hasGpsFix(byVehicle[v.key])) ??
-            known.find((v) => hasGpsFix(byVehicle[v.key]));
-          const seedTel = seed ? byVehicle[seed.key] : undefined;
-          if (seed && hasGpsFix(seedTel)) geoOriginRef.current = { lat: seedTel.gps.lat, lon: seedTel.gps.lon };
+            (activeKey ? vehicleLatLon(byVehicle[activeKey]) : null) ??
+            known.map((v) => vehicleLatLon(byVehicle[v.key])).find((ll): ll is { lat: number; lon: number } => ll != null) ??
+            flatLatLon();
+          if (seed) geoOriginRef.current = seed;
         }
 
         const o = geoOriginRef.current;
@@ -366,9 +390,11 @@ export default function SimWorldView() {
           const cosLat = Math.cos((o.lat * Math.PI) / 180);
           for (const v of known) {
             const t = byVehicle[v.key];
-            if (!hasGpsFix(t)) continue;
-            const north = (t.gps.lat - o.lat) * 111320;
-            const east = (t.gps.lon - o.lon) * 111320 * cosLat;
+            if (!t) continue;
+            const ll = vehicleLatLon(t);
+            if (!ll) continue;
+            const north = (ll.lat - o.lat) * 111320;
+            const east = (ll.lon - o.lon) * 111320 * cosLat;
             const relAlt = t.position?.relativeAlt ?? 0;
             const att = t.attitude ?? { roll: 0, pitch: 0, yaw: 0 };
             const state: SimStateMessage = {

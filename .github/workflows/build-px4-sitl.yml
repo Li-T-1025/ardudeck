@@ -57,7 +57,12 @@ jobs:
             platform: linux-x64
           - runner: macos-14      # Apple Silicon (arm64)
             platform: macos-arm64
-          - runner: macos-13      # Intel (x64)
+          # Intel (x64). MUST be macos-15-intel, not macos-13: the macos-13
+          # image is retired, so a job asking for it is never assigned a runner
+          # and sits QUEUED forever - no error, no log, no timeout (the job
+          # timeout only starts once a runner picks it up). build.yml's
+          # build-mac-x64 uses the same label.
+          - runner: macos-15-intel
             platform: macos-x64
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 120

@@ -19,7 +19,7 @@
  * Windows is unsupported (PX4 SITL there needs WSL, out of scope here).
  */
 
-import { app, BrowserWindow } from 'electron';
+import { BrowserWindow } from 'electron';
 import { createReadStream, createWriteStream } from 'node:fs';
 import { mkdir, access, rm, rename, readdir, chmod, symlink, writeFile, readFile } from 'node:fs/promises';
 import { createGunzip } from 'node:zlib';
@@ -30,6 +30,7 @@ import type {
   Px4SitlBinaryInfo,
 } from '../../shared/ipc-channels.js';
 import { IPC_CHANNELS } from '../../shared/ipc-channels.js';
+import { px4SitlBasePath, px4SitlBundleDir } from './px4-paths.js';
 
 // ── URL sources ──────────────────────────────────────────────────────────────
 
@@ -168,11 +169,11 @@ class Px4SitlDownloader {
   }
 
   private getBasePath(): string {
-    return path.join(app.getPath('userData'), 'px4-sitl');
+    return px4SitlBasePath();
   }
 
   getBundleDir(track: Px4ReleaseTrack): string {
-    return path.join(this.getBasePath(), track);
+    return px4SitlBundleDir(track);
   }
 
   getBinaryPath(track: Px4ReleaseTrack): string {

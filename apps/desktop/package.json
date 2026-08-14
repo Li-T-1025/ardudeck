@@ -61,6 +61,7 @@
     "uplot": "^1.6.32",
     "usb": "^2.16.0",
     "ws": "^8.18.0",
+    "xz-decompress": "^0.2.3",
     "zustand": "^4.5.0"
   },
   "devDependencies": {

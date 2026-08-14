@@ -16,7 +16,8 @@ import { useReplayStore } from '../../stores/replay-store';
 import { distanceLatLng } from '../survey/geo-math';
 import { calculateGSD } from '../survey/survey-stats';
 import { useTelemetryStore } from '../../stores/telemetry-store';
-import { useSettingsStore } from '../../stores/settings-store';
+import { useSettingsStore, type MissionFirmware } from '../../stores/settings-store';
+import { effectiveMissionFirmware } from '../../utils/mission-firmware';
 import {
   COMMAND_NAMES,
   COMMAND_DESCRIPTIONS,
@@ -335,9 +336,117 @@ const INAV_COMMAND_GROUPS: CommandGroup[] = [
   },
 ];
 
+/**
+ * PX4 mission commands. NOT a subset of the ArduPilot list: PX4 rejects a
+ * mission containing commands it does not implement, so offering ArduPilot's
+ * full palette on a PX4 vehicle builds a plan that only fails at upload.
+ *
+ * Curated from PX4FirmwarePlugin::supportedMissionCommands() in the QGC source
+ * vendored at qgroundcontrol/, which is the reference GCS for PX4. Notable
+ * differences from ArduPilot: no spline or arc waypoints, no NAV_LOITER_TURNS,
+ * no ALTITUDE_WAIT, no relay/parachute/aux-function, DO_SET_ROI_* instead of
+ * the legacy DO_SET_ROI, and DO_SET_ACTUATOR alongside DO_SET_SERVO.
+ */
+const PX4_COMMAND_GROUPS: CommandGroup[] = [
+  {
+    group: 'Navigation',
+    commands: [
+      { value: MAV_CMD.NAV_TAKEOFF, label: 'Takeoff', desc: 'Launch and climb to altitude' },
+      { value: MAV_CMD.NAV_WAYPOINT, label: 'Waypoint', desc: 'Fly to this location' },
+      { value: MAV_CMD.NAV_LOITER_UNLIM, label: 'Loiter', desc: 'Circle until commanded' },
+      { value: MAV_CMD.NAV_LOITER_TIME, label: 'Loiter Time', desc: 'Circle for set duration' },
+      { value: MAV_CMD.NAV_LOITER_TO_ALT, label: 'Loiter to Alt', desc: 'Loiter and change alt' },
+      { value: MAV_CMD.NAV_LAND, label: 'Land', desc: 'Land at this location' },
+      { value: MAV_CMD.NAV_RETURN_TO_LAUNCH, label: 'Return Home', desc: 'Fly back to launch' },
+      { value: MAV_CMD.NAV_DELAY, label: 'Delay', desc: 'Wait before the next item' },
+      { value: MAV_CMD.DO_LAND_START, label: 'Land Start', desc: 'Marks the landing sequence' },
+    ],
+  },
+  {
+    group: 'VTOL',
+    commands: [
+      { value: MAV_CMD.NAV_VTOL_TAKEOFF, label: 'VTOL Takeoff', desc: 'Vertical takeoff' },
+      { value: MAV_CMD.NAV_VTOL_LAND, label: 'VTOL Land', desc: 'Vertical landing' },
+      { value: MAV_CMD.DO_VTOL_TRANSITION, label: 'VTOL Transition', desc: 'Switch hover/forward flight' },
+    ],
+  },
+  {
+    group: 'Camera',
+    commands: [
+      { value: MAV_CMD.DO_SET_CAM_TRIGG_DIST, label: 'Camera Trigger', desc: 'Trigger at distance' },
+      { value: MAV_CMD.DO_DIGICAM_CONTROL, label: 'Take Photo', desc: 'Trigger camera shutter' },
+      { value: MAV_CMD.SET_CAMERA_MODE, label: 'Camera Mode', desc: 'Photo or video mode' },
+      { value: MAV_CMD.IMAGE_START_CAPTURE, label: 'Start Capture', desc: 'Start taking photos' },
+      { value: MAV_CMD.IMAGE_STOP_CAPTURE, label: 'Stop Capture', desc: 'Stop taking photos' },
+      { value: MAV_CMD.VIDEO_START_CAPTURE, label: 'Start Video', desc: 'Start recording' },
+      { value: MAV_CMD.VIDEO_STOP_CAPTURE, label: 'Stop Video', desc: 'Stop recording' },
+    ],
+  },
+  {
+    group: 'Gimbal / ROI',
+    commands: [
+      { value: MAV_CMD.DO_SET_ROI_LOCATION, label: 'ROI Location', desc: 'Point camera at a location' },
+      { value: MAV_CMD.DO_SET_ROI_WPNEXT_OFFSET, label: 'ROI Next WP', desc: 'Point at the next waypoint' },
+      { value: MAV_CMD.DO_SET_ROI_NONE, label: 'ROI None', desc: 'Cancel region of interest' },
+      { value: MAV_CMD.DO_MOUNT_CONFIGURE, label: 'Mount Config', desc: 'Set gimbal mode' },
+      { value: MAV_CMD.DO_MOUNT_CONTROL, label: 'Mount Control', desc: 'Aim the gimbal' },
+    ],
+  },
+  {
+    group: 'Actions',
+    commands: [
+      { value: MAV_CMD.DO_CHANGE_SPEED, label: 'Set Speed', desc: 'Change flight speed' },
+      { value: MAV_CMD.DO_JUMP, label: 'Jump', desc: 'Jump to WP and repeat' },
+      { value: MAV_CMD.DO_SET_HOME, label: 'Set Home', desc: 'Redefine the home position' },
+      { value: MAV_CMD.DO_SET_SERVO, label: 'Set Servo', desc: 'Set servo PWM' },
+      { value: MAV_CMD.DO_SET_ACTUATOR, label: 'Set Actuator', desc: 'Set an actuator output' },
+      { value: MAV_CMD.DO_GRIPPER, label: 'Gripper', desc: 'Open/close gripper' },
+      { value: MAV_CMD.CONDITION_YAW, label: 'Set Heading', desc: 'Lock heading direction' },
+    ],
+  },
+];
+
+/** The PX4 essentials, mirroring how SIMPLE_COMMAND_GROUPS trims ArduPilot's. */
+const PX4_SIMPLE_COMMAND_GROUPS: CommandGroup[] = [
+  {
+    group: 'Navigation',
+    commands: [
+      { value: MAV_CMD.NAV_TAKEOFF, label: 'Takeoff', desc: 'Launch and climb to altitude' },
+      { value: MAV_CMD.NAV_WAYPOINT, label: 'Waypoint', desc: 'Fly to this location' },
+      { value: MAV_CMD.NAV_LOITER_UNLIM, label: 'Loiter', desc: 'Circle until commanded' },
+      { value: MAV_CMD.NAV_LOITER_TIME, label: 'Loiter Time', desc: 'Circle for set duration' },
+      { value: MAV_CMD.NAV_LAND, label: 'Land', desc: 'Land at this location' },
+      { value: MAV_CMD.NAV_RETURN_TO_LAUNCH, label: 'Return Home', desc: 'Fly back to launch' },
+    ],
+  },
+  {
+    group: 'Camera',
+    commands: [
+      { value: MAV_CMD.DO_SET_CAM_TRIGG_DIST, label: 'Camera Trigger', desc: 'Trigger at distance' },
+      { value: MAV_CMD.DO_DIGICAM_CONTROL, label: 'Take Photo', desc: 'Trigger camera shutter' },
+      { value: MAV_CMD.IMAGE_START_CAPTURE, label: 'Start Capture', desc: 'Start taking photos' },
+      { value: MAV_CMD.IMAGE_STOP_CAPTURE, label: 'Stop Capture', desc: 'Stop taking photos' },
+    ],
+  },
+  {
+    group: 'Actions',
+    commands: [
+      { value: MAV_CMD.DO_CHANGE_SPEED, label: 'Set Speed', desc: 'Change flight speed' },
+      { value: MAV_CMD.DO_JUMP, label: 'Jump', desc: 'Jump to WP and repeat' },
+      { value: MAV_CMD.DO_SET_SERVO, label: 'Set Servo', desc: 'Set servo PWM' },
+    ],
+  },
+];
+
+/** Command ids PX4 accepts, for validating a plan built before/elsewhere. */
+export const PX4_SUPPORTED_COMMANDS: ReadonlySet<number> = new Set(
+  PX4_COMMAND_GROUPS.flatMap(g => g.commands.map(c => c.value)),
+);
+
 // Flat list of all available commands (for lookup)
 const ALL_AVAILABLE_COMMANDS = [
   ...COMMAND_GROUPS.flatMap(g => g.commands),
+  ...PX4_COMMAND_GROUPS.flatMap(g => g.commands),
   ...INAV_COMMAND_GROUPS.flatMap(g => g.commands),
 ].filter((cmd, i, arr) => arr.findIndex(c => c.value === cmd.value) === i);
 
@@ -351,7 +460,7 @@ function CommandDropdown({
   value: number;
   onChange: (cmd: number) => void;
   advanced: boolean;
-  firmware: 'ardupilot' | 'inav';
+  firmware: MissionFirmware;
 }) {
   const [isOpen, setIsOpen] = useState(false);
   const [search, setSearch] = useState('');
@@ -362,7 +471,9 @@ function CommandDropdown({
   // iNav has only 8 commands total, no need for simple/advanced split
   const groups = firmware === 'inav'
     ? INAV_COMMAND_GROUPS
-    : advanced ? COMMAND_GROUPS : SIMPLE_COMMAND_GROUPS;
+    : firmware === 'px4'
+      ? (advanced ? PX4_COMMAND_GROUPS : PX4_SIMPLE_COMMAND_GROUPS)
+      : advanced ? COMMAND_GROUPS : SIMPLE_COMMAND_GROUPS;
 
   // Current command label
   const currentCmd = ALL_AVAILABLE_COMMANDS.find(c => c.value === value);
@@ -1809,10 +1920,7 @@ function WaypointListContent({ readOnly = false }: { readOnly?: boolean }) {
     [missionItems, groups, altitudeUnit],
   );
 
-  // When connected, auto-detect firmware from protocol. When disconnected, use setting.
-  const effectiveFirmware: 'ardupilot' | 'inav' = connectionState.isConnected
-    ? (connectionState.protocol === 'msp' && connectionState.fcVariant === 'INAV' ? 'inav' : 'ardupilot')
-    : settingsFirmware;
+  const effectiveFirmware = effectiveMissionFirmware(connectionState, settingsFirmware);
 
   const [draggedSeq, setDraggedSeq] = useState<number | null>(null);
   const [dropTargetSeq, setDropTargetSeq] = useState<number | null>(null);

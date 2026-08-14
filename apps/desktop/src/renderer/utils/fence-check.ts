@@ -14,6 +14,7 @@
 import { useParameterStore } from '../stores/parameter-store';
 import { useFenceStore } from '../stores/fence-store';
 import { useMissionStore } from '../stores/mission-store';
+import { useConnectionStore } from '../stores/connection-store';
 
 const FENCE_TYPE_CIRCLE = 2; // bit: circle centered on home
 const FENCE_TYPE_POLYGON = 4; // bit: polygon(s)
@@ -38,8 +39,65 @@ function pointInPolygon(lat: number, lon: number, vertices: Array<{ lat: number;
   return inside;
 }
 
+/**
+ * PX4 geofence: a different parameter set entirely, so reading FENCE_* on a PX4
+ * vehicle finds nothing and the check silently passes everything.
+ *
+ *   GF_ACTION       0 = none, 1 = warning, 2 = hold, 3 = RTL, 4 = terminate, 5 = land
+ *   GF_MAX_HOR_DIST metres from home, 0 = disabled
+ *   GF_MAX_VER_DIST metres above home, 0 = disabled (not judged here: this
+ *                   check is about a horizontal destination)
+ *
+ * PX4 also supports uploaded polygon/circle fences over the mission protocol,
+ * which the shared fence store already holds, so those are judged the same way
+ * for both stacks below.
+ */
+function px4FenceWarning(lat: number, lon: number): string | null {
+  const params = useParameterStore.getState().parameters;
+  const action = params.get('GF_ACTION')?.value;
+  if (action === undefined || action === 0) return null; // fence off or params not loaded
+
+  const maxHor = params.get('GF_MAX_HOR_DIST')?.value ?? 0;
+  const home = useMissionStore.getState().homePosition;
+  if (home && maxHor > 0) {
+    const d = haversine(home.lat, home.lon, lat, lon);
+    if (d > maxHor) {
+      return `outside fence: ${Math.round(d)} m from home, GF_MAX_HOR_DIST ${Math.round(maxHor)} m`;
+    }
+  }
+  return polygonFenceWarning(lat, lon);
+}
+
+/** Uploaded polygon / circle fence items. Same wire format on both stacks. */
+function polygonFenceWarning(lat: number, lon: number): string | null {
+  const { polygons, circles } = useFenceStore.getState();
+  const inclusions = polygons.filter((p) => p.type === 'inclusion' && p.vertices.length >= 3);
+  if (inclusions.length > 0 && !inclusions.some((p) => pointInPolygon(lat, lon, p.vertices))) {
+    return 'outside fence: not inside any inclusion polygon';
+  }
+  for (const p of polygons) {
+    if (p.type === 'exclusion' && p.vertices.length >= 3 && pointInPolygon(lat, lon, p.vertices)) {
+      return 'inside an exclusion zone';
+    }
+  }
+  const circleInclusions = circles.filter((c) => c.type === 'inclusion');
+  if (circleInclusions.length > 0 && !circleInclusions.some((c) => haversine(c.center.lat, c.center.lon, lat, lon) <= c.radius)) {
+    return 'outside fence: not inside any inclusion circle';
+  }
+  for (const c of circles) {
+    if (c.type === 'exclusion' && haversine(c.center.lat, c.center.lon, lat, lon) <= c.radius) {
+      return 'inside an exclusion zone';
+    }
+  }
+  return null;
+}
+
 /** Short human reason when (lat, lon) would breach the fence, else null. */
 export function fenceWarningForPoint(lat: number, lon: number): string | null {
+  if (useConnectionStore.getState().connectionState.firmware === 'px4') {
+    return px4FenceWarning(lat, lon);
+  }
+
   const params = useParameterStore.getState().parameters;
   const enable = params.get('FENCE_ENABLE')?.value;
   if (enable !== 1) return null; // fence off (or params not loaded): nothing to judge
@@ -58,25 +116,7 @@ export function fenceWarningForPoint(lat: number, lon: number): string | null {
 
   // Uploaded polygon / circle fence items
   if (fenceType & FENCE_TYPE_POLYGON) {
-    const { polygons, circles } = useFenceStore.getState();
-    const inclusions = polygons.filter((p) => p.type === 'inclusion' && p.vertices.length >= 3);
-    if (inclusions.length > 0 && !inclusions.some((p) => pointInPolygon(lat, lon, p.vertices))) {
-      return 'outside fence: not inside any inclusion polygon';
-    }
-    for (const p of polygons) {
-      if (p.type === 'exclusion' && p.vertices.length >= 3 && pointInPolygon(lat, lon, p.vertices)) {
-        return 'inside an exclusion zone';
-      }
-    }
-    const circleInclusions = circles.filter((c) => c.type === 'inclusion');
-    if (circleInclusions.length > 0 && !circleInclusions.some((c) => haversine(c.center.lat, c.center.lon, lat, lon) <= c.radius)) {
-      return 'outside fence: not inside any inclusion circle';
-    }
-    for (const c of circles) {
-      if (c.type === 'exclusion' && haversine(c.center.lat, c.center.lon, lat, lon) <= c.radius) {
-        return 'inside an exclusion zone';
-      }
-    }
+    return polygonFenceWarning(lat, lon);
   }
 
   return null;

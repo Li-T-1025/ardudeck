@@ -1303,6 +1303,7 @@ export function RadioHudView() {
   const [applyError, setApplyError] = useState<string | null>(null);
 
   const { connectionState } = useConnectionStore();
+  const isPx4 = connectionState.firmware === 'px4';
   const telemetry = useTelemetryStore();
 
   // Field maps: generated on demand, shipped with the next Apply
@@ -1509,9 +1510,12 @@ export function RadioHudView() {
     let { connected, cfg: suggested } = await window.electronAPI.edgetxHudConfigSuggest();
     if (connected && suggested.capacity == null) {
       // param cache is cold; read the needed params directly from the FC
-      await window.electronAPI.readParameterBatch([
-        'MOT_BAT_VOLT_MAX', 'BATT_CAPACITY', 'BATT_LOW_VOLT', 'BATT_CRT_VOLT',
-      ]).catch(() => null);
+      // Different parameter set per stack; reading ArduPilot's names on PX4
+      // returns nothing and the suggestion comes back empty on a live link.
+      const batteryParams = isPx4
+        ? ['BAT1_N_CELLS', 'BAT1_CAPACITY', 'BAT1_V_CHARGED', 'BAT1_V_EMPTY', 'BAT_LOW_THR', 'BAT_CRIT_THR']
+        : ['MOT_BAT_VOLT_MAX', 'BATT_CAPACITY', 'BATT_LOW_VOLT', 'BATT_CRT_VOLT'];
+      await window.electronAPI.readParameterBatch(batteryParams).catch(() => null);
       suggested = (await window.electronAPI.edgetxHudConfigSuggest()).cfg;
     }
     if (Object.keys(suggested).length === 0) {

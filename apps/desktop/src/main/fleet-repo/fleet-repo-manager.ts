@@ -217,12 +217,18 @@ export async function snapshotParams(
   vehicleType?: string,
   note?: string,
   sitl?: boolean,
+  firmware?: string,
 ): Promise<{ changed: boolean; oid?: string }> {
   const unit = await resolveUnitDir(uid);
+  // Firmware is stamped per SNAPSHOT, not just per unit: a board keeps its
+  // hardware uid across a reflash, so one unit's history can legitimately hold
+  // both ArduPilot and PX4 snapshots. Without this the parameter names in an
+  // old snapshot are meaningless to the stack now running, and nothing says so.
   const paramFile = formatParamFile(params, {
     Source: 'ArduDeck fleet vault',
     Board: boardName,
     ...(vehicleType ? { Vehicle: vehicleType } : {}),
+    ...(firmware ? { Firmware: firmware } : {}),
     ...(sitl ? { Simulator: 'SITL' } : {}),
   });
   // Preserve everything already in meta (user-given name from renameUnit,
@@ -238,6 +244,9 @@ export async function snapshotParams(
       name: (prevMeta.name as string | undefined) ?? boardName,
       vehicleType,
       sitl: sitl ?? prevMeta.sitl ?? false,
+      // Stack this unit was last seen running. Kept alongside the per-snapshot
+      // stamp so the unit list can show it without reading every commit.
+      firmware: firmware ?? prevMeta.firmware,
       lastSnapshotAt: Date.now(),
       paramCount: params.length,
     },

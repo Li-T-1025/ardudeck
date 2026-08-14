@@ -19,7 +19,7 @@ import {
   Check,
   Pencil,
 } from 'lucide-react';
-import { useFleetRepoStore, useCurrentVaultUnit } from '../../stores/fleet-repo-store';
+import { useFleetRepoStore, useCurrentVaultUnit, isRestoreTargetMatch, isRestoreFirmwareMatch } from '../../stores/fleet-repo-store';
 import { VaultAutoSyncToggle } from './VaultAutoSyncToggle';
 import { useParameterStore } from '../../stores/parameter-store';
 import { useConnectionStore } from '../../stores/connection-store';
@@ -427,8 +427,23 @@ function DiffPanel() {
   const restoreBusy = useFleetRepoStore((s) => s.restoreBusy);
   const restoreProgress = useFleetRepoStore((s) => s.restoreProgress);
   const isConnected = useConnectionStore((s) => s.connectionState.isConnected);
+  const liveFirmware = useConnectionStore((s) => s.connectionState.firmware);
+  const units = useFleetRepoStore((s) => s.units);
+  const unitOverride = useFleetRepoStore((s) => s.unitOverride);
+  const currentUnit = useCurrentVaultUnit();
   const [includeCal, setIncludeCal] = useState(false);
   const [confirming, setConfirming] = useState(false);
+
+  // History is repo-wide, so the open snapshot may belong to another aircraft.
+  // The store refuses that restore outright; this mirrors the same rule so the
+  // button explains itself instead of failing on click.
+  const snapshotOwner = diff ? units.find((u) => u.uid === diff.uid) : undefined;
+  const ownerName = snapshotOwner?.name ?? diff?.uid ?? '';
+  const targetMatches = diff
+    ? isRestoreTargetMatch(diff.uid, unitOverride, currentUnit?.uid ?? null, snapshotOwner?.aliases)
+    : false;
+  // Same unit can still be the wrong stack: a reflashed board keeps its uid.
+  const firmwareMatches = isRestoreFirmwareMatch(diff?.snapshotFirmware, liveFirmware);
 
   if (!diff) return null;
   const calCount = diff.changed.filter((r) => r.calibration).length;
@@ -541,9 +556,17 @@ function DiffPanel() {
             ) : (
               <button
                 onClick={() => setConfirming(true)}
-                disabled={!isConnected || applicable === 0}
+                disabled={!isConnected || applicable === 0 || !targetMatches || !firmwareMatches}
                 className="px-3 py-1.5 rounded-lg bg-surface-raised border border-subtle text-xs text-content hover:bg-surface-overlay transition-colors disabled:opacity-50"
-                data-tip={!isConnected ? 'Connect the vehicle to restore' : undefined}
+                data-tip={
+                  !isConnected
+                    ? 'Connect the vehicle to restore'
+                    : !targetMatches
+                      ? `This snapshot belongs to ${ownerName}. Restore only writes to the vehicle it came from; set "Working on" to ${ownerName} if this is that aircraft.`
+                      : !firmwareMatches
+                        ? `This snapshot was taken from ${diff.snapshotFirmware}, but the vehicle is running ${liveFirmware}. Parameter names do not carry across flight stacks.`
+                        : undefined
+                }
               >
                 Restore snapshot...
               </button>

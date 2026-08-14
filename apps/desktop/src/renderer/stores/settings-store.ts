@@ -140,7 +140,7 @@ export interface FlightStats {
 /**
  * Mission planning defaults
  */
-export type MissionFirmware = 'ardupilot' | 'inav';
+export type MissionFirmware = 'ardupilot' | 'px4' | 'inav';
 
 /**
  * Altitude reference frame for mission planning.

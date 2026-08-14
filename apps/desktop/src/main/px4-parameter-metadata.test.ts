@@ -72,7 +72,12 @@ describe('parsePx4ParameterMetadata', () => {
 
     const entry = store.SIM_GZ_EC_MIXER;
     expect(entry?.bitmask).toEqual({ 0: 'SIM Channel 1', 1: 'SIM Channel 2' });
-    expect(entry?.readOnly).toBe(true);
+    // `volatile` means the FC writes the value itself, NOT that the user may
+    // not change it. Treating the two as the same locked 104 stock PX4 params
+    // (CAL_*, ASPD_SCALE_*, EKF2_MAG_DECL, LND_FLIGHT_T_*) that QGC lets you
+    // edit, so it is surfaced as a warning instead.
+    expect(entry?.volatile).toBe(true);
+    expect(entry?.readOnly).toBeUndefined();
   });
 
   it('handles a minimal entry and falls back humanName to name, description to empty', () => {

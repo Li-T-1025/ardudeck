@@ -1063,6 +1063,7 @@ const ParameterTable: React.FC = () => {
                                     hints.push(`Default: ${formatParamValue(param.defaultValue)}`);
                                   }
                                   if (meta?.range) hints.push(`Range: ${meta.range.min} - ${meta.range.max}`);
+                                  if (meta?.volatile) hints.push('Written by the vehicle: your value can be overwritten');
                                   return hints.join('\n') || `Click to edit`;
                                 })()}
                               >

@@ -37,6 +37,7 @@ import { FlightControlInstrument } from './FlightControlInstrument';
 import { CompactReadout, type ReadoutSource } from './CompactReadout';
 import { PANEL_WIDTH } from './stripMetrics';
 import { useLinkUp } from './useLinkUp';
+import { useTelemetryFresh } from './useTelemetryFresh';
 
 /** An alternative rendering of an instrument, chosen per-instrument and
  * persisted alongside the analog/numeric choice. */
@@ -101,7 +102,7 @@ const BATTERY_SCALE: GaugeScale = {
 };
 
 function BatteryInstrument(): JSX.Element {
-  const connected = useLinkUp();
+  const connected = useTelemetryFresh('battery');
   const voltage = useTelemetryStore((s) => s.battery.voltage);
   const remaining = useTelemetryStore((s) => s.battery.remaining);
 
@@ -158,7 +159,7 @@ function GpsSegmentRing({ lit, color }: { lit: number; color: string }): JSX.Ele
 }
 
 function GpsInstrument(): JSX.Element {
-  const connected = useLinkUp();
+  const connected = useTelemetryFresh('gps');
   const fixType = useTelemetryStore((s) => s.gps.fixType);
   const satellites = useTelemetryStore((s) => s.gps.satellites);
 
@@ -195,7 +196,7 @@ function VsiIndicator({ climb, connected, climbText }: { climb: number; connecte
 }
 
 function AltitudeInstrument(): JSX.Element {
-  const connected = useLinkUp();
+  const connected = useTelemetryFresh('position');
   const msl = useTelemetryStore((s) => s.position.alt);
   const agl = useTelemetryStore((s) => s.position.relativeAlt);
   const climb = useTelemetryStore((s) => s.vfrHud.climb);
@@ -220,7 +221,7 @@ function AltitudeInstrument(): JSX.Element {
 }
 
 function SpeedInstrument(): JSX.Element {
-  const connected = useLinkUp();
+  const connected = useTelemetryFresh('vfrHud');
   const groundspeed = useTelemetryStore((s) => s.vfrHud.groundspeed);
   const airspeed = useTelemetryStore((s) => s.vfrHud.airspeed);
   const speedUnit = useSettingsStore((s) => s.unitPreferences.speed);
@@ -314,7 +315,7 @@ function HeadingRose({ heading }: { heading: number }): JSX.Element {
 }
 
 function HeadingInstrument(): JSX.Element {
-  const connected = useLinkUp();
+  const connected = useTelemetryFresh('vfrHud');
   const heading = useTelemetryStore((s) => s.vfrHud.heading);
 
   const deg = Math.round(heading) % 360;
@@ -420,7 +421,7 @@ const VSI_SCALE: GaugeScale = {
 };
 
 function VsiInstrument(): JSX.Element {
-  const connected = useLinkUp();
+  const connected = useTelemetryFresh('vfrHud');
   const climb = useTelemetryStore((s) => s.vfrHud.climb);
   const verticalSpeedUnit = useSettingsStore((s) => s.unitPreferences.verticalSpeed);
 
@@ -459,7 +460,7 @@ function VsiInstrument(): JSX.Element {
 }
 
 function HomeInstrument(): JSX.Element {
-  const connected = useLinkUp();
+  const connected = useTelemetryFresh('position');
   const home = useMapHomeStore((s) => s.home);
   const lat = useTelemetryStore((s) => s.position.lat);
   const lon = useTelemetryStore((s) => s.position.lon);
@@ -534,7 +535,7 @@ function NumericReadout({
 }
 
 function BatteryNumeric(): JSX.Element {
-  const connected = useLinkUp();
+  const connected = useTelemetryFresh('battery');
   const voltage = useTelemetryStore((s) => s.battery.voltage);
   const remaining = useTelemetryStore((s) => s.battery.remaining);
   const known = connected && remaining >= 0;
@@ -551,7 +552,7 @@ function BatteryNumeric(): JSX.Element {
 }
 
 function GpsNumeric(): JSX.Element {
-  const connected = useLinkUp();
+  const connected = useTelemetryFresh('gps');
   const fixType = useTelemetryStore((s) => s.gps.fixType);
   const satellites = useTelemetryStore((s) => s.gps.satellites);
   const valueClassName = !connected ? undefined : fixType >= 3 ? 'text-[var(--gauge-green)]' : fixType >= 2 ? 'text-[var(--gauge-amber)]' : 'text-[var(--gauge-red)]';
@@ -566,7 +567,7 @@ function GpsNumeric(): JSX.Element {
 }
 
 function AltitudeNumeric(): JSX.Element {
-  const connected = useLinkUp();
+  const connected = useTelemetryFresh('position');
   const msl = useTelemetryStore((s) => s.position.alt);
   const agl = useTelemetryStore((s) => s.position.relativeAlt);
   const altitudeUnit = useSettingsStore((s) => s.unitPreferences.altitude);
@@ -582,7 +583,7 @@ function AltitudeNumeric(): JSX.Element {
 }
 
 function SpeedNumeric(): JSX.Element {
-  const connected = useLinkUp();
+  const connected = useTelemetryFresh('vfrHud');
   const groundspeed = useTelemetryStore((s) => s.vfrHud.groundspeed);
   const airspeed = useTelemetryStore((s) => s.vfrHud.airspeed);
   const speedUnit = useSettingsStore((s) => s.unitPreferences.speed);
@@ -598,7 +599,7 @@ function SpeedNumeric(): JSX.Element {
 }
 
 function HeadingNumeric(): JSX.Element {
-  const connected = useLinkUp();
+  const connected = useTelemetryFresh('vfrHud');
   const heading = useTelemetryStore((s) => s.vfrHud.heading);
   const deg = Math.round(heading) % 360;
   return (
@@ -612,7 +613,7 @@ function HeadingNumeric(): JSX.Element {
 }
 
 function VsiNumeric(): JSX.Element {
-  const connected = useLinkUp();
+  const connected = useTelemetryFresh('vfrHud');
   const climb = useTelemetryStore((s) => s.vfrHud.climb);
   const verticalSpeedUnit = useSettingsStore((s) => s.unitPreferences.verticalSpeed);
   const value = verticalSpeedValueFromMetersPerSecond(climb, verticalSpeedUnit);
@@ -628,7 +629,7 @@ function VsiNumeric(): JSX.Element {
 }
 
 function HomeNumeric(): JSX.Element {
-  const connected = useLinkUp();
+  const connected = useTelemetryFresh('position');
   const home = useMapHomeStore((s) => s.home);
   const lat = useTelemetryStore((s) => s.position.lat);
   const lon = useTelemetryStore((s) => s.position.lon);
@@ -918,13 +919,26 @@ function MissionInstrument(): JSX.Element {
 function AttitudeBallInstrument(): JSX.Element {
   const attitude = useTelemetryStore((s) => s.attitude);
   const heading = useTelemetryStore((s) => s.vfrHud.heading);
+  // Without attitude the store holds roll 0 / pitch 0, which paints a perfectly
+  // level horizon: the single most dangerous thing this instrument can do,
+  // because a wrong reading here is indistinguishable from a healthy one. PX4
+  // withholds ATTITUDE until its estimator is valid (~35 s from boot, and again
+  // on any estimator dropout), so this is reached on every PX4 connection.
+  const attitudeFresh = useTelemetryFresh('attitude');
   return (
     <div className="relative">
       {/* Dark background circle */}
       <div className="absolute inset-[-4px] rounded-full bg-surface-overlay-light shadow-xl" />
-      <div className="relative">
+      <div className={`relative${attitudeFresh ? '' : ' opacity-30'}`}>
         <AttitudeIndicator roll={attitude.roll} pitch={attitude.pitch} heading={heading} size={140} />
       </div>
+      {!attitudeFresh && (
+        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+          <span className="px-1.5 py-0.5 rounded bg-surface-overlay-light text-[10px] font-semibold tracking-wide text-[var(--gauge-amber)]">
+            NO ATT
+          </span>
+        </div>
+      )}
     </div>
   );
 }

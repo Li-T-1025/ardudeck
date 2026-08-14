@@ -95,13 +95,14 @@ interface ParameterStore {
   getDescription: (paramId: string) => string;
   hasOfficialDescription: (paramId: string) => boolean;
   validateParameter: (paramId: string, value: number) => ValidationResult;
-  getParameterMetadata: (paramId: string) => { range?: { min: number; max: number }; values?: Record<number, string>; units?: string; bitmask?: Record<number, string>; rebootRequired?: boolean } | null;
+  getParameterMetadata: (paramId: string) => { range?: { min: number; max: number }; values?: Record<number, string>; units?: string; bitmask?: Record<number, string>; rebootRequired?: boolean; volatile?: boolean } | null;
   isRebootRequired: (paramId: string) => boolean;
   isFavourite: (paramId: string) => boolean;
 
   // Actions
   fetchParameters: () => Promise<void>;
   fetchMetadata: (mavType: number) => Promise<void>;
+  setMetadata: (metadata: ParameterMetadataStore) => void;
   setParameter: (paramId: string, value: number) => Promise<boolean>;
   updateParameter: (param: ParamValuePayload) => void;
   bulkLoadParameters: (params: ParamValuePayload[]) => void;
@@ -329,6 +330,7 @@ export const useParameterStore = create<ParameterStore>((set, get) => ({
       units: meta.units,
       bitmask: meta.bitmask,
       rebootRequired: meta.rebootRequired,
+      volatile: meta.volatile,
     };
   },
 
@@ -386,6 +388,23 @@ export const useParameterStore = create<ParameterStore>((set, get) => ({
       });
     }
     // Actual loading continues via IPC events
+  },
+
+  /**
+   * Replace the metadata wholesale. Used when a PX4 vehicle finishes serving
+   * its own definitions, which supersede whatever we started with.
+   */
+  setMetadata: (metadata: ParameterMetadataStore) => {
+    set({ metadata, isLoadingMetadata: false });
+    const params = new Map(get().parameters);
+    let changed = false;
+    for (const [id, param] of params) {
+      if (!param.isReadOnly && metadata[id]?.readOnly) {
+        params.set(id, { ...param, isReadOnly: true });
+        changed = true;
+      }
+    }
+    if (changed) set({ parameters: params });
   },
 
   fetchMetadata: async (mavType: number) => {

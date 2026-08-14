@@ -352,6 +352,13 @@ import { serializeAvssPrsSysStatus, deserializeAvssPrsSysStatus } from './messag
 import { serializeAvssDronePosition, deserializeAvssDronePosition } from './messages/avss-drone-position.js';
 import { serializeAvssDroneImu, deserializeAvssDroneImu } from './messages/avss-drone-imu.js';
 import { serializeAvssDroneOperationMode, deserializeAvssDroneOperationMode } from './messages/avss-drone-operation-mode.js';
+import { serializeTimeEstimateToTarget, deserializeTimeEstimateToTarget } from './messages/time-estimate-to-target.js';
+import { serializeComponentInformation, deserializeComponentInformation } from './messages/component-information.js';
+import { serializeComponentMetadata, deserializeComponentMetadata } from './messages/component-metadata.js';
+import { serializeEvent, deserializeEvent } from './messages/event.js';
+import { serializeCurrentEventSequence, deserializeCurrentEventSequence } from './messages/current-event-sequence.js';
+import { serializeRequestEvent, deserializeRequestEvent } from './messages/request-event.js';
+import { serializeResponseEventError, deserializeResponseEventError } from './messages/response-event-error.js';
 
 /**
  * Message info registry
@@ -2581,6 +2588,15 @@ export const MESSAGE_REGISTRY: Map<number, MessageInfo> = new Map([
     serialize: serializeRelayStatus as (msg: unknown) => Uint8Array,
     deserialize: deserializeRelayStatus as (payload: Uint8Array) => unknown,
   }],
+  [380, {
+    msgid: 380,
+    name: 'TIME_ESTIMATE_TO_TARGET',
+    crcExtra: 232,
+    minLength: 20,
+    maxLength: 20,
+    serialize: serializeTimeEstimateToTarget as (msg: unknown) => Uint8Array,
+    deserialize: deserializeTimeEstimateToTarget as (payload: Uint8Array) => unknown,
+  }],
   [385, {
     msgid: 385,
     name: 'TUNNEL',
@@ -2616,6 +2632,60 @@ export const MESSAGE_REGISTRY: Map<number, MessageInfo> = new Map([
     maxLength: 37,
     serialize: serializeCanFilterModify as (msg: unknown) => Uint8Array,
     deserialize: deserializeCanFilterModify as (payload: Uint8Array) => unknown,
+  }],
+  [395, {
+    msgid: 395,
+    name: 'COMPONENT_INFORMATION',
+    crcExtra: 0,
+    minLength: 212,
+    maxLength: 212,
+    serialize: serializeComponentInformation as (msg: unknown) => Uint8Array,
+    deserialize: deserializeComponentInformation as (payload: Uint8Array) => unknown,
+  }],
+  [397, {
+    msgid: 397,
+    name: 'COMPONENT_METADATA',
+    crcExtra: 182,
+    minLength: 108,
+    maxLength: 108,
+    serialize: serializeComponentMetadata as (msg: unknown) => Uint8Array,
+    deserialize: deserializeComponentMetadata as (payload: Uint8Array) => unknown,
+  }],
+  [410, {
+    msgid: 410,
+    name: 'EVENT',
+    crcExtra: 160,
+    minLength: 53,
+    maxLength: 53,
+    serialize: serializeEvent as (msg: unknown) => Uint8Array,
+    deserialize: deserializeEvent as (payload: Uint8Array) => unknown,
+  }],
+  [411, {
+    msgid: 411,
+    name: 'CURRENT_EVENT_SEQUENCE',
+    crcExtra: 106,
+    minLength: 3,
+    maxLength: 3,
+    serialize: serializeCurrentEventSequence as (msg: unknown) => Uint8Array,
+    deserialize: deserializeCurrentEventSequence as (payload: Uint8Array) => unknown,
+  }],
+  [412, {
+    msgid: 412,
+    name: 'REQUEST_EVENT',
+    crcExtra: 33,
+    minLength: 6,
+    maxLength: 6,
+    serialize: serializeRequestEvent as (msg: unknown) => Uint8Array,
+    deserialize: deserializeRequestEvent as (payload: Uint8Array) => unknown,
+  }],
+  [413, {
+    msgid: 413,
+    name: 'RESPONSE_EVENT_ERROR',
+    crcExtra: 77,
+    minLength: 7,
+    maxLength: 7,
+    serialize: serializeResponseEventError as (msg: unknown) => Uint8Array,
+    deserialize: deserializeResponseEventError as (payload: Uint8Array) => unknown,
   }],
   [420, {
     msgid: 420,

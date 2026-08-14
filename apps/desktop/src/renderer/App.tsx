@@ -732,6 +732,15 @@ function App() {
     return () => { unsubscribe?.(); };
   }, [addStatusMessage]);
 
+  // A PX4 vehicle's own parameter definitions, which arrive over MAVLink FTP
+  // after the initial (bundled) metadata has already been applied.
+  useEffect(() => {
+    const unsubscribe = window.electronAPI?.onParameterMetadataUpdate?.(({ metadata }) => {
+      useParameterStore.getState().setMetadata(metadata);
+    });
+    return () => { unsubscribe?.(); };
+  }, []);
+
   // TERRAIN_REPORT per vehicle: feeds the terrain-relative command gate.
   useEffect(() => {
     const unsubscribe = window.electronAPI?.onTerrainStatus?.(({ sysid, loaded, pending, spacing }) => {

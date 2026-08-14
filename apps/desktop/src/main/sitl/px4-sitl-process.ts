@@ -12,10 +12,9 @@
  */
 
 import { spawn, ChildProcess } from 'node:child_process';
-import { app, BrowserWindow } from 'electron';
-import { chmod, rm, readdir, symlink } from 'node:fs/promises';
+import { BrowserWindow } from 'electron';
+import { chmod, rm, readdir } from 'node:fs/promises';
 import path from 'node:path';
-import os from 'node:os';
 import type {
   Px4SitlConfig,
   Px4SitlStatus,
@@ -23,6 +22,7 @@ import type {
   Px4ReleaseTrack,
 } from '../../shared/ipc-channels.js';
 import { IPC_CHANNELS } from '../../shared/ipc-channels.js';
+import { px4SitlBundleDir, px4PathHasSpace } from './px4-paths.js';
 
 /**
  * PX4_SIM_MODEL for each airframe class. We use PX4's built-in SIH
@@ -76,9 +76,9 @@ class Px4SitlProcessManager {
     this.mainWindow = window;
   }
 
-  /** Root of the downloaded bundle for a track: `<userData>/px4-sitl/<track>/`. */
+  /** Root of the downloaded bundle for a track (see px4-paths.ts). */
   getBundleDir(releaseTrack: Px4ReleaseTrack): string {
-    return path.join(app.getPath('userData'), 'px4-sitl', releaseTrack);
+    return px4SitlBundleDir(releaseTrack);
   }
 
   /** Path to the `px4` executable inside the bundle: `<bundle>/bin/px4`. */
@@ -97,19 +97,34 @@ class Px4SitlProcessManager {
 
   /**
    * Delete PX4's persisted SITL state so the next boot starts from defaults.
-   * PX4 keeps params in `<rootfs>/eeprom/` plus loose `*.bson` / `parameters*`
-   * files; we sweep all of them. Best-effort and fully defensive: a wipe that
-   * fails must not block the launch.
+   *
+   * px4 does NOT keep that state in `rootfs/` itself: it creates a per-airframe
+   * working dir `rootfs/sitl_<PX4_SIM_MODEL>/` and writes parameters.bson,
+   * parameters_backup.bson, dataman, eeprom/ and log/ in THERE. Dropping those
+   * dirs wholesale is the wipe; px4 recreates them (and their etc/test_data
+   * symlinks) on the next boot. The loose top-level sweep stays for bundles
+   * that ran under an older launcher which used rootfs/ directly.
+   *
+   * Best-effort and fully defensive: a wipe that fails must not block launch.
    */
   private async wipeState(bundleDir: string): Promise<void> {
     const rootfs = path.join(bundleDir, 'rootfs');
+    const entries = await readdir(rootfs).catch(() => [] as string[]);
+    try {
+      await Promise.all(
+        entries
+          .filter((name) => name.startsWith('sitl_'))
+          .map((name) => rm(path.join(rootfs, name), { recursive: true, force: true }).catch(() => {})),
+      );
+    } catch (err) {
+      console.warn('[px4-sitl] could not remove per-airframe working dirs:', err);
+    }
     try {
       await rm(path.join(rootfs, 'eeprom'), { recursive: true, force: true });
     } catch (err) {
       console.warn('[px4-sitl] could not remove eeprom dir:', err);
     }
     try {
-      const entries = await readdir(rootfs).catch(() => [] as string[]);
       await Promise.all(
         entries
           .filter((name) => name.endsWith('.bson') || name.startsWith('parameters'))
@@ -229,21 +244,19 @@ class Px4SitlProcessManager {
 
       const model = this.simModelFor(config);
 
-      // PX4's posix startup re-execs its rc script with an UNQUOTED `/bin/sh
-      // <path>`, so any space in the bundle path breaks it ("cannot execute
-      // binary file"). On macOS the bundle lives under "~/Library/Application
-      // Support/...", which always contains a space. Expose the bundle through a
-      // space-free symlink and launch from there so every path px4 sees is clean.
-      let runDir = bundleDir;
-      if (/\s/.test(bundleDir)) {
-        const link = path.join(os.tmpdir(), `ardudeck-px4-sitl-${config.releaseTrack}`);
-        try {
-          await rm(link, { force: true, recursive: false }).catch(() => {});
-          await symlink(bundleDir, link);
-          runDir = link;
-        } catch (err) {
-          console.error('[px4-sitl] failed to create space-free symlink, using original path:', err);
-        }
+      // PX4 cannot run from a path containing a space: its rc scripts glob
+      // ${R}etc/... unquoted (see px4-paths.ts), and since px4 derives ${R}
+      // from getcwd() a space-free symlink is useless - getcwd() hands back the
+      // physical, spaced path. px4SitlBundleDir() already picks a space-free
+      // location, so this only fires if the username itself has a space.
+      const runDir = bundleDir;
+      if (px4PathHasSpace(runDir)) {
+        return {
+          success: false,
+          error:
+            `PX4 SITL cannot run from a path containing spaces: ${runDir}\n` +
+            'PX4\'s startup scripts split the path and never find the airframe.',
+        };
       }
 
       // The exact px4 posix argv (data path, -s startup script, working dir)
