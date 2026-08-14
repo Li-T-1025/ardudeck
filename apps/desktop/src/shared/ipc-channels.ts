@@ -3,6 +3,7 @@
  */
 
 import type { UserUnitPreferences } from './user-units.js';
+import type { FirmwareSource } from './firmware-types.js';
 
 export const IPC_CHANNELS = {
   // Port management
@@ -515,6 +516,21 @@ export const IPC_CHANNELS = {
   ARDUPILOT_SITL_RC_SEND: 'ardupilot-sitl:rc-send',
   ARDUPILOT_SITL_RC_START: 'ardupilot-sitl:rc-start',
   ARDUPILOT_SITL_RC_STOP: 'ardupilot-sitl:rc-stop',
+
+  // PX4 SITL (mirrors the ArduPilot SITL flow: download a prebuilt bundle, spawn, connect)
+  PX4_SITL_START: 'px4-sitl:start',
+  PX4_SITL_STOP: 'px4-sitl:stop',
+  PX4_SITL_STATUS: 'px4-sitl:status',
+  PX4_SITL_DOWNLOAD: 'px4-sitl:download',
+  PX4_SITL_DOWNLOAD_PROGRESS: 'px4-sitl:download-progress',
+  PX4_SITL_CHECK_BINARY: 'px4-sitl:check-binary',
+  PX4_SITL_CHECK_PLATFORM: 'px4-sitl:check-platform',
+  PX4_SITL_STDOUT: 'px4-sitl:stdout',
+  PX4_SITL_STDERR: 'px4-sitl:stderr',
+  PX4_SITL_ERROR: 'px4-sitl:error',
+  PX4_SITL_EXIT: 'px4-sitl:exit',
+  /** Authoritative "PX4 SITL is up, with this config" push, sent on every successful spawn. */
+  PX4_SITL_STARTED: 'px4-sitl:started',
 
   // ArduPilot SITL swarm (multiple instances → fleet)
   SWARM_SITL_START: 'swarm-sitl:start',
@@ -1114,6 +1130,14 @@ export interface ConnectionState {
   systemId?: number;
   componentId?: number;
   autopilot?: string;
+  /** Raw MAV_AUTOPILOT id from the HEARTBEAT (3=ArduPilot, 12=PX4, ...) */
+  autopilotType?: number;
+  /**
+   * Detected firmware family for MAVLink connections. Lets the renderer
+   * branch (e.g. PX4 vs ArduPilot) without parsing the display string.
+   * Unset on MSP connections, which use fcVariant instead.
+   */
+  firmware?: FirmwareSource;
   vehicleType?: string;
   mavType?: number; // Raw MAV_TYPE for metadata lookup
   // MSP-specific (Betaflight/iNav)
@@ -1834,6 +1858,108 @@ export interface ArduPilotSitlBinaryInfo {
   vehicleType: ArduPilotVehicleType;
   releaseTrack: ArduPilotReleaseTrack;
   exists: boolean;
+  path?: string;
+  version?: string;
+  downloadedAt?: string;
+}
+
+// ── PX4 SITL ─────────────────────────────────────────────────────────────────
+// PX4 SITL mirrors the ArduPilot flow (download a prebuilt bundle from our
+// releases, spawn it, connect over UDP) with two real differences: PX4 has no
+// standalone single binary, so the download is a per-track BUNDLE (the `px4`
+// executable + its rootfs + a physics backend) that covers every airframe via
+// the PX4_SIM_MODEL env var; and physics come from a bundled simulator backend
+// (jMAVSim by default) rather than ArduPilot's built-in FDM.
+
+/** PX4 airframe classes offered in the SITL picker. Each maps to a PX4_SIM_MODEL. */
+export type Px4VehicleType = 'copter' | 'plane' | 'vtol' | 'rover';
+
+/** PX4 release tracks (mirror of ArduPilot's, resolved to PX4 branches in the downloader). */
+export type Px4ReleaseTrack = 'stable' | 'beta' | 'dev';
+
+/** Physics backend bundled with the PX4 SITL download. */
+export type Px4SimulatorBackend = 'jmavsim' | 'gz' | 'none';
+
+/**
+ * PX4 SITL configuration. Shape parallels ArduPilotSitlConfig so the renderer
+ * tab and store can mirror the ArduPilot ones.
+ */
+export interface Px4SitlConfig {
+  /** Airframe class (copter, plane, vtol, rover). */
+  vehicleType: Px4VehicleType;
+  /** PX4_SIM_MODEL override (e.g. 'iris', 'standard_vtol', 'plane', 'rover'). Derived from vehicleType when omitted. */
+  model?: string;
+  /** Release track (stable, beta, dev). */
+  releaseTrack: Px4ReleaseTrack;
+  /** Home location, written via PX4_HOME_LAT/LON/ALT + heading. */
+  homeLocation: {
+    lat: number;
+    lng: number;
+    alt: number;
+    heading: number;
+  };
+  /** Simulation speedup (PX4_SIM_SPEED_FACTOR). 1 = real-time. */
+  speedup?: number;
+  /** Wipe the SITL EEPROM/params on start. */
+  wipeOnStart?: boolean;
+  /** Physics backend. Defaults to 'jmavsim'. */
+  simulator?: Px4SimulatorBackend;
+}
+
+/** PX4 SITL process status. */
+export interface Px4SitlStatus {
+  isRunning: boolean;
+  pid?: number;
+  /** Command line used to start. */
+  command?: string;
+  /** Airframe class of the running instance. */
+  vehicleType?: Px4VehicleType;
+  /** UDP port PX4 offers MAVLink to the GCS on (14550). */
+  udpPort?: number;
+}
+
+/** PX4 SITL exit event. */
+export interface Px4SitlExitData {
+  code: number | null;
+  signal: string | null;
+  uptimeMs?: number;
+  wasEarlyCrash?: boolean;
+  vehicleType?: Px4VehicleType;
+  model?: string;
+  releaseTrack?: Px4ReleaseTrack;
+  /** First half of a deliberate relaunch: a PX4_SITL_STARTED (or _ERROR) follows. */
+  relaunching?: boolean;
+}
+
+/** The config PX4 SITL is actually running with, pushed after every spawn. */
+export interface Px4SitlStartedData {
+  homeLocation: { lat: number; lng: number; alt: number; heading: number };
+  vehicleType: Px4VehicleType;
+  model: string;
+  releaseTrack: Px4ReleaseTrack;
+  pid?: number;
+  command?: string;
+  wasRelaunch?: boolean;
+}
+
+/**
+ * PX4 SITL download progress. Keyed by track only: one bundle per track covers
+ * every airframe (unlike ArduPilot's per-vehicle binaries).
+ */
+export interface Px4SitlDownloadProgress {
+  releaseTrack: Px4ReleaseTrack;
+  progress: number;  // 0-100
+  bytesDownloaded: number;
+  totalBytes: number;
+  status: 'downloading' | 'extracting' | 'complete' | 'error';
+  error?: string;
+}
+
+/** PX4 SITL bundle info (per track). */
+export interface Px4SitlBinaryInfo {
+  releaseTrack: Px4ReleaseTrack;
+  exists: boolean;
+  /** Path to the bundle's `px4` executable. */
   path?: string;
   version?: string;
   downloadedAt?: string;

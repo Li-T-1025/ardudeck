@@ -4,7 +4,7 @@
  */
 
 import { contextBridge, ipcRenderer } from 'electron';
-import { IPC_CHANNELS, type ConnectOptions, type ConnectionState, type ConsoleLogEntry, type SavedLayout, type SettingsStoreSchema, type MSPConnectOptions, type MSPConnectionState, type MSPTelemetryData, type SitlConfig, type SitlStatus, type SitlExitData, type VirtualRCState, type ArduPilotSitlConfig, type ArduPilotSitlStatus, type ArduPilotSitlExitData, type ArduPilotSitlStartedData, type ArduPilotFlightGearConfig, type ArduPilotSitlDownloadProgress, type ArduPilotSitlBinaryInfo, type ArduPilotFrameCatalog, type ArduPilotVehicleType, type ArduPilotReleaseTrack, type SwarmSitlConfig, type SwarmSitlStatus, type SwarmInstanceStatus, type SwarmSitlLogLine, type AppUpdateInfo, type SigningStatus, type TelemetrySpeed, type LegacyStreamConsentRequest, type StatusMessage, type TileCacheStats, type TileCacheDownloadProgress, type TileCacheSettings, type TileCacheDownloadRegion, type CompanionConnectOptions, type CompanionConnectionIpcState, type CompanionDiscoveryResult, type TransportInfoIpc, type VehicleInfoIpc, type SetActiveSelectionPayload, type VehicleCommand, type MissionVehicleProgress, type OrchestrationIntentIpc, type OrchestrationStatusIpc, type OrchestratorSource, type OrchestratorStatus, type CameraSourceConfig, type CameraStartResult, type CameraMediaActionResult, type MediaEngineStatus, type GimbalCommand, type CameraCommand, type VideoStreamInfoIpc, type GimbalAttitudeIpc, type GimbalInfoIpc, type FrameBlueprintResult, type FrameBlueprintRequest } from '../shared/ipc-channels.js';
+import { IPC_CHANNELS, type ConnectOptions, type ConnectionState, type ConsoleLogEntry, type SavedLayout, type SettingsStoreSchema, type MSPConnectOptions, type MSPConnectionState, type MSPTelemetryData, type SitlConfig, type SitlStatus, type SitlExitData, type VirtualRCState, type ArduPilotSitlConfig, type ArduPilotSitlStatus, type ArduPilotSitlExitData, type ArduPilotSitlStartedData, type ArduPilotFlightGearConfig, type ArduPilotSitlDownloadProgress, type ArduPilotSitlBinaryInfo, type ArduPilotFrameCatalog, type ArduPilotVehicleType, type ArduPilotReleaseTrack, type Px4SitlConfig, type Px4SitlStatus, type Px4SitlExitData, type Px4SitlStartedData, type Px4SitlDownloadProgress, type Px4SitlBinaryInfo, type Px4ReleaseTrack, type SwarmSitlConfig, type SwarmSitlStatus, type SwarmInstanceStatus, type SwarmSitlLogLine, type AppUpdateInfo, type SigningStatus, type TelemetrySpeed, type LegacyStreamConsentRequest, type StatusMessage, type TileCacheStats, type TileCacheDownloadProgress, type TileCacheSettings, type TileCacheDownloadRegion, type CompanionConnectOptions, type CompanionConnectionIpcState, type CompanionDiscoveryResult, type TransportInfoIpc, type VehicleInfoIpc, type SetActiveSelectionPayload, type VehicleCommand, type MissionVehicleProgress, type OrchestrationIntentIpc, type OrchestrationStatusIpc, type OrchestratorSource, type OrchestratorStatus, type CameraSourceConfig, type CameraStartResult, type CameraMediaActionResult, type MediaEngineStatus, type GimbalCommand, type CameraCommand, type VideoStreamInfoIpc, type GimbalAttitudeIpc, type GimbalInfoIpc, type FrameBlueprintResult, type FrameBlueprintRequest } from '../shared/ipc-channels.js';
 import type { SigningAuditSnapshot } from '../shared/signing-audit-types.js';
 import type { StreamDiagnosis, ElrsModuleInfo, ElrsSetModeResult, ElrsProgressEvent } from '../shared/link-doctor-types.js';
 import type { WfbngStatus } from '../shared/camera-types.js';
@@ -1775,6 +1775,64 @@ const api = {
     const handler = (_: unknown, progress: ArduPilotSitlDownloadProgress) => callback(progress);
     ipcRenderer.on(IPC_CHANNELS.ARDUPILOT_SITL_DOWNLOAD_PROGRESS, handler);
     return () => ipcRenderer.removeListener(IPC_CHANNELS.ARDUPILOT_SITL_DOWNLOAD_PROGRESS, handler);
+  },
+
+  // ============================================================================
+  // PX4 SITL (mirrors ArduPilot SITL: download a bundle, spawn, connect UDP 14550)
+  // ============================================================================
+
+  px4SitlStart: (config: Px4SitlConfig): Promise<{ success: boolean; command?: string; error?: string }> =>
+    ipcRenderer.invoke(IPC_CHANNELS.PX4_SITL_START, config),
+
+  px4SitlStop: (): Promise<{ success: boolean }> =>
+    ipcRenderer.invoke(IPC_CHANNELS.PX4_SITL_STOP),
+
+  px4SitlGetStatus: (): Promise<Px4SitlStatus> =>
+    ipcRenderer.invoke(IPC_CHANNELS.PX4_SITL_STATUS),
+
+  px4SitlDownload: (releaseTrack: Px4ReleaseTrack): Promise<{ success: boolean; path?: string; error?: string }> =>
+    ipcRenderer.invoke(IPC_CHANNELS.PX4_SITL_DOWNLOAD, releaseTrack),
+
+  px4SitlCheckBinary: (releaseTrack: Px4ReleaseTrack): Promise<Px4SitlBinaryInfo> =>
+    ipcRenderer.invoke(IPC_CHANNELS.PX4_SITL_CHECK_BINARY, releaseTrack),
+
+  px4SitlCheckPlatform: (): Promise<{ supported: boolean; needsJava: boolean; error?: string }> =>
+    ipcRenderer.invoke(IPC_CHANNELS.PX4_SITL_CHECK_PLATFORM),
+
+  onPx4SitlStdout: (callback: (data: string) => void) => {
+    const handler = (_: unknown, data: string) => callback(data);
+    ipcRenderer.on(IPC_CHANNELS.PX4_SITL_STDOUT, handler);
+    return () => ipcRenderer.removeListener(IPC_CHANNELS.PX4_SITL_STDOUT, handler);
+  },
+
+  onPx4SitlStderr: (callback: (data: string) => void) => {
+    const handler = (_: unknown, data: string) => callback(data);
+    ipcRenderer.on(IPC_CHANNELS.PX4_SITL_STDERR, handler);
+    return () => ipcRenderer.removeListener(IPC_CHANNELS.PX4_SITL_STDERR, handler);
+  },
+
+  onPx4SitlError: (callback: (error: string) => void) => {
+    const handler = (_: unknown, error: string) => callback(error);
+    ipcRenderer.on(IPC_CHANNELS.PX4_SITL_ERROR, handler);
+    return () => ipcRenderer.removeListener(IPC_CHANNELS.PX4_SITL_ERROR, handler);
+  },
+
+  onPx4SitlExit: (callback: (data: Px4SitlExitData) => void) => {
+    const handler = (_: unknown, data: Px4SitlExitData) => callback(data);
+    ipcRenderer.on(IPC_CHANNELS.PX4_SITL_EXIT, handler);
+    return () => ipcRenderer.removeListener(IPC_CHANNELS.PX4_SITL_EXIT, handler);
+  },
+
+  onPx4SitlStarted: (callback: (data: Px4SitlStartedData) => void) => {
+    const handler = (_: unknown, data: Px4SitlStartedData) => callback(data);
+    ipcRenderer.on(IPC_CHANNELS.PX4_SITL_STARTED, handler);
+    return () => ipcRenderer.removeListener(IPC_CHANNELS.PX4_SITL_STARTED, handler);
+  },
+
+  onPx4SitlDownloadProgress: (callback: (progress: Px4SitlDownloadProgress) => void) => {
+    const handler = (_: unknown, progress: Px4SitlDownloadProgress) => callback(progress);
+    ipcRenderer.on(IPC_CHANNELS.PX4_SITL_DOWNLOAD_PROGRESS, handler);
+    return () => ipcRenderer.removeListener(IPC_CHANNELS.PX4_SITL_DOWNLOAD_PROGRESS, handler);
   },
 
   // ============================================================================

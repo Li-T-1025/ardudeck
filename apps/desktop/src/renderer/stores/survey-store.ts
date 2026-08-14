@@ -17,6 +17,7 @@ import { parseGisArea } from '../../shared/gis-area-import';
 import { computeSurveyGroupSignature } from '../components/survey/survey-group-signature';
 import { useSettingsStore } from './settings-store';
 import { useMissionStore } from './mission-store';
+import { useConnectionStore } from './connection-store';
 import { MAV_CMD } from '../../shared/mission-types';
 import { isSurveyGroup, createSurveyGroup, GROUP_COLOR_PALETTE, type SurveyGroup } from '../../shared/mission-group-types';
 
@@ -272,7 +273,8 @@ async function buildSurveyGroupEntry(
   const fullConfig: SurveyConfig = { ...config, polygon, holes };
   const result = await runGenerator(fullConfig);
   if (!result || result.waypoints.length === 0) return null;
-  const items = surveyToMissionItems(result, fullConfig);
+  const firmware = useConnectionStore.getState().connectionState.firmware;
+  const items = surveyToMissionItems(result, fullConfig, firmware);
   const generatorId = resolveGeneratorId(fullConfig);
   const reg = getSurveyGenerator(generatorId);
   const group = createSurveyGroup({
@@ -302,7 +304,8 @@ function syncResultToEditingGroup(
   fullConfig: SurveyConfig,
   result: SurveyResult,
 ): void {
-  let items = surveyToMissionItems(result, fullConfig);
+  const firmware = useConnectionStore.getState().connectionState.firmware;
+  let items = surveyToMissionItems(result, fullConfig, firmware);
   const missionStore = useMissionStore.getState();
   const externalTakeoff = missionStore.missionItems.some(
     (it) => it.command === MAV_CMD.NAV_TAKEOFF && it.groupId !== editingGroupId,

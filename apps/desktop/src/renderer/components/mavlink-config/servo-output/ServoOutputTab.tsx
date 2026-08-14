@@ -14,8 +14,10 @@ import React, { useMemo } from 'react';
 import { Move, Lightbulb } from 'lucide-react';
 import { useParameterStore } from '../../../stores/parameter-store';
 import { useTelemetryStore } from '../../../stores/telemetry-store';
+import { useConnectionStore } from '../../../stores/connection-store';
 import { ServoRow } from './ServoRow';
 import { StickTestPanel } from './StickTestPanel';
+import Px4ServoOutput from './Px4ServoOutput';
 
 const PWM_MIN = 800;
 const PWM_MAX = 2200;
@@ -26,6 +28,7 @@ const ServoOutputTab: React.FC = () => {
   const setParameter = useParameterStore((s) => s.setParameter);
   const servoOutput = useTelemetryStore((s) => s.servoOutput);
   const lastServoOutput = useTelemetryStore((s) => s.lastServoOutput);
+  const firmware = useConnectionStore((s) => s.connectionState.firmware);
 
   const hasParameters = parameters.size > 0;
 
@@ -45,6 +48,18 @@ const ServoOutputTab: React.FC = () => {
   }, [metadata]);
 
   const hasLiveOutput = lastServoOutput > 0 && Date.now() - lastServoOutput < 3000;
+
+  if (firmware === 'px4') {
+    return (
+      <Px4ServoOutput
+        parameters={parameters}
+        metadata={metadata}
+        setParameter={setParameter}
+        servoOutputs={servoOutput?.outputs}
+        hasLiveOutput={hasLiveOutput}
+      />
+    );
+  }
 
   return (
     <div className="p-6 space-y-4">

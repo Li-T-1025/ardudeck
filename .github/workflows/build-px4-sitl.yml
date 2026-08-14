@@ -1,0 +1,61 @@
+name: Build PX4 SITL Bundles
+
+# Builds the Linux x64 PX4 SITL bundle and uploads it to the GitHub release
+# ArduDeck's in-app PX4 SITL tab downloads from. macOS arm64/x64 bundles are
+# built locally on a Mac and uploaded manually (same split as build-sitl.yml),
+# because PX4 has no standalone prebuilt SITL binary.
+#
+# ArduDeck downloads from:
+#   https://github.com/rubenCodeforges/ardudeck/releases/download/{tag}/px4-sitl-{track}-{platform}.tar.gz
+# The {tag} MUST match PX4_SITL_RELEASE_TAG in
+#   apps/desktop/src/main/sitl/px4-sitl-downloader.ts
+
+on:
+  workflow_dispatch:
+    inputs:
+      track:
+        description: 'Release track (stable, beta, dev)'
+        required: true
+        default: 'stable'
+      px4_ref:
+        description: 'PX4-Autopilot git ref (tag or branch). Leave blank to use the track default.'
+        required: false
+        default: ''
+      release_tag:
+        description: 'GitHub release tag to upload to (must match the app)'
+        required: true
+        default: 'px4-sitl-vmaster-20260814'
+
+permissions:
+  contents: write
+
+jobs:
+  build-linux-x64:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - name: Checkout ArduDeck (for the build script)
+        uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install Java + ant (jMAVSim) and build basics
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y default-jdk ant cmake ninja-build g++ git make
+
+      - name: Build and upload PX4 SITL bundle
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          chmod +x scripts/build-px4-sitl-bundle.sh
+          REF_ARG=""
+          if [ -n "${{ inputs.px4_ref }}" ]; then REF_ARG="--ref ${{ inputs.px4_ref }}"; fi
+          # The PX4 Ubuntu setup script installs the rest of the toolchain.
+          scripts/build-px4-sitl-bundle.sh \
+            --track "${{ inputs.track }}" \
+            $REF_ARG \
+            --tag "${{ inputs.release_tag }}" \
+            --upload

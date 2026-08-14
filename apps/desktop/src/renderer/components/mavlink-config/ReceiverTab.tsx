@@ -15,6 +15,8 @@ import { useParameterStore } from '../../stores/parameter-store';
 import { useTelemetryStore } from '../../stores/telemetry-store';
 import { useEffectiveRc, usePseudoTxStore } from '../../stores/pseudo-tx-store';
 import { useSettingsStore } from '../../stores/settings-store';
+import { useConnectionStore } from '../../stores/connection-store';
+import Px4ReceiverConfig from './Px4ReceiverConfig';
 import { PRIMARY_CHANNEL_COUNT, getMavlinkChannelNames, reorderChannelsWithRcmap } from '../../utils/rc-channel-constants';
 
 // =============================================================================
@@ -137,6 +139,7 @@ const ReceiverTab: React.FC = () => {
   const fcRc = useTelemetryStore((s) => s.rcChannels);
   const rcChannels = useEffectiveRc(fcRc);
   const lastRcChannels = useTelemetryStore((s) => s.lastRcChannels);
+  const firmware = useConnectionStore((s) => s.connectionState.firmware);
 
   // RCMAP parameters — which physical channel carries which function (1-based)
   const rcmap = useMemo(() => ({
@@ -237,6 +240,10 @@ const ReceiverTab: React.FC = () => {
     : signalStatus === 'stale'
     ? { text: 'Signal Lost', color: 'amber' }
     : { text: 'No Signal', color: 'red' };
+
+  if (firmware === 'px4') {
+    return <Px4ReceiverConfig />;
+  }
 
   return (
     <div className="p-6 space-y-6">

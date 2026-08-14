@@ -22,7 +22,7 @@ import { useOrchestrationStore } from '../../stores/orchestration-store';
 import { isPreArmMessage, extractPreArmReason, matchPreArmError, PREARM_STALE_MS } from '../../../shared/prearm-checks';
 import { PreArmParamFix } from '../prearm/PreArmParamFix';
 import { PanelContainer, SectionTitle } from './panel-utils';
-import { getVehicleClass, VEHICLE_CAPABILITIES, type ArduPilotVehicleClass } from '../../../shared/telemetry-types';
+import { getVehicleClass, VEHICLE_CAPABILITIES, encodePx4CustomMode, type ArduPilotVehicleClass } from '../../../shared/telemetry-types';
 import { useModeRequest } from '../../hooks/useModeRequest';
 import { ModeAnnunciator } from './flight-modes/ModeAnnunciator';
 import { ModePicker } from './flight-modes/ModePicker';
@@ -523,6 +523,13 @@ function MavlinkFlightControl({ mavTypeOverride }: { mavTypeOverride?: number })
         ? fleetVehicles.filter((v) => squadKeys.includes(v.key)).map((v) => v.sysid)
         : [activeFleetVehicle.sysid])
     : null;
+  // PX4 encodes the commanded mode as a custom_mode bitfield rather than a raw
+  // ArduPilot mode number, and HEARTBEAT echoes back that same bitfield (so
+  // flight.modeNum is the encoded value too). Used below for PX4 mission run/pause
+  // encoding. ArduPilot keeps its existing per-vehicle mode/mission numbers.
+  // NOTE: the ModePicker itself is still ArduPilot-vehicle-class based (master's
+  // mode-UI rewrite); PX4 mode *selection* through the picker is a follow-up.
+  const isPx4 = connectionState.firmware === 'px4';
   const missionItems = useMissionStore((s) => s.missionItems);
   const currentSeq = useMissionStore((s) => s.currentSeq);
   const fetchMission = useMissionStore((s) => s.fetchMission);
@@ -532,7 +539,12 @@ function MavlinkFlightControl({ mavTypeOverride }: { mavTypeOverride?: number })
   const uploadMissionToFc = useMissionStore((s) => s.uploadMission);
   const altitudeUnit = useSettingsStore((s) => s.unitPreferences.altitude);
   const missionLoaded = missionItems.length > 0;
-  const missionModes = MISSION_MODES[vehicleClass];
+  // PX4 mission run = AUTO_MISSION (4,4); pause = AUTO_LOITER/Hold (4,3),
+  // which holds position without abandoning the mission, same intent as the
+  // ArduPilot pause modes. Abort = AUTO_RTL (4,5), PX4's return-to-launch.
+  const missionModes = isPx4
+    ? { auto: encodePx4CustomMode(4, 4), pause: encodePx4CustomMode(4, 3), pauseLabel: 'Hold', abort: encodePx4CustomMode(4, 5), abortLabel: 'Return' }
+    : MISSION_MODES[vehicleClass];
   const isInAuto = flight.modeNum === missionModes.auto;
   const isInPause = flight.modeNum === missionModes.pause;
 
@@ -625,16 +637,16 @@ function MavlinkFlightControl({ mavTypeOverride }: { mavTypeOverride?: number })
     if (flight.armed) return [];
     const freshAfter = Math.max(preArmDismissedAt, preArmNow - PREARM_STALE_MS);
     return messages
-      .filter((m) => isPreArmMessage(m.text))
+      .filter((m) => isPreArmMessage(m.text, connectionState.firmware))
       .filter((m) => m.timestamp >= freshAfter)
       .map((m) => {
-        const match = matchPreArmError(m.text);
+        const match = matchPreArmError(m.text, connectionState.firmware);
         return match ? { reason: match.reason, fix: match.pattern.fix } : null;
       })
       .filter((x): x is NonNullable<typeof x> => x !== null)
       .filter((x, i, arr) => arr.findIndex((a) => a.reason === x.reason) === i)
       .slice(0, 10);
-  }, [messages, flight.armed, preArmDismissedAt, preArmNow]);
+  }, [messages, flight.armed, preArmDismissedAt, preArmNow, connectionState.firmware]);
 
   // Watch for ARM/DISARM command result in messages
   const lastArmResult = useMemo(() => {
@@ -1001,6 +1013,7 @@ function MavlinkFlightControl({ mavTypeOverride }: { mavTypeOverride?: number })
       formatAltitude: (meters) => formatAltitudeFromMeters(meters, altitudeUnit),
       forceArm,
       vehicleClass,
+      firmware:     connectionState.firmware,
       capabilities,
       isSitl: connectionState.isSitl ?? sitlIsRunning,
       getFlight:   () => store().flight,
@@ -1031,7 +1044,10 @@ function MavlinkFlightControl({ mavTypeOverride }: { mavTypeOverride?: number })
   };
 
   // Per-vehicle button + dialog copy comes from the strategy module.
-  const takeoffPresentation = useMemo(() => presentTakeoff(vehicleClass), [vehicleClass]);
+  const takeoffPresentation = useMemo(
+    () => presentTakeoff(vehicleClass, connectionState.firmware),
+    [vehicleClass, connectionState.firmware],
+  );
 
   // RTL/Land sourced from the per-vehicle capability matrix.
   const rtlModeNum = capabilities.rtlModeNum;

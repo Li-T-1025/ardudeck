@@ -5,6 +5,7 @@ import { VEHICLE_TEMPLATES } from '../../../lib/vehicle-templates/registry.js';
 import { useConnectionStore } from '../../../stores/connection-store.js';
 import { useParameterStore } from '../../../stores/parameter-store.js';
 import { inferProfileFromParams } from '../../../lib/vehicle-templates/import.js';
+import { Px4AirframePicker } from './Px4AirframePicker.js';
 
 type CategoryFilter = 'all' | VehicleTemplate['category'];
 
@@ -34,8 +35,12 @@ export function VehicleTemplatePicker({ onSelect, onImportFromConnected, onClose
   const [focusedIndex, setFocusedIndex] = useState(0);
 
   const isConnected = useConnectionStore(s => s.connectionState.isConnected);
+  const firmware = useConnectionStore(s => s.connectionState.firmware);
   const paramSize = useParameterStore(s => s.parameters.size);
   const canImport = isConnected && paramSize > 0;
+  // These templates emit ArduPilot FRAME_CLASS / FRAME_TYPE / Q_* parameters,
+  // which do not apply to PX4 (PX4 selects an airframe via SYS_AUTOSTART).
+  const isPx4 = firmware === 'px4';
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -53,6 +58,7 @@ export function VehicleTemplatePicker({ onSelect, onImportFromConnected, onClose
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') { onClose(); return; }
+      if (isPx4) return;
       if (e.key === 'Enter') {
         const t = filtered[focusedIndex];
         if (t) onSelect(t);
@@ -77,7 +83,7 @@ export function VehicleTemplatePicker({ onSelect, onImportFromConnected, onClose
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [filtered, focusedIndex, onClose, onSelect]);
+  }, [filtered, focusedIndex, onClose, onSelect, isPx4]);
 
   return (
     <div className="fixed inset-0 bg-surface-overlay flex items-center justify-center z-[70] p-4">
@@ -85,9 +91,13 @@ export function VehicleTemplatePicker({ onSelect, onImportFromConnected, onClose
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-subtle">
           <div>
-            <h2 className="text-base font-semibold text-content">Choose a vehicle template</h2>
+            <h2 className="text-base font-semibold text-content">
+              {isPx4 ? 'Choose a PX4 airframe' : 'Choose a vehicle template'}
+            </h2>
             <p className="text-xs text-content-secondary mt-0.5">
-              Pick the configuration that matches your aircraft, you can tweak fields after.
+              {isPx4
+                ? 'Pick the airframe that matches your aircraft. This writes SYS_AUTOSTART and needs a reboot.'
+                : 'Pick the configuration that matches your aircraft, you can tweak fields after.'}
             </p>
           </div>
           <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-surface-overlay-subtle text-content-secondary hover:text-content">
@@ -95,6 +105,10 @@ export function VehicleTemplatePicker({ onSelect, onImportFromConnected, onClose
           </button>
         </div>
 
+        {isPx4 ? (
+          <Px4AirframePicker />
+        ) : (
+        <>
         {/* Filter bar */}
         <div className="px-5 py-3 border-b border-subtle flex items-center gap-3 flex-wrap">
           <div className="flex items-center gap-1">
@@ -163,10 +177,12 @@ export function VehicleTemplatePicker({ onSelect, onImportFromConnected, onClose
             </div>
           )}
         </div>
+        </>
+        )}
 
         <div className="px-5 py-3 border-t border-subtle text-[10px] text-content-secondary flex items-center justify-between">
-          <span>{filtered.length} template{filtered.length === 1 ? '' : 's'}</span>
-          <span>↑↓←→ navigate · Enter select · Esc cancel</span>
+          <span>{isPx4 ? 'PX4 airframe via SYS_AUTOSTART · reboot to apply' : `${filtered.length} template${filtered.length === 1 ? '' : 's'}`}</span>
+          <span>{isPx4 ? 'Esc cancel' : '↑↓←→ navigate · Enter select · Esc cancel'}</span>
         </div>
       </div>
     </div>

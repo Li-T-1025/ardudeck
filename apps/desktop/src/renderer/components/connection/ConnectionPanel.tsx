@@ -3,9 +3,11 @@ import { useConnectionStore } from '../../stores/connection-store';
 import { useSettingsStore, type DefaultSitlType } from '../../stores/settings-store';
 import { useSitlStore } from '../../stores/sitl-store';
 import { useArduPilotSitlStore } from '../../stores/ardupilot-sitl-store';
+import { usePx4SitlStore } from '../../stores/px4-sitl-store';
 import { useSigningStore, initSigningListener } from '../../stores/signing-store';
 import type { SerialPortInfo } from '@ardudeck/comms';
 import { formatPortDisplayName } from '../../utils/usb-device-names';
+import { firmwareLabel } from '../../../shared/firmware-types';
 import { DriverAssistant } from './DriverAssistant';
 import { RecentConnectionsButton } from './RecentConnectionsButton';
 import type { SavedConnection } from '../../stores/settings-store';
@@ -145,37 +147,84 @@ export function ConnectionPanel() {
     downloadProgress: ardupilotDownloadProgress,
   } = useArduPilotSitlStore();
 
-  // Combined SITL state
-  const anySitlRunning = inavIsRunning || ardupilotIsRunning;
-  const anySitlStarting = inavIsStarting || ardupilotIsStarting;
+  // PX4 SITL state (mirrors ArduPilot: download a per-track bundle, spawn, connect UDP 14550)
+  const {
+    isRunning: px4IsRunning,
+    isStarting: px4IsStarting,
+    start: startPx4Sitl,
+    checkStatus: checkPx4Status,
+    subscribeToEvents: subscribePx4Events,
+    vehicleType: px4VehicleType,
+    binaryInfo: px4BinaryInfo,
+    checkBinary: checkPx4Binary,
+    download: downloadPx4Bundle,
+    isDownloading: px4IsDownloading,
+    downloadProgress: px4DownloadProgress,
+  } = usePx4SitlStore();
 
-  // ArduPilot status - needs download?
+  // Combined SITL state
+  const anySitlRunning = inavIsRunning || ardupilotIsRunning || px4IsRunning;
+  const anySitlStarting = inavIsStarting || ardupilotIsStarting || px4IsStarting;
+
+  // Per-flavour "needs download?" and the one that applies to the active choice.
   const ardupilotNeedsDownload = defaultSitlType === 'ardupilot' && !ardupilotBinaryInfo?.exists;
+  const px4NeedsDownload = defaultSitlType === 'px4' && !px4BinaryInfo?.exists;
+  const activeNeedsDownload = ardupilotNeedsDownload || px4NeedsDownload;
+  const anySitlDownloading = ardupilotIsDownloading || px4IsDownloading;
+  const activeDownloadProgress = defaultSitlType === 'px4' ? px4DownloadProgress : ardupilotDownloadProgress;
+
+  // Quick-launch card presentation, keyed by the selected SITL flavour. Tailwind
+  // class strings must be static (no templating), so each accent is spelled out;
+  // a pending download overrides to amber. PX4 uses teal to match its tab in the
+  // full SITL screen.
+  const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
+  const SITL_CARD_STYLES = {
+    inav:      { card: 'bg-purple-600/10 hover:bg-purple-600/15 border border-purple-500/30 hover:border-purple-500/50', iconBg: 'bg-purple-600/20', fg: 'text-purple-400', badge: 'bg-purple-500/15 text-purple-400', bar: 'bg-purple-500' },
+    ardupilot: { card: 'bg-blue-600/10 hover:bg-blue-600/15 border border-blue-500/30 hover:border-blue-500/50', iconBg: 'bg-blue-600/20', fg: 'text-blue-400', badge: 'bg-blue-500/15 text-blue-400', bar: 'bg-blue-500' },
+    px4:       { card: 'bg-teal-600/10 hover:bg-teal-600/15 border border-teal-500/30 hover:border-teal-500/50', iconBg: 'bg-teal-600/20', fg: 'text-teal-400', badge: 'bg-teal-500/15 text-teal-400', bar: 'bg-teal-500' },
+  } as const;
+  const AMBER_CARD_STYLE = { card: 'bg-amber-600/10 hover:bg-amber-600/15 border border-amber-500/30 hover:border-amber-500/50', iconBg: 'bg-amber-600/20', fg: 'text-amber-400', badge: 'bg-amber-500/15 text-amber-400', bar: 'bg-amber-500' };
+  const sitlStyle = activeNeedsDownload ? AMBER_CARD_STYLE : SITL_CARD_STYLES[defaultSitlType];
+  const sitlLabel = defaultSitlType === 'ardupilot' ? `ArduPilot ${cap(ardupilotVehicleType)}`
+    : defaultSitlType === 'px4' ? `PX4 ${cap(px4VehicleType)}`
+    : 'iNav';
+  const sitlSubtitle = anySitlDownloading ? `Downloading${activeDownloadProgress ? ` ${activeDownloadProgress.progress}%` : '...'}`
+    : anySitlStarting ? 'Starting...'
+    : inavIsRunning ? 'iNav running on TCP :5760'
+    : ardupilotIsRunning ? `ArduPilot ${ardupilotVehicleType} running on TCP :5760`
+    : px4IsRunning ? `PX4 ${px4VehicleType} running on UDP :14550`
+    : activeNeedsDownload ? 'Click to download and launch'
+    : 'Launch virtual flight controller';
 
   // Initialize SITL listeners and check status on mount
   useEffect(() => {
     checkInavStatus();
     checkArdupilotStatus();
+    checkPx4Status();
     const cleanupInav = initInavListeners();
     const cleanupArdupilot = initArdupilotListeners();
+    const cleanupPx4 = subscribePx4Events();
     const cleanupSigning = initSigningListener();
     return () => {
       cleanupInav();
       cleanupArdupilot();
+      cleanupPx4();
       cleanupSigning();
     };
-  }, [checkInavStatus, checkArdupilotStatus, initInavListeners, initArdupilotListeners]);
+  }, [checkInavStatus, checkArdupilotStatus, checkPx4Status, initInavListeners, initArdupilotListeners, subscribePx4Events]);
 
-  // Check ArduPilot binary when default type or vehicle type changes
+  // Check the relevant SITL binary/bundle when default type or vehicle type changes
   useEffect(() => {
     if (defaultSitlType === 'ardupilot') {
       checkArdupilotBinary();
+    } else if (defaultSitlType === 'px4') {
+      checkPx4Binary();
     }
-  }, [defaultSitlType, ardupilotVehicleType, checkArdupilotBinary]);
+  }, [defaultSitlType, ardupilotVehicleType, px4VehicleType, checkArdupilotBinary, checkPx4Binary]);
 
   // Handle SITL quick-start based on default type
   const handleSitlQuickStart = async () => {
-    // For ArduPilot, download binary if needed then start
+    // ArduPilot / PX4 both download their artifact first when missing.
     if (defaultSitlType === 'ardupilot' && !ardupilotBinaryInfo?.exists) {
       setError(null);
       const downloaded = await downloadArdupilotBinary();
@@ -188,12 +237,26 @@ export function ConnectionPanel() {
         );
         return;
       }
+    } else if (defaultSitlType === 'px4' && !px4BinaryInfo?.exists) {
+      setError(null);
+      const downloaded = await downloadPx4Bundle();
+      if (!downloaded) {
+        const detail = usePx4SitlStore.getState().lastError;
+        setError(
+          detail
+            ? `Failed to download PX4 SITL bundle: ${detail}`
+            : 'Failed to download PX4 SITL bundle.'
+        );
+        return;
+      }
     }
 
     let success = false;
 
     if (defaultSitlType === 'ardupilot') {
       success = await startArdupilotSitl();
+    } else if (defaultSitlType === 'px4') {
+      success = await startPx4Sitl();
     } else {
       success = await startInavSitl();
     }
@@ -234,13 +297,21 @@ export function ConnectionPanel() {
   // Respond to SITL starting - switch to TCP and auto-connect with retry
   useEffect(() => {
     if (pendingSitlSwitch && !connectionState.isConnected) {
-      setConnectionType('tcp');
-      setTcpHost('127.0.0.1');
-      setTcpPort(5760);
+      // Which SITL flavour started decides the transport: ArduPilot / iNav offer
+      // MAVLink/MSP over TCP 5760, PX4 offers MAVLink over UDP 14550 (we listen,
+      // PX4 SITL streams to that port). They are mutually exclusive.
+      const isPx4 = usePx4SitlStore.getState().isRunning;
+      if (isPx4) {
+        setConnectionType('udp');
+      } else {
+        setConnectionType('tcp');
+        setTcpHost('127.0.0.1');
+        setTcpPort(5760);
+      }
       // Clear the flag
       setPendingSitlSwitch(false);
 
-      // Auto-connect with retry - SITL may take a moment to start TCP server
+      // Auto-connect with retry - SITL may take a moment to come up on its port
       const autoConnectWithRetry = async () => {
         const maxRetries = 20;
         const retryDelayMs = 1500;
@@ -248,7 +319,7 @@ export function ConnectionPanel() {
         for (let attempt = 1; attempt <= maxRetries; attempt++) {
           console.log(`[ConnectionPanel] SITL auto-connect attempt ${attempt}/${maxRetries}...`);
 
-          // Wait before trying (SITL needs time to start TCP server)
+          // Wait before trying (SITL needs time to start its server)
           await new Promise(r => setTimeout(r, retryDelayMs));
 
           // Check if we're already connected (user may have connected manually)
@@ -260,21 +331,21 @@ export function ConnectionPanel() {
           // Check if SITL is still running - if it crashed/failed, stop retrying
           const inavStillRunning = useSitlStore.getState().isRunning;
           const ardupilotStillRunning = useArduPilotSitlStore.getState().isRunning;
-          if (!inavStillRunning && !ardupilotStillRunning) {
+          const px4StillRunning = usePx4SitlStore.getState().isRunning;
+          if (!inavStillRunning && !ardupilotStillRunning && !px4StillRunning) {
             console.warn('[ConnectionPanel] SITL process is no longer running, aborting auto-connect');
             setError('SITL process failed to start. Check the SITL tab for details.');
             return;
           }
 
-          const protocol = ardupilotStillRunning ? 'mavlink' : 'msp';
-          const success = await connect({ type: 'tcp', host: '127.0.0.1', tcpPort: 5760, protocol });
+          const success = px4StillRunning
+            ? await connect({ type: 'udp', udpPort: 14550, udpMode: 'listen', protocol: 'mavlink' })
+            : await connect({ type: 'tcp', host: '127.0.0.1', tcpPort: 5760, protocol: ardupilotStillRunning ? 'mavlink' : 'msp' });
           if (success) {
             console.log('[ConnectionPanel] SITL auto-connect successful!');
-            updateConnectionMemory({
-              lastTcpHost: '127.0.0.1',
-              lastTcpPort: 5760,
-              lastConnectionType: 'tcp',
-            });
+            updateConnectionMemory(px4StillRunning
+              ? { lastUdpPort: 14550, lastConnectionType: 'udp' }
+              : { lastTcpHost: '127.0.0.1', lastTcpPort: 5760, lastConnectionType: 'tcp' });
             return;
           }
 
@@ -517,60 +588,37 @@ export function ConnectionPanel() {
           <div className="space-y-0">
             <button
               onClick={anySitlRunning ? handleSitlConnect : handleSitlQuickStart}
-              disabled={anySitlStarting || isConnecting || ardupilotIsDownloading}
-              className={`w-full rounded-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed overflow-hidden ${
-                ardupilotNeedsDownload
-                  ? 'bg-amber-600/10 hover:bg-amber-600/15 border border-amber-500/30 hover:border-amber-500/50'
-                  : defaultSitlType === 'ardupilot'
-                  ? 'bg-blue-600/10 hover:bg-blue-600/15 border border-blue-500/30 hover:border-blue-500/50'
-                  : 'bg-purple-600/10 hover:bg-purple-600/15 border border-purple-500/30 hover:border-purple-500/50'
-              }`}
+              disabled={anySitlStarting || isConnecting || anySitlDownloading}
+              className={`w-full rounded-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed overflow-hidden ${sitlStyle.card}`}
             >
               {/* Header row */}
               <div className="flex items-center gap-3 px-4 pt-3.5 pb-2">
-                <div className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ${
-                  ardupilotNeedsDownload
-                    ? 'bg-amber-600/20'
-                    : defaultSitlType === 'ardupilot'
-                    ? 'bg-blue-600/20'
-                    : 'bg-purple-600/20'
-                }`}>
-                  <svg className={`w-[18px] h-[18px] ${
-                    ardupilotNeedsDownload
-                      ? 'text-amber-400'
-                      : defaultSitlType === 'ardupilot'
-                      ? 'text-blue-400'
-                      : 'text-purple-400'
-                  }`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <div className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ${sitlStyle.iconBg}`}>
+                  <svg className={`w-[18px] h-[18px] ${sitlStyle.fg}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
                   </svg>
                 </div>
                 <div className="flex-1 text-left min-w-0">
                   <div className="text-[13px] font-medium text-content">SITL Simulator</div>
                   <div className="text-[11px] text-content-secondary mt-0.5">
-                    {ardupilotIsDownloading ? `Downloading${ardupilotDownloadProgress ? ` ${ardupilotDownloadProgress.progress}%` : '...'}`
-                      : anySitlStarting ? 'Starting...'
-                      : inavIsRunning ? 'iNav running on TCP :5760'
-                      : ardupilotIsRunning ? `ArduPilot ${ardupilotVehicleType} running on TCP :5760`
-                      : ardupilotNeedsDownload ? 'Click to download and launch'
-                      : 'Launch virtual flight controller'}
+                    {sitlSubtitle}
                   </div>
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
                   {anySitlRunning && (
                     <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
                   )}
-                  {anySitlStarting || ardupilotIsDownloading ? (
-                    <svg className={`w-5 h-5 animate-spin ${defaultSitlType === 'ardupilot' ? 'text-blue-400' : 'text-purple-400'}`} fill="none" viewBox="0 0 24 24">
+                  {anySitlStarting || anySitlDownloading ? (
+                    <svg className={`w-5 h-5 animate-spin ${sitlStyle.fg}`} fill="none" viewBox="0 0 24 24">
                       <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                       <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
                     </svg>
-                  ) : ardupilotNeedsDownload ? (
+                  ) : activeNeedsDownload ? (
                     <svg className="w-5 h-5 text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
                     </svg>
                   ) : (
-                    <svg className={`w-4 h-4 ${defaultSitlType === 'ardupilot' ? 'text-blue-400' : 'text-purple-400'}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <svg className={`w-4 h-4 ${sitlStyle.fg}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                     </svg>
                   )}
@@ -578,16 +626,10 @@ export function ConnectionPanel() {
               </div>
               {/* Tags row */}
               <div className="flex items-center gap-1.5 px-4 pb-3">
-                <span className={`px-2 py-0.5 text-[10px] font-medium rounded-md ${
-                  defaultSitlType === 'ardupilot'
-                    ? 'bg-blue-500/15 text-blue-400'
-                    : 'bg-purple-500/15 text-purple-400'
-                }`}>
-                  {defaultSitlType === 'ardupilot'
-                    ? `ArduPilot ${ardupilotVehicleType.charAt(0).toUpperCase() + ardupilotVehicleType.slice(1)}`
-                    : 'iNav'}
+                <span className={`px-2 py-0.5 text-[10px] font-medium rounded-md ${sitlStyle.badge}`}>
+                  {sitlLabel}
                 </span>
-                {ardupilotNeedsDownload && (
+                {activeNeedsDownload && (
                   <span className="px-2 py-0.5 text-[10px] font-medium rounded-md bg-amber-500/15 text-amber-400">
                     Download needed
                   </span>
@@ -599,19 +641,19 @@ export function ConnectionPanel() {
                 )}
               </div>
               {/* Download progress bar */}
-              {ardupilotIsDownloading && ardupilotDownloadProgress && (
+              {anySitlDownloading && activeDownloadProgress && (
                 <div className="px-4 pb-3">
                   <div className="h-1 rounded-full bg-surface-raised overflow-hidden">
                     <div
-                      className="h-full rounded-full bg-blue-500 transition-all duration-300"
-                      style={{ width: `${ardupilotDownloadProgress.progress}%` }}
+                      className={`h-full rounded-full transition-all duration-300 ${sitlStyle.bar}`}
+                      style={{ width: `${activeDownloadProgress.progress}%` }}
                     />
                   </div>
                 </div>
               )}
             </button>
             {/* SITL Type Selector - show when not running */}
-            {!anySitlRunning && !anySitlStarting && !ardupilotIsDownloading && (
+            {!anySitlRunning && !anySitlStarting && !anySitlDownloading && (
               <div className="flex items-center justify-center gap-1.5 pt-2">
                 <button
                   onClick={() => setDefaultSitlType('inav')}
@@ -632,6 +674,16 @@ export function ConnectionPanel() {
                   }`}
                 >
                   ArduPilot
+                </button>
+                <button
+                  onClick={() => setDefaultSitlType('px4')}
+                  className={`px-2.5 py-1 text-[10px] rounded-md transition-colors ${
+                    defaultSitlType === 'px4'
+                      ? 'bg-teal-500/20 text-teal-300 font-medium'
+                      : 'text-content-secondary hover:text-content-secondary hover:bg-surface-raised'
+                  }`}
+                >
+                  PX4
                 </button>
               </div>
             )}
@@ -1185,10 +1237,10 @@ export function ConnectionPanel() {
                 <span className="text-content-secondary">Transport</span>
                 <span className="text-content font-medium">{connectionState.transport}</span>
               </div>
-              {connectionState.autopilot && (
+              {(connectionState.autopilot || connectionState.firmware) && (
                 <div className="flex justify-between">
                   <span className="text-content-secondary">Autopilot</span>
-                  <span className="text-content font-medium">{connectionState.autopilot}</span>
+                  <span className="text-content font-medium">{firmwareLabel(connectionState)}</span>
                 </div>
               )}
               {connectionState.vehicleType && (

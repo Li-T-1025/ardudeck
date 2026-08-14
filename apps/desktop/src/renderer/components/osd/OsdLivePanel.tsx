@@ -14,6 +14,7 @@
 
 import { useState, useCallback } from 'react';
 import { useConnectionStore } from '../../stores/connection-store';
+import { firmwareLabel } from '../../../shared/firmware-types';
 import { useFlightControlStore } from '../../stores/flight-control-store';
 import { useTelemetryStore } from '../../stores/telemetry-store';
 import { useEffectiveRc } from '../../stores/pseudo-tx-store';
@@ -60,7 +61,7 @@ export function OsdLivePanel() {
         <h3 className="text-xs font-medium text-content mb-1">Live Telemetry</h3>
         {connectionState.isConnected ? (
           <p className="text-[10px] text-green-400">
-            Connected to {connectionState.fcVariant || connectionState.autopilot || 'FC'}
+            Connected to {connectionState.fcVariant || (connectionState.firmware || connectionState.autopilot ? firmwareLabel(connectionState) : 'FC')}
             {connectionState.fcVersion && ` ${connectionState.fcVersion}`}
           </p>
         ) : (

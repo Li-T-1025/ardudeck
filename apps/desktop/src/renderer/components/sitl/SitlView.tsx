@@ -8,12 +8,14 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { useSitlStore } from '../../stores/sitl-store';
 import { useArduPilotSitlStore } from '../../stores/ardupilot-sitl-store';
+import { usePx4SitlStore } from '../../stores/px4-sitl-store';
 import { useConnectionStore } from '../../stores/connection-store';
 import { useSettingsStore } from '../../stores/settings-store';
 import ArduPilotSitlTab from './ArduPilotSitlTab';
+import Px4SitlTab from './Px4SitlTab';
 import type { VirtualRCState } from '../../../shared/ipc-channels';
 
-type SitlTab = 'inav' | 'ardupilot';
+type SitlTab = 'inav' | 'ardupilot' | 'px4';
 
 // Aircraft options for FlightGear
 const AIRCRAFT_OPTIONS = [
@@ -85,6 +87,7 @@ export default function SitlView() {
   const { connectionState } = useConnectionStore();
   const { setPendingSitlSwitch } = useSettingsStore();
   const ardupilotSitlStore = useArduPilotSitlStore();
+  const px4SitlStore = usePx4SitlStore();
   const outputRef = useRef<HTMLDivElement>(null);
   const [activeTab, setActiveTab] = useState<SitlTab>('ardupilot');
   const [showNewProfile, setShowNewProfile] = useState(false);
@@ -176,8 +179,8 @@ export default function SitlView() {
   const canDelete = currentProfile && !currentProfile.isStandard;
 
   // Determine if any SITL is running
-  const anyRunning = isRunning || ardupilotSitlStore.isRunning;
-  const activeRunningTab = isRunning ? 'inav' : ardupilotSitlStore.isRunning ? 'ardupilot' : null;
+  const anyRunning = isRunning || ardupilotSitlStore.isRunning || px4SitlStore.isRunning;
+  const activeRunningTab = isRunning ? 'inav' : ardupilotSitlStore.isRunning ? 'ardupilot' : px4SitlStore.isRunning ? 'px4' : null;
 
   return (
     <div className="h-full flex flex-col bg-surface-base">
@@ -198,31 +201,45 @@ export default function SitlView() {
           </div>
         </div>
 
-        {/* Tab switcher */}
+        {/* Tab switcher. A tab locks while a DIFFERENT sim is running (they share
+            MAVLink/MSP ports and would collide), so you must stop the running one
+            before switching. */}
         <div className="flex items-center gap-1 bg-surface-input border border-subtle rounded-lg p-1">
             <button
               onClick={() => setActiveTab('inav')}
-              disabled={ardupilotSitlStore.isRunning}
+              disabled={anyRunning && activeRunningTab !== 'inav'}
               className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
                 activeTab === 'inav'
                   ? 'bg-purple-500/20 text-purple-400 border border-purple-500/30'
                   : 'text-content-secondary hover:text-content hover:bg-surface'
               } disabled:opacity-50 disabled:cursor-not-allowed`}
-              title={ardupilotSitlStore.isRunning ? 'Stop ArduPilot SITL first' : undefined}
+              title={anyRunning && activeRunningTab !== 'inav' ? 'Stop the running SITL first' : undefined}
             >
               iNav (MSP)
             </button>
             <button
               onClick={() => setActiveTab('ardupilot')}
-              disabled={isRunning}
+              disabled={anyRunning && activeRunningTab !== 'ardupilot'}
               className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
                 activeTab === 'ardupilot'
                   ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30'
                   : 'text-content-secondary hover:text-content hover:bg-surface'
               } disabled:opacity-50 disabled:cursor-not-allowed`}
-              title={isRunning ? 'Stop iNav SITL first' : undefined}
+              title={anyRunning && activeRunningTab !== 'ardupilot' ? 'Stop the running SITL first' : undefined}
             >
               ArduPilot (MAVLink)
+            </button>
+            <button
+              onClick={() => setActiveTab('px4')}
+              disabled={anyRunning && activeRunningTab !== 'px4'}
+              className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
+                activeTab === 'px4'
+                  ? 'bg-teal-500/20 text-teal-400 border border-teal-500/30'
+                  : 'text-content-secondary hover:text-content hover:bg-surface'
+              } disabled:opacity-50 disabled:cursor-not-allowed`}
+              title={anyRunning && activeRunningTab !== 'px4' ? 'Stop the running SITL first' : undefined}
+            >
+              PX4 (MAVLink)
             </button>
           </div>
 
@@ -237,7 +254,7 @@ export default function SitlView() {
               anyRunning ? 'bg-green-400' : 'bg-zinc-500'
             }`} />
             {anyRunning
-              ? `${activeRunningTab === 'inav' ? 'iNav' : 'ArduPilot'} Running`
+              ? `${activeRunningTab === 'inav' ? 'iNav' : activeRunningTab === 'px4' ? 'PX4' : 'ArduPilot'} Running`
               : 'Stopped'}
           </div>
         </div>
@@ -247,6 +264,9 @@ export default function SitlView() {
       <div className="flex-1 flex flex-col overflow-y-auto p-4 gap-4">
         {/* ArduPilot SITL Tab */}
         {activeTab === 'ardupilot' && <ArduPilotSitlTab />}
+
+        {/* PX4 SITL Tab */}
+        {activeTab === 'px4' && <Px4SitlTab />}
 
         {/* iNav SITL Tab */}
         {activeTab === 'inav' && (

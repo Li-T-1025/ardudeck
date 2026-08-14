@@ -9,6 +9,7 @@ import { useMemo, useState } from 'react';
 import { useCalibrationStore, getAvailableCalibrationTypes, isCalibrationTypeAvailable } from '../../../stores/calibration-store';
 import { useTelemetryStore } from '../../../stores/telemetry-store';
 import { useParameterStore } from '../../../stores/parameter-store';
+import { useConnectionStore } from '../../../stores/connection-store';
 import { type CalibrationTypeId } from '../../../../shared/calibration-types';
 import { LargeVehicleMagCalDialog } from '../LargeVehicleMagCalDialog';
 import { LoadCalibrationFromFileDialog } from '../LoadCalibrationFromFileDialog';
@@ -206,6 +207,10 @@ export function SelectCalibrationStep() {
   const { protocol, sensors, isSensorsLoading, selectCalibrationType, error, completedCalibrations } = useCalibrationStore();
   const flight = useTelemetryStore((s) => s.flight);
   const parameters = useParameterStore((s) => s.parameters);
+  const firmware = useConnectionStore((s) => s.connectionState.firmware);
+  // Large Vehicle MagCal and load-from-file rely on ArduPilot-specific params/
+  // commands, so only offer them on ArduPilot (not PX4) MAVLink connections.
+  const isArduPilotMavlink = protocol === 'mavlink' && firmware !== 'px4';
 
   // A compass exists only if the FC reports a non-zero device id. getSensorConfig
   // hardcodes hasCompass=true, so gate the compass cal here on real param data —
@@ -362,7 +367,7 @@ export function SelectCalibrationStep() {
       )}
 
       {/* Large Vehicle MagCal + CompassMot (ArduPilot only) — both need a compass */}
-      {protocol === 'mavlink' && !isSensorsLoading && !compassMissing && (
+      {isArduPilotMavlink && !isSensorsLoading && !compassMissing && (
         <div className="mt-2 space-y-2">
           <div className="flex items-center gap-3 p-4 rounded-xl border border-amber-500/20 bg-gradient-to-br from-amber-500/5 via-transparent to-orange-500/5">
             <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-amber-500/20 to-orange-500/20 text-amber-400 flex items-center justify-center shrink-0">

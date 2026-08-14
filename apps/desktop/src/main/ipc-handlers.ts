@@ -132,8 +132,9 @@ import { initAutoUpdater, checkForUpdates, downloadUpdate, installUpdate } from 
 import type { ParamValuePayload, ParameterProgress } from '../shared/parameter-types.js';
 import { PARAMETER_METADATA_URLS, mavTypeToVehicleType, type VehicleType, type ParameterMetadata, type ParameterMetadataStore } from '../shared/parameter-metadata.js';
 import { persistsStreamRates, cappedLegacyRates } from '../shared/stream-rates.js';
+import { getPx4ParameterMetadata } from './px4-parameter-metadata.js';
 import type { AttitudeData, PositionData, GpsData, BatteryData, VfrHudData, FlightState, RcChannelsData, NavControllerData, GuidedTargetData } from '../shared/telemetry-types.js';
-import { COPTER_MODES, PLANE_MODES, ROVER_MODES, SUB_MODES } from '../shared/telemetry-types.js';
+import { COPTER_MODES, PLANE_MODES, ROVER_MODES, SUB_MODES, getPx4ModeName } from '../shared/telemetry-types.js';
 import type { MissionItem, MissionProgress, MavFrame } from '../shared/mission-types.js';
 import { buildDjiWpml, parseDjiWpml } from '../shared/dji-wpml.js';
 import { MAV_MISSION_RESULT, MAV_MISSION_TYPE } from '../shared/mission-types.js';
@@ -173,13 +174,16 @@ import { classifyStream, classifyDatagrams } from './link-doctor/stream-classifi
 import { detectElrsModule, setElrsLinkMode, cancelElrsOperation } from './link-doctor/elrs-service.js';
 import { wfbngReceiver } from './media/wfbng-receiver.js';
 import { decodeServoOutputRaw } from './servo-output-decode.js';
+import { decodePx4ParamValue, encodePx4ParamSetValue } from './px4-param-bytewise.js';
 import { writeFile, readFile } from 'node:fs/promises';
 import { networkInterfaces } from 'node:os';
 import { createDataFlashParser, runHealthChecks } from '@ardudeck/dataflash-parser';
+import { createUlogParser, runPx4HealthChecks } from '@ardudeck/ulog-parser';
 import { sitlProcess } from './sitl/sitl-process.js';
 import { simEngineProcess } from './sim/sim-engine-process.js';
 import { mediaEngine } from './media/media-engine.js';
 import { ardupilotSitlProcess, swarmSitlProcess, ardupilotSitlDownloader, ardupilotRcSender } from './sitl/index.js';
+import { px4SitlProcess, px4SitlDownloader } from './sitl/index.js';
 import { startSimHandoverServer, stopSimHandoverServer } from './sim/sim-handover-server.js';
 import { resolveReconnectTarget } from './connection/reconnect-target.js';
 import { orchestratorProcess } from './orchestrator/orchestrator-process.js';
@@ -216,7 +220,7 @@ import {
 } from './simulators/index.js';
 import { ardupilotFlightGear } from './simulators/ardupilot-flightgear.js';
 import { detectFlightGear } from './simulators/simulator-detector.js';
-import type { SitlConfig, SitlStatus, ArduPilotSitlConfig, ArduPilotSitlStatus, ArduPilotVehicleType, ArduPilotReleaseTrack, ArduPilotSitlBinaryInfo, SwarmSitlConfig, SwarmSitlStatus, ArduPilotFlightGearConfig } from '../shared/ipc-channels.js';
+import type { SitlConfig, SitlStatus, ArduPilotSitlConfig, ArduPilotSitlStatus, ArduPilotVehicleType, ArduPilotReleaseTrack, ArduPilotSitlBinaryInfo, SwarmSitlConfig, SwarmSitlStatus, ArduPilotFlightGearConfig, Px4SitlConfig, Px4SitlStatus, Px4SitlBinaryInfo, Px4ReleaseTrack } from '../shared/ipc-channels.js';
 import { openAreaEditorWindow, setMainMapViewport } from './area-editor-window.js';
 
 // =============================================================================
@@ -1699,6 +1703,16 @@ const PARAM_LIST_MAX_RETRIES = 3;
 const PARAM_MAX_STALLED_ROUNDS = 3;
 const PARAM_GAP_FILL_CHUNK = 30; // Reads per recovery round; keeps the uplink of slow radios breathable
 
+// Resolve the MAV_PARAM_TYPE to put on the wire for a PARAM_SET.
+// ArduPilot stores all params as float32 over MAVLink and expects REAL32 (9)
+// for every PARAM_SET regardless of the param's native type, so we always
+// force REAL32 there. PX4 is strict: it rejects/misinterprets a PARAM_SET whose
+// param_type does not match the param's real type, so for PX4 we send the
+// actual per-param type (originating from the FC-reported PARAM_VALUE type).
+function resolveParamSetType(requestedType: number): number {
+  return connectionState.firmware === 'px4' ? requestedType : 9; // 9 = MAV_PARAM_TYPE_REAL32
+}
+
 // MAVLink FTP client for fast parameter download
 let ftpClient: MavlinkFtpClient | null = null;
 let paramRequestInFlight = false; // Guard against concurrent param download requests
@@ -1739,8 +1753,8 @@ function resetMavlinkDiagCache(): void {
   resetRcChannelState();
 }
 
-// Parameter metadata cache (keyed by vehicle type)
-const metadataCache = new Map<VehicleType, ParameterMetadataStore>();
+// Parameter metadata cache (keyed by vehicle type, or 'px4' for bundled PX4 metadata)
+const metadataCache = new Map<VehicleType | 'px4', ParameterMetadataStore>();
 
 // Mission download state
 let missionDownloadState: {
@@ -2463,8 +2477,12 @@ function parseTelemetry(mainWindow: BrowserWindow, packet: MAVLinkPacket): void 
         lastReportedArmed = armed;
       }
 
-      // Get mode name based on vehicle type
+      // Get mode name based on autopilot + vehicle type
       let modeName = `Mode ${customMode}`;
+      if (autopilotType === 12) {
+        // PX4 encodes the mode in a main/sub bitfield, not by vehicle type.
+        modeName = getPx4ModeName(customMode);
+      } else
       // Fixed wing and VTOL types use plane modes
       if (vehicleType === 1 || (vehicleType >= 19 && vehicleType <= 25)) {
         modeName = PLANE_MODES[customMode] || modeName;
@@ -3062,6 +3080,15 @@ function parseTelemetry(mainWindow: BrowserWindow, packet: MAVLinkPacket): void 
     case MSG_PARAM_VALUE: {
       // Deserialize parameter value
       const param = deserializeParamValue(payload);
+
+      // PX4 transmits integer params bytewise: the param_value bytes hold the
+      // raw typed integer bits, not a float. Reinterpret from the raw wire
+      // bytes (not the already-decoded float, which is lossy for int bits)
+      // before the value is cached or forwarded. ArduPilot keeps the float
+      // (by-value) decoding from deserializeParamValue unchanged.
+      if (connectionState.firmware === 'px4') {
+        param.paramValue = decodePx4ParamValue(payload, param.paramType);
+      }
 
       // Track received parameters
       receivedParams.set(param.paramId, param);
@@ -4563,6 +4590,8 @@ export function setupIpcHandlers(mainWindow: BrowserWindow): void {
                 connectionState.systemId = packet.sysid;
                 connectionState.componentId = packet.compid;
                 connectionState.autopilot = AUTOPILOT_NAMES[autopilotType] || `Unknown (${autopilotType})`;
+                connectionState.autopilotType = autopilotType;
+                connectionState.firmware = autopilotType === 12 ? 'px4' : autopilotType === 3 ? 'ardupilot' : 'custom';
                 connectionState.vehicleType = VEHICLE_NAMES[vehicleType] || `Unknown (${vehicleType})`;
                 connectionState.mavType = vehicleType;
                 connectionState.mavlinkVersion = detectedMavlinkVersion;
@@ -6693,13 +6722,19 @@ export function setupIpcHandlers(mainWindow: BrowserWindow): void {
       }
 
       // Build PARAM_SET message
+      const setType = resolveParamSetType(type);
       const payload = serializeParamSet({
         targetSystem: connectionState.systemId ?? 1,
         targetComponent: 1, // MAV_COMP_ID_AUTOPILOT1
         paramId,
         paramValue: value,
-        paramType: type,
+        paramType: setType,
       });
+      // PX4 expects integer params bytewise (raw int bits in the value field);
+      // ArduPilot keeps the float32 (by-value) bytes written above.
+      if (connectionState.firmware === 'px4') {
+        encodePx4ParamSetValue(payload, value, setType);
+      }
 
       // Use detected MAVLink version for compatibility (with signing if enabled)
       const packet = await sendMavlinkPacket(PARAM_SET_ID, payload, PARAM_SET_CRC_EXTRA);
@@ -6806,13 +6841,17 @@ export function setupIpcHandlers(mainWindow: BrowserWindow): void {
         }
 
         try {
+          const setType = resolveParamSetType(p.type);
           const payload = serializeParamSet({
             targetSystem: connectionState.systemId ?? 1,
             targetComponent: 1,
             paramId: p.paramId,
             paramValue: p.value,
-            paramType: p.type,
+            paramType: setType,
           });
+          if (connectionState.firmware === 'px4') {
+            encodePx4ParamSetValue(payload, p.value, setType);
+          }
 
           const packet = await sendMavlinkPacket(PARAM_SET_ID, payload, PARAM_SET_CRC_EXTRA);
           await currentTransport.write(packet);
@@ -6927,6 +6966,19 @@ export function setupIpcHandlers(mainWindow: BrowserWindow): void {
 
   // Fetch parameter metadata from ArduPilot
   ipcMain.handle(IPC_CHANNELS.PARAM_METADATA_FETCH, async (_, mavType: number): Promise<{ success: boolean; metadata?: ParameterMetadataStore; error?: string }> => {
+    // PX4 has no live XML endpoint - serve the bundled QGC JSON instead.
+    // Metadata is per-firmware, not per-vehicle, so we key the cache on 'px4'.
+    if (connectionState.firmware === 'px4') {
+      const cached = metadataCache.get('px4');
+      if (cached) {
+        return { success: true, metadata: cached };
+      }
+      const metadata = getPx4ParameterMetadata();
+      metadataCache.set('px4', metadata);
+      sendLog(mainWindow, 'info', `Loaded ${Object.keys(metadata).length} PX4 parameter definitions from bundled metadata`);
+      return { success: true, metadata };
+    }
+
     const vehicleType = mavTypeToVehicleType(mavType);
     if (!vehicleType) {
       return { success: false, error: `Unknown vehicle type: ${mavType}` };
@@ -7634,10 +7686,13 @@ export function setupIpcHandlers(mainWindow: BrowserWindow): void {
         const targetComponent = 1;
         // Look up paramType from receivedParams cache, default to REAL32 (9).
         const cached = receivedParams.get(paramId);
-        const paramType = cached?.paramType ?? 9;
+        const paramType = resolveParamSetType(cached?.paramType ?? 9);
         const setPayload = serializeParamSet({
           targetSystem, targetComponent, paramId, paramValue: value, paramType,
         });
+        if (connectionState.firmware === 'px4') {
+          encodePx4ParamSetValue(setPayload, value, paramType);
+        }
         const packet = await sendMavlinkPacket(PARAM_SET_ID, setPayload, PARAM_SET_CRC_EXTRA);
         await currentTransport!.write(packet);
         connectionState.packetsSent++;
@@ -10922,6 +10977,8 @@ export function setupIpcHandlers(mainWindow: BrowserWindow): void {
   swarmSitlProcess.setMainWindow(mainWindow);
   orchestratorProcess.setMainWindow(mainWindow);
   ardupilotSitlDownloader.setMainWindow(mainWindow);
+  px4SitlProcess.setMainWindow(mainWindow);
+  px4SitlDownloader.setMainWindow(mainWindow);
 
   // Sweep stale macOS SITL caches: legacy per-track layout (pre tag-keyed
   // paths) + old tag-keyed dirs that aren't the current SITL_RELEASE_TAG.
@@ -11021,6 +11078,43 @@ export function setupIpcHandlers(mainWindow: BrowserWindow): void {
   // Check if platform supports ArduPilot SITL
   ipcMain.handle(IPC_CHANNELS.ARDUPILOT_SITL_CHECK_PLATFORM, async (): Promise<{ supported: boolean; useDocker: boolean; error?: string }> => {
     return ardupilotSitlProcess.isPlatformSupported();
+  });
+
+  // ---- PX4 SITL (mirror of ArduPilot SITL: download a bundle, spawn, connect UDP 14550) ----
+  ipcMain.handle(IPC_CHANNELS.PX4_SITL_START, async (_event, config: Px4SitlConfig): Promise<{ success: boolean; command?: string; error?: string }> => {
+    return px4SitlProcess.start(config);
+  });
+
+  ipcMain.handle(IPC_CHANNELS.PX4_SITL_STOP, async (): Promise<{ success: boolean }> => {
+    try {
+      px4SitlProcess.stop();
+      return { success: true };
+    } catch (error) {
+      console.error('[PX4 SITL] Failed to stop:', error instanceof Error ? error.message : error);
+      return { success: false };
+    }
+  });
+
+  ipcMain.handle(IPC_CHANNELS.PX4_SITL_STATUS, async (): Promise<Px4SitlStatus> => {
+    return px4SitlProcess.getStatus();
+  });
+
+  ipcMain.handle(IPC_CHANNELS.PX4_SITL_DOWNLOAD, async (
+    _event,
+    releaseTrack: Px4ReleaseTrack
+  ): Promise<{ success: boolean; path?: string; error?: string }> => {
+    return px4SitlDownloader.download(releaseTrack);
+  });
+
+  ipcMain.handle(IPC_CHANNELS.PX4_SITL_CHECK_BINARY, async (
+    _event,
+    releaseTrack: Px4ReleaseTrack
+  ): Promise<Px4SitlBinaryInfo> => {
+    return px4SitlDownloader.checkBinary(releaseTrack);
+  });
+
+  ipcMain.handle(IPC_CHANNELS.PX4_SITL_CHECK_PLATFORM, async (): Promise<{ supported: boolean; needsJava: boolean; error?: string }> => {
+    return px4SitlDownloader.checkPlatform();
   });
 
   // ArduPilot SITL RC control - send RC values
@@ -11780,7 +11874,7 @@ export function setupIpcHandlers(mainWindow: BrowserWindow): void {
     const result = await dialog.showOpenDialog(mainWindow, {
       title: 'Open Flight Log',
       filters: [
-        { name: 'Flight Logs', extensions: ['bin', 'log'] },
+        { name: 'Flight Logs', extensions: ['bin', 'log', 'ulg'] },
         { name: 'All Files', extensions: ['*'] },
       ],
       properties: ['openFile'],
@@ -11794,6 +11888,17 @@ export function setupIpcHandlers(mainWindow: BrowserWindow): void {
   // model where the renderer received the file as `number[]` (100M JS Numbers
   // for a 100MB log) and then sent it back to main for parsing — that
   // double-IPC-marshal was the multi-minute "frozen UI" symptom users saw.
+  // Detect log format from the leading magic bytes. ULog files start with the
+  // ASCII bytes 'U','L','o','g' (0x55 0x4C 0x6F 0x67). Everything else defaults
+  // to dataflash so any non-ULog file behaves exactly as before (preserves
+  // ArduPilot logs and the All-Files-pick-anything behavior).
+  const detectLogFormat = (buf: Uint8Array): 'dataflash' | 'ulog' => {
+    if (buf.length >= 4 && buf[0] === 0x55 && buf[1] === 0x4c && buf[2] === 0x6f && buf[3] === 0x67) {
+      return 'ulog';
+    }
+    return 'dataflash';
+  };
+
   ipcMain.handle(IPC_CHANNELS.LOG_PARSE_FILE, async (_, filePath: string): Promise<unknown> => {
     if (!existsSync(filePath)) {
       // Stale recent — clean it up so the user doesn't keep seeing it.
@@ -11815,7 +11920,8 @@ export function setupIpcHandlers(mainWindow: BrowserWindow): void {
     // and yield the event loop between feeds. Without the yield, IPC events
     // queued by sendLogParseProgress would not flush to the renderer until
     // the entire parse completed, leaving the progress bar stuck at 0%.
-    const parser = createDataFlashParser();
+    const logFormat = detectLogFormat(buffer);
+    const parser = logFormat === 'ulog' ? createUlogParser() : createDataFlashParser();
     const CHUNK = 1024 * 1024;
     const yieldEventLoop = () => new Promise<void>((r) => setImmediate(r));
     const sendProgress = (bytesConsumed: number) => {
@@ -11834,7 +11940,7 @@ export function setupIpcHandlers(mainWindow: BrowserWindow): void {
     }
     const log = parser.finalize();
 
-    const healthResults = runHealthChecks(log);
+    const healthResults = logFormat === 'ulog' ? runPx4HealthChecks(log) : runHealthChecks(log);
 
     // Fleet Forensics: persist a compact per-vehicle flight summary so health
     // trends + maintenance flags can roll up across the fleet. Best-effort - a
@@ -11876,6 +11982,7 @@ export function setupIpcHandlers(mainWindow: BrowserWindow): void {
 
     return {
       log: {
+        format: log.format,
         formats,
         messages,
         metadata: log.metadata,

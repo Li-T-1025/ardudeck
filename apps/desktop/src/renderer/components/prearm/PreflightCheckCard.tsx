@@ -1,5 +1,6 @@
 import { useState, useMemo, useEffect } from 'react';
 import { useMessagesStore } from '../../stores/messages-store';
+import { useConnectionStore } from '../../stores/connection-store';
 import {
   PREARM_CATEGORIES,
   PREARM_STALE_MS,
@@ -12,6 +13,7 @@ import { PanelContainer } from '../panels/panel-utils';
 
 export function PreflightCheckCard() {
   const messages = useMessagesStore((s) => s.messages);
+  const firmware = useConnectionStore((s) => s.connectionState.firmware);
   const [lastCheckTs, setLastCheckTs] = useState(() => Date.now() - 30_000);
   const [isChecking, setIsChecking] = useState(false);
   const [expandedCategories, setExpandedCategories] = useState<Set<PreArmCategory>>(new Set());
@@ -29,13 +31,13 @@ export function PreflightCheckCard() {
   const activeErrors = useMemo(() => {
     const freshAfter = Math.max(lastCheckTs, now - PREARM_STALE_MS);
     return messages
-      .filter((m) => m.timestamp >= freshAfter && isPreArmMessage(m.text))
+      .filter((m) => m.timestamp >= freshAfter && isPreArmMessage(m.text, firmware))
       .map((m) => {
-        const result = matchPreArmError(m.text);
+        const result = matchPreArmError(m.text, firmware);
         return result ? { message: m, ...result } : null;
       })
       .filter((x): x is NonNullable<typeof x> => x !== null);
-  }, [messages, lastCheckTs, now]);
+  }, [messages, lastCheckTs, now, firmware]);
 
   // Group errors by category, deduplicate by reason
   const errorsByCategory = useMemo(() => {

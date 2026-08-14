@@ -271,7 +271,7 @@ export interface ConnectionMemory {
 /**
  * Default SITL type for quick-start button
  */
-export type DefaultSitlType = 'inav' | 'ardupilot';
+export type DefaultSitlType = 'inav' | 'ardupilot' | 'px4';
 
 /**
  * Theme preference
