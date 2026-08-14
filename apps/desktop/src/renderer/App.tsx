@@ -65,6 +65,7 @@ import { ParameterCompareModalRoot } from './components/parameters/ParameterComp
 import { GlobalTooltip } from './components/GlobalTooltip';
 import { ActivityIndicator } from './components/ui/ActivityIndicator';
 import type { ElectronAPI } from '../main/preload';
+import type { LegacyStreamConsentRequest } from '../shared/ipc-channels';
 import logoImage from './assets/logo.png';
 
 // Welcome-screen quick-link cards. Every entry works WITHOUT a connected
@@ -187,6 +188,75 @@ function VehicleMismatchDialog({
               Don't Ask Again
             </button>
           </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * A vehicle is not streaming telemetry, and the only remaining way to ask is
+ * the legacy REQUEST_DATA_STREAM, which ArduPlane WRITES INTO its SR*_
+ * parameters (see shared/stream-rates.ts). That outlives the flight and every
+ * other GCS the pilot uses afterwards, so it is their decision, not ours.
+ */
+function LegacyStreamConsentDialog({
+  request,
+  onAllow,
+  onDecline,
+}: {
+  request: LegacyStreamConsentRequest;
+  onAllow: () => void;
+  onDecline: () => void;
+}) {
+  return (
+    <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50">
+      <div className="bg-surface-solid rounded-xl border border-amber-500/50 w-full max-w-lg mx-4 overflow-hidden shadow-2xl">
+        <div className="px-6 py-4 border-b border-subtle bg-amber-500/10">
+          <div className="flex items-center gap-3">
+            <svg className="w-6 h-6 text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+            </svg>
+            <h2 className="text-lg font-semibold text-content">No telemetry from {request.label}</h2>
+          </div>
+        </div>
+
+        <div className="px-6 py-5 space-y-3">
+          <p className="text-content">
+            {request.label} answered the modern per-message request with nothing.
+            The older request usually works, but on this aircraft ArduPilot
+            <span className="font-semibold text-amber-400"> saves those rates into its SR*_ parameters</span>,
+            where they stay after this flight and in every other ground station.
+          </p>
+          <p className="text-content-secondary text-sm">
+            {request.isFleetLink
+              ? 'This is a fleet link, so it would happen on every connect.'
+              : 'ArduDeck will not change your vehicle without asking.'}
+          </p>
+          <p className="text-content-secondary text-sm">
+            If you allow it, the rates requested are the conservative ones
+            (attitude 10 Hz), not your selected telemetry speed, so a slow
+            radio link stays usable.
+          </p>
+        </div>
+
+        <div className="px-6 py-4 border-t border-subtle flex flex-col gap-2">
+          <button
+            onClick={onAllow}
+            className="w-full px-4 py-2.5 bg-amber-600 hover:bg-amber-500 text-white rounded-lg font-medium transition-colors"
+          >
+            Request streams and save to this vehicle
+          </button>
+          <button
+            onClick={onDecline}
+            className="w-full px-4 py-2 bg-surface-raised hover:bg-surface text-content rounded-lg transition-colors"
+          >
+            Leave my vehicle alone
+          </button>
+          <p className="text-content-tertiary text-xs text-center">
+            Declining keeps whatever rates the vehicle already has. You can raise
+            its SR*_ parameters yourself in Parameters.
+          </p>
         </div>
       </div>
     </div>
@@ -352,6 +422,11 @@ function App() {
 
   // Mismatch dialog state
   const [showMismatchDialog, setShowMismatchDialog] = useState(false);
+  // A vehicle that will not stream, and cannot be asked to without writing its
+  // parameters. Queued rather than shown immediately so a fleet of them does
+  // not stack dialogs.
+  const [legacyStreamRequest, setLegacyStreamRequest] =
+    useState<LegacyStreamConsentRequest | null>(null);
   const [pendingView, setPendingView] = useState<ViewId | null>(null);
   const [detectedFcType, setDetectedFcType] = useState<VehicleType | null>(null);
 
@@ -365,6 +440,22 @@ function App() {
   // Get active vehicle profile type
   const activeVehicle = vehicles.find(v => v.id === activeVehicleId);
   const profileType = activeVehicle?.type || 'copter';
+
+  useEffect(() => {
+    const off = window.electronAPI?.onLegacyStreamConsentRequest?.((request) => {
+      // First one wins; the rest are asked again on the next connect rather
+      // than piling dialogs on a pilot who is trying to fly.
+      setLegacyStreamRequest((current) => current ?? request);
+    });
+    return () => off?.();
+  }, []);
+
+  const answerLegacyStreamConsent = async (granted: boolean) => {
+    const request = legacyStreamRequest;
+    setLegacyStreamRequest(null);
+    if (!request) return;
+    await window.electronAPI?.answerLegacyStreamConsent?.(request.requestId, granted);
+  };
 
   // Custom view change handler that checks for CLI exit and mismatch
   const handleViewChange = (viewId: ViewId) => {
@@ -1093,6 +1184,15 @@ function App() {
           onUpdateProfile={handleUpdateProfile}
           onIgnore={handleIgnoreMismatch}
           onDismissSession={handleDismissSession}
+        />
+      )}
+
+      {/* Legacy stream-rate consent: the app must not rewrite a vehicle */}
+      {legacyStreamRequest && (
+        <LegacyStreamConsentDialog
+          request={legacyStreamRequest}
+          onAllow={() => void answerLegacyStreamConsent(true)}
+          onDecline={() => void answerLegacyStreamConsent(false)}
         />
       )}
 

@@ -585,6 +585,12 @@ export const IPC_CHANNELS = {
   REPORT_GET_ENCRYPTION_INFO: 'report:get-encryption-info',
 
   // Calibration
+  // Legacy stream-rate consent. ArduPlane SAVES REQUEST_DATA_STREAM rates into
+  // its SR*_ parameters (see shared/stream-rates.ts), so when the modern
+  // per-message path yields no telemetry on such a vehicle the pilot is asked
+  // before the app changes their configuration.
+  TELEMETRY_LEGACY_STREAM_CONSENT_REQUEST: 'telemetry:legacy-stream-consent-request',
+  TELEMETRY_LEGACY_STREAM_CONSENT: 'telemetry:legacy-stream-consent',
   CALIBRATION_GET_SENSOR_CONFIG: 'calibration:get-sensor-config',
   CALIBRATION_GET_DATA: 'calibration:get-data',
   CALIBRATION_SET_DATA: 'calibration:set-data',
@@ -1952,6 +1958,23 @@ export interface StatusMessage {
  * REQUEST_DATA_STREAM rates into the user's SRx_* parameters.
  */
 export type TelemetrySpeed = 'fc' | 'eco' | 'normal' | 'max';
+
+/**
+ * A vehicle that is not streaming, and whose stream rates cannot be requested
+ * without writing to its parameters. Sent to the renderer so the pilot can
+ * decide, rather than the app deciding for them.
+ */
+export interface LegacyStreamConsentRequest {
+  /** Stable identity of the link that needs it. */
+  requestId: string;
+  sysid: number;
+  compid: number;
+  mavType: number | null;
+  /** Human label, e.g. "ArduPlane" or a fleet vehicle name. */
+  label: string;
+  /** True for a background / fleet link rather than the primary connection. */
+  isFleetLink: boolean;
+}
 
 // =============================================================================
 // Tile Cache Types (Offline Maps)

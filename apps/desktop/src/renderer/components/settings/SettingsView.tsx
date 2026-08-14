@@ -9,6 +9,7 @@ import { useTelemetryStore } from '../../stores/telemetry-store';
 import { useConnectionStore } from '../../stores/connection-store';
 import { useUpdateStore } from '../../stores/update-store';
 import { betaLabel } from '../../utils/version-label';
+import { renderMarkdown } from '../lua-graph/docs/markdown-renderer';
 import { ScriptInstallModal } from '../script-installer/ScriptInstallModal';
 import { VehicleTemplatePicker } from './vehicle-profile/VehicleTemplatePicker';
 import { ApplyProfileButton } from './vehicle-profile/ApplyProfileButton';
@@ -1147,8 +1148,16 @@ export function SettingsView() {
   // Deep-link scroll: a caller (e.g. the survey panel's "Performance settings"
   // link) can request this view and a target element to scroll to on arrival.
   const scrollTarget = useNavigationStore((s) => s.scrollTarget);
+  const [selectedCategory, setSelectedCategory] = useState<SettingsCategoryId>('vehicle');
   useEffect(() => {
     if (!scrollTarget) return;
+    // A caller can deep-link straight to a settings tab by passing its category
+    // id as the scroll target (the header version label jumps to About).
+    if (SETTINGS_CATEGORIES.some((c) => c.id === scrollTarget)) {
+      setSelectedCategory(scrollTarget as SettingsCategoryId);
+      useNavigationStore.getState().clearScrollTarget();
+      return;
+    }
     const el = document.getElementById(scrollTarget);
     if (el) {
       el.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -1161,7 +1170,6 @@ export function SettingsView() {
   }, [scrollTarget]);
 
   const { connectionState } = useConnectionStore();
-  const [selectedCategory, setSelectedCategory] = useState<SettingsCategoryId>('vehicle');
   const [editingVehicleId, setEditingVehicleId] = useState<string | null>(null);
   const [showTemplatePicker, setShowTemplatePicker] = useState(false);
   const [missionLocalValues, setMissionLocalValues] = useState<Record<string, string>>({});
@@ -2409,6 +2417,38 @@ function AboutSection() {
   const isChecking = status === 'checking';
   const showCheckButton = status === 'idle' || status === 'not-available' || status === 'error';
 
+  // Release notes for the running (or newest) version, pulled from GitHub and
+  // rendered as markdown so "what's in this build" lives on the About tab.
+  const [notes, setNotes] = useState<{ name: string; body: string; date: string } | null>(null);
+  const [notesState, setNotesState] = useState<'loading' | 'ready' | 'empty' | 'error'>('loading');
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        setNotesState('loading');
+        const res = await fetch('https://api.github.com/repos/rubenCodeforges/ardudeck/releases?per_page=15', {
+          headers: { Accept: 'application/vnd.github+json' },
+        });
+        if (!res.ok) throw new Error(`GitHub ${res.status}`);
+        const list = (await res.json()) as Array<{ name: string; tag_name: string; body: string; published_at: string; draft: boolean }>;
+        const visible = list.filter((r) => !r.draft);
+        // Prefer the release that matches the running version; else the newest.
+        const norm = (s: string) => s.replace(/^v/i, '').trim();
+        const rel =
+          (currentVersion && visible.find((r) => norm(r.tag_name).includes(norm(currentVersion)) || norm(currentVersion).includes(norm(r.tag_name)))) ||
+          visible[0];
+        if (cancelled) return;
+        if (!rel) { setNotesState('empty'); return; }
+        setNotes({ name: rel.name || rel.tag_name, body: (rel.body || '').trim(), date: rel.published_at });
+        setNotesState('ready');
+      } catch {
+        if (!cancelled) setNotesState('error');
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [currentVersion]);
+
   return (
     <div className="mt-8">
       <div className="flex items-center gap-2 mb-4">
@@ -2553,6 +2593,36 @@ function AboutSection() {
             </div>
           )}
         </div>
+      </section>
+
+      <section className="mt-4 bg-surface rounded-xl border border-subtle p-5">
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="text-sm font-semibold text-content">
+            Release notes{notes ? ` · ${notes.name}` : ''}
+          </h3>
+          {notes && (
+            <span className="text-xs text-content-tertiary">{new Date(notes.date).toLocaleDateString()}</span>
+          )}
+        </div>
+        {notesState === 'loading' && (
+          <p className="text-sm text-content-tertiary">Loading release notes…</p>
+        )}
+        {notesState === 'empty' && (
+          <p className="text-sm text-content-tertiary">No published releases yet.</p>
+        )}
+        {notesState === 'error' && (
+          <p className="text-sm text-content-tertiary">
+            Couldn't reach GitHub for release notes.{' '}
+            <a href="https://github.com/rubenCodeforges/ardudeck/releases" target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:text-blue-400">
+              View on GitHub
+            </a>
+          </p>
+        )}
+        {notesState === 'ready' && notes && (
+          notes.body
+            ? <div className="max-w-none">{renderMarkdown(notes.body)}</div>
+            : <p className="text-sm text-content-tertiary">This release has no notes.</p>
+        )}
       </section>
     </div>
   );

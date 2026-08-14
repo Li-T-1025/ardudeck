@@ -74,6 +74,7 @@ function InstrumentConfigPopover({
   const setInstrumentOpacity = useMapInstrumentsStore((s) => s.setInstrumentOpacity);
   const mode = useMapInstrumentsStore((s) => s.displayMode[instrument.id] ?? 'analog');
   const setDisplayMode = useMapInstrumentsStore((s) => s.setDisplayMode);
+  const toggle = useMapInstrumentsStore((s) => s.toggle);
 
   const effective = ownOpacity ?? globalOpacity;
   const left = Math.max(8, Math.min(anchorRect.left, window.innerWidth - CONFIG_WIDTH - 8));
@@ -151,6 +152,16 @@ function InstrumentConfigPopover({
               </button>
             )}
           </div>
+          {/* Hide takes the instrument off the map; add it back from the
+              Instruments catalog. Mirrors the mobile config sheet's eye-off. */}
+          <button
+            type="button"
+            onClick={() => { toggle(instrument.id); onClose(); }}
+            className="w-full flex items-center justify-center gap-1.5 py-1.5 rounded-md border border-subtle text-xs text-red-500 hover:bg-red-500/10 hover:border-red-500/40 transition-colors"
+          >
+            <EyeOffIcon />
+            Hide instrument
+          </button>
         </div>
       </div>
     </>,
@@ -158,10 +169,21 @@ function InstrumentConfigPopover({
   );
 }
 
+// Eye with a slash: "hide", not "delete". A hidden instrument is re-added from
+// the Instruments catalog, nothing is lost.
+function EyeOffIcon(): JSX.Element {
+  return (
+    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.542-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.542 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" />
+    </svg>
+  );
+}
+
 function InstrumentSlot({ instrument }: { instrument: MapInstrumentDef }): JSX.Element {
   const drag = useDraggableOverlay('instrument:' + instrument.id);
   const storedScale = useMapInstrumentsStore((s) => s.scale[instrument.id] ?? 1);
   const setScale = useMapInstrumentsStore((s) => s.setScale);
+  const toggle = useMapInstrumentsStore((s) => s.toggle);
   const globalOpacity = useMapInstrumentsStore((s) => s.opacity);
   const ownOpacity = useMapInstrumentsStore((s) => s.instrumentOpacity[instrument.id]);
   const mode = useMapInstrumentsStore((s) => s.displayMode[instrument.id] ?? 'analog');
@@ -262,6 +284,24 @@ function InstrumentSlot({ instrument }: { instrument: MapInstrumentDef }): JSX.E
         <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
           <path strokeLinecap="round" strokeLinejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
           <circle cx="12" cy="12" r="3" />
+        </svg>
+      </button>
+      {/* Quick-hide chip, mirror of the gear at the opposite corner: one click
+          takes this instrument off the map (re-add from the Instruments
+          catalog). Hover-revealed like the gear and the resize grip. */}
+      <button
+        type="button"
+        onClick={() => toggle(instrument.id)}
+        data-tip="Hide instrument"
+        className={
+          `absolute ${roundInstrument ? 'top-0 left-0' : '-top-1.5 -left-1.5'} p-1 rounded-full ` +
+          'bg-surface shadow-lg text-content-secondary hover:text-red-500 hover:bg-surface-raised ' +
+          'transition-opacity ' +
+          (configOpen ? 'opacity-0' : 'opacity-0 group-hover:opacity-100')
+        }
+      >
+        <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.542-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.542 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" />
         </svg>
       </button>
       {/* Inset 11px so the grip sits ON a round gauge's bezel at 45 degrees

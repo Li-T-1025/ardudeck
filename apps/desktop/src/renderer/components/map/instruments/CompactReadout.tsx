@@ -31,12 +31,10 @@ import { GAUGE_COLORS } from './RoundGauge';
 import { SegmentBar, SignalBars, FillBehind, gaugeTint } from './ReadoutPrimitives';
 import { useLinkUp } from './useLinkUp';
 import { useMapHomeStore } from './registry';
+import { STRIP_HEIGHT } from './stripMetrics';
 
 export type ReadoutSource = 'battery' | 'gps' | 'altitude' | 'speed' | 'heading' | 'vsi' | 'home' | 'link';
 export type ReadoutTreatment = 'strip' | 'cell' | 'inline';
-
-/** Every strip is exactly this tall so a row of them reads as one band. */
-const STRIP_HEIGHT = 30;
 
 interface Readout {
   /** Short tag: BAT, GPS. */
@@ -298,9 +296,13 @@ function VsiReadout({ treatment }: { treatment: ReadoutTreatment }): JSX.Element
 
   const value = verticalSpeedValueFromMetersPerSecond(climb, verticalSpeedUnit);
   const unit = UNIT_LABELS.verticalSpeed[verticalSpeedUnit];
+  // Always signed with fixed decimals: a bare "0" vs a "+"/"-" prefix (and
+  // trailing-zero trimming) changed the string width every tick, so the strip
+  // jiggled as climb crossed zero. A constant sign + fixed places holds width.
+  const vsiPrecision = UNIT_PRECISION.verticalSpeed[verticalSpeedUnit];
   const r: Readout = {
     tag: 'VSI',
-    value: connected ? `${value > 0 ? '+' : ''}${trimmed(value, UNIT_PRECISION.verticalSpeed[verticalSpeedUnit])}` : '--',
+    value: connected ? `${value < 0 ? '-' : '+'}${Math.abs(value).toFixed(vsiPrecision)}` : '--',
     detail: connected ? unit : '--',
     fraction: null,
     known: connected,

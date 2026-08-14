@@ -758,6 +758,18 @@ select,
 .light .hover\:text-amber-300:hover { color: #f59e0b; }
 .light .text-amber-400,
 .light .hover\:text-amber-400:hover { color: #d97706; }
+/* Amber text carrying an opacity suffix (text-amber-300/80 etc.) is a DIFFERENT
+   class than the exact selectors above, so it slips past them and stays a pale
+   yellow that is unreadable on the light amber callout fills. Substring-match
+   every opacity variant and pin it to the same light-mode amber. The solid
+   color also overrides Tailwind's rgb(... / --tw-text-opacity), so the alpha is
+   dropped along with the wash-out. */
+.light [class*="text-amber-200/"] { color: #d97706; }
+.light [class*="text-amber-300/"] { color: #f59e0b; }
+.light [class*="text-amber-400/"] { color: #d97706; }
+.light [class*="text-yellow-200/"] { color: #d97706; }
+.light [class*="text-yellow-300/"] { color: #ca8a04; }
+.light [class*="text-yellow-400/"] { color: #ca8a04; }
 
 /* Cyan */
 .light .text-cyan-50,

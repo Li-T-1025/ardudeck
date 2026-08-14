@@ -62,15 +62,15 @@ export function MapLayersControl({
 
   return (
     <div className="relative select-none">
-      {/* w-full: sibling toolbar buttons stretch to the flex column's width;
-          without it this inline-flex button renders narrower when the "(n)"
-          suffix is absent. */}
+      {/* w-full so this stretches to the flex column's width like the plain
+          sibling buttons; icon-left/label-after (no justify-center) so the
+          whole column shares one left-aligned icon-then-text layout. */}
       <button
         ref={btnRef}
         type="button"
         onClick={() => setOpen((v) => !v)}
         data-tip="Map layers & overlays"
-        className="w-full justify-center px-2 py-1 inline-flex items-center gap-1.5 rounded text-xs bg-surface text-content hover:bg-surface-raised shadow-lg transition-colors"
+        className="w-full px-2 py-1 inline-flex items-center gap-1.5 rounded text-xs bg-surface text-content hover:bg-surface-raised shadow-lg transition-colors"
       >
         <svg className="w-3.5 h-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
           <path d="M12 2l9 5-9 5-9-5 9-5z" />

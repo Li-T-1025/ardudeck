@@ -126,11 +126,12 @@ import {
   getAllMessageInfos,
   type ParamValue,
 } from '@ardudeck/mavlink-ts';
-import { IPC_CHANNELS, SEVERITY_LABELS, type ConnectOptions, type ConnectionState, type ConsoleLogEntry, type SavedLayout, type LayoutStoreSchema, type SettingsStoreSchema, type SigningStatus, type TelemetrySpeed, type TransportInfoIpc, type VehicleInfoIpc, type SetActiveSelectionPayload, type VehicleCommand, type MissionVehicleProgress, type OrchestrationIntentIpc, type OrchestrationStatusIpc, type OrchestratorSource, type OrchestratorStatus, type CameraSourceConfig, type GimbalCommand, type CameraCommand, type FrameBlueprintResult, type FrameBlueprintRequest } from '../shared/ipc-channels.js';
+import { IPC_CHANNELS, SEVERITY_LABELS, type ConnectOptions, type ConnectionState, type ConsoleLogEntry, type SavedLayout, type LayoutStoreSchema, type SettingsStoreSchema, type SigningStatus, type TelemetrySpeed, type LegacyStreamConsentRequest, type TransportInfoIpc, type VehicleInfoIpc, type SetActiveSelectionPayload, type VehicleCommand, type MissionVehicleProgress, type OrchestrationIntentIpc, type OrchestrationStatusIpc, type OrchestratorSource, type OrchestratorStatus, type CameraSourceConfig, type GimbalCommand, type CameraCommand, type FrameBlueprintResult, type FrameBlueprintRequest } from '../shared/ipc-channels.js';
 import { DEFAULT_USER_UNIT_PREFERENCES } from '../shared/user-units.js';
 import { initAutoUpdater, checkForUpdates, downloadUpdate, installUpdate } from './updater.js';
 import type { ParamValuePayload, ParameterProgress } from '../shared/parameter-types.js';
 import { PARAMETER_METADATA_URLS, mavTypeToVehicleType, type VehicleType, type ParameterMetadata, type ParameterMetadataStore } from '../shared/parameter-metadata.js';
+import { persistsStreamRates, cappedLegacyRates } from '../shared/stream-rates.js';
 import type { AttitudeData, PositionData, GpsData, BatteryData, VfrHudData, FlightState, RcChannelsData, NavControllerData, GuidedTargetData } from '../shared/telemetry-types.js';
 import { COPTER_MODES, PLANE_MODES, ROVER_MODES, SUB_MODES } from '../shared/telemetry-types.js';
 import type { MissionItem, MissionProgress, MavFrame } from '../shared/mission-types.js';
@@ -709,6 +710,52 @@ const STREAM_RATE_PRESETS: Record<Exclude<TelemetrySpeed, 'fc'>, { attitude: num
   max:    { attitude: 50, position: 15, other: 10 },
 };
 
+/**
+ * Links waiting on the pilot's permission to send legacy stream requests.
+ *
+ * Reached only when the modern SET_MESSAGE_INTERVAL path produced nothing AND
+ * the vehicle is one that SAVES legacy rates into its SR*_ parameters (see
+ * shared/stream-rates.ts). Rather than silently rewriting the vehicle or
+ * silently leaving the pilot with no telemetry, the decision is theirs.
+ */
+interface PendingLegacyStreamConsent {
+  transport: Transport;
+  sysid: number;
+  compid: number;
+  mavType: number | null;
+  isFleetLink: boolean;
+}
+const pendingLegacyConsent = new Map<string, PendingLegacyStreamConsent>();
+
+/** Vehicles the pilot has already answered for, so they are asked once. */
+const legacyConsentAnswered = new Set<string>();
+
+function legacyConsentKey(sysid: number, compid: number): string {
+  return `${sysid}:${compid}`;
+}
+
+/**
+ * Ask the renderer to put the question to the pilot. A no-op if they have
+ * already answered for this vehicle this session.
+ */
+function askForLegacyStreamConsent(
+  mainWindow: BrowserWindow,
+  pending: PendingLegacyStreamConsent,
+  label: string,
+): void {
+  const requestId = legacyConsentKey(pending.sysid, pending.compid);
+  if (legacyConsentAnswered.has(requestId)) return;
+  pendingLegacyConsent.set(requestId, pending);
+  safeSend(mainWindow, IPC_CHANNELS.TELEMETRY_LEGACY_STREAM_CONSENT_REQUEST, {
+    requestId,
+    sysid: pending.sysid,
+    compid: pending.compid,
+    mavType: pending.mavType,
+    label,
+    isFleetLink: pending.isFleetLink,
+  } satisfies LegacyStreamConsentRequest);
+}
+
 // Current telemetry speed (updated from settings on connect, from renderer on toggle)
 let currentTelemetrySpeed: TelemetrySpeed = 'normal';
 
@@ -725,8 +772,31 @@ async function sendLegacyStreamRequests(mainWindow: BrowserWindow, speed: Teleme
   if (speed === 'fc') return;
   if (!currentTransport?.isOpen || !connectionState.isConnected) return;
 
-  const rates = STREAM_RATE_PRESETS[speed];
-  if (!rates) return;
+  const preset = STREAM_RATE_PRESETS[speed];
+  if (!preset) return;
+
+  // ArduPlane SAVES legacy-requested rates into SR*_ (see shared/stream-rates.ts).
+  // A GCS must not rewrite a pilot's configuration, so this path is simply not
+  // available on those vehicles; the modern per-message path already ran.
+  if (persistsStreamRates(connectionState.mavType)) {
+    // Not our call to make: these requests would be written into the pilot's
+    // SR*_ parameters and outlive the session. Ask.
+    sendLog(mainWindow, 'warn',
+      'No telemetry, and this vehicle saves legacy stream rates to its SR*_ parameters',
+      'Asking before changing the vehicle. See shared/stream-rates.ts.');
+    askForLegacyStreamConsent(mainWindow, {
+      transport: currentTransport,
+      sysid: connectionState.systemId ?? 1,
+      compid: connectionState.componentId ?? 1,
+      mavType: connectionState.mavType ?? null,
+      isFleetLink: false,
+    }, connectionState.vehicleType ?? 'this vehicle');
+    return;
+  }
+
+  // Capped, never the pilot's chosen preset: a fallback must not be able to
+  // burn 50 Hz attitude into anything.
+  const rates = cappedLegacyRates(preset);
 
   const targetSys = connectionState.systemId ?? 1;
   const targetComp = connectionState.componentId ?? 1;
@@ -892,10 +962,18 @@ async function requestStreamsOnTransport(
   sysid: number,
   compid: number,
   speed: TelemetrySpeed,
+  /**
+   * The vehicle's MAV_TYPE, when the caller knows it. Decides whether the
+   * legacy REQUEST_DATA_STREAM half of this function may run at all: on a
+   * plane those rates are written into SR*_ and outlive the session. Omitted
+   * means unknown, which is treated as persisting.
+   */
+  mavType?: number,
 ): Promise<void> {
   if (speed === 'fc') return;
-  const rates = STREAM_RATE_PRESETS[speed];
-  if (!rates) return;
+  const preset = STREAM_RATE_PRESETS[speed];
+  if (!preset) return;
+  const rates = preset;
 
   const messageIntervals = [
     { msgId: 30, hz: rates.attitude },  // ATTITUDE
@@ -909,13 +987,17 @@ async function requestStreamsOnTransport(
     { msgId: 27, hz: rates.other },     // RAW_IMU
   ];
 
+  // Capped, not the pilot's preset: see the guard below and
+  // shared/stream-rates.ts. The per-message requests above are session-only
+  // and use the full preset; only this legacy table is fenced.
+  const legacyRates = cappedLegacyRates(rates);
   const legacyStreams = [
-    { streamId: 2,  hz: rates.other },     // EXTENDED_STATUS
-    { streamId: 6,  hz: rates.position },  // POSITION
-    { streamId: 10, hz: rates.attitude },  // EXTRA1 (ATTITUDE)
-    { streamId: 11, hz: rates.position },  // EXTRA2 (VFR_HUD)
-    { streamId: 12, hz: rates.other },     // EXTRA3 (battery, etc.)
-    { streamId: 1,  hz: rates.other },     // RAW_SENSORS (GPS_RAW_INT)
+    { streamId: 2,  hz: legacyRates.other },     // EXTENDED_STATUS
+    { streamId: 6,  hz: legacyRates.position },  // POSITION
+    { streamId: 10, hz: legacyRates.attitude },  // EXTRA1 (ATTITUDE)
+    { streamId: 11, hz: legacyRates.position },  // EXTRA2 (VFR_HUD)
+    { streamId: 12, hz: legacyRates.other },     // EXTRA3 (battery, etc.)
+    { streamId: 1,  hz: legacyRates.other },     // RAW_SENSORS (GPS_RAW_INT)
   ];
 
   for (const req of messageIntervals) {
@@ -941,6 +1023,27 @@ async function requestStreamsOnTransport(
 
   // Legacy REQUEST_DATA_STREAM groups - universally supported and verified to
   // start full telemetry on ArduPilot master where SET_MESSAGE_INTERVAL/SRx params do not.
+  //
+  // This used to run unconditionally on every fleet link, at the pilot's
+  // chosen preset. On a plane that meant rewriting its SR*_ parameters on
+  // every connect, which is what a pilot reported. Now: never on a vehicle
+  // that saves them, and capped when it does run.
+  if (persistsStreamRates(mavType)) {
+    // Same rule on a fleet link, and it matters more here: this path used to
+    // fire on every connect, so a fleet plane had its parameters rewritten
+    // every single time.
+    const win = getMainWindow();
+    if (win) {
+      askForLegacyStreamConsent(win, {
+        transport,
+        sysid,
+        compid,
+        mavType: mavType ?? null,
+        isFleetLink: true,
+      }, `vehicle ${sysid}`);
+    }
+    return;
+  }
   for (const req of legacyStreams) {
     if (!transport.isOpen) return;
     try {
@@ -1425,6 +1528,7 @@ function createBackgroundDiscoveryHandler(
                 if (live?.transport?.isOpen) {
                   void requestStreamsOnTransport(
                     live.transport, packet.sysid, packet.compid, currentTelemetrySpeed,
+                    vehicleType,
                   ).catch(() => {});
                 }
               };
@@ -6030,6 +6134,65 @@ export function setupIpcHandlers(mainWindow: BrowserWindow): void {
   ipcMain.handle(IPC_CHANNELS.CONNECTION_GET_STATE, async (): Promise<ConnectionState> => connectionState);
 
   // Telemetry stream rate control (MAVLink only)
+  /**
+   * The pilot's answer to "may I write this vehicle's stream-rate
+   * parameters?". Granting sends the legacy REQUEST_DATA_STREAM set at the
+   * capped rates; declining simply records the answer so they are not asked
+   * again this session.
+   */
+  ipcMain.handle(
+    IPC_CHANNELS.TELEMETRY_LEGACY_STREAM_CONSENT,
+    async (_, requestId: string, granted: boolean): Promise<{ success: boolean }> => {
+      const pending = pendingLegacyConsent.get(requestId);
+      pendingLegacyConsent.delete(requestId);
+      legacyConsentAnswered.add(requestId);
+
+      const mainWindow = getMainWindow();
+      if (!granted) {
+        if (mainWindow) {
+          sendLog(mainWindow, 'info', 'Legacy stream request declined',
+            'The vehicle keeps its own SR*_ rates. Raise them on the vehicle if telemetry is too slow.');
+        }
+        return { success: true };
+      }
+      if (!pending || !pending.transport.isOpen) return { success: false };
+
+      const preset = STREAM_RATE_PRESETS[currentTelemetrySpeed === 'fc' ? 'eco' : currentTelemetrySpeed];
+      const rates = cappedLegacyRates(preset ?? { attitude: 10, position: 4, other: 2 });
+      const streams = [
+        { streamId: 2,  hz: rates.other },
+        { streamId: 6,  hz: rates.position },
+        { streamId: 10, hz: rates.attitude },
+        { streamId: 11, hz: rates.position },
+        { streamId: 12, hz: rates.other },
+        { streamId: 1,  hz: rates.other },
+      ];
+      for (const req of streams) {
+        if (!pending.transport.isOpen) break;
+        try {
+          const payload = serializeRequestDataStream({
+            targetSystem: pending.sysid,
+            targetComponent: pending.compid,
+            reqStreamId: req.streamId,
+            reqMessageRate: req.hz,
+            startStop: 1,
+          });
+          const pkt = await sendMavlinkPacket(REQUEST_DATA_STREAM_ID, payload, REQUEST_DATA_STREAM_CRC_EXTRA);
+          await pending.transport.write(pkt);
+          await new Promise(resolve => setTimeout(resolve, 20));
+        } catch {
+          // Best effort; the pilot can retry by reconnecting.
+        }
+      }
+      if (mainWindow) {
+        sendLog(mainWindow, 'info',
+          `Legacy stream rates requested (ATT ${rates.attitude}Hz)`,
+          'This vehicle saves them into its SR*_ parameters, as you approved.');
+      }
+      return { success: true };
+    },
+  );
+
   ipcMain.handle(IPC_CHANNELS.TELEMETRY_SET_STREAM_RATE, async (_, speed: TelemetrySpeed): Promise<{ success: boolean }> => {
     if (connectionState.protocol !== 'mavlink' || !connectionState.isConnected) {
       return { success: false };

@@ -11,23 +11,25 @@
  */
 import type { ReactNode } from 'react';
 import { GAUGE_COLORS } from './RoundGauge';
+import { PANEL_WIDTH } from './stripMetrics';
 
 interface InstrumentStripProps {
   label: string;
   children: ReactNode;
-  minWidth?: number;
   bar?: ReactNode;
   tall?: boolean;
 }
 
-export function InstrumentStrip({ label, children, minWidth = 168, bar, tall = false }: InstrumentStripProps): JSX.Element {
+export function InstrumentStrip({ label, children, bar, tall = false }: InstrumentStripProps): JSX.Element {
   return (
     <div
+      // Fixed PANEL_WIDTH (not a min) so every card panel is the exact same
+      // width and a stacked column lines up; content clips rather than widen.
       className="relative overflow-hidden rounded-lg shadow-xl select-none font-mono px-3 pt-2 pb-2.5"
       style={{
         background: GAUGE_COLORS.face,
         border: `1.5px solid ${GAUGE_COLORS.bezelEdge}`,
-        minWidth,
+        width: PANEL_WIDTH,
       }}
     >
       <div

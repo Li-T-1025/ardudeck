@@ -35,6 +35,7 @@ import { RoundGauge, GAUGE_COLORS, gaugeArcPath, gaugePoint, valueToAngle, type 
 import { InstrumentStrip } from './InstrumentStrip';
 import { FlightControlInstrument } from './FlightControlInstrument';
 import { CompactReadout, type ReadoutSource } from './CompactReadout';
+import { PANEL_WIDTH } from './stripMetrics';
 import { useLinkUp } from './useLinkUp';
 
 /** An alternative rendering of an instrument, chosen per-instrument and
@@ -358,7 +359,7 @@ function FlightDataInstrument(): JSX.Element {
     : null;
 
   return (
-    <div className="rounded-lg px-3 py-2 text-xs space-y-1 min-w-[130px] shadow-xl font-mono" style={{ background: GAUGE_COLORS.face, border: `1.5px solid ${GAUGE_COLORS.bezelEdge}`, color: GAUGE_COLORS.text }}>
+    <div className="rounded-lg px-3 py-2 text-xs space-y-1 shadow-xl font-mono" style={{ background: GAUGE_COLORS.face, border: `1.5px solid ${GAUGE_COLORS.bezelEdge}`, color: GAUGE_COLORS.text, width: PANEL_WIDTH }}>
       <div className="flex justify-between">
         <span className="text-[var(--gauge-text-dim)]">MSL</span>
         <span className="font-mono text-[var(--gauge-text)]">{formatAltitudeFromMeters(msl, altitudeUnit)}</span>

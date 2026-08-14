@@ -80,7 +80,7 @@ export function AppShell({ children }: AppShellProps) {
           {/* Version badge */}
           {currentVersion && (
             <button
-              onClick={() => setView('settings')}
+              onClick={() => setView('settings', 'about')}
               className="flex items-center gap-1.5 text-content-tertiary hover:text-content-secondary transition-colors"
               title="About ArduDeck"
             >

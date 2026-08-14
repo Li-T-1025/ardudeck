@@ -215,6 +215,11 @@ interface MapInstrumentsStore {
   saveLayout: (name: string) => void;
   applyLayout: (layout: InstrumentLayoutSnapshot) => void;
   deleteLayout: (name: string) => void;
+  /** Store an imported (shared) layout under a name; sanitises the raw payload
+   * and returns false if it is not a valid layout snapshot. */
+  importLayout: (name: string, raw: unknown) => boolean;
+  /** Clear every instrument's stored drag position back to registry defaults. */
+  resetPositions: () => void;
 }
 
 // One-time migration: the attitude ball persisted its drag position under
@@ -322,6 +327,24 @@ export const useMapInstrumentsStore = create<MapInstrumentsStore>((set, get) => 
       delete next[name];
       persistLayouts(next);
       set({ savedLayouts: next });
+    },
+
+    importLayout: (name, raw) => {
+      const trimmed = name.trim();
+      if (!trimmed) return false;
+      const snapshot = sanitizeLayout(raw);
+      if (!snapshot) return false;
+      const next = { ...get().savedLayouts, [trimmed]: snapshot };
+      persistLayouts(next);
+      set({ savedLayouts: next });
+      return true;
+    },
+
+    resetPositions: () => {
+      for (const key of layoutPosKeys()) clearOverlayPosPayload(key);
+      // Remount every slot so it re-reads (the now-absent) stored position and
+      // falls back to its registry default class.
+      set({ layoutRev: get().layoutRev + 1 });
     },
   };
 });

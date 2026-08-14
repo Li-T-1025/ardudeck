@@ -1032,9 +1032,12 @@ function SplitControl() {
 
   return (
     <div className="relative">
+      {/* w-full so this wrapped button stretches to the flex column's width like
+          the plain sibling buttons; icon-left/label-after (no justify-center) so
+          the whole column shares one left-aligned icon-then-text layout. */}
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className={`px-2 py-1 text-xs rounded shadow-lg transition-colors flex items-center gap-1.5 ${
+        className={`w-full px-2 py-1 text-xs rounded shadow-lg transition-colors flex items-center gap-1.5 ${
           target ? 'bg-blue-600 text-white' : 'bg-surface text-content hover:bg-surface-raised'
         }`}
         data-tip={target ? `Split with ${PANEL_COMPONENTS[target].title}` : 'Split the map with another panel'}
@@ -1998,6 +2001,11 @@ const TelemetryMap2D = React.memo(function TelemetryMap2D() {
   // The nav ball is the 'attitude' registry instrument now.
   const attitudeVisible = useMapInstrumentsStore((s) => resolveInstrumentVisible(s.visible, 'attitude'));
   const [showMission, setShowMission] = useState(true); // Show mission overlays by default
+  // Clean-screen: collapse the whole right-side control column to a single
+  // eye, leaving the map and the flight instruments. Same idea as the mobile
+  // HUD's hide-chrome toggle; the instruments are flight data and stay.
+  const [controlsHidden, setControlsHidden] = useState(false);
+  const [largeMissionNoticeDismissed, setLargeMissionNoticeDismissed] = useState(false);
   const [showTerrain, setShowTerrain] = useState(false);
   const [elevationRange, setElevationRange] = useState<ElevationRange>({ min: 0, max: 0 });
   const [terrainAutoRange, setTerrainAutoRange] = useState(true);
@@ -2438,14 +2446,26 @@ const TelemetryMap2D = React.memo(function TelemetryMap2D() {
       {/* Large-mission notice: plain waypoints carry no useful number and stack
           into an unreadable cluster, so we show only the route's start/end, the
           live target, and key commands. The full flight path is still drawn. */}
-      {showMission && markersSemantic && (
-        <div className="absolute top-20 left-1/2 -translate-x-1/2 z-[1000] flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-gray-900/90 border border-white/10 shadow-md backdrop-blur-sm text-[11px] text-gray-100 pointer-events-none whitespace-nowrap">
+      {showMission && markersSemantic && !largeMissionNoticeDismissed && (
+        <div className="absolute top-20 left-1/2 -translate-x-1/2 z-[1000] flex items-center gap-1.5 pl-2.5 pr-1 py-1 rounded-md bg-gray-900/90 border border-white/10 shadow-md backdrop-blur-sm text-[11px] text-gray-100 pointer-events-none whitespace-nowrap">
           <svg className="w-3.5 h-3.5 text-blue-300 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
           </svg>
           <span>
-            Large mission: showing key waypoints (launch, turns, landing) and the live target - the full flight path is drawn.
+            Large mission: showing key waypoints (launch, turns, landing) and the live target. The full flight path is still drawn.
           </span>
+          {/* The banner is click-through so it never eats a map click; only the
+              dismiss button opts back into pointer events. */}
+          <button
+            type="button"
+            onClick={() => setLargeMissionNoticeDismissed(true)}
+            data-tip="Dismiss"
+            className="pointer-events-auto ml-1 p-0.5 rounded text-gray-400 hover:text-white hover:bg-white/10 transition-colors"
+          >
+            <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" d="M6 6l12 12M18 6L6 18" />
+            </svg>
+          </button>
         </div>
       )}
       {/* Shifted right of its default slot: the Instruments menu owns top-left here */}
@@ -2461,7 +2481,30 @@ const TelemetryMap2D = React.memo(function TelemetryMap2D() {
         </div>
       )}
       {/* Top toolbar */}
+      {controlsHidden ? (
+        <button
+          onClick={() => setControlsHidden(false)}
+          data-tip="Show map controls"
+          className="absolute top-2 right-2 z-[1000] p-1.5 rounded bg-surface text-content-secondary hover:text-content hover:bg-surface-raised shadow-lg transition-colors"
+        >
+          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+            <circle cx="12" cy="12" r="3" />
+          </svg>
+        </button>
+      ) : (
       <div data-tour="telemetry-map-overlays" className="absolute top-2 right-2 z-[1000] flex flex-col gap-1">
+        {/* Clean-screen toggle: hides this whole column, leaving the map and
+            the flight instruments. Sits at the top of the stack as its handle. */}
+        <button
+          onClick={() => setControlsHidden(true)}
+          data-tip="Hide map controls"
+          className="self-end p-1.5 rounded bg-surface text-content-secondary hover:text-content hover:bg-surface-raised shadow-lg transition-colors"
+        >
+          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.542-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.542 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" />
+          </svg>
+        </button>
         <MapLayersControl
           baseLayers={Object.keys(TELEMETRY_LAYERS) as LayerKey[]}
           activeLayer={currentLayer}
@@ -2570,6 +2613,7 @@ const TelemetryMap2D = React.memo(function TelemetryMap2D() {
           Mission
         </button>
       </div>
+      )}
 
       {/* Instruments menu (top-left counterpart of the Layers menu) */}
       <div className="absolute top-2 left-2 z-[1000]">
