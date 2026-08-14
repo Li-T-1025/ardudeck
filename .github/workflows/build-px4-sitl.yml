@@ -1,9 +1,10 @@
 name: Build PX4 SITL Bundles
 
-# Builds the Linux x64 PX4 SITL bundle and uploads it to the GitHub release
-# ArduDeck's in-app PX4 SITL tab downloads from. macOS arm64/x64 bundles are
-# built locally on a Mac and uploaded manually (same split as build-sitl.yml),
-# because PX4 has no standalone prebuilt SITL binary.
+# Builds the PX4 SITL bundles ArduDeck's in-app PX4 SITL tab downloads from,
+# for every supported platform (Linux x64, macOS arm64, macOS x64) in one
+# dispatch. PX4 has no standalone prebuilt SITL binary, so each bundle carries
+# the px4 executable + its ROMFS data + jMAVSim + a version-matched launcher
+# (see scripts/build-px4-sitl-bundle.sh).
 #
 # ArduDeck downloads from:
 #   https://github.com/rubenCodeforges/ardudeck/releases/download/{tag}/px4-sitl-{track}-{platform}.tar.gz
@@ -30,9 +31,36 @@ permissions:
   contents: write
 
 jobs:
-  build-linux-x64:
+  # Create the release once, up front, so the parallel build jobs only upload
+  # (no race between three jobs each trying to create the same release).
+  prepare-release:
     runs-on: ubuntu-latest
-    timeout-minutes: 90
+    steps:
+      - name: Ensure release exists
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="${{ inputs.release_tag }}"
+          gh release view "$TAG" --repo "${{ github.repository }}" >/dev/null 2>&1 \
+            || gh release create "$TAG" --repo "${{ github.repository }}" \
+                 --title "PX4 SITL bundles" \
+                 --notes "Prebuilt PX4 SITL bundles for ArduDeck's in-app simulator." \
+                 --prerelease
+
+  build:
+    needs: prepare-release
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-latest
+            platform: linux-x64
+          - runner: macos-14      # Apple Silicon (arm64)
+            platform: macos-arm64
+          - runner: macos-13      # Intel (x64)
+            platform: macos-x64
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 120
     steps:
       - name: Checkout ArduDeck (for the build script)
         uses: actions/checkout@v4
@@ -41,19 +69,28 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: Install Java + ant (jMAVSim) and build basics
+      - name: Install jMAVSim + build deps (Linux)
+        if: runner.os == 'Linux'
         run: |
           sudo apt-get update
           sudo apt-get install -y default-jdk ant cmake ninja-build g++ git make
 
-      - name: Build and upload PX4 SITL bundle
+      - name: Install jMAVSim + build deps (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          # PX4's own Tools/setup/macos.sh (run by the build script) installs the
+          # rest of the toolchain; here we just guarantee ant + cmake/ninja + a JDK
+          # for jMAVSim so the build script does not have to.
+          brew install ant cmake ninja || true
+          brew install --cask temurin || true
+
+      - name: Build and upload PX4 SITL bundle (${{ matrix.platform }})
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           chmod +x scripts/build-px4-sitl-bundle.sh
           REF_ARG=""
           if [ -n "${{ inputs.px4_ref }}" ]; then REF_ARG="--ref ${{ inputs.px4_ref }}"; fi
-          # The PX4 Ubuntu setup script installs the rest of the toolchain.
           scripts/build-px4-sitl-bundle.sh \
             --track "${{ inputs.track }}" \
             $REF_ARG \
