@@ -97,7 +97,9 @@ case "$uname_s" in
   *) echo "error: unsupported OS $uname_s (Windows PX4 SITL native is not supported)" >&2; exit 2 ;;
 esac
 
-WORKROOT="${PX4_SITL_BUILD_DIR:-$(mktemp -d -t px4-sitl-build)}"
+# Explicit XXXXXX template so this works on both GNU (Linux) and BSD (macOS)
+# mktemp; `-t <name>` without X's is a BSD-only form and errors on GNU.
+WORKROOT="${PX4_SITL_BUILD_DIR:-$(mktemp -d "${TMPDIR:-/tmp}/px4-sitl-build.XXXXXX")}"
 SRC="$WORKROOT/PX4-Autopilot"
 OUT="$WORKROOT/bundle"
 ASSET="px4-sitl-${TRACK}-${PLATFORM}.tar.gz"
