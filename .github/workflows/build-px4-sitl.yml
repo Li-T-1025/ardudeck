@@ -69,13 +69,14 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: Install jMAVSim + build deps (Linux)
+      - name: Install build deps (Linux)
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
-          sudo apt-get install -y default-jdk ant cmake ninja-build g++ git make
+          sudo apt-get install -y cmake ninja-build g++ git make
+          # Physics is PX4's built-in SIH; no jMAVSim, so no Java/ant needed.
 
-      - name: Install jMAVSim + build deps (macOS)
+      - name: Install build deps (macOS)
         if: runner.os == 'macOS'
         run: |
           # We do NOT run PX4's Tools/setup/macos.sh: it taps px4/px4 and installs
@@ -83,8 +84,8 @@ jobs:
           # and modern Homebrew refuses that untrusted tap. Install the host-build
           # deps directly instead, and the build job runs the script with
           # --skip-setup. gnu-sed/coreutils cover PX4 build scripts that assume GNU.
-          brew install ant cmake ninja gnu-sed coreutils || true
-          brew install --cask temurin || true
+          # No Java/ant: physics is PX4's built-in SIH, not jMAVSim.
+          brew install cmake ninja gnu-sed coreutils || true
 
       - name: Build and upload PX4 SITL bundle (${{ matrix.platform }})
         env:

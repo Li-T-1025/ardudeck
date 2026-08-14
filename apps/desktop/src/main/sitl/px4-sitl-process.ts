@@ -13,8 +13,9 @@
 
 import { spawn, ChildProcess } from 'node:child_process';
 import { app, BrowserWindow } from 'electron';
-import { chmod, rm, readdir } from 'node:fs/promises';
+import { chmod, rm, readdir, symlink } from 'node:fs/promises';
 import path from 'node:path';
+import os from 'node:os';
 import type {
   Px4SitlConfig,
   Px4SitlStatus,
@@ -24,15 +25,19 @@ import type {
 import { IPC_CHANNELS } from '../../shared/ipc-channels.js';
 
 /**
- * PX4_SIM_MODEL for each airframe class. These are the stock PX4 SITL model
- * names shipped under ROMFS/px4fmu_common/init.d-posix; a wrong name leaves
- * PX4 unable to find its airframe startup script and it aborts on boot.
+ * PX4_SIM_MODEL for each airframe class. We use PX4's built-in SIH
+ * (Simulation-In-Hardware) airframes, verified present in the bundle
+ * (10040_sihsim_quadx / 10041_sihsim_airplane / 10042_sihsim_xvert), so no
+ * external simulator is needed. A wrong name aborts px4 on boot with "Unknown
+ * model". NOTE: SIH has no rover model in this PX4 version, so rover falls back
+ * to the quad SIH to keep the link up; true PX4 rover SITL needs Gazebo, which
+ * we do not bundle.
  */
 const DEFAULT_MODELS: Record<Px4VehicleType, string> = {
-  copter: 'iris',
-  plane: 'plane',
-  vtol: 'standard_vtol',
-  rover: 'rover',
+  copter: 'sihsim_quadx',
+  plane: 'sihsim_airplane',
+  vtol: 'sihsim_xvert',
+  rover: 'sihsim_quadx',
 };
 
 /** GCS-facing MAVLink UDP port PX4 SITL offers by default. */
@@ -217,21 +222,29 @@ class Px4SitlProcessManager {
 
       this._currentConfig = config;
 
-      // Start the external physics simulator FIRST so its TCP 4560 socket is
-      // bound before px4 dials in. Nothing to spawn for 'gz' / 'none'.
-      let simCmd: string | null = null;
-      try {
-        simCmd = this.spawnPhysicsSim(config, bundleDir);
-      } catch (err) {
-        this._isRunning = false;
-        this._currentConfig = null;
-        return {
-          success: false,
-          error: `PX4 physics simulator failed to start: ${err instanceof Error ? err.message : 'unknown error'}`,
-        };
-      }
+      // No external physics simulator: we run PX4's built-in SIH model
+      // (PX4_SIM_MODEL=sihsim_*), so px4 computes the dynamics itself. That is
+      // what keeps the bundle self-contained (no jMAVSim/Java, no Gazebo).
+      const simCmd: string | null = null;
 
       const model = this.simModelFor(config);
+
+      // PX4's posix startup re-execs its rc script with an UNQUOTED `/bin/sh
+      // <path>`, so any space in the bundle path breaks it ("cannot execute
+      // binary file"). On macOS the bundle lives under "~/Library/Application
+      // Support/...", which always contains a space. Expose the bundle through a
+      // space-free symlink and launch from there so every path px4 sees is clean.
+      let runDir = bundleDir;
+      if (/\s/.test(bundleDir)) {
+        const link = path.join(os.tmpdir(), `ardudeck-px4-sitl-${config.releaseTrack}`);
+        try {
+          await rm(link, { force: true, recursive: false }).catch(() => {});
+          await symlink(bundleDir, link);
+          runDir = link;
+        } catch (err) {
+          console.error('[px4-sitl] failed to create space-free symlink, using original path:', err);
+        }
+      }
 
       // The exact px4 posix argv (data path, -s startup script, working dir)
       // varies across PX4 versions, so the version-matched invocation lives in
@@ -240,7 +253,7 @@ class Px4SitlProcessManager {
       // exactly the variables PX4's own sitl_run.sh reads. If the launcher is
       // missing (an older bundle), fall back to the canonical direct invocation
       // so the failure is a visible px4 error rather than a missing-file spawn.
-      const launchScript = path.join(bundleDir, 'px4-launch.sh');
+      const launchScript = path.join(runDir, 'px4-launch.sh');
       const hasLauncher = await access(launchScript).then(() => true).catch(() => false);
       let spawnCmd: string;
       let spawnArgs: string[];
@@ -249,11 +262,11 @@ class Px4SitlProcessManager {
         try { await chmod(launchScript, 0o755); } catch { /* best effort */ }
         spawnCmd = launchScript;
         spawnArgs = [];
-        cwd = bundleDir;
+        cwd = runDir;
       } else {
-        spawnCmd = binaryPath;
+        spawnCmd = path.join(runDir, 'bin', 'px4');
         spawnArgs = ['-d', 'etc/init.d-posix/rcS'];
-        cwd = path.join(bundleDir, 'rootfs');
+        cwd = path.join(runDir, 'rootfs');
       }
 
       const env = {

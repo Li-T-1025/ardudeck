@@ -165,22 +165,13 @@ BUILD="$SRC/build/px4_sitl_default"
 PX4_BIN="$BUILD/bin/px4"
 [[ -x "$PX4_BIN" ]] || { echo "error: px4 binary not found at $PX4_BIN" >&2; exit 1; }
 
-# ── Build jMAVSim (physics backend) ───────────────────────────────────────────
-# jMAVSim is a git submodule; its runnable jar lands under out/production.
-JMAVSIM_DIR="$SRC/Tools/simulation/jmavsim"
-JMAVSIM_JAR=""
-if [[ -d "$JMAVSIM_DIR" ]]; then
-  echo "==> Building jMAVSim"
-  ( cd "$JMAVSIM_DIR/jMAVSim" 2>/dev/null && ant create_run_jar copy_res ) \
-    || ( cd "$JMAVSIM_DIR" && ant create_run_jar copy_res ) \
-    || echo "warn: jMAVSim build failed; bundle will ship without a physics backend"
-  JMAVSIM_JAR="$(find "$JMAVSIM_DIR" -name 'jmavsim_run.jar' -print -quit 2>/dev/null || true)"
-fi
-
 # ── Assemble the bundle ───────────────────────────────────────────────────────
+# Physics is PX4's built-in SIH (Simulation-In-Hardware) model, so the bundle
+# needs NO external simulator: no jMAVSim (hence no Java/ant), no Gazebo. The
+# app launches px4 with PX4_SIM_MODEL=sihsim_* and px4 runs the dynamics itself.
 echo "==> Assembling bundle at $OUT"
 rm -rf "$OUT"
-mkdir -p "$OUT/bin" "$OUT/etc" "$OUT/rootfs" "$OUT/jmavsim"
+mkdir -p "$OUT/bin" "$OUT/etc" "$OUT/rootfs"
 
 cp "$PX4_BIN" "$OUT/bin/px4"
 chmod 0755 "$OUT/bin/px4"
@@ -212,21 +203,27 @@ if [[ ! -f "$OUT/rootfs/px4-alias.sh" ]]; then
   exit 1
 fi
 
+# px4-alias.sh maps module commands (param, commander, ekf2, ...) to px4-<module>
+# executables, which in SITL are argv[0]-dispatch symlinks to the single px4
+# binary. Recreate every one the alias file references, or the rcS dies with a
+# flood of "px4-param: command not found".
+( cd "$OUT/bin"
+  for name in $(grep -oE 'px4-[a-z0-9_]+' "$OUT/rootfs/px4-alias.sh" | sort -u); do
+    [ "$name" = "px4" ] && continue
+    ln -sf px4 "$name"
+  done )
+echo "==> px4 module shims created: $(find "$OUT/bin" -maxdepth 1 -type l | wc -l | tr -d ' ')"
+
 # test_data is referenced by some airframes; ship it when present.
 [[ -d "$SRC/test_data" ]] && cp -R "$SRC/test_data" "$OUT/test_data" || true
 
-# jMAVSim jar + its runtime libs (the jar's manifest classpath points at lib/).
-if [[ -n "$JMAVSIM_JAR" && -f "$JMAVSIM_JAR" ]]; then
-  cp "$JMAVSIM_JAR" "$OUT/jmavsim/jmavsim_run.jar"
-  jmavsim_root="$(dirname "$(dirname "$JMAVSIM_JAR")")"
-  [[ -d "$jmavsim_root/lib" ]] && cp -R "$jmavsim_root/lib" "$OUT/jmavsim/lib" || true
-fi
-
-# ── Version-matched launcher the app spawns ───────────────────────────────────
-# The exact px4 posix argv (data path, working dir, -s startup script) is a
-# property of THIS PX4 checkout, so it lives here rather than hardcoded in the
-# app. Home/model/speed arrive as env from px4-sitl-process.ts. jMAVSim is
-# started separately by the app before this runs.
+# ── Launcher the app spawns ───────────────────────────────────────────────────
+# This exact invocation was verified against a real bundle: run px4 from the
+# bundle root (which holds etc/), pass the ROMFS data dir as the positional,
+# and the rc script relative to the CWD. Home/model/speed arrive as env from
+# px4-sitl-process.ts. NOTE: do NOT pass -w: that chdir's px4 into an empty
+# per-model subdir where it can't find etc/init.d-posix/airframes ("Unknown
+# model"). SIH needs no external simulator, so nothing else is spawned.
 cat > "$OUT/px4-launch.sh" <<'LAUNCH'
 #!/usr/bin/env bash
 set -euo pipefail
@@ -239,21 +236,14 @@ if [[ "$HERE" == *" "* ]]; then
   ln -sfn "$HERE" "$LINK"
   HERE="$LINK"
 fi
-MODEL="${PX4_SIM_MODEL:-iris}"
-WORK="$HERE/rootfs"
-mkdir -p "$WORK"
-cd "$WORK"
-# The rcS sources `px4-alias.sh` (which defines the px4-* module commands) from
-# the PATH, and px4 module binaries live in bin/. Put both on PATH so startup
-# resolves them regardless of the -w working subdir px4 chdirs into.
-export PATH="$WORK:$HERE/bin:$PATH"
-# Mirror PX4's Tools/simulation/sitl_run.sh: data path is the bundle's etc dir,
-# a per-model working subdir, absolute path to the POSIX rc startup script, and
-# the test-data dir when present. PX4_HOME_* / PX4_SIM_SPEED_FACTOR are read
-# from the environment by px4 itself.
+# rcS sources px4-alias.sh (module command aliases) from PATH, and the px4-*
+# module shims live in bin/. Put both on PATH. Run from the bundle root so the
+# CWD-relative etc/init.d-posix/{rcS,airframes} lookups resolve.
+export PATH="$HERE/rootfs:$HERE/bin:$PATH"
+cd "$HERE"
 TEST_DATA_ARG=()
 [[ -d "$HERE/test_data" ]] && TEST_DATA_ARG=(-t "$HERE/test_data")
-exec "$HERE/bin/px4" "$HERE/etc" -w "sitl_${MODEL}" -s "$HERE/etc/init.d-posix/rcS" "${TEST_DATA_ARG[@]}"
+exec "$HERE/bin/px4" "$HERE/etc" -s "etc/init.d-posix/rcS" "${TEST_DATA_ARG[@]}"
 LAUNCH
 chmod 0755 "$OUT/px4-launch.sh"
 
