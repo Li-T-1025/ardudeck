@@ -151,6 +151,13 @@ else
 fi
 
 # ── Build px4 SITL ────────────────────────────────────────────────────────────
+# PX4 (and some of its submodules) still declare an ancient
+# cmake_minimum_required, which CMake >= 4 rejects outright ("Compatibility with
+# CMake < 3.5 has been removed"). Homebrew ships CMake 4 on macOS, so set the
+# documented escape hatch that lets CMake configure those old projects anyway.
+# Harmless on the older CMake 3.x that Linux runners carry (it just ignores it).
+export CMAKE_POLICY_VERSION_MINIMUM=3.5
+
 echo "==> Building px4_sitl_default (this takes a while)"
 make -C "$SRC" px4_sitl_default
 
