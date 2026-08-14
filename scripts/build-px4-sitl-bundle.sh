@@ -131,19 +131,23 @@ fi
 
 # ── PX4 python requirements ───────────────────────────────────────────────────
 # PX4's CMake configure imports kconfiglib (menuconfig) plus jinja2/empy/etc.
-# The platform setup scripts sometimes install these into a DIFFERENT python
-# than the one CMake resolves from PATH (e.g. CI's setup-python vs the system
-# python), which surfaces as "No module named 'menuconfig'". Install PX4's own
-# pinned requirements into the ACTIVE python3 explicitly so they always match.
+# Two gotchas: (1) the platform setup scripts install these into a DIFFERENT
+# python than CMake resolves from PATH (CI's setup-python vs the system python),
+# surfacing as "No module named 'menuconfig'"; and (2) PX4's requirements.txt
+# pins like "matplotlib>=3.0.*", which modern pip rejects (".* needs == or !=").
+# So sanitize the ".*" wildcards and install into the ACTIVE python3; fall back
+# to the core build modules directly if the file install still fails.
+CORE_PY_MODULES=(kconfiglib jinja2 jsonschema empy==3.3.4 pyros-genmsg packaging toml numpy pyyaml pymavlink)
+pip_into_active() { python3 -m pip install "$@" || python3 -m pip install --break-system-packages "$@"; }
 REQ="$SRC/Tools/setup/requirements.txt"
+echo "==> Installing PX4 python requirements into $(command -v python3)"
 if [[ -f "$REQ" ]]; then
-  echo "==> Installing PX4 python requirements into $(command -v python3)"
-  python3 -m pip install -r "$REQ" \
-    || python3 -m pip install --break-system-packages -r "$REQ"
+  SANITIZED="$WORKROOT/px4-requirements.txt"
+  # Drop the ".*" version wildcard modern pip refuses (e.g. matplotlib>=3.0.*).
+  sed 's/\.[*]//g' "$REQ" > "$SANITIZED"
+  pip_into_active -r "$SANITIZED" || pip_into_active "${CORE_PY_MODULES[@]}"
 else
-  echo "==> requirements.txt not found, installing the core build modules directly"
-  python3 -m pip install kconfiglib jinja2 jsonschema empy==3.3.4 pyros-genmsg packaging toml numpy pyyaml \
-    || python3 -m pip install --break-system-packages kconfiglib jinja2 jsonschema empy==3.3.4 pyros-genmsg packaging toml numpy pyyaml
+  pip_into_active "${CORE_PY_MODULES[@]}"
 fi
 
 # ── Build px4 SITL ────────────────────────────────────────────────────────────

@@ -78,10 +78,12 @@ jobs:
       - name: Install jMAVSim + build deps (macOS)
         if: runner.os == 'macOS'
         run: |
-          # PX4's own Tools/setup/macos.sh (run by the build script) installs the
-          # rest of the toolchain; here we just guarantee ant + cmake/ninja + a JDK
-          # for jMAVSim so the build script does not have to.
-          brew install ant cmake ninja || true
+          # We do NOT run PX4's Tools/setup/macos.sh: it taps px4/px4 and installs
+          # px4-dev (a NuttX cross toolchain we don't need for a host SITL build),
+          # and modern Homebrew refuses that untrusted tap. Install the host-build
+          # deps directly instead, and the build job runs the script with
+          # --skip-setup. gnu-sed/coreutils cover PX4 build scripts that assume GNU.
+          brew install ant cmake ninja gnu-sed coreutils || true
           brew install --cask temurin || true
 
       - name: Build and upload PX4 SITL bundle (${{ matrix.platform }})
@@ -89,10 +91,8 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           chmod +x scripts/build-px4-sitl-bundle.sh
-          REF_ARG=""
-          if [ -n "${{ inputs.px4_ref }}" ]; then REF_ARG="--ref ${{ inputs.px4_ref }}"; fi
-          scripts/build-px4-sitl-bundle.sh \
-            --track "${{ inputs.track }}" \
-            $REF_ARG \
-            --tag "${{ inputs.release_tag }}" \
-            --upload
+          ARGS=(--track "${{ inputs.track }}" --tag "${{ inputs.release_tag }}" --upload)
+          if [ -n "${{ inputs.px4_ref }}" ]; then ARGS+=(--ref "${{ inputs.px4_ref }}"); fi
+          # macOS: skip PX4's brew-tap setup script (see deps step above).
+          if [ "${{ runner.os }}" = "macOS" ]; then ARGS+=(--skip-setup); fi
+          scripts/build-px4-sitl-bundle.sh "${ARGS[@]}"
