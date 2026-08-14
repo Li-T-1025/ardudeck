@@ -129,6 +129,23 @@ if [[ "$SKIP_SETUP" -eq 0 ]]; then
   fi
 fi
 
+# ── PX4 python requirements ───────────────────────────────────────────────────
+# PX4's CMake configure imports kconfiglib (menuconfig) plus jinja2/empy/etc.
+# The platform setup scripts sometimes install these into a DIFFERENT python
+# than the one CMake resolves from PATH (e.g. CI's setup-python vs the system
+# python), which surfaces as "No module named 'menuconfig'". Install PX4's own
+# pinned requirements into the ACTIVE python3 explicitly so they always match.
+REQ="$SRC/Tools/setup/requirements.txt"
+if [[ -f "$REQ" ]]; then
+  echo "==> Installing PX4 python requirements into $(command -v python3)"
+  python3 -m pip install -r "$REQ" \
+    || python3 -m pip install --break-system-packages -r "$REQ"
+else
+  echo "==> requirements.txt not found, installing the core build modules directly"
+  python3 -m pip install kconfiglib jinja2 jsonschema empy==3.3.4 pyros-genmsg packaging toml numpy pyyaml \
+    || python3 -m pip install --break-system-packages kconfiglib jinja2 jsonschema empy==3.3.4 pyros-genmsg packaging toml numpy pyyaml
+fi
+
 # ── Build px4 SITL ────────────────────────────────────────────────────────────
 echo "==> Building px4_sitl_default (this takes a while)"
 make -C "$SRC" px4_sitl_default
