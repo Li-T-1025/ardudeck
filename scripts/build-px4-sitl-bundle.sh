@@ -191,6 +191,27 @@ if [[ -d "$BUILD/etc" ]]; then
 else
   echo "error: expected ROMFS data dir at $BUILD/etc" >&2; exit 1
 fi
+
+# Generated run dir. The build emits px4-alias.sh (which defines the px4-*
+# module commands the rcS sources) plus other run-time files into
+# build/px4_sitl_default/rootfs. Ship that wholesale instead of an empty dir,
+# otherwise rcS dies at ". px4-alias.sh: No such file or directory".
+if [[ -d "$BUILD/rootfs" ]]; then
+  cp -R "$BUILD/rootfs/." "$OUT/rootfs/"
+fi
+# Belt and suspenders: if px4-alias.sh landed somewhere else in the build tree,
+# find it and drop it into the run dir so the launcher's PATH picks it up.
+if [[ ! -f "$OUT/rootfs/px4-alias.sh" ]]; then
+  ALIAS_SH="$(find "$BUILD" -name 'px4-alias.sh' -print -quit 2>/dev/null || true)"
+  [[ -n "$ALIAS_SH" ]] && cp "$ALIAS_SH" "$OUT/rootfs/px4-alias.sh" || true
+fi
+echo "==> Bundled run dir contents:"; ls -la "$OUT/rootfs" | head -40
+if [[ ! -f "$OUT/rootfs/px4-alias.sh" ]]; then
+  echo "error: px4-alias.sh not found in the build; the bundle would fail at startup" >&2
+  echo "       searched under $BUILD" >&2
+  exit 1
+fi
+
 # test_data is referenced by some airframes; ship it when present.
 [[ -d "$SRC/test_data" ]] && cp -R "$SRC/test_data" "$OUT/test_data" || true
 
@@ -210,10 +231,22 @@ cat > "$OUT/px4-launch.sh" <<'LAUNCH'
 #!/usr/bin/env bash
 set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# PX4's posix startup re-execs its rc script with an unquoted `/bin/sh <path>`,
+# so a space anywhere in the bundle path (e.g. macOS "~/Library/Application
+# Support/...") breaks it. Expose a space-free symlink and run from there.
+if [[ "$HERE" == *" "* ]]; then
+  LINK="${TMPDIR:-/tmp}/ardudeck-px4-sitl"
+  ln -sfn "$HERE" "$LINK"
+  HERE="$LINK"
+fi
 MODEL="${PX4_SIM_MODEL:-iris}"
 WORK="$HERE/rootfs"
 mkdir -p "$WORK"
 cd "$WORK"
+# The rcS sources `px4-alias.sh` (which defines the px4-* module commands) from
+# the PATH, and px4 module binaries live in bin/. Put both on PATH so startup
+# resolves them regardless of the -w working subdir px4 chdirs into.
+export PATH="$WORK:$HERE/bin:$PATH"
 # Mirror PX4's Tools/simulation/sitl_run.sh: data path is the bundle's etc dir,
 # a per-model working subdir, absolute path to the POSIX rc startup script, and
 # the test-data dir when present. PX4_HOME_* / PX4_SIM_SPEED_FACTOR are read
