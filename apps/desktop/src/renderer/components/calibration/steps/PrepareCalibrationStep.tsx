@@ -6,6 +6,7 @@
  */
 
 import { useCalibrationStore } from '../../../stores/calibration-store';
+import { useConnectionStore } from '../../../stores/connection-store';
 import { CALIBRATION_TYPES, ACCEL_6POINT_POSITIONS, type CalibrationTypeId } from '../../../../shared/calibration-types';
 import { PositionDiagram } from '../shared/PositionDiagram';
 
@@ -161,6 +162,7 @@ export function PrepareCalibrationStep() {
     setStep,
     startCalibration,
   } = useCalibrationStore();
+  const isPx4 = useConnectionStore((s) => s.connectionState.firmware === 'px4');
 
   const calTypeInfo = calibrationType
     ? CALIBRATION_TYPES.find((t) => t.id === calibrationType)
@@ -245,7 +247,9 @@ export function PrepareCalibrationStep() {
             {calibrationType === 'accel-6point' && (
               <>
                 <p className="text-content text-sm">
-                  Place vehicle in <strong className="text-content">6 positions</strong> - you'll be guided step by step.
+                  Place vehicle in <strong className="text-content">6 positions</strong> - {isPx4
+                    ? 'each side is detected and captured automatically.'
+                    : "you'll be guided step by step."}
                 </p>
                 <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
                   {ACCEL_6POINT_POSITIONS.map((pos, index) => (
@@ -258,7 +262,9 @@ export function PrepareCalibrationStep() {
                   ))}
                 </div>
                 <WarningBox>
-                  Hold each position <strong className="text-content">steady</strong> until confirmed.
+                  {isPx4
+                    ? <>Hold each position <strong className="text-content">steady</strong> until the vehicle captures it.</>
+                    : <>Hold each position <strong className="text-content">steady</strong>, then confirm with the button.</>}
                 </WarningBox>
               </>
             )}
@@ -270,10 +276,14 @@ export function PrepareCalibrationStep() {
                     Move away from <strong className="text-content">metal/electronics</strong>
                   </InstructionItem>
                   <InstructionItem theme={theme} num={2}>
-                    <strong className="text-content">Rotate continuously</strong> in all directions
+                    {isPx4
+                      ? <>Hold on a side, <strong className="text-content">rotate when prompted</strong></>
+                      : <><strong className="text-content">Rotate continuously</strong> in all directions</>}
                   </InstructionItem>
                   <InstructionItem theme={theme} num={3}>
-                    Continue for ~{countdown}s
+                    {isPx4
+                      ? <>Repeat for all <strong className="text-content">6 sides</strong></>
+                      : <>Continue until <strong className="text-content">every compass reaches 100%</strong></>}
                   </InstructionItem>
                 </div>
                 <WarningBox>

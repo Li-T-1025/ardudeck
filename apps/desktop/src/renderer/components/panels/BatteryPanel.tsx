@@ -47,11 +47,60 @@ function LevelIcon({ level, unknown }: { level: number; unknown: boolean }) {
   return <Icon className="w-4 h-4" />;
 }
 
+/**
+ * One row per battery monitor (#126). Clicking a row makes that monitor the
+ * primary battery every other display follows.
+ */
+function BatteryInstanceRow({ inst, selected, stale, onSelect }: {
+  inst: { id: number; voltage: number; current: number; remaining: number; mahDrawn?: number };
+  selected: boolean;
+  stale: boolean;
+  onSelect: () => void;
+}) {
+  const unknown = inst.remaining < 0;
+  const level = unknown ? 0 : Math.max(0, Math.min(100, inst.remaining));
+  const tone = toneForLevel(level, unknown || stale);
+
+  return (
+    <button
+      onClick={onSelect}
+      data-tip={selected ? 'Primary battery' : 'Show this battery everywhere'}
+      className={`w-full flex items-center gap-2 rounded-lg px-2 py-1.5 text-xs transition-colors border ${
+        selected
+          ? 'border-[color:var(--border-strong,rgba(148,163,184,0.4))]'
+          : 'border-transparent hover:bg-[var(--bg-inset)]'
+      } ${stale ? 'opacity-50' : ''}`}
+      style={selected ? { background: tone.accent } : undefined}
+    >
+      <span className={`font-medium ${selected ? tone.text : 'text-content-secondary'}`}>
+        B{inst.id + 1}
+      </span>
+      <span className="font-mono text-content">{formatNumber(inst.voltage, 1)}V</span>
+      <span className={`font-mono ${tone.text}`}>{unknown ? '-' : `${level}%`}</span>
+      <span className="font-mono text-content-secondary ml-auto">
+        {formatNumber(Math.abs(inst.current), 1)}A
+      </span>
+      {inst.mahDrawn !== undefined && (
+        <span className="font-mono text-content-tertiary">{Math.round(inst.mahDrawn)}mAh</span>
+      )}
+    </button>
+  );
+}
+
 export function BatteryPanel() {
   const battery = useTelemetryStore((s) => s.battery);
+  const batteries = useTelemetryStore((s) => s.batteries);
+  const primaryBatteryId = useTelemetryStore((s) => s.primaryBatteryId);
+  const setPrimaryBattery = useTelemetryStore((s) => s.setPrimaryBattery);
   const unknown = battery.remaining < 0;
   const level = unknown ? 0 : Math.max(0, Math.min(100, battery.remaining));
   const tone = toneForLevel(level, unknown);
+
+  const instances = Object.values(batteries).sort((a, b) => a.id - b.id);
+  const showInstances = instances.length > 1;
+  // With no explicit selection the primary slot is SYS_STATUS = battery 1 (id 0).
+  const effectivePrimaryId = primaryBatteryId ?? 0;
+  const now = Date.now();
 
   return (
     <PanelContainer className="flex flex-col gap-3 justify-center">
@@ -97,6 +146,21 @@ export function BatteryPanel() {
           <span className="text-content-tertiary text-[10px] ml-0.5">A</span>
         </span>
       </div>
+
+      {/* All battery monitors (#126), only when the vehicle has more than one */}
+      {showInstances && (
+        <div className="flex flex-col gap-1 pt-1 border-t border-subtle">
+          {instances.map((inst) => (
+            <BatteryInstanceRow
+              key={inst.id}
+              inst={inst}
+              selected={inst.id === effectivePrimaryId}
+              stale={now - inst.updatedAt > 5000}
+              onSelect={() => setPrimaryBattery(inst.id)}
+            />
+          ))}
+        </div>
+      )}
     </PanelContainer>
   );
 }

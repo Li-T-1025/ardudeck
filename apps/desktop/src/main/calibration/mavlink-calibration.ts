@@ -9,6 +9,7 @@
 
 import type {
   CalibrationTypeId,
+  CalibrationFirmware,
   CalibrationProgressEvent,
   CalibrationCompleteEvent,
   CalibrationData,
@@ -23,6 +24,8 @@ const MAV_CMD_PREFLIGHT_CALIBRATION = 241;
 // PREFLIGHT_CALIBRATION param2 — AP dropped mag cal from that command and
 // answers MAV_RESULT_UNSUPPORTED, so the whole compass flow must use this.
 const MAV_CMD_DO_START_MAG_CAL = 42424;
+// Tells ArduPilot to abandon a running onboard mag cal without saving.
+const MAV_CMD_DO_CANCEL_MAG_CAL = 42426;
 
 // MAG_CAL_STATUS enum (from MAG_CAL_PROGRESS / MAG_CAL_REPORT cal_status field)
 const MAG_CAL_SUCCESS = 4;
@@ -77,6 +80,41 @@ const POSITION_NAMES = [
 ];
 
 // =============================================================================
+// PX4 constants
+// =============================================================================
+
+// PX4 names its accel-cal sides by which side of the vehicle faces DOWN,
+// narrated via "[cal] <side> orientation detected" / "[cal] <side> side done".
+// Mapped onto the same 0-5 position indices the UI diagram uses.
+const PX4_SIDE_TO_INDEX: Record<string, number> = {
+  down: 0,  // level, belly down
+  left: 1,  // left side down
+  right: 2, // right side down
+  front: 3, // nose down
+  back: 4,  // nose up (tail down)
+  up: 5,    // inverted
+};
+
+const PX4_SIDE_LABEL: Record<string, string> = {
+  down: 'Level (Top Up)',
+  left: 'Left Side Down',
+  right: 'Right Side Down',
+  front: 'Nose Down',
+  back: 'Nose Up',
+  up: 'Inverted (Top Down)',
+};
+
+// Overall PX4 run timeouts. PX4 gives no MAG_CAL-style keepalive, so a run
+// that stops narrating is dead. Rotation-driven cals get generous windows
+// (six sides, one pilot, big airframes); one-shots are quick.
+const PX4_CAL_TIMEOUT_MS: Record<string, number> = {
+  'compass': 300_000,
+  'accel-6point': 300_000,
+  'accel-level': 60_000,
+  'gyro': 60_000,
+};
+
+// =============================================================================
 // Types
 // =============================================================================
 
@@ -99,18 +137,32 @@ export interface MavlinkCalibrationDeps {
 
 let deps: MavlinkCalibrationDeps | null = null;
 let activeCalType: CalibrationTypeId | null = null;
-let compassTimerId: ReturnType<typeof setInterval> | null = null;
-let compassStartTime = 0;
+// Which MAVLink dialect the active calibration speaks. Set at start time from
+// the connection's firmware; every protocol decision branches on this, never
+// on heuristics.
+let activeFirmware: CalibrationFirmware = 'ardupilot';
 // Fails the cal if it never converges (unhealthy compass / heavy interference /
 // insufficient rotation) instead of sitting at 95% forever. A healthy compass
 // finishes in 30-90s even rotating slowly.
 let compassCalTimeoutId: ReturnType<typeof setTimeout> | null = null;
 const COMPASS_CAL_TIMEOUT_MS = 150000;
+
+// PX4 whole-run watchdog (armed for every PX4 cal type) and 6-point side
+// bookkeeping driven by "[cal] <side> side done" messages.
+let px4TimeoutId: ReturnType<typeof setTimeout> | null = null;
+let px4SidesDone: Set<number> = new Set();
+let px4LastProgressPct = 0;
 // DO_START_MAG_CAL calibrates every compass in the mask and emits one
 // MAG_CAL_REPORT per compass. Track which compass_ids reported SUCCESS so we
 // only complete once the whole batch is done (the report's cal_mask tells us
 // how many to expect).
 const magCalSuccesses = new Set<number>();
+
+// Live per-compass completion percentage from MAG_CAL_PROGRESS, keyed by
+// 0-based compass_id. Drives the per-compass progress bars; the overall bar
+// shows the LAGGING compass (min), because the cal only finishes when every
+// compass in the mask converges.
+const magCalPcts = new Map<number, number>();
 
 // Per-compass fitness + orientation, keyed by 1-based compass number. Sourced
 // from MAG_CAL_REPORT and, more reliably on FCs that don't deliver 192, the
@@ -270,11 +322,19 @@ export async function stopCompassMot(): Promise<{ success: boolean; error?: stri
   return { success: true };
 }
 
-export async function startMavlinkCalibration(type: CalibrationTypeId): Promise<{ success: boolean; error?: string }> {
+export async function startMavlinkCalibration(
+  type: CalibrationTypeId,
+  firmware: CalibrationFirmware = 'ardupilot',
+): Promise<{ success: boolean; error?: string }> {
   if (!deps) return { success: false, error: 'MAVLink calibration not initialized' };
   if (activeCalType) return { success: false, error: 'Another calibration is already in progress' };
 
   activeCalType = type;
+  activeFirmware = firmware;
+
+  if (firmware === 'px4') {
+    return startPx4Calibration(type);
+  }
 
   switch (type) {
     case 'accel-level':
@@ -294,6 +354,9 @@ export async function startMavlinkCalibration(type: CalibrationTypeId): Promise<
 export async function confirmMavlinkPosition(position: number): Promise<{ success: boolean; error?: string }> {
   if (!deps) return { success: false, error: 'MAVLink calibration not initialized' };
   if (activeCalType !== 'accel-6point') return { success: false, error: '6-point calibration not in progress' };
+  // PX4 detects orientations automatically and has no confirm step; the UI
+  // never shows the button on PX4, this is a belt-and-braces guard.
+  if (activeFirmware === 'px4') return { success: false, error: 'PX4 detects positions automatically, no confirmation needed' };
 
   // Convert our position index to ArduPilot enum
   const arduPos = INDEX_TO_ARDU_POS[position];
@@ -341,10 +404,14 @@ export async function confirmMavlinkPosition(position: number): Promise<{ succes
     sixPointFallbackTimerId = setTimeout(() => {
       sixPointFallbackTimerId = null;
       if (!deps || activeCalType !== 'accel-6point') return;
-      deps.sendLog('warn', 'No completion message from FC after 8s — assuming calibration succeeded (fallback)');
+      // Silence is NOT success. Report completion as unconfirmed and let the
+      // post-cal param diff (the only reliable witness) decide the outcome -
+      // an optimistic success here once masked a cal the FC never wrote.
+      deps.sendLog('warn', 'No completion message from FC after 8s, result unconfirmed, verifying against parameters');
       deps.sendComplete({
         type: 'accel-6point',
         success: true,
+        unconfirmed: true,
       });
       cancelMavlinkCalibration();
     }, 8000);
@@ -354,10 +421,6 @@ export async function confirmMavlinkPosition(position: number): Promise<{ succes
 }
 
 export function cancelMavlinkCalibration(): void {
-  if (compassTimerId) {
-    clearInterval(compassTimerId);
-    compassTimerId = null;
-  }
   if (compassCalTimeoutId) {
     clearTimeout(compassCalTimeoutId);
     compassCalTimeoutId = null;
@@ -370,12 +433,39 @@ export function cancelMavlinkCalibration(): void {
     clearTimeout(oneShotTimeoutId);
     oneShotTimeoutId = null;
   }
+  if (px4TimeoutId) {
+    clearTimeout(px4TimeoutId);
+    px4TimeoutId = null;
+  }
   activeCalType = null;
+  activeFirmware = 'ardupilot';
   compassMotActive = false;
   expectedPosition = -1;
   positionStatus = [false, false, false, false, false, false];
   magCalSuccesses.clear();
   magCalResults.clear();
+  magCalPcts.clear();
+  px4SidesDone = new Set();
+  px4LastProgressPct = 0;
+}
+
+/**
+ * Ask the vehicle to abandon an in-flight calibration. ArduPilot compass cal
+ * has a dedicated cancel command; PX4 cancels any running calibration when it
+ * receives PREFLIGHT_CALIBRATION with every param zero (the QGC convention).
+ * Fire-and-forget: local state is torn down regardless.
+ */
+export function abortVehicleCalibration(): void {
+  if (!deps || !activeCalType) return;
+  if (activeFirmware === 'px4') {
+    void deps.sendCommandLong(MAV_CMD_PREFLIGHT_CALIBRATION, {
+      param1: 0, param2: 0, param3: 0, param4: 0, param5: 0, param6: 0, param7: 0,
+    });
+  } else if (activeCalType === 'compass') {
+    void deps.sendCommandLong(MAV_CMD_DO_CANCEL_MAG_CAL, {
+      param1: 0, param2: 0, param3: 0, param4: 0, param5: 0, param6: 0, param7: 0,
+    });
+  }
 }
 
 /**
@@ -406,6 +496,13 @@ export function handleCalibrationStatusText(text: string, severity: number): voi
   if (!deps || !activeCalType) return;
 
   const lower = text.toLowerCase();
+
+  // PX4 speaks an entirely different dialect and gets its own state machine.
+  // Never let PX4 text fall through to the ArduPilot matchers below.
+  if (activeFirmware === 'px4') {
+    handlePx4CalStatusText(text, lower);
+    return;
+  }
 
   // Completion detection — match the exact strings ArduPilot emits.
   // AP_AccelCal sends "Calibration successful" / "Calibration FAILED" /
@@ -546,6 +643,198 @@ export function handleCalibrationStatusText(text: string, severity: number): voi
 }
 
 // =============================================================================
+// PX4 calibration: PREFLIGHT_CALIBRATION + "[cal] ..." STATUSTEXT protocol
+// =============================================================================
+
+/**
+ * PX4's commander narrates every calibration through STATUSTEXT lines with a
+ * "[cal] " prefix (calibration message protocol v2, unchanged since 2015 and
+ * what QGC parses):
+ *
+ *   [cal] calibration started: 2 <sensor>
+ *   [cal] pending: <side> <side> ...
+ *   [cal] <side> orientation detected
+ *   [cal] <side> side done, rotate to a different side
+ *   [cal] progress <pct>
+ *   [cal] calibration done: <sensor>
+ *   [cal] calibration failed: <reason>   /  [cal] calibration cancelled
+ *
+ * Sides are named by which side of the vehicle faces down (down/up/left/
+ * right/front/back). Orientation is detected automatically, there is no
+ * GCS confirm step, so none of these status texts may start with
+ * "Place vehicle" (that exact prefix is what shows the ArduPilot confirm
+ * button in the UI).
+ */
+function handlePx4CalStatusText(text: string, lower: string): void {
+  if (!deps || !activeCalType) return;
+
+  const cal = /^\[cal\]\s*(.*)$/i.exec(text.trim());
+  if (!cal) return; // non-[cal] chatter, nothing else is protocol on PX4
+  const body = cal[1]!;
+  const bodyLower = body.toLowerCase();
+
+  if (bodyLower.startsWith('calibration started')) {
+    deps.sendLog('info', `PX4 calibration started (${activeCalType})`);
+    deps.sendProgress({
+      type: activeCalType,
+      progress: 0,
+      statusText: activeCalType === 'compass'
+        ? 'Hold the vehicle on one side, then rotate it when asked'
+        : activeCalType === 'accel-6point'
+          ? 'Hold the vehicle still, sides are detected automatically'
+          : activeCalType === 'accel-level'
+            ? 'Hold the vehicle level and still'
+            : 'Keep the vehicle completely still',
+      ...(activeCalType === 'accel-6point' || activeCalType === 'compass'
+        ? { positionStatus: [...positionStatus] }
+        : {}),
+    });
+    return;
+  }
+
+  // "[cal] progress <pct>", the vehicle's own overall percentage. The only
+  // number the progress bar is allowed to show.
+  const prog = /^progress\s+<?(\d+)>?/.exec(bodyLower);
+  if (prog) {
+    const pct = Math.min(parseInt(prog[1]!, 10), 99);
+    px4LastProgressPct = Math.max(px4LastProgressPct, pct);
+    deps.sendProgress({
+      type: activeCalType,
+      progress: px4LastProgressPct,
+      statusText: activeCalType === 'compass'
+        ? 'Rotate the vehicle around the held orientation'
+        : 'Hold still...',
+      ...(activeCalType === 'accel-6point' || activeCalType === 'compass'
+        ? { positionStatus: [...positionStatus] }
+        : {}),
+    });
+    return;
+  }
+
+  // "[cal] <side> orientation detected"
+  const detected = /^(down|up|left|right|front|back)\s+orientation detected/.exec(bodyLower);
+  if (detected) {
+    const side = detected[1]!;
+    const idx = PX4_SIDE_TO_INDEX[side]!;
+    deps.sendLog('info', `PX4: ${PX4_SIDE_LABEL[side]} detected`);
+    deps.sendProgress({
+      type: activeCalType,
+      progress: px4LastProgressPct,
+      statusText: `${PX4_SIDE_LABEL[side]} detected, hold still`,
+      currentPosition: idx as 0 | 1 | 2 | 3 | 4 | 5,
+      positionStatus: [...positionStatus],
+    });
+    return;
+  }
+
+  // "[cal] <side> side done, rotate to a different side"
+  const sideDone = /^(down|up|left|right|front|back)\s+side done/.exec(bodyLower);
+  if (sideDone) {
+    const side = sideDone[1]!;
+    const idx = PX4_SIDE_TO_INDEX[side]!;
+    px4SidesDone.add(idx);
+    positionStatus[idx] = true;
+    deps.sendLog('info', `PX4: ${PX4_SIDE_LABEL[side]} done (${px4SidesDone.size}/6)`);
+    deps.sendProgress({
+      type: activeCalType,
+      progress: px4LastProgressPct,
+      statusText: px4SidesDone.size >= 6
+        ? 'All sides captured, finishing up'
+        : `${PX4_SIDE_LABEL[side]} done, rotate to a different side`,
+      currentPosition: idx as 0 | 1 | 2 | 3 | 4 | 5,
+      positionStatus: [...positionStatus],
+    });
+    return;
+  }
+
+  if (bodyLower.startsWith('calibration done')) {
+    deps.sendLog('info', `PX4 calibration complete: ${body}`);
+    // PX4 writes CAL_* params immediately and applies them live, no reboot.
+    deps.sendComplete({ type: activeCalType, success: true });
+    cancelMavlinkCalibration();
+    return;
+  }
+
+  if (bodyLower.startsWith('calibration failed') || bodyLower.startsWith('calibration cancelled')) {
+    deps.sendLog('error', `PX4 calibration failed: ${body}`);
+    deps.sendComplete({
+      type: activeCalType,
+      success: false,
+      error: bodyLower.startsWith('calibration cancelled')
+        ? 'Calibration was cancelled by the vehicle.'
+        : `Calibration failed: ${body.replace(/^calibration failed:?\s*/i, '') || 'the vehicle rejected the data'}. ` +
+          (activeCalType === 'compass'
+            ? 'Move away from metal, magnets and wiring, then try again.'
+            : 'Hold each position still on a firm surface and try again.'),
+    });
+    cancelMavlinkCalibration();
+    return;
+  }
+
+  // Everything else ("pending: ...", detection hints) is narration, log it.
+  deps.sendLog('info', `PX4: ${body}`);
+}
+
+/**
+ * Start a PX4 calibration. Every type is PREFLIGHT_CALIBRATION with the
+ * appropriate param slot; the run is asynchronous and narrated via [cal]
+ * STATUSTEXT regardless of type (including gyro/level, unlike ArduPilot,
+ * the ACK arrives immediately and does NOT mean the work is done).
+ */
+async function startPx4Calibration(type: CalibrationTypeId): Promise<{ success: boolean; error?: string }> {
+  if (!deps) return { success: false, error: 'Not initialized' };
+
+  const params = { param1: 0, param2: 0, param3: 0, param4: 0, param5: 0, param6: 0, param7: 0 };
+  switch (type) {
+    case 'gyro': params.param1 = 1; break;
+    case 'compass': params.param2 = 1; break;
+    case 'accel-6point': params.param5 = 1; break;
+    case 'accel-level': params.param5 = 2; break;
+    default:
+      activeCalType = null;
+      return { success: false, error: `Unsupported PX4 calibration type: ${type}` };
+  }
+
+  px4SidesDone = new Set();
+  px4LastProgressPct = 0;
+  positionStatus = [false, false, false, false, false, false];
+
+  deps.sendLog('info', `Starting PX4 ${type} calibration (PREFLIGHT_CALIBRATION ${JSON.stringify(params)})`);
+
+  const sent = await deps.sendCommandLong(MAV_CMD_PREFLIGHT_CALIBRATION, params);
+  if (!sent) {
+    activeCalType = null;
+    return { success: false, error: 'Failed to send calibration command, ensure FC is connected' };
+  }
+
+  deps.sendProgress({
+    type,
+    progress: 0,
+    statusText: 'Waiting for the vehicle to start calibrating...',
+    ...(type === 'accel-6point' || type === 'compass' ? { positionStatus: [...positionStatus] } : {}),
+  });
+
+  // Whole-run watchdog: PX4 either narrates or it is dead/stuck. On expiry,
+  // tell the vehicle to abandon the run, then fail loudly.
+  const timeoutMs = PX4_CAL_TIMEOUT_MS[type] ?? 120_000;
+  if (px4TimeoutId) clearTimeout(px4TimeoutId);
+  px4TimeoutId = setTimeout(() => {
+    px4TimeoutId = null;
+    if (!deps || activeCalType !== type) return;
+    deps.sendLog('error', `PX4 ${type} calibration timed out after ${timeoutMs / 1000}s`);
+    abortVehicleCalibration();
+    deps.sendComplete({
+      type,
+      success: false,
+      error: 'The vehicle stopped responding during calibration. Nothing was saved, check the connection and try again.',
+    });
+    cancelMavlinkCalibration();
+  }, timeoutMs);
+
+  return { success: true };
+}
+
+// =============================================================================
 // MAG_CAL_PROGRESS / MAG_CAL_REPORT handlers — DO_START_MAG_CAL feedback
 // =============================================================================
 
@@ -565,10 +854,20 @@ export function handleMagCalProgress(compassId: number, _calStatus: number, comp
   // Cap below 100 until MAG_CAL_REPORT confirms the fit — the pct hits 100
   // before the FC has judged fitness.
   const pct = Math.max(0, Math.min(completionPct, 99));
+  magCalPcts.set(compassId, pct);
+
+  // Dense per-compass array for the UI (ids are contiguous from 0 in the mask
+  // ArduPilot calibrates). Overall = the compass furthest behind.
+  const maxId = Math.max(...magCalPcts.keys());
+  const compassProgress: number[] = [];
+  for (let id = 0; id <= maxId; id++) compassProgress.push(magCalPcts.get(id) ?? 0);
+  const overall = Math.min(...compassProgress);
+
   deps.sendProgress({
     type: 'compass',
-    progress: pct,
-    statusText: `Rotate the vehicle slowly through all orientations (compass ${compassId + 1}: ${pct}%)`,
+    progress: overall,
+    statusText: 'Rotate the vehicle slowly through all orientations',
+    compassProgress,
   });
 }
 
@@ -639,6 +938,28 @@ export function handleCalibrationCommandAck(command: number, result: number): vo
   }
 
   if (!activeCalType) return;
+
+  if (command === MAV_CMD_PREFLIGHT_CALIBRATION && activeFirmware === 'px4') {
+    // PX4 acknowledges IMMEDIATELY and runs the calibration asynchronously -
+    // for every type, including gyro and level. ACCEPTED means "started",
+    // never "done"; completion only ever arrives via "[cal] calibration done".
+    if (result === 0 || result === 5) {
+      deps.sendLog('info', 'PX4 accepted the calibration command');
+    } else {
+      const names = ['ACCEPTED', 'TEMPORARILY_REJECTED', 'DENIED', 'UNSUPPORTED', 'FAILED', 'IN_PROGRESS'];
+      const name = names[result] ?? `UNKNOWN(${result})`;
+      deps.sendLog('error', `PX4 rejected the calibration: ${name}`);
+      deps.sendComplete({
+        type: activeCalType,
+        success: false,
+        error: result === 2
+          ? 'The vehicle refused to calibrate. Make sure it is disarmed and on the ground.'
+          : `The vehicle rejected the calibration: ${name}.`,
+      });
+      cancelMavlinkCalibration();
+    }
+    return;
+  }
 
   if (command === MAV_CMD_PREFLIGHT_CALIBRATION) {
     if (result === 0) {
@@ -723,6 +1044,9 @@ export function handleCalibrationCommandAck(command: number, result: number): vo
 
 export function handleIncomingCommandLong(command: number, param1: number): void {
   if (!deps || activeCalType !== 'accel-6point') return;
+  // ACCELCAL_VEHICLE_POS is ArduPilot's pose-request protocol. PX4 never
+  // sends it; during a PX4 run such a frame is stray traffic, not protocol.
+  if (activeFirmware === 'px4') return;
 
   if (command === MAV_CMD_ACCELCAL_VEHICLE_POS) {
     // Always log incoming position requests so we can diagnose stuck calibrations.
@@ -780,7 +1104,7 @@ async function startAccelLevel(): Promise<{ success: boolean; error?: string }> 
   deps.sendLog('info', 'Starting MAVLink level calibration (MAV_CMD_PREFLIGHT_CALIBRATION param5=2)');
   deps.sendProgress({
     type: 'accel-level',
-    progress: 10,
+    progress: 0,
     statusText: 'Sending level calibration command...',
   });
 
@@ -797,13 +1121,12 @@ async function startAccelLevel(): Promise<{ success: boolean; error?: string }> 
 
   if (!sent) {
     activeCalType = null;
-    return { success: false, error: 'Failed to send calibration command — ensure FC is connected' };
+    return { success: false, error: 'Failed to send calibration command, ensure FC is connected' };
   }
 
-  deps.sendLog('info', '[CAL DIAG] level command written to transport, waiting for COMMAND_ACK from FC...');
   deps.sendProgress({
     type: 'accel-level',
-    progress: 30,
+    progress: 0,
     statusText: 'Calibrating... keep vehicle level and still',
   });
   armOneShotTimeout('accel-level');
@@ -832,7 +1155,7 @@ async function startAccel6Point(): Promise<{ success: boolean; error?: string }>
 
   if (!sent) {
     activeCalType = null;
-    return { success: false, error: 'Failed to send calibration command — ensure FC is connected' };
+    return { success: false, error: 'Failed to send calibration command, ensure FC is connected' };
   }
 
   // ArduPilot will send COMMAND_LONG with ACCELCAL_VEHICLE_POS to request first position
@@ -853,7 +1176,7 @@ async function startGyro(): Promise<{ success: boolean; error?: string }> {
   deps.sendLog('info', 'Starting MAVLink gyro calibration (MAV_CMD_PREFLIGHT_CALIBRATION param1=1)');
   deps.sendProgress({
     type: 'gyro',
-    progress: 10,
+    progress: 0,
     statusText: 'Sending gyro calibration command...',
   });
 
@@ -870,12 +1193,12 @@ async function startGyro(): Promise<{ success: boolean; error?: string }> {
 
   if (!sent) {
     activeCalType = null;
-    return { success: false, error: 'Failed to send calibration command — ensure FC is connected' };
+    return { success: false, error: 'Failed to send calibration command, ensure FC is connected' };
   }
 
   deps.sendProgress({
     type: 'gyro',
-    progress: 30,
+    progress: 0,
     statusText: 'Calibrating gyroscope... keep vehicle still',
   });
   armOneShotTimeout('gyro');
@@ -902,10 +1225,8 @@ async function startCompass(): Promise<{ success: boolean; error?: string }> {
 
   if (!sent) {
     activeCalType = null;
-    return { success: false, error: 'Failed to send calibration command — ensure FC is connected' };
+    return { success: false, error: 'Failed to send calibration command, ensure FC is connected' };
   }
-
-  compassStartTime = Date.now();
 
   // Convergence timeout: if no MAG_CAL_REPORT / "calibrated" STATUSTEXT arrives
   // in time, the fit isn't converging (unhealthy compass, interference, or too
@@ -923,30 +1244,15 @@ async function startCompass(): Promise<{ success: boolean; error?: string }> {
     cancelMavlinkCalibration();
   }, COMPASS_CAL_TIMEOUT_MS);
 
-  // Compass calibration can take 30-60s with user rotating vehicle
+  // The ONLY progress source from here on is the vehicle itself
+  // (MAG_CAL_PROGRESS / STATUSTEXT percentages). No synthetic time-based
+  // progress, no fake countdown: a bar that moves on its own while the fit
+  // is stalled tells the pilot a lie precisely when the truth matters most.
   deps.sendProgress({
     type: 'compass',
     progress: 0,
     statusText: 'Rotate vehicle slowly in all directions...',
-    countdown: 60,
   });
-
-  // Countdown timer for compass
-  let elapsed = 0;
-  compassTimerId = setInterval(() => {
-    if (!deps || activeCalType !== 'compass') {
-      if (compassTimerId) clearInterval(compassTimerId);
-      compassTimerId = null;
-      return;
-    }
-    elapsed++;
-    deps.sendProgress({
-      type: 'compass',
-      progress: Math.min(elapsed / 60 * 100, 95), // Cap at 95% until actual completion
-      statusText: 'Rotate vehicle slowly in all directions...',
-      countdown: Math.max(60 - elapsed, 0),
-    });
-  }, 1000);
 
   return { success: true };
 }

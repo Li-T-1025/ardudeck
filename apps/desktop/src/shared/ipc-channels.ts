@@ -619,6 +619,11 @@ export const IPC_CHANNELS = {
   CALIBRATION_COMPASSMOT_STOP: 'calibration:compassmot-stop', // Finish compassmot (COMMAND_ACK for PREFLIGHT_CALIBRATION)
   CALIBRATION_PROGRESS: 'calibration:progress', // Event from main
   CALIBRATION_COMPLETE: 'calibration:complete', // Event from main
+  // Per-board calibration records, kept so a calibration can be proven after
+  // the FC reboot instead of assumed.
+  CALIBRATION_RECORD_SAVE: 'calibration:record-save',
+  CALIBRATION_RECORD_LIST: 'calibration:record-list',
+  CALIBRATION_RECORD_VERIFY: 'calibration:record-verify',
 
   // Motor Test
   MOTOR_TEST_START: 'motor-test:start',

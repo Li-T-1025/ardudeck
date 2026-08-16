@@ -5,8 +5,9 @@
  * Auto-redirects to select screen after successful save.
  */
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useCalibrationStore } from '../../../stores/calibration-store';
+import { assessAccelCalibration, assessCompassFitness, type CalibrationVerdict } from '../../../../shared/calibration-quality';
 import { useConnectionStore } from '../../../stores/connection-store';
 import { CALIBRATION_TYPES, type CalibrationVerification } from '../../../../shared/calibration-types';
 import { boardSupportsPersistentParamSave } from '../../../../shared/board-mappings';
@@ -20,13 +21,16 @@ function rotationName(o: number | null): string {
   if (o == null) return '-';
   return ROTATION_NAMES[o] ?? `Rotation ${o}`;
 }
-// ArduPilot compass fitness is RMS milligauss residual: < 2 good, < 3.5 usable,
-// higher means interference / insufficient rotation coverage.
-function fitnessVerdict(f: number): { label: string; cls: string } {
-  if (f < 2) return { label: 'Good', cls: 'text-green-400 bg-green-500/15 border-green-500/30' };
-  if (f < 3.5) return { label: 'Marginal', cls: 'text-amber-400 bg-amber-500/15 border-amber-500/30' };
-  return { label: 'Poor', cls: 'text-red-400 bg-red-500/15 border-red-500/30' };
-}
+/** Verdict styling. The judgement itself lives in shared/calibration-quality
+ *  so the wizard, the stored record and the preflight card cannot disagree. */
+const VERDICT_STYLE: Record<CalibrationVerdict, { label: string; cls: string }> = {
+  good: { label: 'Good', cls: 'text-green-400 bg-green-500/15 border-green-500/30' },
+  marginal: { label: 'Marginal', cls: 'text-amber-400 bg-amber-500/15 border-amber-500/30' },
+  bad: { label: 'Poor', cls: 'text-red-400 bg-red-500/15 border-red-500/30' },
+  unknown: { label: 'Unknown', cls: 'text-content-secondary bg-surface-raised border-subtle' },
+};
+
+const VERDICT_ORDER: Record<CalibrationVerdict, number> = { good: 0, unknown: 1, marginal: 2, bad: 3 };
 
 export function CalibrationCompleteStep() {
   const {
@@ -34,6 +38,7 @@ export function CalibrationCompleteStep() {
     calibrationSuccess,
     calibrationData,
     calibrationRebootRequired,
+    calibrationUnconfirmed,
     error,
     isSaving,
     saveSuccess,
@@ -107,23 +112,49 @@ export function CalibrationCompleteStep() {
   // Show a neutral "verifying" banner instead of flashing green→red when the
   // verification eventually flips success to false.
   const isVerifying = verification?.status === 'pending';
-  const showSuccess = calibrationSuccess === true && !isVerifying;
+
+  // Judge the six-point result from the parameters it actually wrote, using the
+  // same engine as the stored record so the wizard and the preflight card can
+  // never disagree about the same calibration.
+  const accelAssessment = useMemo(() => {
+    if (calibrationType !== 'accel-6point' || !verification) return null;
+    const v: Record<string, number> = {};
+    for (const row of verification.results) {
+      if (row.after !== undefined && row.after !== null) v[row.paramId] = row.after;
+    }
+    if (v.INS_ACCOFFS_X === undefined && v.INS_ACCSCAL_X === undefined) return null;
+    return assessAccelCalibration({
+      offsets: v.INS_ACCOFFS_X !== undefined
+        ? { x: v.INS_ACCOFFS_X, y: v.INS_ACCOFFS_Y ?? 0, z: v.INS_ACCOFFS_Z ?? 0 }
+        : undefined,
+      scales: v.INS_ACCSCAL_X !== undefined
+        ? { x: v.INS_ACCSCAL_X, y: v.INS_ACCSCAL_Y ?? 1, z: v.INS_ACCSCAL_Z ?? 1 }
+        : undefined,
+    });
+  }, [calibrationType, verification]);
+  // "Unconfirmed" is success reported by a fallback that verification could
+  // not settle (no snapshot, or the re-read errored). It must read as a
+  // warning, never as a confirmed green success.
+  const showUnconfirmed = calibrationSuccess === true && !isVerifying && calibrationUnconfirmed;
+  const showSuccess = calibrationSuccess === true && !isVerifying && !calibrationUnconfirmed;
   const showFailure = calibrationSuccess === false;
 
   return (
     <div className="max-w-2xl mx-auto space-y-8">
-      {/* Success / Failure / Verifying Banner */}
+      {/* Success / Unconfirmed / Failure / Verifying Banner */}
       <div className={`rounded-xl p-6 text-center ${
         isVerifying
           ? 'bg-cyan-500/10 border border-cyan-500/30'
           : showSuccess
             ? 'bg-green-500/10 border border-green-500/30'
-            : 'bg-red-500/10 border border-red-500/30'
+            : showUnconfirmed
+              ? 'bg-amber-500/10 border border-amber-500/30'
+              : 'bg-red-500/10 border border-red-500/30'
       }`}>
         <div className={`inline-flex items-center justify-center w-16 h-16 rounded-full mb-4 ${
           isVerifying
             ? 'bg-cyan-500/20'
-            : showSuccess ? 'bg-green-500/20' : 'bg-red-500/20'
+            : showSuccess ? 'bg-green-500/20' : showUnconfirmed ? 'bg-amber-500/20' : 'bg-red-500/20'
         }`}>
           {isVerifying ? (
             <svg className="w-8 h-8 text-cyan-400 animate-spin" fill="none" viewBox="0 0 24 24">
@@ -133,6 +164,10 @@ export function CalibrationCompleteStep() {
           ) : showSuccess ? (
             <svg className="w-8 h-8 text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+            </svg>
+          ) : showUnconfirmed ? (
+            <svg className="w-8 h-8 text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v4m0 4h.01M10.29 3.86l-8.02 13.89A2 2 0 004 21h16a2 2 0 001.73-3.25L13.71 3.86a2 2 0 00-3.42 0z" />
             </svg>
           ) : (
             <svg className="w-8 h-8 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -144,11 +179,11 @@ export function CalibrationCompleteStep() {
         <h3 className={`text-xl font-semibold mb-2 ${
           isVerifying
             ? 'text-cyan-300'
-            : showSuccess ? 'text-green-400' : 'text-red-400'
+            : showSuccess ? 'text-green-400' : showUnconfirmed ? 'text-amber-400' : 'text-red-400'
         }`}>
           {isVerifying
             ? 'Verifying Calibration…'
-            : showSuccess ? 'Calibration Complete!' : 'Calibration Failed'}
+            : showSuccess ? 'Calibration Complete!' : showUnconfirmed ? 'Completed, Not Confirmed' : 'Calibration Failed'}
         </h3>
 
         <p className="text-content-secondary">
@@ -156,7 +191,9 @@ export function CalibrationCompleteStep() {
             ? 'Reading parameters back from the flight controller to confirm the calibration was applied.'
             : showSuccess
               ? `${calTypeInfo?.name} calibration was successful.`
-              : error || 'An error occurred during calibration. Please try again.'}
+              : showUnconfirmed
+                ? 'The flight controller never confirmed this calibration and the parameter check could not settle it. Verify the calibration parameters changed before flying, or run it again.'
+                : error || 'An error occurred during calibration. Please try again.'}
         </p>
       </div>
 
@@ -179,7 +216,8 @@ export function CalibrationCompleteStep() {
         <div className="space-y-2">
           <h4 className="text-sm font-medium text-content uppercase tracking-wide">Compass Fit</h4>
           {calibrationData.compassResults.map((r) => {
-            const v = fitnessVerdict(r.fitness);
+            const assessment = assessCompassFitness(r.fitness);
+            const v = VERDICT_STYLE[assessment.verdict];
             return (
               <div key={r.compass} className="flex items-center justify-between bg-surface rounded-lg border border-subtle p-3">
                 <div className="text-sm text-content">Compass {r.compass}</div>
@@ -191,9 +229,37 @@ export function CalibrationCompleteStep() {
               </div>
             );
           })}
-          {calibrationData.compassResults.some((r) => r.fitness >= 3.5) && (
-            <p className="text-xs text-amber-400/90">
-              A poor fit (&gt; 3.5) usually means magnetic interference or too little rotation. Move the compass away from power wiring and recalibrate.
+          {/* Say what to DO about it, not just that it is amber. */}
+          {(() => {
+            const worst = calibrationData.compassResults
+              .map((r) => assessCompassFitness(r.fitness))
+              .reduce((a, b) => (VERDICT_ORDER[b.verdict] > VERDICT_ORDER[a.verdict] ? b : a));
+            if (!worst.advice) return null;
+            return (
+              <p className={`text-xs ${worst.verdict === 'bad' ? 'text-red-400/90' : 'text-amber-400/90'}`}>
+                {worst.advice}
+              </p>
+            );
+          })()}
+        </div>
+      ) : null}
+
+      {/* Accelerometer fit. The six-point cal has no fitness number, so it is
+          judged on the values it produced: offsets that are large, or scales
+          far from 1.0, mean a level that will not hold even though the FC
+          reported success. */}
+      {showSuccess && calibrationType === 'accel-6point' && accelAssessment && accelAssessment.verdict !== 'unknown' ? (
+        <div className="space-y-2">
+          <h4 className="text-sm font-medium text-content uppercase tracking-wide">Accelerometer Fit</h4>
+          <div className="flex items-center justify-between bg-surface rounded-lg border border-subtle p-3">
+            <div className="text-sm text-content">{accelAssessment.summary}</div>
+            <span className={`px-2 py-0.5 rounded-full border text-[11px] font-medium ${VERDICT_STYLE[accelAssessment.verdict].cls}`}>
+              {VERDICT_STYLE[accelAssessment.verdict].label}
+            </span>
+          </div>
+          {accelAssessment.advice && (
+            <p className={`text-xs ${accelAssessment.verdict === 'bad' ? 'text-red-400/90' : 'text-amber-400/90'}`}>
+              {accelAssessment.advice}
             </p>
           )}
         </div>

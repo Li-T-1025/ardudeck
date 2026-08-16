@@ -597,6 +597,12 @@ function App() {
         if (connectionState.mavType !== undefined) {
           fetchMetadata(connectionState.mavType);
         }
+        // Prove any calibration that is waiting on a reboot actually survived
+        // it. A reconnect is exactly the moment the operator assumes all is
+        // well, so this is where the vehicle has to be asked, not assumed.
+        if (connectionState.boardUid) {
+          void window.electronAPI?.calibrationRecordVerify?.(connectionState.boardUid);
+        }
         // Auto-download the vehicle's mission ONLY when we have nothing locally.
         // The FC holds the flattened union of whatever was uploaded, so if the
         // operator has been planning (surveys, hand-placed WPs, a loaded file),
@@ -921,7 +927,7 @@ function App() {
       );
     });
     const unsubComplete = window.electronAPI?.onCalibrationComplete?.((event) => {
-      handleCalibrationComplete(event.success, event.data, event.error, event.rebootRequired);
+      handleCalibrationComplete(event.success, event.data, event.error, event.rebootRequired, event.unconfirmed);
     });
 
     return () => {

@@ -6,16 +6,73 @@ interface CalibrationProgressProps {
   progress: number; // 0-100
   size?: number;
   strokeWidth?: number;
+  /**
+   * The vehicle has not reported a percentage (yet). Renders a spinning arc
+   * with a label instead of a misleading "0%", synchronous calibrations
+   * (ArduPilot level/gyro) finish without ever reporting one.
+   */
+  indeterminate?: boolean;
+  /** Label under the center value; defaults to Calibrating/Complete. */
+  label?: string;
 }
 
 export function CalibrationProgress({
   progress,
   size = 160,
   strokeWidth = 8,
+  indeterminate = false,
+  label,
 }: CalibrationProgressProps) {
   const radius = (size - strokeWidth) / 2;
   const circumference = 2 * Math.PI * radius;
   const strokeDashoffset = circumference - (progress / 100) * circumference;
+
+  if (indeterminate) {
+    return (
+      <div className="relative" style={{ width: size, height: size }}>
+        <svg className="absolute top-0 left-0" width={size} height={size}>
+          <circle
+            cx={size / 2}
+            cy={size / 2}
+            r={radius}
+            fill="none"
+            stroke="currentColor"
+            strokeWidth={strokeWidth}
+            className="text-content-tertiary"
+          />
+        </svg>
+        <svg
+          className="absolute top-0 left-0 animate-spin"
+          style={{ animationDuration: '1.4s' }}
+          width={size}
+          height={size}
+        >
+          <circle
+            cx={size / 2}
+            cy={size / 2}
+            r={radius}
+            fill="none"
+            stroke="url(#calGradientIndet)"
+            strokeWidth={strokeWidth}
+            strokeLinecap="round"
+            strokeDasharray={circumference}
+            strokeDashoffset={circumference * 0.75}
+          />
+          <defs>
+            <linearGradient id="calGradientIndet" x1="0%" y1="0%" x2="100%" y2="0%">
+              <stop offset="0%" stopColor="#06b6d4" />
+              <stop offset="100%" stopColor="#3b82f6" />
+            </linearGradient>
+          </defs>
+        </svg>
+        <div className="absolute inset-0 flex flex-col items-center justify-center">
+          <span className="text-sm font-medium text-content text-center px-4">
+            {label ?? 'Calibrating...'}
+          </span>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="relative" style={{ width: size, height: size }}>
@@ -64,7 +121,7 @@ export function CalibrationProgress({
           {Math.round(progress)}%
         </span>
         <span className="text-xs text-content-secondary mt-1">
-          {progress < 100 ? 'Calibrating...' : 'Complete'}
+          {label ?? (progress < 100 ? 'Calibrating...' : 'Complete')}
         </span>
       </div>
 

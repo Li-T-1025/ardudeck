@@ -18,6 +18,15 @@ export type CalibrationTypeId =
 
 export type CalibrationProtocol = 'msp' | 'mavlink';
 
+/**
+ * Which MAVLink firmware dialect to speak. The two differ fundamentally:
+ * ArduPilot compass cal is DO_START_MAG_CAL + MAG_CAL_PROGRESS/REPORT and its
+ * 6-point flow is GCS-confirmed via ACCELCAL_VEHICLE_POS; PX4 does everything
+ * through PREFLIGHT_CALIBRATION and narrates via "[cal] ..." STATUSTEXT with
+ * automatic orientation detection (no confirm step).
+ */
+export type CalibrationFirmware = 'ardupilot' | 'px4';
+
 export interface CalibrationTypeInfo {
   id: CalibrationTypeId;
   name: string;
@@ -45,10 +54,10 @@ export const CALIBRATION_TYPES: CalibrationTypeInfo[] = [
   {
     id: 'accel-6point',
     name: 'Accelerometer (6-Point)',
-    description: 'Full 6-position calibration for maximum accuracy. iNav and ArduPilot only.',
+    description: 'Full 6-position calibration for maximum accuracy.',
     icon: '6point',
     protocols: ['msp', 'mavlink'],
-    variants: ['INAV', 'ARDU'],
+    variants: ['INAV', 'ARDU', 'PX4'],
     estimatedDuration: 60,
   },
   {
@@ -215,6 +224,14 @@ export interface CalibrationCompleteEvent {
 
   /** FC must be rebooted for the calibration to take effect (compass on ArduPilot) */
   rebootRequired?: boolean;
+
+  /**
+   * success=true but the FC never explicitly confirmed it (e.g. the 6-point
+   * completion message was lost and a fallback fired). The post-cal param
+   * verification is the deciding witness; until it reports, the UI must not
+   * present this as a confirmed success.
+   */
+  unconfirmed?: boolean;
 }
 
 // ============================================================================
@@ -227,6 +244,8 @@ export interface CalibrationStartOptions {
   position?: AccelPosition;
   /** Protocol to use — determines MSP vs MAVLink calibration path */
   protocol?: CalibrationProtocol;
+  /** MAVLink dialect, ArduPilot and PX4 use different commands and feedback */
+  firmware?: CalibrationFirmware;
 }
 
 export interface CalibrationResult {
@@ -273,6 +292,38 @@ export const MAVLINK_CALIBRATION_PARAMS: Partial<Record<CalibrationTypeId, reado
 } as const;
 
 /**
+ * PX4 equivalents. PX4 stores calibration in CAL_* params (offsets in SI
+ * units: Gauss for mag, m/s² for accel, rad/s for gyro) and level-horizon
+ * trim in SENS_BOARD_*_OFF (degrees). Secondary-instance entries may not
+ * exist on boards with fewer sensors, ignored during diff, same as the
+ * ArduPilot table.
+ */
+export const PX4_CALIBRATION_PARAMS: Partial<Record<CalibrationTypeId, readonly string[]>> = {
+  'accel-level': [
+    'SENS_BOARD_X_OFF',
+    'SENS_BOARD_Y_OFF',
+  ],
+  'accel-6point': [
+    'CAL_ACC0_XOFF', 'CAL_ACC0_YOFF', 'CAL_ACC0_ZOFF',
+    'CAL_ACC0_XSCALE', 'CAL_ACC0_YSCALE', 'CAL_ACC0_ZSCALE',
+    'CAL_ACC1_XOFF', 'CAL_ACC1_YOFF', 'CAL_ACC1_ZOFF',
+    'CAL_ACC1_XSCALE', 'CAL_ACC1_YSCALE', 'CAL_ACC1_ZSCALE',
+    'CAL_ACC2_XOFF', 'CAL_ACC2_YOFF', 'CAL_ACC2_ZOFF',
+    'CAL_ACC2_XSCALE', 'CAL_ACC2_YSCALE', 'CAL_ACC2_ZSCALE',
+  ],
+  'gyro': [
+    'CAL_GYRO0_XOFF', 'CAL_GYRO0_YOFF', 'CAL_GYRO0_ZOFF',
+    'CAL_GYRO1_XOFF', 'CAL_GYRO1_YOFF', 'CAL_GYRO1_ZOFF',
+    'CAL_GYRO2_XOFF', 'CAL_GYRO2_YOFF', 'CAL_GYRO2_ZOFF',
+  ],
+  'compass': [
+    'CAL_MAG0_OFF_X', 'CAL_MAG0_OFF_Y', 'CAL_MAG0_OFF_Z',
+    'CAL_MAG1_OFF_X', 'CAL_MAG1_OFF_Y', 'CAL_MAG1_OFF_Z',
+    'CAL_MAG2_OFF_X', 'CAL_MAG2_OFF_Y', 'CAL_MAG2_OFF_Z',
+  ],
+} as const;
+
+/**
  * Per-cal-type epsilon for "did this value actually move". A real cal
  * always produces changes well above these thresholds; anything smaller
  * is rounding noise. Compass uses milligauss-scale offsets so its epsilon
@@ -284,6 +335,20 @@ export const CALIBRATION_DIFF_EPSILON: Record<CalibrationTypeId, number> = {
   'gyro': 1e-5,          // rad/s
   'compass': 1.0,        // mGauss
   'opflow': 0,           // not applicable (MSP only)
+};
+
+/**
+ * PX4 epsilons. CRITICAL difference from ArduPilot: PX4 mag offsets are in
+ * GAUSS (typical real values 0.05-0.5), so reusing the ArduPilot 1.0 mGauss
+ * epsilon literal would classify every genuine PX4 compass cal as
+ * "unchanged" and fail it. Level trim is in degrees.
+ */
+export const PX4_CALIBRATION_DIFF_EPSILON: Record<CalibrationTypeId, number> = {
+  'accel-level': 1e-3,   // degrees
+  'accel-6point': 1e-4,  // m/s² offsets, dimensionless scale
+  'gyro': 1e-6,          // rad/s (PX4 gyro offsets are tiny but real)
+  'compass': 1e-3,       // Gauss
+  'opflow': 0,           // not applicable
 };
 
 export interface ParamReadResult {

@@ -136,6 +136,7 @@ import { getPx4ParameterMetadata } from './px4-parameter-metadata.js';
 import { formatPx4Event, px4EventSeverity, setPx4EventMetadata } from './px4-events/index.js';
 import { COMP_METADATA_TYPE, fetchPx4ComponentMetadata } from './px4-component-info/index.js';
 import { px4CellVoltageAtThreshold } from '../shared/px4-battery.js';
+import { verifyCalibrationPersisted } from '../shared/calibration-quality.js';
 import type { AttitudeData, PositionData, GpsData, BatteryData, VfrHudData, FlightState, RcChannelsData, NavControllerData, GuidedTargetData } from '../shared/telemetry-types.js';
 import { COPTER_MODES, PLANE_MODES, ROVER_MODES, SUB_MODES, getPx4ModeName } from '../shared/telemetry-types.js';
 import type { MissionItem, MissionProgress, MavFrame } from '../shared/mission-types.js';
@@ -403,6 +404,33 @@ const paramHistoryStore = new Store<{ boards: Record<string, BoardParamHistory> 
   defaults: { boards: {} },
 });
 
+/**
+ * Calibration record per board, so a calibration can be PROVEN after the
+ * reboot rather than assumed.
+ *
+ * The dangerous moment is the reboot: the wizard reports success, the FC
+ * restarts, and nothing checks that the new values actually came back. An
+ * operator reasonably assumes a rebooted vehicle kept its calibration. This
+ * survives both the reboot and an app restart, so the answer is still there
+ * when the vehicle reconnects.
+ */
+interface CalibrationRecord {
+  /** 'accel-6point' | 'compass' | ... */
+  type: string;
+  /** Values the calibration produced, to be compared after the reboot. */
+  written: Record<string, number>;
+  /** 'good' | 'marginal' | 'bad' | 'unknown' at the time it was written. */
+  verdict: string;
+  summary: string;
+  completedAt: number;
+  /** null until the vehicle has reconnected and been re-read. */
+  persistence: null | { state: string; summary: string; mismatched: string[]; checkedAt: number };
+}
+const calibrationRecordStore = new Store<{ boards: Record<string, CalibrationRecord[]> }>({
+  name: 'calibration-records',
+  defaults: { boards: {} },
+});
+
 // AI chat conversation storage keyed by log file path
 const chatStore = new Store<{ conversations: Record<string, { messages: { role: string; content: string }[]; insightCards: unknown[] }> }>({
   name: 'log-chats',
@@ -426,6 +454,28 @@ const recentLogsStore = new Store<{ logs: RecentLogEntry[] }>({
   name: 'recent-logs',
   defaults: { logs: [] },
 });
+
+/**
+ * Record a file in the recent-logs list, moving it to the top.
+ *
+ * CARRIES THE FC IDENTITY FORWARD. Only the download path knows which FC log a
+ * file came from, and it stamps fcLogId/fcTimeUtc/fcSizeBytes at that moment.
+ * Opening that same file afterwards used to re-insert a bare entry and drop the
+ * stamp, so the "Downloaded" badge vanished from the row the moment you opened
+ * the log you had just downloaded. It only appeared to work for files still
+ * named log_<id>.bin, which fall back to matching on the filename.
+ */
+function rememberRecentLog(entry: RecentLogEntry): void {
+  const logs = recentLogsStore.get('logs');
+  const previous = logs.find((l) => l.path === entry.path);
+  const merged: RecentLogEntry = {
+    ...entry,
+    fcLogId: entry.fcLogId ?? previous?.fcLogId,
+    fcTimeUtc: entry.fcTimeUtc ?? previous?.fcTimeUtc,
+    fcSizeBytes: entry.fcSizeBytes ?? previous?.fcSizeBytes,
+  };
+  recentLogsStore.set('logs', [merged, ...logs.filter((l) => l.path !== entry.path)].slice(0, 20));
+}
 
 let signingEnabled = false;
 let signingKey: Uint8Array | null = null;
@@ -857,6 +907,7 @@ const TELEM_STREAM_MESSAGES: { msgId: number; cat: 'attitude' | 'position' | 'ot
   { msgId: 29, cat: 'other' },           // SCALED_PRESSURE
   { msgId: 168, cat: 'other', hz: 1 },   // WIND (EKF wind estimation, 1Hz is plenty)
   { msgId: 241, cat: 'other' },          // VIBRATION (for motor test view)
+  { msgId: 147, cat: 'other' },          // BATTERY_STATUS (per-monitor batteries, #126)
   { msgId: 11030, cat: 'other' },        // ESC_TELEMETRY_1_TO_4
   { msgId: 11031, cat: 'other' },        // ESC_TELEMETRY_5_TO_8
   { msgId: 11032, cat: 'other' },        // ESC_TELEMETRY_9_TO_12
@@ -2391,6 +2442,7 @@ function readFloat(payload: Uint8Array, offset: number): number {
 // MAVLink message IDs
 const MSG_HEARTBEAT = 0;
 const MSG_SYS_STATUS = 1;
+const MSG_BATTERY_STATUS = 147;
 const MSG_PARAM_VALUE = 22;
 const MSG_GPS_RAW_INT = 24;
 const MSG_GPS2_RAW = 124;
@@ -2653,6 +2705,51 @@ function parseTelemetry(mainWindow: BrowserWindow, packet: MAVLinkPacket): void 
         errors_count3: readUint16(payload, 22),
         errors_count4: readUint16(payload, 24),
       };
+      break;
+    }
+
+    case MSG_BATTERY_STATUS: {
+      // Per-monitor battery data (#126). One message per configured monitor;
+      // SYS_STATUS above stays the source for the legacy primary slot.
+      // v2 zero-truncation: extensions (time_remaining..fault_bitmask) are
+      // routinely stripped, always pad before reading.
+      const p = padTo(payload, 54);
+
+      // Pack voltage = sum of populated cell slots (mV, 65535 = slot unused).
+      // Monitors without per-cell sensing report the whole pack in slot 0;
+      // 11-14S packs continue into voltages_ext.
+      let mv = 0;
+      let cells = 0;
+      for (let i = 0; i < 10; i++) {
+        const v = readUint16(p, 10 + i * 2);
+        if (v !== 65535 && v > 0) { mv += v; cells++; }
+      }
+      for (let i = 0; i < 4; i++) {
+        const v = readUint16(p, 41 + i * 2);
+        if (v !== 0 && v !== 65535) { mv += v; cells++; }
+      }
+
+      const currentCa = readInt16(p, 30);
+      const mah = readInt32(p, 0);
+      const tempCdeg = readInt16(p, 8);
+      const remainingPct = (p[35]! << 24) >> 24; // int8, -1 = unknown
+      const timeRemaining = readInt32(p, 36);
+
+      const instance = {
+        id: p[32]!,
+        voltage: mv / 1000,
+        current: currentCa === -1 ? 0 : currentCa / 100,
+        remaining: remainingPct < 0 ? -1 : remainingPct,
+        ...(mah >= 0 ? { mahDrawn: mah } : {}),
+        ...(cells > 1 ? { cellCount: cells, cellVoltage: mv / cells / 1000 } : {}),
+        ...(tempCdeg !== 32767 ? { temperature: tempCdeg / 100 } : {}),
+        ...(timeRemaining > 0 ? { timeRemaining } : {}),
+      };
+
+      // Merge into the pending batch by id, a flat field would let one
+      // monitor's frame overwrite another's inside the 100ms batch window.
+      const pending = (mavlinkTelemetryBatches[parseVehicleKey]?.batteryInstances ?? {}) as Record<number, unknown>;
+      queueMavlinkTelemetry(mainWindow, { batteryInstances: { ...pending, [instance.id]: instance } });
       break;
     }
 
@@ -7094,6 +7191,119 @@ export function setupIpcHandlers(mainWindow: BrowserWindow): void {
   // matching PARAM_VALUE responses via the pendingParamReads map. Each
   // read is bounded by a 1500ms timeout so a missing-on-this-board param
   // (e.g. INS_ACC3* on a single-IMU board) doesn't block the whole batch.
+  /**
+   * Read named parameters straight off the vehicle, one PARAM_REQUEST_READ
+   * each. Shared by PARAM_READ_BATCH and the post-reboot calibration check,
+   * which must NOT trust the renderer's parameter cache: the cache is what the
+   * FC said before the reboot, and the whole point is to find out what it says
+   * now. Missing params are simply absent from the result.
+   */
+  const readParamsFromVehicle = async (paramIds: string[]): Promise<Record<string, number>> => {
+    if (!currentTransport?.isOpen || !connectionState.isConnected) return {};
+    const targetSystem = connectionState.systemId ?? 1;
+    const PER_PARAM_TIMEOUT_MS = 1500;
+
+    const readOne = (paramId: string): Promise<number | null> => new Promise((resolve) => {
+      const timer = setTimeout(() => {
+        pendingParamReads.delete(paramId);
+        resolve(null);
+      }, PER_PARAM_TIMEOUT_MS);
+
+      pendingParamReads.set(paramId, (value) => {
+        clearTimeout(timer);
+        resolve(value);
+      });
+
+      (async () => {
+        try {
+          const reqPayload = serializeParamRequestRead({
+            targetSystem,
+            targetComponent: 1,
+            paramId,
+            paramIndex: -1,
+          });
+          const packet = await sendMavlinkPacket(PARAM_REQUEST_READ_ID, reqPayload, PARAM_REQUEST_READ_CRC_EXTRA);
+          await currentTransport!.write(packet);
+          connectionState.packetsSent++;
+        } catch {
+          clearTimeout(timer);
+          pendingParamReads.delete(paramId);
+          resolve(null);
+        }
+      })();
+    });
+
+    const results = await Promise.all(paramIds.map(readOne));
+    const values: Record<string, number> = {};
+    paramIds.forEach((id, i) => {
+      const v = results[i];
+      if (v !== null && v !== undefined) values[id] = v;
+    });
+    return values;
+  };
+
+  /** Record what a calibration wrote, so the reboot can be checked against it. */
+  ipcMain.handle(IPC_CHANNELS.CALIBRATION_RECORD_SAVE, (_, boardUid: string, record: CalibrationRecord) => {
+    if (!boardUid) return { success: false, error: 'No board identity' };
+    const boards = calibrationRecordStore.get('boards');
+    // One record per calibration type: the latest run is the one that matters.
+    const existing = (boards[boardUid] ?? []).filter((r) => r.type !== record.type);
+    boards[boardUid] = [record, ...existing].slice(0, 12);
+    calibrationRecordStore.set('boards', boards);
+    return { success: true };
+  });
+
+  ipcMain.handle(IPC_CHANNELS.CALIBRATION_RECORD_LIST, (_, boardUid: string): CalibrationRecord[] => {
+    if (!boardUid) return [];
+    return calibrationRecordStore.get('boards')[boardUid] ?? [];
+  });
+
+  /**
+   * Read the calibration back off the vehicle and compare it with what was
+   * written. This is the check that closes the "FC rebooted, so it must be
+   * fine" gap: nothing else proves the values survived.
+   */
+  ipcMain.handle(IPC_CHANNELS.CALIBRATION_RECORD_VERIFY, async (_, boardUid: string): Promise<{
+    success: boolean;
+    records?: CalibrationRecord[];
+    error?: string;
+  }> => {
+    if (!boardUid) return { success: false, error: 'No board identity' };
+    if (!currentTransport?.isOpen || !connectionState.isConnected) {
+      return { success: false, error: 'Not connected' };
+    }
+
+    const boards = calibrationRecordStore.get('boards');
+    const records = boards[boardUid] ?? [];
+    const unchecked = records.filter((r) => r.persistence === null);
+    if (unchecked.length === 0) return { success: true, records };
+
+    const names = [...new Set(unchecked.flatMap((r) => Object.keys(r.written)))];
+    const readBack = await readParamsFromVehicle(names);
+    const checkedAt = Date.now();
+
+    boards[boardUid] = records.map((record) => {
+      if (record.persistence !== null) return record;
+      const result = verifyCalibrationPersisted(record.written, readBack);
+      if (result.state === 'unverified') return record; // try again next connect
+      sendLog(
+        mainWindow,
+        result.state === 'verified' ? 'info' : 'error',
+        `Calibration check (${record.type}): ${result.summary}`,
+      );
+      // A calibration the reboot threw away is a flight-safety fact, so it goes
+      // to the Messages panel at CRITICAL, where the voice announcer picks it
+      // up too. A log line is exactly what gets missed.
+      if (result.state !== 'verified' && mainWindow) {
+        emitStatusText(mainWindow, 2, `${record.type} calibration did NOT survive the reboot. Recalibrate before flying.`);
+      }
+      return { ...record, persistence: { ...result, checkedAt } };
+    });
+    calibrationRecordStore.set('boards', boards);
+
+    return { success: true, records: boards[boardUid] };
+  });
+
   ipcMain.handle(IPC_CHANNELS.PARAM_READ_BATCH, async (_, paramIds: string[]): Promise<{
     success: boolean;
     values: Record<string, number>;
@@ -12096,8 +12306,7 @@ export function setupIpcHandlers(mainWindow: BrowserWindow): void {
     // later opened) and stamp the FC identity so the list badge matches this
     // exact log, not whatever log happens to carry the same id next flight.
     {
-      const logs = recentLogsStore.get('logs').filter((l) => l.path !== result.filePath);
-      logs.unshift({
+      rememberRecentLog({
         path: result.filePath,
         name: basename(result.filePath),
         size: data.length,
@@ -12106,7 +12315,6 @@ export function setupIpcHandlers(mainWindow: BrowserWindow): void {
         fcTimeUtc: timeUtc,
         fcSizeBytes: logSize,
       });
-      recentLogsStore.set('logs', logs.slice(0, 20));
     }
     safeSend(mainWindow, IPC_CHANNELS.LOG_DOWNLOAD_COMPLETE, { logId, path: result.filePath, size: data.length });
     return result.filePath;
@@ -12159,9 +12367,7 @@ export function setupIpcHandlers(mainWindow: BrowserWindow): void {
 
     // Add to recent logs up-front so the UI can refresh its list while parsing.
     const name = filePath.split(/[\\/]/).pop() ?? filePath;
-    const recents = recentLogsStore.get('logs').filter((l) => l.path !== filePath);
-    recents.unshift({ path: filePath, name, size: totalBytes, openedAt: Date.now() });
-    recentLogsStore.set('logs', recents.slice(0, 20));
+    rememberRecentLog({ path: filePath, name, size: totalBytes, openedAt: Date.now() });
 
     // Stream the file into the parser in 1 MB chunks so we can emit progress
     // and yield the event loop between feeds. Without the yield, IPC events
@@ -12328,9 +12534,7 @@ export function setupIpcHandlers(mainWindow: BrowserWindow): void {
   });
 
   ipcMain.handle(IPC_CHANNELS.LOG_RECENT_ADD, (_, entry: { path: string; name: string; size: number }) => {
-    const logs = recentLogsStore.get('logs').filter((l) => l.path !== entry.path);
-    logs.unshift({ ...entry, openedAt: Date.now() });
-    recentLogsStore.set('logs', logs.slice(0, 20));
+    rememberRecentLog({ ...entry, openedAt: Date.now() });
   });
 
   // Remove a single entry from the recent-logs list. Does NOT touch the .bin

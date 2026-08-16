@@ -19,7 +19,9 @@ import {
   CALIBRATION_TYPES,
   ACCEL_6POINT_POSITIONS,
   MAVLINK_CALIBRATION_PARAMS,
+  PX4_CALIBRATION_PARAMS,
   CALIBRATION_DIFF_EPSILON,
+  PX4_CALIBRATION_DIFF_EPSILON,
 } from '../../shared/calibration-types';
 import {
   categorizeCalibrationParam,
@@ -27,6 +29,11 @@ import {
   type CalibrationParamInfo,
 } from '../../shared/calibration-param-groups';
 import { useParameterStore } from './parameter-store';
+import {
+  assessAccelCalibration,
+  assessCompassFitness,
+  type CalibrationAssessment,
+} from '../../shared/calibration-quality';
 
 // ============================================================================
 // Types — Force-accept calibration from file
@@ -127,6 +134,12 @@ export interface CalibrationState {
   calibrationSuccess: boolean | null;
   /** FC must be rebooted for this calibration to take effect (compass on ArduPilot) */
   calibrationRebootRequired: boolean;
+  /**
+   * Success was reported by a fallback, not confirmed by the FC, and
+   * verification could not settle it. The UI shows this as "unconfirmed",
+   * never as a green success.
+   */
+  calibrationUnconfirmed: boolean;
 
   // Error state
   error: string | null;
@@ -181,7 +194,7 @@ export interface CalibrationState {
 
   // Progress updates (called from IPC events)
   handleProgressUpdate: (progress: number, statusText: string, position?: AccelPosition, positionStatus?: boolean[], countdown?: number, compassProgress?: number[]) => void;
-  handleCalibrationComplete: (success: boolean, data?: CalibrationData, error?: string, rebootRequired?: boolean) => void;
+  handleCalibrationComplete: (success: boolean, data?: CalibrationData, error?: string, rebootRequired?: boolean, unconfirmed?: boolean) => void;
 
   // Force-accept calibration-from-file actions (#16)
   loadCalibrationFromFile: () => Promise<{ ok: boolean; error?: string; calCount?: number }>;
@@ -237,6 +250,7 @@ export const useCalibrationStore = create<CalibrationState>((set, get) => ({
   calibrationData: null,
   calibrationSuccess: null,
   calibrationRebootRequired: false,
+  calibrationUnconfirmed: false,
 
   error: null,
 
@@ -276,6 +290,7 @@ export const useCalibrationStore = create<CalibrationState>((set, get) => ({
       fcVariant,
       calibrationData: null,
       calibrationSuccess: null,
+      calibrationUnconfirmed: false,
       error: null,
       progress: 0,
       statusText: '',
@@ -341,6 +356,7 @@ export const useCalibrationStore = create<CalibrationState>((set, get) => ({
       statusText: getInitialStatusText(type),
       calibrationData: null,
       calibrationSuccess: null,
+      calibrationUnconfirmed: false,
       currentPosition: 0,
       positionStatus: [false, false, false, false, false, false],
       countdown: calType.estimatedDuration,
@@ -380,13 +396,14 @@ export const useCalibrationStore = create<CalibrationState>((set, get) => ({
     //      whatever the post-cal read returns, so the diff can never silently
     //      compare against an empty snapshot.
     // Cost is one round-trip (~1-2s for ~18 params in parallel).
-    // Post-cal verification diffs ArduPilot INS_*/COMPASS_OFS_* params, which
-    // do not exist on PX4. Skip the snapshot for PX4 so verification is not
-    // attempted (otherwise it would report a misleading "silent failure").
+    // The tracked-param table is firmware-specific: ArduPilot writes
+    // INS_*/COMPASS_OFS_*, PX4 writes CAL_*/SENS_BOARD_*. Both get the same
+    // snapshot -> diff treatment; a cal without moved params is a failure on
+    // either firmware.
     const isPx4 = useConnectionStore.getState().connectionState.firmware === 'px4';
     let paramSnapshot: Record<string, number> | null = null;
-    if (protocol === 'mavlink' && !isPx4) {
-      const trackedParams = MAVLINK_CALIBRATION_PARAMS[calibrationType];
+    if (protocol === 'mavlink') {
+      const trackedParams = (isPx4 ? PX4_CALIBRATION_PARAMS : MAVLINK_CALIBRATION_PARAMS)[calibrationType];
       if (trackedParams && trackedParams.length > 0) {
         try {
           const result = await window.electronAPI?.readParameterBatch([...trackedParams]);
@@ -425,7 +442,11 @@ export const useCalibrationStore = create<CalibrationState>((set, get) => ({
 
     try {
       // Call the IPC to start calibration, passing protocol so handler routes to MSP or MAVLink
-      const result = await window.electronAPI?.calibrationStart({ type: calibrationType, protocol: protocol ?? undefined });
+      const result = await window.electronAPI?.calibrationStart({
+        type: calibrationType,
+        protocol: protocol ?? undefined,
+        firmware: isPx4 ? 'px4' : 'ardupilot',
+      });
 
       if (!result?.success) {
         throw new Error(result?.error || 'Failed to start calibration');
@@ -650,8 +671,10 @@ export const useCalibrationStore = create<CalibrationState>((set, get) => ({
     });
   },
 
-  handleCalibrationComplete: (success, data, error, rebootRequired) => {
+  handleCalibrationComplete: (success, data, error, rebootRequired, unconfirmed) => {
     const { calibrationType, protocol, paramSnapshot } = get();
+    const isPx4 = useConnectionStore.getState().connectionState.firmware === 'px4';
+    const trackedTable = isPx4 ? PX4_CALIBRATION_PARAMS : MAVLINK_CALIBRATION_PARAMS;
 
     // Decide up front whether we'll run verification, so the initial state
     // transition can include `verification: pending` atomically. Without
@@ -662,7 +685,7 @@ export const useCalibrationStore = create<CalibrationState>((set, get) => ({
       protocol === 'mavlink' &&
       calibrationType &&
       paramSnapshot &&
-      MAVLINK_CALIBRATION_PARAMS[calibrationType]
+      trackedTable[calibrationType]
     );
 
     set({
@@ -672,6 +695,10 @@ export const useCalibrationStore = create<CalibrationState>((set, get) => ({
       calibrationSuccess: success,
       calibrationData: data || null,
       calibrationRebootRequired: success ? !!rebootRequired : false,
+      // An unconfirmed success that verification cannot adjudicate must never
+      // be presented as a confirmed one. Cleared if verification later says
+      // 'verified'.
+      calibrationUnconfirmed: success ? !!unconfirmed : false,
       error: error || null,
       progress: success ? 100 : get().progress,
       verification: willVerify ? { status: 'pending', results: [] } : null,
@@ -682,7 +709,7 @@ export const useCalibrationStore = create<CalibrationState>((set, get) => ({
     // and missing snapshots fall through to verification: null which the UI
     // treats as "not applicable".
     if (willVerify && calibrationType && paramSnapshot) {
-      void verifyCalibrationParams(calibrationType, paramSnapshot)
+      void verifyCalibrationParams(calibrationType, paramSnapshot, isPx4)
         .then((result) => {
           // Verification is the source of truth. If the tracked params
           // didn't move, the FC silently failed (or the 8s fallback fired
@@ -695,17 +722,27 @@ export const useCalibrationStore = create<CalibrationState>((set, get) => ({
             set({
               verification: result,
               calibrationSuccess: false,
+              calibrationUnconfirmed: false,
               error: 'Flight controller reported success, but the calibration parameters did not change. The calibration silently failed, please try again.',
             });
           } else {
-            set({ verification: result });
+            // 'verified' also settles any unconfirmed completion: the params
+            // moved, so the calibration demonstrably happened.
+            set({
+              verification: result,
+              ...(result.status === 'verified' ? { calibrationUnconfirmed: false } : {}),
+            });
+            // Record what the calibration actually wrote, plus how good it is.
+            // Without this the reboot erases all evidence and the operator is
+            // left assuming a restarted FC kept the calibration.
+            void recordCalibrationOutcome(calibrationType, result);
           }
         })
         .catch((err) => {
           const message = err instanceof Error ? err.message : 'Verification failed';
           set({ verification: { status: 'error', results: [], error: message } });
         });
-    } else if (success && protocol === 'mavlink' && calibrationType && !MAVLINK_CALIBRATION_PARAMS[calibrationType]) {
+    } else if (success && protocol === 'mavlink' && calibrationType && !trackedTable[calibrationType]) {
       set({ verification: { status: 'skipped', results: [] } });
     }
   },
@@ -917,6 +954,7 @@ export const useCalibrationStore = create<CalibrationState>((set, get) => ({
       compassProgress: [],
       calibrationData: null,
       calibrationSuccess: null,
+      calibrationUnconfirmed: false,
       error: null,
       isSaving: false,
       saveSuccess: false,
@@ -951,16 +989,76 @@ export const useCalibrationStore = create<CalibrationState>((set, get) => ({
  * treated as "doesn't exist on this FC" and ignored (e.g. INS_ACC3* on a
  * single-IMU board) — they don't count toward changed or unchanged.
  */
+/**
+ * Judge the calibration on its numbers and store it against the board, so the
+ * result survives the reboot that follows.
+ *
+ * "The flight controller said success" is not evidence. A compass fit the FC
+ * accepts can still be poor enough to fly badly, and a calibration that was
+ * accepted can be discarded by the reboot. Both are recorded here so the app
+ * can state what is true rather than implying everything is fine.
+ */
+async function recordCalibrationOutcome(
+  calType: CalibrationTypeId,
+  verification: CalibrationVerification,
+): Promise<void> {
+  const boardUid = useConnectionStore.getState().connectionState.boardUid;
+  if (!boardUid) return;
+
+  const written: Record<string, number> = {};
+  for (const row of verification.results) {
+    if (row.after !== undefined && row.after !== null) written[row.paramId] = row.after;
+  }
+  if (Object.keys(written).length === 0) return;
+
+  let assessment: CalibrationAssessment;
+  if (calType === 'compass') {
+    // Worst compass in the batch decides: one bad heading source is enough.
+    const fits = (useCalibrationStore.getState().calibrationData?.compassResults ?? [])
+      .map((r) => r.fitness)
+      .filter((f): f is number => typeof f === 'number');
+    assessment = fits.length > 0
+      ? fits.map((f) => assessCompassFitness(f)).reduce((worst, next) =>
+          (VERDICT_RANK[next.verdict] ?? 0) > (VERDICT_RANK[worst.verdict] ?? 0) ? next : worst)
+      : { verdict: 'unknown', summary: 'No compass fitness reported.' };
+  } else if (calType === 'accel-6point') {
+    const num = (name: string): number | undefined => written[name];
+    const offsets = num('INS_ACCOFFS_X') !== undefined
+      ? { x: num('INS_ACCOFFS_X')!, y: num('INS_ACCOFFS_Y') ?? 0, z: num('INS_ACCOFFS_Z') ?? 0 }
+      : undefined;
+    const scales = num('INS_ACCSCAL_X') !== undefined
+      ? { x: num('INS_ACCSCAL_X')!, y: num('INS_ACCSCAL_Y') ?? 1, z: num('INS_ACCSCAL_Z') ?? 1 }
+      : undefined;
+    assessment = assessAccelCalibration({ offsets, scales });
+  } else {
+    assessment = { verdict: 'unknown', summary: 'Recorded.' };
+  }
+
+  await window.electronAPI?.calibrationRecordSave(boardUid, {
+    type: calType,
+    written,
+    verdict: assessment.verdict,
+    summary: assessment.advice ? `${assessment.summary} ${assessment.advice}` : assessment.summary,
+    completedAt: Date.now(),
+    persistence: null,
+  });
+}
+
+const VERDICT_RANK: Record<string, number> = { good: 0, unknown: 1, marginal: 2, bad: 3 };
+
 async function verifyCalibrationParams(
   calType: CalibrationTypeId,
   snapshot: Record<string, number>,
+  isPx4 = false,
 ): Promise<CalibrationVerification> {
-  const tracked = MAVLINK_CALIBRATION_PARAMS[calType];
+  const tracked = (isPx4 ? PX4_CALIBRATION_PARAMS : MAVLINK_CALIBRATION_PARAMS)[calType];
   if (!tracked) {
     return { status: 'skipped', results: [] };
   }
 
-  const epsilon = CALIBRATION_DIFF_EPSILON[calType] ?? 1e-4;
+  // Firmware-specific epsilons: PX4 mag offsets are in Gauss (values ~0.1),
+  // ArduPilot's in milligauss, one epsilon table cannot serve both.
+  const epsilon = (isPx4 ? PX4_CALIBRATION_DIFF_EPSILON : CALIBRATION_DIFF_EPSILON)[calType] ?? 1e-4;
 
   const result = await window.electronAPI?.readParameterBatch([...tracked]);
   if (!result || !result.success) {

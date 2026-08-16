@@ -14,6 +14,7 @@ import { type CalibrationTypeId } from '../../../../shared/calibration-types';
 import { LargeVehicleMagCalDialog } from '../LargeVehicleMagCalDialog';
 import { LoadCalibrationFromFileDialog } from '../LoadCalibrationFromFileDialog';
 import { CompassMotDialog } from '../CompassMotDialog';
+import { CalibrationHealthBanner } from '../shared/CalibrationHealthBanner';
 
 // Map calibration type IDs to arming flag names that indicate calibration is needed
 // iNav flags: 'Accelerometer', 'Compass', 'No Gyro'
@@ -238,6 +239,11 @@ export function SelectCalibrationStep() {
 
   return (
     <div className="space-y-6">
+      {/* Standing calibration health for this board, worst first. Shown before
+          the picker because "the last calibration never made it onto the
+          vehicle" has to be read before choosing what to do next. */}
+      <CalibrationHealthBanner />
+
       {/* Introduction */}
       <div className="text-center max-w-2xl mx-auto">
         <h3 className="text-xl font-semibold text-content mb-2">Select Calibration Type</h3>

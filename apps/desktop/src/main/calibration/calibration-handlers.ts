@@ -23,6 +23,7 @@ import {
   startMavlinkCalibration,
   confirmMavlinkPosition,
   cancelMavlinkCalibration,
+  abortVehicleCalibration,
   isMavlinkCalibrationActive,
   sendFixedMagCalYaw,
   startCompassMot,
@@ -112,7 +113,7 @@ async function setCalibrationData(data: CalibrationData): Promise<{ success: boo
 // =============================================================================
 
 async function startCalibration(options: CalibrationStartOptions): Promise<CalibrationResult> {
-  const { type, protocol } = options;
+  const { type, protocol, firmware } = options;
 
   if (currentCalibration || isMavlinkCalibrationActive()) {
     return { success: false, error: 'Another calibration is already in progress' };
@@ -120,11 +121,12 @@ async function startCalibration(options: CalibrationStartOptions): Promise<Calib
 
   activeProtocol = protocol ?? null;
 
-  // Route to MAVLink path for ArduPilot
+  // Route to MAVLink path, the firmware decides the dialect (ArduPilot's
+  // DO_START_MAG_CAL/ACCELCAL flow vs PX4's PREFLIGHT_CALIBRATION + [cal]).
   if (protocol === 'mavlink') {
-    sendLog('info', `Starting ${type} calibration via MAVLink`);
+    sendLog('info', `Starting ${type} calibration via MAVLink (${firmware ?? 'ardupilot'})`);
     currentCalibration = type;
-    return startMavlinkCalibration(type);
+    return startMavlinkCalibration(type, firmware ?? 'ardupilot');
   }
 
   // MSP path (iNav / Betaflight)
@@ -481,6 +483,10 @@ async function confirmPosition(position: number): Promise<{ success: boolean; er
 
 export function cancelCalibration(reason: string = 'Cancelled by user'): void {
   if (activeProtocol === 'mavlink') {
+    // Tell the vehicle to abandon the run BEFORE tearing down local state -
+    // otherwise an ArduPilot mag cal (or PX4 cal) keeps running headless on
+    // the FC with nobody watching it.
+    abortVehicleCalibration();
     cancelMavlinkCalibration();
   }
   if (currentCalibration) {

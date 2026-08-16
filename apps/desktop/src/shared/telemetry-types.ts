@@ -43,6 +43,22 @@ export interface BatteryData {
   mahDrawn?: number;     // milliamp-hours consumed
 }
 
+/**
+ * One battery monitor instance from BATTERY_STATUS (#126: multi-battery
+ * systems, e.g. flight pack + MPPT solar input, report one message per
+ * configured monitor).
+ */
+export interface BatteryInstanceData extends BatteryData {
+  /** BATTERY_STATUS.id, 0-based monitor index (BATTx params are 1-based). */
+  id: number;
+  /** degC (omitted when the monitor doesn't report temperature) */
+  temperature?: number;
+  /** Estimated seconds of charge left (omitted when unknown) */
+  timeRemaining?: number;
+  /** Renderer-side receive timestamp for per-instance staleness */
+  updatedAt: number;
+}
+
 export interface VfrHudData {
   airspeed: number;    // m/s
   groundspeed: number; // m/s
@@ -148,6 +164,13 @@ export interface TelemetryState {
   /** Second GPS receiver (GPS2_RAW). null until a GPS2_RAW message is received. */
   gps2: GpsData | null;
   battery: BatteryData;
+  /** All battery monitors seen this session, keyed by BATTERY_STATUS id. */
+  batteries: Record<number, BatteryInstanceData>;
+  /**
+   * Which monitor drives the primary `battery` slot every consumer reads
+   * (panel, map gauge, HUD, announcer). null = SYS_STATUS default (battery 1).
+   */
+  primaryBatteryId: number | null;
   vfrHud: VfrHudData;
   wind: WindData;
   flight: FlightState;

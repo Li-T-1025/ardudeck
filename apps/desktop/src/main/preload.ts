@@ -21,6 +21,7 @@ import type { AttitudeData, PositionData, GpsData, BatteryData, VfrHudData, Wind
 import type { MotorTestStartRequest, MotorTestResponse } from '../shared/motor-test-types.js';
 import type { ParamValuePayload, ParameterProgress } from '../shared/parameter-types.js';
 import type { ParameterMetadataStore } from '../shared/parameter-metadata.js';
+import type { CalibrationRecordIpc } from '../shared/calibration-quality.js';
 import type { MissionItem, MissionProgress } from '../shared/mission-types.js';
 import type { MissionMirrorSnapshot } from '../shared/mission-group-types.js';
 import type { FenceItem, FenceStatus } from '../shared/fence-types.js';
@@ -2033,6 +2034,7 @@ const api = {
     type: 'accel-level' | 'accel-6point' | 'compass' | 'gyro' | 'opflow';
     position?: number;
     protocol?: 'msp' | 'mavlink';
+    firmware?: 'ardupilot' | 'px4';
   }): Promise<{
     success: boolean;
     error?: string;
@@ -2070,6 +2072,20 @@ const api = {
   /** Finish compassmot - the FC writes COMPASS_MOT_* and exits the loop. */
   calibrationCompassMotStop: (): Promise<{ success: boolean; error?: string }> =>
     ipcRenderer.invoke(IPC_CHANNELS.CALIBRATION_COMPASSMOT_STOP),
+
+  /**
+   * Calibration records, kept per board so a calibration can be PROVEN after
+   * the flight controller reboots instead of assumed to have survived it.
+   */
+  calibrationRecordSave: (boardUid: string, record: CalibrationRecordIpc): Promise<{ success: boolean; error?: string }> =>
+    ipcRenderer.invoke(IPC_CHANNELS.CALIBRATION_RECORD_SAVE, boardUid, record),
+
+  calibrationRecordList: (boardUid: string): Promise<CalibrationRecordIpc[]> =>
+    ipcRenderer.invoke(IPC_CHANNELS.CALIBRATION_RECORD_LIST, boardUid),
+
+  /** Re-read the calibration off the vehicle and confirm it persisted. */
+  calibrationRecordVerify: (boardUid: string): Promise<{ success: boolean; records?: CalibrationRecordIpc[]; error?: string }> =>
+    ipcRenderer.invoke(IPC_CHANNELS.CALIBRATION_RECORD_VERIFY, boardUid),
 
   /** Listen for calibration progress updates */
   onCalibrationProgress: (callback: (progress: CalibrationProgressEvent) => void) => {

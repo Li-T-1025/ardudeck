@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { TelemetryState, AttitudeData, PositionData, GpsData, BatteryData, VfrHudData, WindData, FlightState, RcChannelsData, RadioStatusData, SensorHealth, NavControllerData, GuidedTargetData } from '../../shared/telemetry-types';
+import type { TelemetryState, AttitudeData, PositionData, GpsData, BatteryData, BatteryInstanceData, VfrHudData, WindData, FlightState, RcChannelsData, RadioStatusData, SensorHealth, NavControllerData, GuidedTargetData } from '../../shared/telemetry-types';
 import type { VibrationData, EscTelemetryData, ServoOutputData } from '../../shared/motor-test-types';
 
 /** Batch telemetry update - all fields optional */
@@ -9,6 +9,8 @@ export interface TelemetryBatch {
   gps?: GpsData;
   gps2?: GpsData;
   battery?: BatteryData;
+  /** Per-monitor BATTERY_STATUS instances received this batch, keyed by id. */
+  batteryInstances?: Record<number, Omit<BatteryInstanceData, 'updatedAt'>>;
   vfrHud?: VfrHudData;
   wind?: WindData;
   flight?: FlightState;
@@ -33,7 +35,25 @@ interface TelemetryStore extends TelemetryState {
   updateFlight: (data: FlightState) => void;
   /** Batch update - updates multiple telemetry fields in a single store mutation */
   updateBatch: (batch: TelemetryBatch) => void;
+  /**
+   * Choose which battery monitor drives the primary `battery` slot (#126).
+   * null restores the SYS_STATUS default (battery 1). Persisted.
+   */
+  setPrimaryBattery: (id: number | null) => void;
   reset: () => void;
+}
+
+const PRIMARY_BATTERY_KEY = 'ardudeck.primaryBatteryId';
+
+function loadPrimaryBatteryId(): number | null {
+  try {
+    const raw = localStorage.getItem(PRIMARY_BATTERY_KEY);
+    if (raw === null) return null;
+    const n = Number(raw);
+    return Number.isInteger(n) && n >= 0 ? n : null;
+  } catch {
+    return null;
+  }
 }
 
 const initialState: TelemetryState = {
@@ -54,6 +74,8 @@ const initialState: TelemetryState = {
   gps: { fixType: 0, satellites: 0, hdop: 99, vdop: 99, lat: 0, lon: 0, alt: 0 },
   gps2: null,
   battery: { voltage: 0, current: 0, remaining: 0 },
+  batteries: {},
+  primaryBatteryId: loadPrimaryBatteryId(),
   vfrHud: { airspeed: 0, groundspeed: 0, heading: 0, throttle: 0, alt: 0, climb: 0 },
   wind: { direction: 0, speed: 0, speedZ: 0 },
   flight: { mode: 'Unknown', modeNum: 0, armed: false, isFlying: false },
@@ -67,7 +89,7 @@ const initialState: TelemetryState = {
   guidedTarget: null,
 };
 
-export const useTelemetryStore = create<TelemetryStore>((set) => ({
+export const useTelemetryStore = create<TelemetryStore>((set, get) => ({
   ...initialState,
 
   updateAttitude: (data) => set({ attitude: data, lastAttitude: Date.now() }),
@@ -99,9 +121,32 @@ export const useTelemetryStore = create<TelemetryStore>((set) => ({
       updates.gps2 = batch.gps2;
       updates.lastGps2 = now;
     }
-    if (batch.battery) {
+    if (batch.batteryInstances) {
+      const merged: Record<number, BatteryInstanceData> = { ...get().batteries };
+      for (const inst of Object.values(batch.batteryInstances)) {
+        merged[inst.id] = { ...inst, updatedAt: now };
+      }
+      updates.batteries = merged;
+    }
+    // Primary battery slot (#126): with no selection, SYS_STATUS (battery 1)
+    // drives it as always. With a selected monitor, that monitor's
+    // BATTERY_STATUS drives it instead, so every consumer (panel, gauges,
+    // HUD, announcer) follows the selection without knowing about it.
+    const primaryId = get().primaryBatteryId;
+    if (batch.battery && primaryId === null) {
       updates.battery = batch.battery;
       updates.lastBattery = now;
+    } else if (primaryId !== null) {
+      const inst = batch.batteryInstances?.[primaryId];
+      if (inst) {
+        updates.battery = { ...inst };
+        updates.lastBattery = now;
+      } else if (primaryId === 0 && batch.battery) {
+        // Monitor 1 selected but no BATTERY_STATUS this batch, SYS_STATUS
+        // reports the same battery, keep freshness from it.
+        updates.battery = batch.battery;
+        updates.lastBattery = now;
+      }
     }
     if (batch.vfrHud) {
       updates.vfrHud = batch.vfrHud;
@@ -146,5 +191,23 @@ export const useTelemetryStore = create<TelemetryStore>((set) => ({
     set(updates);
   },
 
-  reset: () => set(initialState),
+  setPrimaryBattery: (id) => {
+    try {
+      if (id === null) localStorage.removeItem(PRIMARY_BATTERY_KEY);
+      else localStorage.setItem(PRIMARY_BATTERY_KEY, String(id));
+    } catch { /* storage unavailable, selection still applies this session */ }
+    set((state) => {
+      const inst = id !== null ? state.batteries[id] : undefined;
+      return {
+        primaryBatteryId: id,
+        // Apply immediately from the last-seen instance so the primary
+        // display doesn't wait for the next telemetry batch.
+        ...(inst ? { battery: { ...inst }, lastBattery: Date.now() } : {}),
+      };
+    });
+  },
+
+  // Re-read the persisted battery selection: initialState captured it at
+  // module load and the user may have changed it since.
+  reset: () => set({ ...initialState, primaryBatteryId: loadPrimaryBatteryId() }),
 }));
