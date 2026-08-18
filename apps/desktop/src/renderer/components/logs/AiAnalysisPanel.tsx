@@ -156,7 +156,7 @@ function ParamActionCard({ params, requireWarning }: { params: ParamSuggestion[]
   const handleApply = async (p: ParamSuggestion) => {
     setApplying(p.name);
     setError(null);
-    const ok = await parameterStore.getState().setParameter(p.name, p.value);
+    const ok = await parameterStore.getState().setParameterImmediate(p.name, p.value);
     setApplying(null);
     if (ok) {
       setApplied((prev) => new Set(prev).add(p.name));
@@ -170,7 +170,7 @@ function ParamActionCard({ params, requireWarning }: { params: ParamSuggestion[]
     for (const p of params) {
       if (applied.has(p.name)) continue;
       setApplying(p.name);
-      const ok = await parameterStore.getState().setParameter(p.name, p.value);
+      const ok = await parameterStore.getState().setParameterImmediate(p.name, p.value);
       setApplying(null);
       if (ok) {
         setApplied((prev) => new Set(prev).add(p.name));

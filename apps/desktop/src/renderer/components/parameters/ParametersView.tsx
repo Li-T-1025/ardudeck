@@ -91,6 +91,7 @@ export function ParametersView() {
     modifiedCount,
     modifiedParameters,
     markAllAsSaved,
+    commitStagedParams,
     groupCounts,
     getDescription,
     hasOfficialDescription,
@@ -209,7 +210,13 @@ export function ParametersView() {
         );
       }
 
-      const result = await window.electronAPI?.writeParamsToFlash();
+      // PX4 persists PARAM_SET immediately, so the staged edits are sent here
+      // (post-confirm) instead of asking the FC to flush RAM to flash.
+      const result = connectionState.firmware === 'px4'
+        ? await commitStagedParams().then(r => r.failed.length === 0
+            ? { success: true as const }
+            : { success: false as const, error: `Failed to write ${r.failed.join(', ')}` })
+        : await window.electronAPI?.writeParamsToFlash();
       if (result?.success) {
         // Check if any written params require a reboot
         const rebootParams = modified.filter(p => isRebootRequired(p.id)).map(p => p.id);
@@ -227,7 +234,7 @@ export function ParametersView() {
     } finally {
       setIsWritingFlash(false);
     }
-  }, [markAllAsSaved, showToast, modifiedParameters, connectionState, isRebootRequired]);
+  }, [markAllAsSaved, showToast, modifiedParameters, connectionState, isRebootRequired, commitStagedParams]);
 
   const handleReboot = useCallback(async () => {
     setRebooting(true);

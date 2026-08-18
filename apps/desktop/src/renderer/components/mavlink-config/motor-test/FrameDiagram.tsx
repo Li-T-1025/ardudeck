@@ -134,7 +134,11 @@ export const FrameDiagram: React.FC<FrameDiagramProps> = ({
           const isActive = activeMotor === pos.number;
           const rpm = rpmByMotor?.get(pos.number);
           const isCw = pos.rotation === 'CW';
-          const color = isCw ? 'rgb(59, 130, 246)' : 'rgb(16, 185, 129)'; // blue = CW, green = CCW
+          // Unknown direction (PX4 with CA_ROTORn_KM unset) must not claim a spin
+          const unknownRotation = pos.rotation === '?';
+          const color = unknownRotation
+            ? 'var(--text-secondary)'
+            : isCw ? 'rgb(59, 130, 246)' : 'rgb(16, 185, 129)'; // blue = CW, green = CCW
 
           return (
             <g
@@ -182,7 +186,7 @@ export const FrameDiagram: React.FC<FrameDiagramProps> = ({
 
               {/* Rotation arrow — a real curved arrow (arc + arrowhead) so the
                   spin direction reads at a glance without the colour legend. */}
-              {(() => {
+              {!unknownRotation && (() => {
                 const arrow = rotationArrow(pos.cx, pos.cy, isCw);
                 return (
                   <g opacity={0.85} pointerEvents="none">

@@ -492,8 +492,8 @@ const Px4ReceiverConfig: React.FC = () => {
           </table>
         </div>
         <p className="text-[11px] text-content-tertiary mt-2">
-          Changes are written to the vehicle as you edit. ArduPilot-style automatic stick calibration
-          is not available over MAVLink for PX4, so set endpoints manually using the live bars above.
+          Changes are staged until you Save All Changes in the header. ArduPilot-style automatic stick
+          calibration is not available over MAVLink for PX4, so set endpoints manually using the live bars above.
         </p>
       </div>
     </div>

@@ -243,7 +243,10 @@ const ROVER_TABS: TabNode[] = [
 // Motor Test (DO_MOTOR_TEST, which PX4 rejects). Hidden on PX4 rather than
 // shown hunting for parameters that don't exist; the full parameter table
 // still exposes everything with PX4's own metadata.
-const PX4_UNSUPPORTED_TABS: ReadonlySet<TabId> = new Set(['rates', 'tuning', 'serial-ports', 'motor-test']);
+// Rates and Tuning are ArduPilot-parameter presets with no PX4 counterpart
+// (PX4 rate/tuning params live in the PID tab and parameter table). Serial
+// ports and motor test have dedicated PX4 implementations.
+const PX4_UNSUPPORTED_TABS: ReadonlySet<TabId> = new Set(['rates', 'tuning']);
 
 function filterTabsForFirmware(nodes: TabNode[], isPx4: boolean): TabNode[] {
   if (!isPx4) return nodes;
@@ -281,6 +284,7 @@ export const MavlinkConfigView: React.FC = () => {
   const fetchParameters = useParameterStore((s) => s.fetchParameters);
   const modifiedCount = useParameterStore((s) => s.modifiedCount);
   const modifiedParameters = useParameterStore((s) => s.modifiedParameters);
+  const commitStagedParams = useParameterStore((s) => s.commitStagedParams);
   const markAllAsSaved = useParameterStore((s) => s.markAllAsSaved);
   const isRebootRequired = useParameterStore((s) => s.isRebootRequired);
   const setSearchQuery = useParameterStore((s) => s.setSearchQuery);
@@ -377,7 +381,13 @@ export const MavlinkConfigView: React.FC = () => {
         );
       }
 
-      const result = await window.electronAPI?.writeParamsToFlash();
+      // PX4 persists PARAM_SET immediately, so the staged edits are sent here
+      // (post-confirm) instead of asking the FC to flush RAM to flash.
+      const result = connectionState.firmware === 'px4'
+        ? await commitStagedParams().then(r => r.failed.length === 0
+            ? { success: true as const }
+            : { success: false as const, error: `Failed to write ${r.failed.join(', ')}` })
+        : await window.electronAPI?.writeParamsToFlash();
       if (result?.success) {
         // Vault backup: full param snapshot after a successful flash write.
         // Auto-sync pushes it to the remote from the main side.
@@ -401,7 +411,7 @@ export const MavlinkConfigView: React.FC = () => {
     } finally {
       setIsWritingFlash(false);
     }
-  }, [markAllAsSaved, showToast, modifiedParameters, connectionState, isRebootRequired]);
+  }, [markAllAsSaved, showToast, modifiedParameters, connectionState, isRebootRequired, commitStagedParams]);
 
   const handleReboot = useCallback(async () => {
     setRebooting(true);

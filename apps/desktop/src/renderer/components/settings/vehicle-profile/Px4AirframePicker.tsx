@@ -19,7 +19,7 @@ import {
 } from './px4-airframes.js';
 
 export function Px4AirframePicker() {
-  const setParameter = useParameterStore((s) => s.setParameter);
+  const setParameter = useParameterStore((s) => s.setParameterImmediate);
   const paramSize = useParameterStore((s) => s.parameters.size);
   const currentId = useParameterStore((s) => s.parameters.get('SYS_AUTOSTART')?.value);
   const canSet = useParameterStore((s) => s.parameters.has('SYS_AUTOSTART'));

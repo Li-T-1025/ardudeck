@@ -10,7 +10,7 @@ import { useParameterStore } from '../stores/parameter-store';
 
 export function useSimParam(paramId: string, defaultValue = 0) {
   const storeValue = useParameterStore((s) => s.parameters.get(paramId)?.value);
-  const setParameter = useParameterStore((s) => s.setParameter);
+  const setParameter = useParameterStore((s) => s.setParameterImmediate);
   const [local, setLocal] = useState<number | undefined>(undefined);
   const timerRef = useRef<ReturnType<typeof setTimeout>>();
 

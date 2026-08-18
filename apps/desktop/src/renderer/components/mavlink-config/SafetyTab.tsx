@@ -86,17 +86,9 @@ const Px4SafetyConfig: React.FC<{
   setParameter: (id: string, value: number) => void;
   getParameterMetadata: ReturnType<typeof useParameterStore.getState>['getParameterMetadata'];
 }> = ({ parameters, setParameter, getParameterMetadata }) => {
-  // Staged write + confirm. The ArduPilot side of this tab confirms dangerous
-  // changes with an old->new dialog; PX4 safety edits must not be the one
-  // place in the Safety tab where a click writes to the vehicle unreviewed.
-  const [pendingWrite, setPendingWrite] = useState<{
-    paramId: string; label: string; oldValue: number; newValue: number;
-    format?: (v: number) => string;
-  } | null>(null);
-  const requestWrite = useCallback((paramId: string, label: string, oldValue: number, newValue: number, format?: (v: number) => string) => {
-    if (oldValue === newValue) return;
-    setPendingWrite({ paramId, label, oldValue, newValue, format });
-  }, []);
+  // Edits stage in the parameter store (PX4 setParameter stages instead of
+  // writing) and are reviewed in the standard Write Parameters to Flash
+  // dialog via Save All Changes, exactly like the ArduPilot tabs.
 
   // Resolve enum options from bundled metadata first, then fall back to known labels.
   const enumOptions = useCallback((paramId: string): Array<{ value: number; label: string }> => {
@@ -113,11 +105,10 @@ const Px4SafetyConfig: React.FC<{
   const renderEnum = (paramId: string, currentFallback: number) => {
     const options = enumOptions(paramId);
     const value = num(paramId, currentFallback);
-    const labelFor = (v: number) => options.find((o) => o.value === v)?.label ?? `Value ${v}`;
     return (
       <select
         value={value}
-        onChange={(e) => requestWrite(paramId, paramId, value, Number(e.target.value), labelFor)}
+        onChange={(e) => setParameter(paramId, Number(e.target.value))}
         className="w-full px-3 py-2 bg-surface-raised border rounded-lg text-sm text-content focus:outline-none focus:border-blue-500"
       >
         {options.length > 0 ? (
@@ -170,7 +161,7 @@ const Px4SafetyConfig: React.FC<{
           <DraggableSlider
             label="Loss Timeout (s)"
             value={Math.round(px4Values.comRcLossT * 10)}
-            onChange={(v) => requestWrite('COM_RC_LOSS_T', 'COM_RC_LOSS_T', px4Values.comRcLossT, v / 10, (x) => `${x.toFixed(1)} s`)}
+            onChange={(v) => setParameter('COM_RC_LOSS_T', v / 10)}
             min={0}
             max={350}
             step={1}
@@ -207,7 +198,7 @@ const Px4SafetyConfig: React.FC<{
           <DraggableSlider
             label="Loss Timeout (s)"
             value={px4Values.comDlLossT}
-            onChange={(v) => requestWrite('COM_DL_LOSS_T', 'COM_DL_LOSS_T', px4Values.comDlLossT, v, (x) => `${x.toFixed(0)} s`)}
+            onChange={(v) => setParameter('COM_DL_LOSS_T', v)}
             min={5}
             max={300}
             step={1}
@@ -270,7 +261,7 @@ const Px4SafetyConfig: React.FC<{
           <DraggableSlider
             label="Max Horizontal Distance (m)"
             value={px4Values.gfMaxHorDist}
-            onChange={(v) => requestWrite('GF_MAX_HOR_DIST', 'GF_MAX_HOR_DIST', px4Values.gfMaxHorDist, v, (x) => x === 0 ? 'disabled' : `${x.toFixed(0)} m`)}
+            onChange={(v) => setParameter('GF_MAX_HOR_DIST', v)}
             min={0}
             max={10000}
             step={10}
@@ -281,7 +272,7 @@ const Px4SafetyConfig: React.FC<{
           <DraggableSlider
             label="Max Vertical Distance (m)"
             value={px4Values.gfMaxVerDist}
-            onChange={(v) => requestWrite('GF_MAX_VER_DIST', 'GF_MAX_VER_DIST', px4Values.gfMaxVerDist, v, (x) => x === 0 ? 'disabled' : `${x.toFixed(0)} m`)}
+            onChange={(v) => setParameter('GF_MAX_VER_DIST', v)}
             min={0}
             max={10000}
             step={10}
@@ -307,7 +298,7 @@ const Px4SafetyConfig: React.FC<{
           <DraggableSlider
             label="Disarm After Landing (s)"
             value={Math.round(px4Values.comDisarmLand * 10)}
-            onChange={(v) => requestWrite('COM_DISARM_LAND', 'COM_DISARM_LAND', px4Values.comDisarmLand, v / 10, (x) => `${x.toFixed(1)} s`)}
+            onChange={(v) => setParameter('COM_DISARM_LAND', v / 10)}
             min={0}
             max={200}
             step={1}
@@ -319,7 +310,7 @@ const Px4SafetyConfig: React.FC<{
           <DraggableSlider
             label="Disarm If Not Taking Off (s)"
             value={Math.round(px4Values.comDisarmPrflt * 10)}
-            onChange={(v) => requestWrite('COM_DISARM_PRFLT', 'COM_DISARM_PRFLT', px4Values.comDisarmPrflt, v / 10, (x) => `${x.toFixed(1)} s`)}
+            onChange={(v) => setParameter('COM_DISARM_PRFLT', v / 10)}
             min={0}
             max={300}
             step={1}
@@ -329,28 +320,6 @@ const Px4SafetyConfig: React.FC<{
           />
         </div>
       </div>
-    
-      {/* Confirm before any safety param reaches the vehicle (old -> new). */}
-      {pendingWrite && (
-        <div className="fixed inset-0 z-[3000] flex items-center justify-center bg-black/50" onClick={() => setPendingWrite(null)}>
-          <div className="bg-surface-solid rounded-xl border border-default shadow-2xl p-5 w-[380px]" onClick={(e) => e.stopPropagation()}>
-            <h3 className="text-sm font-semibold text-content mb-3">Change {pendingWrite.label}?</h3>
-            <div className="flex items-center gap-2 text-sm mb-4">
-              <span className="font-mono text-content-secondary">{(pendingWrite.format ?? String)(pendingWrite.oldValue)}</span>
-              <span className="text-content-tertiary">to</span>
-              <span className="font-mono text-content">{(pendingWrite.format ?? String)(pendingWrite.newValue)}</span>
-            </div>
-            <p className="text-xs text-content-secondary mb-4">Written to the vehicle immediately on confirm.</p>
-            <div className="flex justify-end gap-2">
-              <button onClick={() => setPendingWrite(null)} className="px-3 py-1.5 text-xs rounded-lg border border-subtle text-content-secondary hover:text-content">Cancel</button>
-              <button
-                onClick={() => { setParameter(pendingWrite.paramId, pendingWrite.newValue); setPendingWrite(null); }}
-                className="px-3 py-1.5 text-xs rounded-lg bg-blue-600 hover:bg-blue-500 text-white"
-              >Confirm</button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 };
@@ -483,7 +452,7 @@ const SafetyTab: React.FC = () => {
           <div className="bg-amber-500/10 rounded-xl border-amber-500/30 p-4 flex items-center gap-3">
             <Save className="w-5 h-5 text-amber-400" />
             <p className="text-sm text-amber-400">
-              You have unsaved changes. Click <span className="font-medium">"Write to Flash"</span> in the header to save.
+              You have unsaved changes. Click <span className="font-medium">"Save All Changes"</span> in the header to save.
             </p>
           </div>
         )}

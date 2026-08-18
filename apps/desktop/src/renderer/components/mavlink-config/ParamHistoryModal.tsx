@@ -43,7 +43,7 @@ const ParamHistoryModal: React.FC<Props> = ({ boardUid, boardName, onClose, show
   const [restoring, setRestoring] = useState<string | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
 
-  const { setParameter } = useParameterStore();
+  const setParameter = useParameterStore((s) => s.setParameterImmediate);
 
   const loadHistory = useCallback(async () => {
     setLoading(true);

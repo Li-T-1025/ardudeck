@@ -494,7 +494,7 @@ export const useFleetRepoStore = create<FleetRepoState>()((set, get) => ({
     }
 
     const rows = diff.changed.filter((r) => includeCalibration || !r.calibration);
-    const setParameter = useParameterStore.getState().setParameter;
+    const setParameter = useParameterStore.getState().setParameterImmediate;
     set({ restoreBusy: true, restoreProgress: { done: 0, total: rows.length } });
     let applied = 0;
     let failed = 0;

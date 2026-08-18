@@ -51,6 +51,51 @@ export function buildGenericLayout(motorCount: number): FrameLayout {
   };
 }
 
+/**
+ * Build a frame layout from PX4 control-allocation geometry.
+ * CA_ROTOR_COUNT gives the motor count; CA_ROTOR{i}_PX/_PY give positions in
+ * the body frame (X forward, Y right); CA_ROTOR{i}_KM sign gives spin
+ * direction (positive = CCW, negative = CW, per control_allocator module.yaml).
+ * Returns null when CA_ROTOR_COUNT is missing/zero (not a multirotor airframe).
+ */
+export function buildPx4Layout(get: (key: string) => number | undefined): FrameLayout | null {
+  const count = get('CA_ROTOR_COUNT');
+  if (!count || count < 1) return null;
+  const n = Math.min(Math.round(count), 12);
+
+  const motors: FrameLayoutMotor[] = [];
+  let anyGeometry = false;
+  for (let i = 0; i < n; i++) {
+    const px = get(`CA_ROTOR${i}_PX`) ?? 0;
+    const py = get(`CA_ROTOR${i}_PY`) ?? 0;
+    const km = get(`CA_ROTOR${i}_KM`);
+    if (px !== 0 || py !== 0) anyGeometry = true;
+    motors.push({
+      Number: i + 1,
+      TestOrder: i + 1,
+      Rotation: km === undefined || km === 0 ? '?' : km > 0 ? 'CCW' : 'CW',
+      // Layout space: Pitch = forward (+PX); right side of vehicle renders at
+      // -Roll (see layoutToSvgPositions), so Roll = -PY.
+      Roll: -py,
+      Pitch: px,
+    });
+  }
+
+  if (!anyGeometry) {
+    // Geometry params unset: fall back to an evenly spaced circle but keep the
+    // KM-derived (or unknown) spin directions rather than guessing.
+    const generic = buildGenericLayout(n);
+    return {
+      ...generic,
+      ClassName: 'PX4',
+      TypeName: `PX4 ${n}-rotor`,
+      motors: generic.motors.map((m, i) => ({ ...m, Rotation: motors[i]?.Rotation ?? '?' })),
+    };
+  }
+
+  return { Class: -1, ClassName: 'PX4', Type: -1, TypeName: `PX4 ${n}-rotor`, motors };
+}
+
 export interface MotorPosition {
   number: number;
   testOrder: number;

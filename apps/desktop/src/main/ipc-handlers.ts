@@ -1241,6 +1241,16 @@ function stopPx4ManualControlStream(): void {
   }
 }
 
+// PX4 motor test (MAV_CMD_ACTUATOR_TEST) re-send timers. PX4 caps a single
+// test command at 3 s (Commander::handleCommandActuatorTest clamps timeout_ms
+// to 3000), so longer durations are covered by chained re-sends.
+let px4MotorTestTimers: NodeJS.Timeout[] = [];
+
+function clearPx4MotorTestTimers(): void {
+  for (const t of px4MotorTestTimers) clearTimeout(t);
+  px4MotorTestTimers = [];
+}
+
 /**
  * BSOD FIX: Clean up all transport event listeners
  * Must be called BEFORE closing transport to prevent orphaned handlers
@@ -5741,6 +5751,7 @@ export function setupIpcHandlers(mainWindow: BrowserWindow): void {
 
     // A new link means the old virtual joystick must not keep transmitting.
     stopPx4ManualControlStream();
+    clearPx4MotorTestTimers();
 
     // Disconnect existing connection. Close unconditionally, not only when
     // isOpen: a UDP transport whose open() failed (or whose error path fired)
@@ -6381,6 +6392,7 @@ export function setupIpcHandlers(mainWindow: BrowserWindow): void {
     cancelCalibration('User disconnected');
 
     stopPx4ManualControlStream();
+    clearPx4MotorTestTimers();
 
     try {
       // Exit CLI mode first (sends 'exit' command to leave board in MSP mode)
@@ -8767,6 +8779,42 @@ export function setupIpcHandlers(mainWindow: BrowserWindow): void {
     void adapter; // suppress unused
   });
 
+  // PX4 motor test: MAV_CMD_ACTUATOR_TEST (310). param1 = value (motors 0..1),
+  // param2 = timeout seconds (<= 0 releases control = stop, PX4 clamps to 3 s
+  // max per command), param5 = output function (ACTUATOR_OUTPUT_FUNCTION:
+  // MOTOR1 = 1). Denied by PX4 when armed or when COM_MOT_TEST_EN != 1.
+  const sendPx4ActuatorTest = async (fn: number, value: number, timeoutS: number): Promise<void> => {
+    if (!currentTransport?.isOpen || !connectionState.isConnected) return;
+    const payload = serializeCommandLong({
+      targetSystem: connectionState.systemId ?? 1,
+      targetComponent: 1,
+      command: 310, // MAV_CMD_ACTUATOR_TEST
+      confirmation: 0,
+      param1: value,
+      param2: timeoutS,
+      param3: 0,
+      param4: 0,
+      param5: fn,
+      param6: 0,
+      param7: 0,
+    });
+    const packet = await sendMavlinkPacket(COMMAND_LONG_ID, payload, COMMAND_LONG_CRC_EXTRA);
+    await currentTransport.write(packet);
+    connectionState.packetsSent++;
+  };
+
+  // Chain re-sends so a duration beyond PX4's 3 s per-command cap keeps running.
+  const schedulePx4MotorRun = (fn: number, durationS: number, startDelayMs: number): void => {
+    for (let offset = 0; offset < durationS; offset += 1) {
+      const timeoutS = Math.min(durationS - offset, 3);
+      const t = setTimeout(() => {
+        void sendPx4ActuatorTest(fn, px4MotorTestValue, timeoutS).catch(() => { /* transport churn mid-test */ });
+      }, startDelayMs + offset * 1000);
+      px4MotorTestTimers.push(t);
+    }
+  };
+  let px4MotorTestValue = 0;
+
   // Motor Test via MAV_CMD_DO_MOTOR_TEST (command 209)
   // Spins a single motor (or sequences through N motors) at the requested throttle.
   // ArduPilot refuses the command if the vehicle is armed.
@@ -8776,6 +8824,37 @@ export function setupIpcHandlers(mainWindow: BrowserWindow): void {
     }
     if (connectionState.protocol !== 'mavlink') {
       return { success: false, error: 'Motor test requires MAVLink connection' };
+    }
+
+    if (connectionState.firmware === 'px4') {
+      try {
+        px4MotorTestValue = Math.max(0, Math.min(1, request.throttle / 100));
+        if (request.motorCount && request.motorCount > 1) {
+          // PX4 has no FC-side sequence mode: chain the motors here.
+          for (let i = 0; i < request.motorCount; i++) {
+            schedulePx4MotorRun(i + 1, request.duration, i * request.duration * 1000);
+          }
+        } else {
+          // First segment sent immediately so transport errors surface to the UI
+          await sendPx4ActuatorTest(request.motor, px4MotorTestValue, Math.min(request.duration, 3));
+          if (request.duration > 3) {
+            for (let offset = 3; offset < request.duration; offset += 1) {
+              const timeoutS = Math.min(request.duration - offset, 3);
+              const t = setTimeout(() => {
+                void sendPx4ActuatorTest(request.motor, px4MotorTestValue, timeoutS).catch(() => { /* transport churn */ });
+              }, offset * 1000);
+              px4MotorTestTimers.push(t);
+            }
+          }
+        }
+        sendLog(mainWindow, 'info',
+          `Actuator test: motor ${request.motorCount && request.motorCount > 1 ? `1-${request.motorCount} sequence` : request.motor}, ${request.throttle}%, ${request.duration}s`);
+        return { success: true };
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Unknown error';
+        sendLog(mainWindow, 'error', 'Failed to send actuator test command', message);
+        return { success: false, error: message };
+      }
     }
 
     try {
@@ -8956,6 +9035,23 @@ export function setupIpcHandlers(mainWindow: BrowserWindow): void {
   ipcMain.handle(IPC_CHANNELS.MOTOR_TEST_STOP, async (_, motorCount: number): Promise<MotorTestResponse> => {
     if (!currentTransport?.isOpen || !connectionState.isConnected) {
       return { success: false, error: 'Not connected' };
+    }
+
+    if (connectionState.firmware === 'px4') {
+      try {
+        clearPx4MotorTestTimers();
+        // timeout <= 0 = ACTION_RELEASE_CONTROL: hands the output back to the
+        // (disarmed) allocator, which stops the motor.
+        for (let motor = 1; motor <= motorCount; motor++) {
+          await sendPx4ActuatorTest(motor, 0, 0);
+        }
+        sendLog(mainWindow, 'info', `Actuator test STOP sent to ${motorCount} motors`);
+        return { success: true };
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Unknown error';
+        sendLog(mainWindow, 'error', 'Failed to stop motors', message);
+        return { success: false, error: message };
+      }
     }
 
     try {
@@ -13378,6 +13474,7 @@ export async function cleanupOnShutdown(): Promise<void> {
     swarmSitlProcess.stop();
     px4SitlProcess.stop();
     stopPx4ManualControlStream();
+    clearPx4MotorTestTimers();
   } catch (err) {
     console.warn('[Shutdown] Error stopping firmware SITLs:', err);
   }

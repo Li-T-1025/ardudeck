@@ -50,7 +50,7 @@ function ParamLink({ paramId }: { paramId: string }) {
  * disabling arming checks) when there's no direct parameter to point at.
  */
 export function PreArmParamFix({ paramIds, hint, action, navigateTo }: PreArmParamFixProps) {
-  const setParameter = useParameterStore((s) => s.setParameter);
+  const setParameter = useParameterStore((s) => s.setParameterImmediate);
   const [disabling, setDisabling] = useState(false);
   const [disabled, setDisabled] = useState(false);
 

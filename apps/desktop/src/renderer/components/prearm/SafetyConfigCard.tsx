@@ -47,7 +47,7 @@ const SEVERITY: Record<SafetySeverity, {
 
 function FindingRow({ finding }: { finding: SafetyFinding }) {
   const setView = useNavigationStore((s) => s.setView);
-  const setParameter = useParameterStore((s) => s.setParameter);
+  const setParameter = useParameterStore((s) => s.setParameterImmediate);
   const [applying, setApplying] = useState(false);
   const [applied, setApplied] = useState(false);
   const [failed, setFailed] = useState(false);

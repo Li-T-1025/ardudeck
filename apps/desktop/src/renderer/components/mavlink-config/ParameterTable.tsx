@@ -98,6 +98,7 @@ const ParameterTable: React.FC = () => {
     modifiedCount,
     modifiedParameters,
     markAllAsSaved,
+    commitStagedParams,
     groupCounts,
     getDescription,
     hasOfficialDescription,
@@ -258,7 +259,13 @@ const ParameterTable: React.FC = () => {
         );
       }
 
-      const result = await window.electronAPI?.writeParamsToFlash();
+      // PX4 persists PARAM_SET immediately, so the staged edits are sent here
+      // (post-confirm) instead of asking the FC to flush RAM to flash.
+      const result = connectionState.firmware === 'px4'
+        ? await commitStagedParams().then(r => r.failed.length === 0
+            ? { success: true as const }
+            : { success: false as const, error: `Failed to write ${r.failed.join(', ')}` })
+        : await window.electronAPI?.writeParamsToFlash();
       if (result?.success) {
         // Vault backup: full param snapshot after a successful flash write.
         // Auto-sync (if enabled) pushes it to the remote from the main side.
@@ -282,7 +289,7 @@ const ParameterTable: React.FC = () => {
     } finally {
       setIsWritingFlash(false);
     }
-  }, [markAllAsSaved, showToast, modifiedParameters, connectionState, isRebootRequired]);
+  }, [markAllAsSaved, showToast, modifiedParameters, connectionState, isRebootRequired, commitStagedParams]);
 
   const handleReboot = useCallback(async () => {
     setRebooting(true);
@@ -348,10 +355,12 @@ const ParameterTable: React.FC = () => {
       cycle.totalApplied += result.applied;
       cycle.totalFailed += result.failed;
 
-      // If params were applied, flash write again
+      // If params were applied, flash write again (PX4 already persisted them)
       if (result.applied > 0) {
-        setCycleStatus('Writing new parameters to flash...');
-        await window.electronAPI?.writeParamsToFlash();
+        if (connectionState.firmware !== 'px4') {
+          setCycleStatus('Writing new parameters to flash...');
+          await window.electronAPI?.writeParamsToFlash();
+        }
         markAllAsSaved();
       }
 
@@ -398,25 +407,27 @@ const ParameterTable: React.FC = () => {
     // Close compare modal
     closeCompareModal();
 
-    // Flash write
-    setCycleStatus('Writing parameters to flash...');
-    try {
-      const flashResult = await window.electronAPI?.writeParamsToFlash();
-      if (!flashResult?.success) {
+    // Flash write (PX4 already persisted the batch-applied params)
+    if (connectionState.firmware !== 'px4') {
+      setCycleStatus('Writing parameters to flash...');
+      try {
+        const flashResult = await window.electronAPI?.writeParamsToFlash();
+        if (!flashResult?.success) {
+          cycle.active = false;
+          cycle.phase = 'idle';
+          setCycleStatus(null);
+          showToast(flashResult?.error ?? 'Failed to write to flash', 'error');
+          return;
+        }
+      } catch {
         cycle.active = false;
         cycle.phase = 'idle';
         setCycleStatus(null);
-        showToast(flashResult?.error ?? 'Failed to write to flash', 'error');
+        showToast('Failed to write to flash', 'error');
         return;
       }
-      markAllAsSaved();
-    } catch {
-      cycle.active = false;
-      cycle.phase = 'idle';
-      setCycleStatus(null);
-      showToast('Failed to write to flash', 'error');
-      return;
     }
+    markAllAsSaved();
 
     // Reboot
     cycle.phase = 'rebooting';
@@ -435,7 +446,7 @@ const ParameterTable: React.FC = () => {
       setCycleStatus(null);
       showToast('Failed to reboot flight controller', 'error');
     }
-  }, [fileApplyResult, setPendingRetryParams, clearFileApplyResult, closeCompareModal, markAllAsSaved, showToast]);
+  }, [fileApplyResult, setPendingRetryParams, clearFileApplyResult, closeCompareModal, markAllAsSaved, showToast, connectionState.firmware]);
 
   // Handle "Close" on summary dialog: dismiss and show reboot banner if needed
   const handleSummaryClose = useCallback(() => {

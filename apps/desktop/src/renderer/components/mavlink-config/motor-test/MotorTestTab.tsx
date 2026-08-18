@@ -24,6 +24,7 @@ import { VibrationCard } from './VibrationCard';
 import { EscTelemetryCard } from './EscTelemetryCard';
 import {
   buildGenericLayout,
+  buildPx4Layout,
   findFrameLayout,
   getFrameClassType,
   testOrderToLabel,
@@ -54,13 +55,21 @@ export const MotorTestTab: React.FC = () => {
 
   const [showSafetyDialog, setShowSafetyDialog] = useState(false);
 
-  // Resolve the frame layout from FRAME_CLASS / FRAME_TYPE parameters
+  const isPx4 = connectionState.firmware === 'px4';
+  // PX4 refuses ACTUATOR_TEST unless COM_MOT_TEST_EN is 1
+  const px4TestDisabled = isPx4 && parameters.get('COM_MOT_TEST_EN')?.value === 0;
+
+  // Resolve the frame layout: PX4 from CA_ROTOR geometry, ArduPilot from
+  // FRAME_CLASS / FRAME_TYPE parameters
   const layout = useMemo(() => {
+    if (isPx4) {
+      return buildPx4Layout((key) => parameters.get(key)?.value) ?? buildGenericLayout(4);
+    }
     const frameInfo = getFrameClassType((key) => parameters.get(key)?.value);
     if (!frameInfo) return buildGenericLayout(4);
     const found = findFrameLayout(frameInfo.frameClass, frameInfo.frameType);
     return found ?? buildGenericLayout(4);
-  }, [parameters]);
+  }, [parameters, isPx4]);
 
   const motorCount = layout.motors.length;
 
@@ -89,6 +98,7 @@ export const MotorTestTab: React.FC = () => {
     connectionState.isConnected &&
     connectionState.protocol === 'mavlink' &&
     !isArmed &&
+    !px4TestDisabled &&
     safetyConfirmed;
 
   // First-use safety dialog
@@ -227,7 +237,7 @@ export const MotorTestTab: React.FC = () => {
   if (connectionState.protocol !== 'mavlink') {
     return (
       <div className="p-8 text-center text-content-secondary">
-        Motor test requires a MAVLink (ArduPilot) connection.
+        Motor test requires a MAVLink connection.
       </div>
     );
   }
@@ -266,6 +276,20 @@ export const MotorTestTab: React.FC = () => {
               >
                 I Confirm - Props Removed
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* PX4 motor test disabled by parameter */}
+      {px4TestDisabled && (
+        <div className="bg-red-500/10 border-red-500/30 rounded-lg p-4 flex items-center gap-3">
+          <AlertTriangle className="w-5 h-5 text-red-400 flex-shrink-0" />
+          <div className="flex-1">
+            <div className="text-sm font-semibold text-red-300">Motor test disabled on this vehicle</div>
+            <div className="text-xs text-red-400/70">
+              PX4 refuses actuator test commands while COM_MOT_TEST_EN is 0. Set it to 1 in the
+              parameter table and save to enable.
             </div>
           </div>
         </div>

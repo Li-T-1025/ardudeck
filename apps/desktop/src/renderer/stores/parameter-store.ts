@@ -4,6 +4,7 @@ import { isReadOnlyParameter, generateFallbackDescription } from '../../shared/p
 import { parameterBelongsToGroup } from '../../shared/parameter-groups.js';
 import { validateParameterValue, vehicleTypeToMavType, REBOOT_REQUIRED_OVERRIDES, type ParameterMetadataStore, type ValidationResult, type VehicleType } from '../../shared/parameter-metadata.js';
 import { createSearchRegex } from '../../shared/search-utils.js';
+import { useConnectionStore } from './connection-store';
 
 export type SortColumn = 'name' | 'status';
 export type SortDirection = 'asc' | 'desc';
@@ -104,6 +105,8 @@ interface ParameterStore {
   fetchMetadata: (mavType: number) => Promise<void>;
   setMetadata: (metadata: ParameterMetadataStore) => void;
   setParameter: (paramId: string, value: number) => Promise<boolean>;
+  setParameterImmediate: (paramId: string, value: number) => Promise<boolean>;
+  commitStagedParams: () => Promise<{ written: number; failed: string[] }>;
   updateParameter: (param: ParamValuePayload) => void;
   bulkLoadParameters: (params: ParamValuePayload[]) => void;
   setProgress: (progress: ParameterProgress) => void;
@@ -170,6 +173,11 @@ function cleanFloat32(value: number, paramType: number): number {
 
 // Tracks params the user has actively edited via setParameter (pending FC confirmation)
 const userModifiedParams = new Set<string>();
+
+// PX4 staged edits: held locally, sent only when the user confirms the standard
+// Write Parameters to Flash dialog (PX4 persists PARAM_SET immediately, so the
+// ArduPilot write-now/flash-later flow would skip the review step).
+const stagedParams = new Set<string>();
 
 export const useParameterStore = create<ParameterStore>((set, get) => ({
   parameters: new Map(),
@@ -437,6 +445,36 @@ export const useParameterStore = create<ParameterStore>((set, get) => ({
 
   setParameter: async (paramId, rawValue) => {
     const param = get().parameters.get(paramId);
+    const paramType = param?.type ?? 9;
+    const value = cleanFloat32(rawValue, paramType);
+
+    // In offline mode, just update local state - no IPC
+    if (get().offlineMode) {
+      get().setOfflineParameter(paramId, value);
+      return true;
+    }
+
+    // PX4 UI edits stage locally; commitStagedParams sends them after the
+    // Write Parameters to Flash confirm. Unknown params (not in cache) fall
+    // through to an immediate write since there is nothing to diff against.
+    if (useConnectionStore.getState().connectionState.firmware === 'px4' && param) {
+      set(state => {
+        const params = new Map(state.parameters);
+        const existing = params.get(paramId)!;
+        const isModified = !f32Equal(existing.originalValue ?? existing.value, value);
+        if (isModified) stagedParams.add(paramId);
+        else stagedParams.delete(paramId);
+        params.set(paramId, { ...existing, value, isModified });
+        return { parameters: params };
+      });
+      return true;
+    }
+
+    return get().setParameterImmediate(paramId, value);
+  },
+
+  setParameterImmediate: async (paramId, rawValue) => {
+    const param = get().parameters.get(paramId);
     // Use existing type if known, otherwise default to REAL32 (9) for ArduPilot
     const paramType = param?.type ?? 9;
     const value = cleanFloat32(rawValue, paramType);
@@ -485,11 +523,50 @@ export const useParameterStore = create<ParameterStore>((set, get) => ({
     return true;
   },
 
+  commitStagedParams: async () => {
+    const modified = get().modifiedParameters();
+    const failed: string[] = [];
+    let written = 0;
+    for (const p of modified) {
+      const result = await window.electronAPI?.setParameter(p.id, p.value, p.type ?? 9);
+      if (result?.success) {
+        stagedParams.delete(p.id);
+        // Preserve the modified baseline until the caller marks all as saved,
+        // so a partial failure leaves the unwritten rows still flagged.
+        userModifiedParams.add(p.id);
+        written++;
+      } else {
+        failed.push(p.id);
+      }
+    }
+    return { written, failed };
+  },
+
   updateParameter: (param) => {
     // Check if this PARAM_VALUE is a response to a user-initiated setParameter call
     const isUserEdit = userModifiedParams.has(param.paramId);
     if (isUserEdit) {
       userModifiedParams.delete(param.paramId);
+    }
+
+    // A staged PX4 edit exists locally and has not been written yet; an
+    // unsolicited PARAM_VALUE must not clobber it. Absorb the FC value as the
+    // new baseline and keep the staged value on top.
+    if (!isUserEdit && stagedParams.has(param.paramId)) {
+      set(state => {
+        const params = new Map(state.parameters);
+        const existing = params.get(param.paramId);
+        if (!existing) return {};
+        const fcValue = cleanFloat32(param.paramValue, param.paramType);
+        params.set(param.paramId, {
+          ...existing,
+          originalValue: fcValue,
+          index: param.paramIndex,
+          isModified: !f32Equal(fcValue, existing.value),
+        });
+        return { parameters: params };
+      });
+      return;
     }
 
     set(state => {
@@ -526,6 +603,7 @@ export const useParameterStore = create<ParameterStore>((set, get) => ({
   bulkLoadParameters: (params) => {
     // FTP fast path: build entire parameter map in one state update
     userModifiedParams.clear();
+    stagedParams.clear();
     const { metadata } = get();
     const newParams = new Map<string, ParameterWithMeta>();
     for (const p of params) {
@@ -561,6 +639,7 @@ export const useParameterStore = create<ParameterStore>((set, get) => ({
   setComplete: () => {
     // Full download complete — clear any pending user edits tracker
     userModifiedParams.clear();
+    stagedParams.clear();
     set(state => {
       // After a full download, the FC's values are ground truth.
       // Reset all baselines so sensor/calibration params the FC updated
@@ -622,6 +701,7 @@ export const useParameterStore = create<ParameterStore>((set, get) => ({
   }),
 
   revertParameter: (paramId) => {
+    stagedParams.delete(paramId);
     set(state => {
       const params = new Map(state.parameters);
       const param = params.get(paramId);
@@ -639,6 +719,7 @@ export const useParameterStore = create<ParameterStore>((set, get) => ({
   },
 
   markAllAsSaved: () => {
+    stagedParams.clear();
     set(state => {
       const params = new Map(state.parameters);
 
@@ -1036,7 +1117,7 @@ export const useParameterStore = create<ParameterStore>((set, get) => ({
     set({ pendingRetryParams: [] });
   },
 
-  reset: () => { userModifiedParams.clear(); set({
+  reset: () => { userModifiedParams.clear(); stagedParams.clear(); set({
     parameters: new Map(),
     paramCount: 0,
     metadata: null,

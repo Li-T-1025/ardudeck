@@ -10,6 +10,7 @@ import React, { useMemo } from 'react';
 import { Cable, Usb, AlertTriangle, HelpCircle } from 'lucide-react';
 import { useParameterStore } from '../../stores/parameter-store';
 import { useSettingsStore } from '../../stores/settings-store';
+import { useConnectionStore } from '../../stores/connection-store';
 
 // =============================================================================
 // Constants
@@ -98,6 +99,237 @@ const PORT_LABELS: Record<number, string> = {
 };
 
 // =============================================================================
+// PX4 serial configuration
+// =============================================================================
+
+/**
+ * PX4 has no SERIALn_PROTOCOL. Physical ports carry SER_<port>_BAUD params and
+ * functions claim a port through *_CONFIG params (MAV_0_CONFIG, GPS_1_CONFIG,
+ * RC_PORT_CONFIG, ...) whose enum values are port codes from PX4's serial
+ * framework: 6=UART 6, 101-104=TELEM 1-4, 201-203=GPS 1-3, 300=Radio
+ * Controller, 301=Wifi Port.
+ */
+const PX4_PORT_CODES: Record<string, number> = {
+  TEL1: 101, TEL2: 102, TEL3: 103, TEL4: 104,
+  GPS1: 201, GPS2: 202, GPS3: 203,
+  RC: 300, WIFI: 301, URT6: 6,
+};
+
+const PX4_PORT_LABELS: Record<string, string> = {
+  TEL1: 'TELEM 1', TEL2: 'TELEM 2', TEL3: 'TELEM 3', TEL4: 'TELEM 4',
+  GPS1: 'GPS 1', GPS2: 'GPS 2', GPS3: 'GPS 3',
+  RC: 'RC Port', WIFI: 'Wifi Port', URT6: 'UART 6',
+};
+
+const PX4_FALLBACK_BAUDS = [9600, 19200, 38400, 57600, 115200, 230400, 460800, 500000, 921600, 1000000, 1500000, 2000000, 3000000];
+
+const Px4SerialPortsConfig: React.FC = () => {
+  const { parameters, setParameter, getParameterMetadata, getDescription } = useParameterStore();
+  const showTips = useSettingsStore((s) => s.uiVisibility.showTips);
+
+  const selectStyle = 'bg-surface-raised text-content text-xs rounded px-1.5 py-1 border border-subtle focus:border-blue-500 focus:outline-none w-full';
+
+  // Physical ports: every SER_<port>_BAUD param the vehicle reports
+  const ports = useMemo(() => {
+    const out: Array<{ suffix: string; baudParam: string; code: number | undefined }> = [];
+    for (const id of parameters.keys()) {
+      const m = /^SER_(.+)_BAUD$/.exec(id);
+      if (m && m[1]) out.push({ suffix: m[1], baudParam: id, code: PX4_PORT_CODES[m[1]] });
+    }
+    return out.sort((a, b) => a.suffix.localeCompare(b.suffix));
+  }, [parameters]);
+
+  // Function assignments: *_CONFIG params whose enum maps onto serial port codes
+  const configParams = useMemo(() => {
+    const out: string[] = [];
+    for (const id of parameters.keys()) {
+      if (!/_CONFIG$/.test(id)) continue;
+      const values = getParameterMetadata(id)?.values;
+      if (values && (101 in values || 201 in values || 300 in values || 6 in values)) out.push(id);
+    }
+    return out.sort();
+  }, [parameters, getParameterMetadata]);
+
+  const portLabelForCode = (code: number): string => {
+    const entry = Object.entries(PX4_PORT_CODES).find(([, c]) => c === code);
+    return entry ? (PX4_PORT_LABELS[entry[0]] ?? entry[0]) : `Port ${code}`;
+  };
+
+  if (ports.length === 0 && configParams.length === 0) {
+    return (
+      <div className="p-6">
+        <div className="p-8 text-center text-content-secondary text-sm space-y-1">
+          <p>This vehicle reports no configurable serial ports.</p>
+          <p className="text-xs text-content-tertiary">
+            {parameters.size === 0
+              ? 'Fetch parameters first.'
+              : 'PX4 generates serial port parameters per board. Simulators (SITL) have no physical UARTs, so none exist; connect real hardware to configure its ports.'}
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="p-6 space-y-6">
+      {/* Physical ports card */}
+      {ports.length > 0 && (
+        <div className="bg-surface rounded-xl border border-subtle p-5">
+          <div className="flex items-center gap-3 mb-5">
+            <div className="w-10 h-10 rounded-lg bg-sky-500/20 flex items-center justify-center">
+              <Cable className="w-5 h-5 text-sky-400" />
+            </div>
+            <div>
+              <h3 className="font-medium text-content">Serial Port Configuration</h3>
+              <p className="text-xs text-content-secondary">Baud rates per physical port. Changes require Save All Changes + reboot.</p>
+            </div>
+          </div>
+          {showTips && (
+            <div className="flex items-start gap-2.5 px-4 py-3 rounded-xl bg-sky-500/5 border-sky-500/20 mb-4">
+              <HelpCircle className="w-4 h-4 text-sky-400 shrink-0 mt-0.5" />
+              <p className="text-xs text-content leading-relaxed">
+                <span className="font-semibold text-sky-300">How this works: </span>
+                PX4 assigns functions to ports, not protocols. Pick which port each function uses in
+                the table below; set the port's baud rate here to match the connected device.
+              </p>
+            </div>
+          )}
+          <div className="rounded-lg border-subtle overflow-hidden">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="bg-surface text-content-secondary text-xs">
+                  <th className="px-3 py-2.5 text-left font-medium w-36">Port</th>
+                  <th className="px-2 py-2.5 text-left font-medium w-32">Baud Rate</th>
+                  <th className="px-3 py-2.5 text-left font-medium">Assigned Functions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {ports.map((port) => {
+                  const baud = parameters.get(port.baudParam)?.value ?? 57600;
+                  const meta = getParameterMetadata(port.baudParam)?.values;
+                  const baudOptions = meta && Object.keys(meta).length > 0
+                    ? Object.entries(meta).map(([v, label]) => ({ value: Number(v), label }))
+                    : PX4_FALLBACK_BAUDS.map((b) => ({ value: b, label: String(b) }));
+                  if (!baudOptions.some((o) => o.value === Number(baud))) {
+                    baudOptions.push({ value: Number(baud), label: String(baud) });
+                  }
+                  baudOptions.sort((a, b) => a.value - b.value);
+                  const assigned = port.code === undefined
+                    ? []
+                    : configParams.filter((id) => Number(parameters.get(id)?.value) === port.code);
+                  return (
+                    <tr key={port.baudParam} className="border-b border-subtle hover:bg-surface-overlay-subtle">
+                      <td className="px-3 py-2.5">
+                        <div className="flex items-center gap-2">
+                          <Cable className="w-3.5 h-3.5 text-content-secondary" />
+                          <div>
+                            <span className="text-sm text-content">{PX4_PORT_LABELS[port.suffix] ?? port.suffix}</span>
+                            <p className="text-[10px] text-content-secondary leading-tight">{port.baudParam}</p>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-2 py-2.5">
+                        <select
+                          value={Number(baud)}
+                          onChange={(e) => setParameter(port.baudParam, Number(e.target.value))}
+                          className={selectStyle}
+                        >
+                          {baudOptions.map((b) => (
+                            <option key={b.value} value={b.value}>{b.label}</option>
+                          ))}
+                        </select>
+                      </td>
+                      <td className="px-3 py-2.5">
+                        {assigned.length > 0 ? (
+                          <div className="flex flex-wrap gap-1">
+                            {assigned.map((id) => (
+                              <span key={id} className="inline-flex px-1.5 py-0.5 text-[10px] bg-blue-500/10 text-blue-400 border-blue-500/30 rounded">
+                                {id.replace(/_CONFIG$/, '')}
+                              </span>
+                            ))}
+                          </div>
+                        ) : (
+                          <span className="text-[10px] text-content-tertiary">unassigned</span>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* Function assignment card */}
+      {configParams.length > 0 && (
+        <div className="bg-surface rounded-xl border border-subtle p-5">
+          <div className="flex items-center gap-3 mb-5">
+            <div className="w-10 h-10 rounded-lg bg-blue-500/20 flex items-center justify-center">
+              <Usb className="w-5 h-5 text-blue-400" />
+            </div>
+            <div>
+              <h3 className="font-medium text-content">Port Assignments</h3>
+              <p className="text-xs text-content-secondary">Which serial port each function (MAVLink instance, GPS, RC, ...) runs on.</p>
+            </div>
+          </div>
+          <div className="rounded-lg border-subtle overflow-hidden">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="bg-surface text-content-secondary text-xs">
+                  <th className="px-3 py-2.5 text-left font-medium w-64">Function</th>
+                  <th className="px-2 py-2.5 text-left font-medium w-48">Port</th>
+                  <th className="px-3 py-2.5 text-left font-medium">Description</th>
+                </tr>
+              </thead>
+              <tbody>
+                {configParams.map((id) => {
+                  const value = Number(parameters.get(id)?.value ?? 0);
+                  const values = getParameterMetadata(id)?.values ?? {};
+                  const options = Object.entries(values)
+                    .map(([v, label]) => ({ value: Number(v), label }))
+                    .sort((a, b) => a.value - b.value);
+                  if (!options.some((o) => o.value === value)) {
+                    options.push({ value, label: portLabelForCode(value) });
+                  }
+                  return (
+                    <tr key={id} className="border-b border-subtle hover:bg-surface-overlay-subtle">
+                      <td className="px-3 py-2.5 font-mono text-xs text-content">{id}</td>
+                      <td className="px-2 py-2.5">
+                        <select
+                          value={value}
+                          onChange={(e) => setParameter(id, Number(e.target.value))}
+                          className={selectStyle}
+                        >
+                          {options.map((o) => (
+                            <option key={o.value} value={o.value}>{o.label}</option>
+                          ))}
+                        </select>
+                      </td>
+                      <td className="px-3 py-2.5 text-[11px] text-content-secondary">{getDescription(id)}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* Reboot note */}
+      <div className="p-3 rounded-lg bg-amber-500/10 border-amber-500/20">
+        <div className="flex items-center gap-2">
+          <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0" />
+          <p className="text-xs text-amber-300">
+            Serial configuration takes effect after saving with Save All Changes and rebooting the flight controller.
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// =============================================================================
 // Port Row Component
 // =============================================================================
 
@@ -180,7 +412,7 @@ function PortRow({ index }: { index: number }) {
 // Main Component
 // =============================================================================
 
-const SerialPortsTab: React.FC = () => {
+const ArduPilotSerialPorts: React.FC = () => {
   const { parameters } = useParameterStore();
   const showTips = useSettingsStore((s) => s.uiVisibility.showTips);
 
@@ -271,6 +503,11 @@ const SerialPortsTab: React.FC = () => {
       )}
     </div>
   );
+};
+
+const SerialPortsTab: React.FC = () => {
+  const firmware = useConnectionStore((s) => s.connectionState.firmware);
+  return firmware === 'px4' ? <Px4SerialPortsConfig /> : <ArduPilotSerialPorts />;
 };
 
 export default SerialPortsTab;
