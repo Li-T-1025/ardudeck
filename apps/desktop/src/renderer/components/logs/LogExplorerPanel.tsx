@@ -1339,6 +1339,9 @@ function ChartPanel({ chartId }: { chartId: string }) {
 const FLIGHT_MAP_LAYERS: Record<string, { name: string; tiles: string[]; maxZoom: number }> = {
   satellite: { name: 'Satellite', tiles: ['https://mt0.google.com/vt/lyrs=s&x={x}&y={y}&z={z}', 'https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}', 'https://mt2.google.com/vt/lyrs=s&x={x}&y={y}&z={z}', 'https://mt3.google.com/vt/lyrs=s&x={x}&y={y}&z={z}'], maxZoom: 22 },
   hybrid: { name: 'Hybrid', tiles: ['https://mt0.google.com/vt/lyrs=y&x={x}&y={y}&z={z}', 'https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}', 'https://mt2.google.com/vt/lyrs=y&x={x}&y={y}&z={z}', 'https://mt3.google.com/vt/lyrs=y&x={x}&y={y}&z={z}'], maxZoom: 22 },
+  // Bing aerial for regions where Google tiles are unreachable (China).
+  // MapLibre substitutes {quadkey} natively.
+  bing: { name: 'Bing Sat', tiles: ['https://ecn.t0.tiles.virtualearth.net/tiles/a{quadkey}.jpeg?g=14364&n=z', 'https://ecn.t1.tiles.virtualearth.net/tiles/a{quadkey}.jpeg?g=14364&n=z', 'https://ecn.t2.tiles.virtualearth.net/tiles/a{quadkey}.jpeg?g=14364&n=z', 'https://ecn.t3.tiles.virtualearth.net/tiles/a{quadkey}.jpeg?g=14364&n=z'], maxZoom: 19 },
   street: { name: 'Street', tiles: ['https://a.tile.openstreetmap.org/{z}/{x}/{y}.png', 'https://b.tile.openstreetmap.org/{z}/{x}/{y}.png', 'https://c.tile.openstreetmap.org/{z}/{x}/{y}.png'], maxZoom: 19 },
   terrain: { name: 'Terrain', tiles: ['https://a.tile.opentopomap.org/{z}/{x}/{y}.png', 'https://b.tile.opentopomap.org/{z}/{x}/{y}.png', 'https://c.tile.opentopomap.org/{z}/{x}/{y}.png'], maxZoom: 17 },
 };

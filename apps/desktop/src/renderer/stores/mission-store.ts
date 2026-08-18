@@ -1253,14 +1253,19 @@ export const useMissionStore = create<MissionStore>((set, get) => ({
     // It shares MAV_CMD 16 (WAYPOINT) but has current=true in the protocol.
     // Also detect seq=0 at 0,0 (placeholder when no GPS fix).
     let homePosition: HomePosition | null = null;
-    const homeWasStripped = items.some(item => item.seq === 0);
+    // ArduPilot's mission raw seq 0 is the HOME slot and must be stripped.
+    // PX4 has NO home item — its seq 0 is the first real waypoint, and
+    // stripping it silently deleted WP1 from every PX4 download (and shifted
+    // MISSION_CURRENT tracking by one via fcSeqOffset).
+    const isPx4Mission = useConnectionStore.getState().connectionState.firmware === 'px4';
+    const homeWasStripped = !isPx4Mission && items.some(item => item.seq === 0);
     const filteredItems = items.filter(item => {
-      if (item.seq === 0) {
+      if (!isPx4Mission && item.seq === 0) {
         // seq=0 is home position - extract it if it has valid coordinates
         if (item.latitude !== 0 || item.longitude !== 0) {
           homePosition = { lat: item.latitude, lon: item.longitude, alt: item.altitude };
         }
-        return false; // Always remove seq=0 from mission items
+        return false; // Remove ArduPilot's HOME slot from mission items
       }
       return true;
     });

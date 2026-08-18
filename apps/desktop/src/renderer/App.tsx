@@ -28,6 +28,7 @@ import { VaultView } from './components/vault/VaultView';
 import { WeatherBriefingView } from './components/weather/WeatherBriefingView';
 import { setupWorkspaceSync } from './stores/workspace-store';
 import { startInspector } from './stores/inspector-store';
+import { startCompassCoverageListener } from './stores/compass-coverage-store';
 import { startSafetyMonitor, refreshContext as refreshSafetyMonitorContext } from './safety-monitor/source';
 import { useConnectionStore } from './stores/connection-store';
 import { useActiveVehicleSync } from './hooks/useActiveVehicleSync';
@@ -549,6 +550,9 @@ function App() {
   // are idempotent — safe across hot-reloads.
   useEffect(() => {
     startInspector();
+    // Compass coverage feeds both the calibration spheres and the progress
+    // ring, so it listens once here rather than per component.
+    startCompassCoverageListener();
     startSafetyMonitor();
     const cleanup = setupWorkspaceSync();
     return () => { cleanup?.(); };

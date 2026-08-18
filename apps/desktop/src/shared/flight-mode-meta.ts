@@ -16,7 +16,7 @@
  *            asks for one confirm before sending, so a mis-click can't fire it.
  */
 
-import type { ArduPilotVehicleClass } from './telemetry-types';
+import { encodePx4CustomMode, type ArduPilotVehicleClass } from './telemetry-types';
 
 export type ModeGroup = 'manual' | 'assisted' | 'auto' | 'return' | 'tuning';
 
@@ -154,12 +154,35 @@ export const FLIGHT_MODES: Record<ArduPilotVehicleClass, FlightModeMeta[]> = {
   sub: SUB,
 };
 
+// PX4 has one mode vocabulary across vehicle types. modeNum here is the
+// ENCODED custom_mode ((main<<16)|(sub<<24)) — the same value HEARTBEAT echoes
+// back in flight.modeNum and the same value the DO_SET_MODE path unpacks, so
+// the picker plugs into the existing selection flow unchanged.
+const px4 = (main: number, sub: number, name: string, group: ModeGroup, flags: Omit<FlightModeMeta, 'modeNum' | 'name' | 'group'> = {}) =>
+  m(encodePx4CustomMode(main, sub), name, group, flags);
+
+export const PX4_FLIGHT_MODES: FlightModeMeta[] = [
+  px4(1, 0, 'Manual', 'manual'),
+  px4(7, 0, 'Stabilized', 'manual'),
+  px4(5, 0, 'Acro', 'manual', { commit: true }),
+  px4(2, 0, 'Altitude', 'assisted'),
+  px4(3, 0, 'Position', 'assisted', { gps: true }),
+  px4(4, 3, 'Hold', 'auto', { gps: true }),
+  px4(4, 4, 'Mission', 'auto', { gps: true, commit: true }),
+  px4(4, 2, 'Takeoff', 'auto', { gps: true, commit: true }),
+  px4(6, 0, 'Offboard', 'auto', { commit: true }),
+  px4(4, 5, 'Return', 'return', { gps: true, commit: true }),
+  px4(4, 6, 'Land', 'return', { commit: true }),
+];
+
 export function modeMetaFor(
   vehicleClass: ArduPilotVehicleClass,
   modeNum: number | undefined,
+  firmware?: string,
 ): FlightModeMeta | undefined {
   if (modeNum === undefined) return undefined;
-  return FLIGHT_MODES[vehicleClass].find((mm) => mm.modeNum === modeNum);
+  const table = firmware === 'px4' ? PX4_FLIGHT_MODES : FLIGHT_MODES[vehicleClass];
+  return table.find((mm) => mm.modeNum === modeNum);
 }
 
 const PILOT_THROTTLE_GROUPS: ReadonlySet<ModeGroup> = new Set(['manual', 'assisted', 'tuning']);

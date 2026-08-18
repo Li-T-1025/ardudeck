@@ -10,14 +10,29 @@
  *     its sender as an endpoint (so a phone that binds 14550 and sends a GCS
  *     heartbeat gets the stream with zero desktop config),
  *   - injects datagrams received from those endpoints into the active
- *     vehicle transport (the phone commands through the desktop radio link).
+ *     vehicle transport (the phone commands through the desktop radio link),
+ *   - announces ITSELF with a GCS heartbeat, independently of the vehicle.
  *
- * The tee deliberately does not parse anything: it moves bytes. Sysid
- * separation is the vehicle's job (both GCS default to sysid 255; ArduPilot
- * replies to the requester by (sysid, compid), which both ends share, so
- * both see all responses - same behavior as mavlink-router fan-out).
+ * That last one is not decoration. The mobile app discovers by speaking and
+ * waiting to be answered, so a tee that only ever relays vehicle bytes is
+ * invisible whenever the vehicle link is down, idle or reconnecting - which is
+ * exactly when a pilot is setting the phone up. It also lets the scanner tell a
+ * forwarder from a vehicle: lan_scan.dart reads MAV_TYPE_GCS as "ground station
+ * or forwarder" and anything else as an aircraft. mavlink-router heartbeats for
+ * the same reasons.
+ *
+ * Apart from that heartbeat the tee does not parse anything: it moves bytes.
+ * Sysid separation is the vehicle's job (both GCS default to sysid 255;
+ * ArduPilot replies to the requester by (sysid, compid), which both ends share,
+ * so both see all responses - same behavior as mavlink-router fan-out).
  */
 import dgram from 'dgram';
+import {
+  serializeV2,
+  serializeHeartbeat,
+  MavType,
+  MavAutopilot,
+} from '@ardudeck/mavlink-ts';
 
 export interface TeeEndpoint {
   host: string;
@@ -39,6 +54,11 @@ const MAX_LEARNED = 8;
  * dropped. Without expiry, failed connection attempts pile up dead
  * endpoints until the table is full and real clients never get learned. */
 const LEARNED_TTL_MS = 15_000;
+/** Standard MAVLink heartbeat rate, and comfortably inside the mobile
+ * scanner's listening window. */
+const HEARTBEAT_MS = 1000;
+const HEARTBEAT_MSGID = 0;
+const HEARTBEAT_CRC_EXTRA = 50;
 
 class MavlinkTee {
   private socket: dgram.Socket | null = null;
@@ -49,6 +69,10 @@ class MavlinkTee {
   private forwardedBytes = 0;
   private injectedBytes = 0;
   private lastError: string | null = null;
+  private heartbeatTimer: NodeJS.Timeout | null = null;
+  /** Own sequence counter: sharing the serializer's global one would make our
+   * announcements interleave into the app's outgoing packet numbering. */
+  private heartbeatSeq = 0;
 
   /** The active-transport write hook; survives start/stop cycles. */
   setInjector(fn: ((data: Uint8Array) => void) | null): void {
@@ -98,6 +122,8 @@ class MavlinkTee {
               if (oldestKey) this.learned.delete(oldestKey);
             }
             this.learned.set(key, { host: rinfo.address, port: rinfo.port, lastSeen: now });
+            // Answer a scanner on the spot rather than up to HEARTBEAT_MS later.
+            this.sendHeartbeatTo({ host: rinfo.address, port: rinfo.port });
           }
         }
         this.injectedBytes += msg.length;
@@ -110,10 +136,19 @@ class MavlinkTee {
       });
     });
 
+    // Announce at once: an endpoint typed into the desktop is push-only and
+    // never probes, so learn-on-receive alone would never reach it.
+    this.sendHeartbeat();
+    this.heartbeatTimer = setInterval(() => this.sendHeartbeat(), HEARTBEAT_MS);
+
     return this.status();
   }
 
   async stop(): Promise<void> {
+    if (this.heartbeatTimer) {
+      clearInterval(this.heartbeatTimer);
+      this.heartbeatTimer = null;
+    }
     const socket = this.socket;
     this.socket = null;
     this.listenPort = null;
@@ -121,6 +156,36 @@ class MavlinkTee {
     if (socket) {
       await new Promise<void>((resolve) => socket.close(() => resolve()));
     }
+  }
+
+  /** Our own presence announcement: a GCS, explicitly not an autopilot. */
+  private heartbeatFrame(): Uint8Array {
+    const seq = this.heartbeatSeq;
+    this.heartbeatSeq = (this.heartbeatSeq + 1) & 0xff;
+    const payload = serializeHeartbeat({
+      type: MavType.MAV_TYPE_GCS,
+      autopilot: MavAutopilot.MAV_AUTOPILOT_INVALID,
+      baseMode: 0,
+      customMode: 0,
+      systemStatus: 4, // MAV_STATE_ACTIVE
+      mavlinkVersion: 3,
+    });
+    return serializeV2(HEARTBEAT_MSGID, payload, HEARTBEAT_CRC_EXTRA, { sequence: seq });
+  }
+
+  private sendHeartbeatTo(ep: TeeEndpoint): void {
+    const socket = this.socket;
+    if (!socket) return;
+    socket.send(this.heartbeatFrame(), ep.port, ep.host, (err) => {
+      if (err) this.lastError = err.message;
+    });
+  }
+
+  /** Heartbeat every endpoint, configured or learned; no-op unless running. */
+  private sendHeartbeat(): void {
+    if (!this.socket) return;
+    for (const ep of this.endpoints) this.sendHeartbeatTo(ep);
+    for (const ep of this.learned.values()) this.sendHeartbeatTo(ep);
   }
 
   /** Called with every raw inbound vehicle chunk; no-op unless running. */

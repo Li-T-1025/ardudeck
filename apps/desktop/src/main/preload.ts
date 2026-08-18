@@ -244,8 +244,8 @@ const api = {
   mavlinkVtolTakeoff: (altitude: number): Promise<boolean> =>
     ipcRenderer.invoke(IPC_CHANNELS.MAVLINK_COMMAND_VTOL_TAKEOFF, altitude),
 
-  mavlinkGoto: (lat: number, lon: number, alt: number, frame?: number): Promise<boolean> =>
-    ipcRenderer.invoke(IPC_CHANNELS.MAVLINK_GOTO, lat, lon, alt, frame),
+  mavlinkGoto: (lat: number, lon: number, alt: number, frame?: number, yawRad?: number): Promise<boolean> =>
+    ipcRenderer.invoke(IPC_CHANNELS.MAVLINK_GOTO, lat, lon, alt, frame, yawRad),
 
   mavlinkOrbit: (lat: number, lon: number, alt: number, radius: number, frame?: number): Promise<boolean> =>
     ipcRenderer.invoke(IPC_CHANNELS.MAVLINK_ORBIT, lat, lon, alt, radius, frame),
@@ -2086,6 +2086,27 @@ const api = {
   /** Re-read the calibration off the vehicle and confirm it persisted. */
   calibrationRecordVerify: (boardUid: string): Promise<{ success: boolean; records?: CalibrationRecordIpc[]; error?: string }> =>
     ipcRenderer.invoke(IPC_CHANNELS.CALIBRATION_RECORD_VERIFY, boardUid),
+
+  /**
+   * Per-frame compass coverage. Separate from calibration progress because it
+   * is purely what the sphere draws: the 80-section completion mask plus the
+   * direction of the latest sample.
+   */
+  onCalibrationMagCoverage: (callback: (msg: {
+    compassId: number;
+    completionPct: number;
+    mask: number[];
+    direction: [number, number, number];
+  }) => void) => {
+    const handler = (_: unknown, msg: {
+      compassId: number;
+      completionPct: number;
+      mask: number[];
+      direction: [number, number, number];
+    }) => callback(msg);
+    ipcRenderer.on(IPC_CHANNELS.CALIBRATION_MAG_COVERAGE, handler);
+    return () => ipcRenderer.removeListener(IPC_CHANNELS.CALIBRATION_MAG_COVERAGE, handler);
+  },
 
   /** Listen for calibration progress updates */
   onCalibrationProgress: (callback: (progress: CalibrationProgressEvent) => void) => {

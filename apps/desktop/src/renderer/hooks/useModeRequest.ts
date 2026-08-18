@@ -27,13 +27,13 @@ const REJECT_LINGER_MS = 2800; // how long the red "rejected" state shows before
 const CONFIRM_FLASH_MS = 2000; // transient highlight on the confirming heartbeat
 const RECENTS_MAX = 5;
 
-function recentsKey(vehicleClass: ArduPilotVehicleClass): string {
-  return `ardudeck.modeRecents.${vehicleClass}`;
+function recentsKey(scope: string): string {
+  return `ardudeck.modeRecents.${scope}`;
 }
 
-function loadRecents(vehicleClass: ArduPilotVehicleClass): number[] {
+function loadRecents(scope: string): number[] {
   try {
-    const raw = localStorage.getItem(recentsKey(vehicleClass));
+    const raw = localStorage.getItem(recentsKey(scope));
     if (raw) {
       const arr = JSON.parse(raw);
       if (Array.isArray(arr)) return arr.filter((n) => typeof n === 'number').slice(0, RECENTS_MAX);
@@ -44,9 +44,9 @@ function loadRecents(vehicleClass: ArduPilotVehicleClass): number[] {
   return [];
 }
 
-function saveRecents(vehicleClass: ArduPilotVehicleClass, next: number[]): number[] {
+function saveRecents(scope: string, next: number[]): number[] {
   try {
-    localStorage.setItem(recentsKey(vehicleClass), JSON.stringify(next));
+    localStorage.setItem(recentsKey(scope), JSON.stringify(next));
   } catch {
     /* ignore */
   }
@@ -72,13 +72,16 @@ export function useModeRequest(
   vehicleClass: ArduPilotVehicleClass,
   currentModeNum: number | undefined,
   sendMode: (modeNum: number) => Promise<boolean>,
+  // 'px4' swaps the mode vocabulary (and recents bucket) to PX4's tables.
+  firmware?: string,
 ): ModeRequestState {
+  const modeScope = firmware === 'px4' ? 'px4' : vehicleClass;
   const [phase, setPhase] = useState<ModePhase>('active');
   const [requestedMode, setRequestedMode] = useState<number | null>(null);
   const [rejectLabel, setRejectLabel] = useState('Rejected');
   const [pendingCommit, setPendingCommit] = useState<number | null>(null);
   const [justConfirmed, setJustConfirmed] = useState(false);
-  const [recents, setRecents] = useState<number[]>(() => loadRecents(vehicleClass));
+  const [recents, setRecents] = useState<number[]>(() => loadRecents(modeScope));
 
   const watchdog = useRef<ReturnType<typeof setTimeout> | null>(null);
   const rejectTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -117,7 +120,7 @@ export function useModeRequest(
   }, [clearWatchdog, enterRejected, sendMode]);
 
   const requestMode = useCallback((modeNum: number, opts?: { skipConfirm?: boolean }) => {
-    const meta = modeMetaFor(vehicleClass, modeNum);
+    const meta = modeMetaFor(vehicleClass, modeNum, firmware);
     if (meta?.commit && !opts?.skipConfirm) { setPendingCommit(modeNum); return; }
     void send(modeNum);
   }, [vehicleClass, send]);
@@ -136,7 +139,7 @@ export function useModeRequest(
     setPhase('active');
     const confirmed = requestedMode;
     setRequestedMode(null);
-    setRecents((r) => saveRecents(vehicleClass, [confirmed, ...r.filter((x) => x !== confirmed)].slice(0, RECENTS_MAX)));
+    setRecents((r) => saveRecents(modeScope, [confirmed, ...r.filter((x) => x !== confirmed)].slice(0, RECENTS_MAX)));
     setJustConfirmed(true);
     if (flashTimer.current) clearTimeout(flashTimer.current);
     flashTimer.current = setTimeout(() => setJustConfirmed(false), CONFIRM_FLASH_MS);

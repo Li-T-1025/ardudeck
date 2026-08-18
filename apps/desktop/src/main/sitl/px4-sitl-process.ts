@@ -204,7 +204,113 @@ class Px4SitlProcessManager {
     return simCmd;
   }
 
+  /**
+   * Insert the PX4_HOME_* -> SIH_LOC_* mapping into the bundle's rcS,
+   * once (marker-guarded), right before `dataman start` so it runs after the
+   * airframe file but before any module reads the params. SIH_LOC_LAT0/LON0
+   * are int32 in 1e-7 degrees; SIH_LOC_H0 is ground altitude in meters.
+   * rcS is executed by /bin/sh with px4 module shims on PATH, so plain shell
+   * plus awk is available.
+   */
+  private async ensureSihHomeInRcs(bundleDir: string): Promise<void> {
+    const marker = '# ArduDeck: SIH home from PX4_HOME_*';
+    const rcsPath = path.join(bundleDir, 'etc', 'init.d-posix', 'rcS');
+    try {
+      const { readFile, writeFile } = await import('node:fs/promises');
+      const rcs = await readFile(rcsPath, 'utf8');
+      if (rcs.includes(marker)) return;
+      const anchor = '\ndataman start';
+      if (!rcs.includes(anchor)) {
+        console.warn('[px4-sitl] rcS has no "dataman start" anchor; SIH home patch skipped');
+        return;
+      }
+      const block = [
+        '',
+        marker,
+        'if [ -n "${PX4_HOME_LAT:-}" ]; then',
+        '\tparam set SIH_LOC_LAT0 $(awk "BEGIN {printf \\"%.0f\\", ${PX4_HOME_LAT}*10000000}")',
+        'fi',
+        'if [ -n "${PX4_HOME_LON:-}" ]; then',
+        '\tparam set SIH_LOC_LON0 $(awk "BEGIN {printf \\"%.0f\\", ${PX4_HOME_LON}*10000000}")',
+        'fi',
+        'if [ -n "${PX4_HOME_ALT:-}" ]; then',
+        '\tparam set SIH_LOC_H0 ${PX4_HOME_ALT}',
+        'fi',
+        '',
+      ].join('\n');
+      await writeFile(rcsPath, rcs.replace(anchor, `${block}\ndataman start`));
+      console.log('[px4-sitl] patched rcS with SIH home-position mapping');
+    } catch (err) {
+      // Non-fatal: the sim still runs, just at the SIH default location.
+      console.warn('[px4-sitl] could not patch rcS for SIH home:', err);
+    }
+
+    // Upstream bug (present at least in v1.15.x): px4-rc.simulator maps
+    // PX4_HOME_LAT/LON into SIH_LOC_LAT0/LON0 with RAW DEGREES, but those
+    // params are Int32 in deg*1e7 — 42.44 becomes 42, i.e. 4.2e-6 degrees,
+    // which is (0,0) in the Atlantic. It also runs AFTER our rcS block, so
+    // its unscaled write wins. Rescale it in place.
+    const simRcPath = path.join(bundleDir, 'etc', 'init.d-posix', 'px4-rc.simulator');
+    try {
+      const { readFile, writeFile } = await import('node:fs/promises');
+      const rc = await readFile(simRcPath, 'utf8');
+      if (rc.includes('SIH_LOC_LAT0 $(awk')) return; // already fixed
+      const rawLat = 'param set SIH_LOC_LAT0 ${PX4_HOME_LAT}';
+      const rawLon = 'param set SIH_LOC_LON0 ${PX4_HOME_LON}';
+      if (!rc.includes(rawLat) || !rc.includes(rawLon)) return; // different PX4 version — rcS block covers it
+      const fixed = rc
+        .replace(rawLat, 'param set SIH_LOC_LAT0 $(awk "BEGIN {printf \\"%.0f\\", ${PX4_HOME_LAT}*10000000}")')
+        .replace(rawLon, 'param set SIH_LOC_LON0 $(awk "BEGIN {printf \\"%.0f\\", ${PX4_HOME_LON}*10000000}")');
+      await writeFile(simRcPath, fixed);
+      console.log('[px4-sitl] rescaled px4-rc.simulator SIH_LOC mapping (upstream deg vs degE7 bug)');
+    } catch (err) {
+      console.warn('[px4-sitl] could not patch px4-rc.simulator:', err);
+    }
+  }
+
+  /**
+   * Kill any px4 process launched from this bundle that we no longer track
+   * (previous app run, crashed instance). SIGKILL is safe here: it is a
+   * simulator with no state worth a graceful exit, and the stale one is by
+   * definition unmanaged. A short settle lets the OS release px4's lock.
+   */
+  private async reapStalePx4(bundleDir: string): Promise<void> {
+    if (process.platform === 'win32') return; // posix SITL only
+    try {
+      const { execFile } = await import('node:child_process');
+      const { promisify } = await import('node:util');
+      const run = promisify(execFile);
+      // pkill exits 1 when nothing matched — that is the common, healthy case.
+      await run('pkill', ['-9', '-f', path.join(bundleDir, 'bin', 'px4')]).then(
+        () => {
+          console.log('[px4-sitl] reaped stale px4 instance(s) from a previous run');
+          return new Promise<void>((r) => setTimeout(r, 300));
+        },
+        () => undefined,
+      );
+    } catch { /* best effort */ }
+  }
+
   async start(config: Px4SitlConfig): Promise<{ success: boolean; command?: string; error?: string }> {
+    // Concurrency guard. start() awaits several fs operations before it marks
+    // _isRunning, so two rapid calls (double-click, re-render) both passed the
+    // old guard and BOTH spawned a px4: the second overwrote this.process and
+    // the first ran on as an orphan that stop() could never reach, keeping
+    // 14550 alive and the GCS "connected" to a vehicle we no longer managed.
+    if (this._startInFlight) {
+      return { success: false, error: 'PX4 SITL is already starting' };
+    }
+    this._startInFlight = true;
+    try {
+      return await this.doStart(config);
+    } finally {
+      this._startInFlight = false;
+    }
+  }
+
+  private _startInFlight = false;
+
+  private async doStart(config: Px4SitlConfig): Promise<{ success: boolean; command?: string; error?: string }> {
     if (this._isRunning) {
       this.stop();
     }
@@ -234,6 +340,20 @@ class Px4SitlProcessManager {
       if (config.wipeOnStart) {
         await this.wipeState(bundleDir);
       }
+
+      // PX4_HOME_* env only positions EXTERNAL simulators (jMAVSim/Gazebo
+      // generate GPS at that spot). The built-in SIH model reads its origin
+      // from SIH_LOC_LAT0/LON0/H0 params, which nothing sets, so the vehicle
+      // spawned at (0,0) in the Atlantic regardless of the chosen home.
+      // Patch the bundle's rcS once to map the env into those params.
+      await this.ensureSihHomeInRcs(bundleDir);
+
+      // Reap stale px4 processes from OUR bundle before starting. Orphans
+      // survive app crashes/force-quits, and px4's single-instance lock then
+      // fails every launch with "PX4 server already running for instance 0"
+      // (exit 255). Matching on the bundle's binary path keeps this from ever
+      // touching a px4 the user runs themselves.
+      await this.reapStalePx4(bundleDir);
 
       this._currentConfig = config;
 

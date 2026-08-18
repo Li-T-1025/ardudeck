@@ -84,6 +84,8 @@ const TELEMETRY_LAYERS = {
   satellite: MAP_LAYERS.satellite,
   googleSat: MAP_LAYERS.googleSat,
   googleHybrid: MAP_LAYERS.googleHybrid,
+  bingSat: MAP_LAYERS.bingSat,
+  bingHybrid: MAP_LAYERS.bingHybrid,
   terrain: MAP_LAYERS.terrain,
   dark: MAP_LAYERS.dark,
 } as const;
@@ -2210,7 +2212,12 @@ const TelemetryMap2D = React.memo(function TelemetryMap2D() {
   // and desktop-issued ones don't double-draw.
   const vehicleGuidedTarget = useVehicleGuidedTarget();
   const activeTarget = mergeGuidedTarget(localTarget, vehicleGuidedTarget);
+  // When the target was last SET. PX4 needs a grace window: its goto flips the
+  // mode to Hold only on the next heartbeat, and clearing on the stale mode
+  // reading would erase the overlay the instant it was drawn.
+  const targetSetAtRef = useRef(0);
   const setActiveTarget = useCallback((next: ActiveCommandTarget | null) => {
+    if (next) targetSetAtRef.current = Date.now();
     useCommandTargetStore.getState().setTarget(commandTargetKey(), next);
   }, []);
 
@@ -2248,6 +2255,30 @@ const TelemetryMap2D = React.memo(function TelemetryMap2D() {
   // so it does not go through dispatchMapCommand / activeTarget.
   const sendRoiCommand = useCallback(async (lat: number, lon: number): Promise<boolean> => {
     const vehicleKey = useActiveVehicleStore.getState().activeVehicleKey ?? '';
+    // PX4 ignores DO_SET_ROI_LOCATION for VEHICLE yaw outside missions
+    // (navigator only applies ROI to mission items), so on PX4 "look here"
+    // must pin the heading through DO_REPOSITION param4 — which PX4 stores
+    // raw as RADIANS. Hovering: reposition in place with the bearing.
+    // Transiting a goto: re-issue the same target with the bearing pinned.
+    if (useConnectionStore.getState().connectionState.firmware === 'px4') {
+      const t = useTelemetryStore.getState();
+      const bearingRad = Math.atan2(
+        Math.sin((lon - t.gps.lon) * Math.PI / 180) * Math.cos(lat * Math.PI / 180),
+        Math.cos(t.gps.lat * Math.PI / 180) * Math.sin(lat * Math.PI / 180) -
+        Math.sin(t.gps.lat * Math.PI / 180) * Math.cos(lat * Math.PI / 180) * Math.cos((lon - t.gps.lon) * Math.PI / 180),
+      );
+      const tgt = useCommandTargetStore.getState().getTarget(commandTargetKey());
+      const gotoTgt = tgt?.type === 'goto' ? tgt : null;
+      const ok = await window.electronAPI.mavlinkGoto(
+        gotoTgt?.lat ?? t.gps.lat,
+        gotoTgt?.lon ?? t.gps.lon,
+        gotoTgt?.px4Amsl ?? t.position.alt,
+        5,
+        (bearingRad + 2 * Math.PI) % (2 * Math.PI),
+      );
+      // Fall through to the gimbal ROI too — a mounted gimbal should also point.
+      if (!ok) return false;
+    }
     // ROI needs the target's ground altitude (AMSL). Prefer the terrain DEM;
     // fall back to the ground height under the vehicle (its AMSL minus AGL) when
     // the elevation service is offline, matching the video-click ROI path.
@@ -2297,7 +2328,7 @@ const TelemetryMap2D = React.memo(function TelemetryMap2D() {
     if (result.success) {
       // ActiveTarget mirrors the issued command's variant for correct overlay rendering.
       if (command.type === 'goto') {
-        setActiveTarget({ type: 'goto', lat: command.lat, lon: command.lon, alt: command.alt });
+        setActiveTarget({ type: 'goto', lat: command.lat, lon: command.lon, alt: command.alt, px4Amsl: result.px4Amsl });
         // ArduPilot resets guided yaw behaviour on every new destination, which
         // silently cancels an active ROI (verified in SITL: yaw snapped from the
         // ROI bearing to face-travel on DO_REPOSITION). Re-assert the lock so
@@ -2362,17 +2393,29 @@ const TelemetryMap2D = React.memo(function TelemetryMap2D() {
   useEffect(() => {
     if (!localTarget) return;
     const modeUpper = flight.mode.toUpperCase();
+    // The mode a command "lives in" is firmware-specific. ArduPilot flies
+    // gotos/orbits in GUIDED; PX4 has no GUIDED — DO_REPOSITION holds at the
+    // target in Hold, DO_ORBIT flies as Orbit, land is its own mode. The old
+    // GUIDED-only rule erased every PX4 overlay the moment it was drawn.
+    const isPx4Fw = connectionState.firmware === 'px4';
+    // Grace window after set: PX4's mode flips on the NEXT heartbeat, so the
+    // first evaluations still see the pre-command mode.
+    const inGrace = Date.now() - targetSetAtRef.current < 3000;
 
     if (localTarget.type === 'land') {
-      if (modeUpper !== 'GUIDED' && modeUpper !== 'LAND') setActiveTarget(null);
+      const landModes = isPx4Fw ? ['LAND'] : ['GUIDED', 'LAND'];
+      if (!landModes.includes(modeUpper) && !inGrace) setActiveTarget(null);
       return;
     }
     if (localTarget.type === 'climbRtl') {
-      if (modeUpper !== 'GUIDED' && modeUpper !== 'RTL') setActiveTarget(null);
+      if (modeUpper !== 'GUIDED' && modeUpper !== 'RTL' && !inGrace) setActiveTarget(null);
       return;
     }
-    if (modeUpper !== 'GUIDED') {
-      setActiveTarget(null);
+    const holdModes = isPx4Fw
+      ? (localTarget.type === 'orbit' ? ['ORBIT', 'HOLD'] : ['HOLD'])
+      : ['GUIDED'];
+    if (!holdModes.includes(modeUpper)) {
+      if (!inGrace) setActiveTarget(null);
       return;
     }
     if (localTarget.type === 'goto') {
@@ -2382,7 +2425,7 @@ const TelemetryMap2D = React.memo(function TelemetryMap2D() {
       );
       if (dist < 5) setActiveTarget(null);
     }
-  }, [localTarget, flight.mode, vehiclePosition]);
+  }, [localTarget, flight.mode, vehiclePosition, connectionState.firmware]);
 
   const clearTrail = useCallback(() => {
     setTrail([]);

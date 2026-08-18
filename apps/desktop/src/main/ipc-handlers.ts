@@ -905,9 +905,11 @@ const TELEM_STREAM_MESSAGES: { msgId: number; cat: 'attitude' | 'position' | 'ot
   { msgId: 36, cat: 'other' },           // SERVO_OUTPUT_RAW
   { msgId: 27, cat: 'other' },           // RAW_IMU
   { msgId: 29, cat: 'other' },           // SCALED_PRESSURE
-  { msgId: 168, cat: 'other', hz: 1 },   // WIND (EKF wind estimation, 1Hz is plenty)
+  { msgId: 168, cat: 'other', hz: 1 },   // WIND (ArduPilot wind estimation, 1Hz is plenty)
+  { msgId: 231, cat: 'other', hz: 1 },   // WIND_COV (PX4's wind message; AP uses 168)
   { msgId: 241, cat: 'other' },          // VIBRATION (for motor test view)
   { msgId: 147, cat: 'other' },          // BATTERY_STATUS (per-monitor batteries, #126)
+  { msgId: 87,  cat: 'other', hz: 2 },   // POSITION_TARGET_GLOBAL_INT (fly-here target/line; AP pushes it unrequested, PX4 only on request)
   { msgId: 11030, cat: 'other' },        // ESC_TELEMETRY_1_TO_4
   { msgId: 11031, cat: 'other' },        // ESC_TELEMETRY_5_TO_8
   { msgId: 11032, cat: 'other' },        // ESC_TELEMETRY_9_TO_12
@@ -1184,6 +1186,58 @@ function queueMavlinkTelemetry(mainWindow: BrowserWindow, fields: Record<string,
       mavlinkTelemetryBatches = {};
       mavlinkBatchTimer = null;
     }, 100); // 10Hz max
+  }
+}
+
+// =============================================================================
+// PX4 virtual joystick — neutral MANUAL_CONTROL (69) stream
+// =============================================================================
+// PX4 gates arming and every stick-flown mode (POSCTL/ALTCTL/...) on having a
+// manual control source; without one it spams "PreArm: No manual control
+// input", auto-disarms after arming, and refuses mode switches. QGC solves
+// this with a virtual joystick; we do the same for SITL: neutral sticks at
+// 10Hz (z=0 is center-throttle in PX4's [-1000,1000] mapping = hold). Only on
+// loopback links — a real vehicle keeps its real RC (COM_RC_IN_MODE default
+// "keep first" would ignore us anyway, but don't even offer it).
+const MANUAL_CONTROL_ID = 69;
+const MANUAL_CONTROL_CRC_EXTRA = 243;
+let px4ManualControlTimer: ReturnType<typeof setInterval> | null = null;
+
+function px4LinkIsLoopback(): boolean {
+  const o = lastConnectOptions;
+  if (!o || o.type === 'serial') return false;
+  const h = o.host ?? o.udpRemoteHost;
+  return !h || h === '127.0.0.1' || h === 'localhost';
+}
+
+function startPx4ManualControlStream(): void {
+  if (px4ManualControlTimer) return;
+  if (connectionState.firmware !== 'px4' || !px4LinkIsLoopback()) return;
+  const mw = getMainWindow();
+  if (mw) sendLog(mw, 'info', 'PX4 SITL: streaming neutral virtual-joystick input (MANUAL_CONTROL)');
+  px4ManualControlTimer = setInterval(() => {
+    void (async () => {
+      try {
+        if (!currentTransport?.isOpen || connectionState.firmware !== 'px4') return;
+        const payload = new Uint8Array(11);
+        const dv = new DataView(payload.buffer);
+        dv.setInt16(0, 0, true);  // x — pitch centered
+        dv.setInt16(2, 0, true);  // y — roll centered
+        dv.setInt16(4, 0, true);  // z — throttle centered (hold)
+        dv.setInt16(6, 0, true);  // r — yaw centered
+        dv.setUint16(8, 0, true); // buttons
+        payload[10] = connectionState.systemId ?? 1;
+        const pkt = await sendMavlinkPacket(MANUAL_CONTROL_ID, payload, MANUAL_CONTROL_CRC_EXTRA);
+        await currentTransport.write(pkt);
+      } catch { /* transport churn mid-send is fine */ }
+    })();
+  }, 100);
+}
+
+function stopPx4ManualControlStream(): void {
+  if (px4ManualControlTimer) {
+    clearInterval(px4ManualControlTimer);
+    px4ManualControlTimer = null;
   }
 }
 
@@ -1532,7 +1586,10 @@ function decodeFleetTelemetry(packet: MAVLinkPacket): Record<string, unknown> | 
       if (!isVehicleHeartbeat(vehicleType, payload[5]!, packet.compid)) return null;
       const armed = (baseMode & 0x80) !== 0 && systemStatus >= 3;
       let modeName = `Mode ${customMode}`;
-      if (vehicleType === 1 || (vehicleType >= 19 && vehicleType <= 25)) modeName = PLANE_MODES[customMode] || modeName;
+      // PX4 encodes the mode as a main/sub bitfield, keyed by autopilot type,
+      // not vehicle type (same branch the active-vehicle decode takes).
+      if (payload[5] === 12) modeName = getPx4ModeName(customMode);
+      else if (vehicleType === 1 || (vehicleType >= 19 && vehicleType <= 25)) modeName = PLANE_MODES[customMode] || modeName;
       else if (vehicleType === 2 || (vehicleType >= 13 && vehicleType <= 15) || vehicleType === 29 || vehicleType === 35) modeName = COPTER_MODES[customMode] || modeName;
       else if (vehicleType === 10 || vehicleType === 11) modeName = ROVER_MODES[customMode] || modeName;
       else if (vehicleType === 12) modeName = SUB_MODES[customMode] || modeName;
@@ -2457,6 +2514,7 @@ const MSG_POSITION_TARGET_GLOBAL_INT = 87;
 const MSG_COMMAND_ACK = 77;
 const MSG_TERRAIN_REPORT = 136;
 const MSG_WIND = 168;
+const MSG_WIND_COV = 231;
 const MSG_NAMED_VALUE_FLOAT = 251;
 const MSG_STATUSTEXT = 253;
 // PX4 events interface. Since v1.13 PX4 reports most user-facing warnings and
@@ -2844,6 +2902,24 @@ function parseTelemetry(mainWindow: BrowserWindow, packet: MAVLinkPacket): void 
       break;
     }
 
+    case MSG_WIND_COV: {
+      // WIND_COV (231) — PX4's wind estimate (PX4 never sends ArduPilot's
+      // WIND/168, so without this every wind display is silently empty on
+      // PX4). Wire order: time_usec(8), wind_x(4, north m/s), wind_y(4, east),
+      // wind_z(4, down), var_horiz(4), var_vert(4), wind_alt(4),
+      // horiz_accuracy(4), vert_accuracy(4).
+      const windN = readFloat(payload, 8);
+      const windE = readFloat(payload, 12);
+      const windD = readFloat(payload, 16);
+      // wind_x/y is the wind VELOCITY vector (direction it blows toward);
+      // WindData.direction is meteorological (where it comes FROM): +180.
+      const dirFrom = (Math.atan2(windE, windN) * 180 / Math.PI + 180 + 360) % 360;
+      queueMavlinkTelemetry(mainWindow, {
+        wind: { direction: dirFrom, speed: Math.hypot(windN, windE), speedZ: -windD },
+      });
+      break;
+    }
+
     case MSG_NAV_CONTROLLER_OUTPUT: {
       // NAV_CONTROLLER_OUTPUT (62) wire order: nav_roll(4), nav_pitch(4),
       //   alt_error(4), aspd_error(4), xtrack_error(4), nav_bearing(2, i16),
@@ -2914,6 +2990,27 @@ function parseTelemetry(mainWindow: BrowserWindow, packet: MAVLinkPacket): void 
       const calStatus = payload[14] ?? 0;
       const completionPct = payload[16] ?? 0;
       handleMagCalProgress(compassId, calStatus, completionPct);
+
+      // Coverage for the calibration sphere. completion_mask is a bitfield over
+      // ArduPilot's 80 geodesic sections, so it says WHICH directions the
+      // solver still has no samples for, which a percentage cannot. Zero-pad
+      // first: v2 truncation drops the trailing mask bytes early in a run, and
+      // those sections genuinely are uncovered.
+      if (mainWindow) {
+        const full = new Uint8Array(27);
+        full.set(payload.subarray(0, Math.min(payload.length, 27)));
+        const view = new DataView(full.buffer);
+        safeSend(mainWindow, IPC_CHANNELS.CALIBRATION_MAG_COVERAGE, {
+          compassId,
+          completionPct,
+          mask: Array.from(full.subarray(17, 27)),
+          direction: [
+            view.getFloat32(0, true),
+            view.getFloat32(4, true),
+            view.getFloat32(8, true),
+          ] as [number, number, number],
+        });
+      }
       break;
     }
 
@@ -4883,11 +4980,14 @@ export function setupIpcHandlers(mainWindow: BrowserWindow): void {
                 connectionState.mavType = vehicleType;
                 connectionState.mavlinkVersion = detectedMavlinkVersion;
                 connectionState.signingEnabled = signingEnabled;
-                // ArduPilot SITL is the only flavour that uses MAVLink, so on a
-                // confirmed MAVLink heartbeat we mark isSitl iff the ArduPilot
-                // SITL launcher process is currently running. (iNav SITL uses
-                // MSP - it's tracked separately on the MSP path.)
-                connectionState.isSitl = ardupilotSitlProcess.isRunning;
+                // Mark isSitl iff one of our MAVLink SITL launchers is
+                // currently running. (iNav SITL uses MSP - tracked separately.)
+                connectionState.isSitl = ardupilotSitlProcess.isRunning || px4SitlProcess.isRunning;
+
+                // PX4 needs a manual-control source before it arms cleanly or
+                // enters stick modes; feed the SITL a neutral virtual joystick.
+                if (connectionState.firmware === 'px4') startPx4ManualControlStream();
+                else stopPx4ManualControlStream();
 
                 sendLog(mainWindow, 'info', `Connected to ${connectionState.autopilot} ${connectionState.vehicleType}`, `System ID: ${packet.sysid}, Component ID: ${packet.compid}, MAVLink v${detectedMavlinkVersion}`);
                 sendConnectionState(mainWindow);
@@ -5639,9 +5739,15 @@ export function setupIpcHandlers(mainWindow: BrowserWindow): void {
     // BSOD FIX: Clean up existing listeners before closing
     cleanupTransportListeners();
 
-    // Disconnect existing connection
-    if (currentTransport?.isOpen) {
-      await currentTransport.close();
+    // A new link means the old virtual joystick must not keep transmitting.
+    stopPx4ManualControlStream();
+
+    // Disconnect existing connection. Close unconditionally, not only when
+    // isOpen: a UDP transport whose open() failed (or whose error path fired)
+    // can report isOpen=false while its socket still holds the port, and
+    // skipping close here is how the app EADDRINUSE-blocks its own reconnect.
+    if (currentTransport) {
+      try { await currentTransport.close(); } catch { /* already gone */ }
     }
     currentTransport = null;
 
@@ -6273,6 +6379,8 @@ export function setupIpcHandlers(mainWindow: BrowserWindow): void {
     // survive into the next connection (otherwise the next start would fail
     // with "Another calibration is already in progress").
     cancelCalibration('User disconnected');
+
+    stopPx4ManualControlStream();
 
     try {
       // Exit CLI mode first (sends 'exit' command to leave board in MSP mode)
@@ -6983,8 +7091,11 @@ export function setupIpcHandlers(mainWindow: BrowserWindow): void {
     paramRequestInFlight = true;
 
     try {
-      // Only attempt FTP on MAVLink v2 connections (FTP requires v2)
-      if (detectedMavlinkVersion === 2) {
+      // Only attempt FTP on MAVLink v2 connections (FTP requires v2).
+      // Skip it on PX4 outright: @PARAM/param.pck is an ArduPilot virtual
+      // file, so on PX4 the fast path can only ever burn its open-timeout
+      // before falling back — a guaranteed connect-time stall for nothing.
+      if (detectedMavlinkVersion === 2 && connectionState.firmware !== 'px4') {
         try {
           sendLog(mainWindow, 'info', 'Requesting parameters via MAVLink FTP (fast path)...');
           const ftpSuccess = await requestParamsViaFtp();
@@ -7675,6 +7786,15 @@ export function setupIpcHandlers(mainWindow: BrowserWindow): void {
       const armedBit = lastReportedArmed ? 128 : 0;
       const baseMode = 1 | armedBit; // MAV_MODE_FLAG_CUSTOM_MODE_ENABLED + armed bit
 
+      // DO_SET_MODE param semantics differ by firmware. ArduPilot reads the
+      // whole custom mode number from param2. PX4's commander casts param2 to
+      // a uint8 MAIN mode and param3 to the SUB mode, so handing it the packed
+      // 32-bit value ((main<<16)|(sub<<24)) truncates to main=0 and the switch
+      // is silently refused. Unpack for PX4.
+      const isPx4Mode = connectionState.firmware === 'px4';
+      const px4Main = (customMode >> 16) & 0xff;
+      const px4Sub = (customMode >> 24) & 0xff;
+
       // 1. MAV_CMD_DO_SET_MODE — preferred path
       const cmdPayload = serializeCommandLong({
         targetSystem: target.sysid,
@@ -7682,8 +7802,8 @@ export function setupIpcHandlers(mainWindow: BrowserWindow): void {
         command: 176, // MAV_CMD_DO_SET_MODE
         confirmation: 0,
         param1: baseMode,
-        param2: customMode,
-        param3: 0,
+        param2: isPx4Mode ? px4Main : customMode,
+        param3: isPx4Mode ? px4Sub : 0,
         param4: 0,
         param5: 0,
         param6: 0,
@@ -7806,7 +7926,7 @@ export function setupIpcHandlers(mainWindow: BrowserWindow): void {
   // MAV_CMD_DO_REPOSITION (command 192) via COMMAND_INT - fly to a location in GUIDED mode.
   // Uses COMMAND_INT (msg 75) instead of COMMAND_LONG so lat/lon are int32 (degrees * 1e7)
   // which preserves full precision. COMMAND_LONG float32 truncates coordinates.
-  ipcMain.handle(IPC_CHANNELS.MAVLINK_GOTO, async (_, lat: number, lon: number, alt: number, frame?: number): Promise<boolean> => {
+  ipcMain.handle(IPC_CHANNELS.MAVLINK_GOTO, async (_, lat: number, lon: number, alt: number, frame?: number, yawRad?: number): Promise<boolean> => {
     const target = activeFlightTarget();
     if (!target) {
       sendLog(mainWindow, 'warn', 'Move command: no active vehicle to command');
@@ -7829,7 +7949,14 @@ export function setupIpcHandlers(mainWindow: BrowserWindow): void {
         param1: -1,         // groundspeed: -1 = use default
         param2: 1,          // MAV_DO_REPOSITION_FLAGS_CHANGE_MODE (auto-switch to GUIDED)
         param3: 0,          // reserved
-        param4: 0,          // yaw: 0 = north (NaN not reliable in float32)
+        // Yaw: PX4 stores param4 RAW into position_setpoint.yaw, which is in
+        // RADIANS (navigator_main.cpp v1.15.4: rep->current.yaw = cmd.param4).
+        // 0 forces the whole leg to be flown FACING NORTH; NaN = default yaw
+        // behavior (face direction of travel). A finite yawRad (Look Here on
+        // PX4) pins the heading. ArduPilot ignores it here — keep legacy 0.
+        param4: connectionState.firmware === 'px4'
+          ? (typeof yawRad === 'number' && Number.isFinite(yawRad) ? yawRad : NaN)
+          : 0,
         x: Math.round(lat * 1e7),  // latitude as int32 (degrees * 1e7)
         y: Math.round(lon * 1e7),  // longitude as int32 (degrees * 1e7)
         z: alt,             // altitude (meters, relative to the frame above)
@@ -13239,6 +13366,20 @@ export async function cleanupOnShutdown(): Promise<void> {
     sitlProcess.stop();
   } catch (err) {
     console.warn('[Shutdown] Error stopping SITL:', err);
+  }
+
+  try {
+    // Same reaping duty for the ArduPilot, swarm and PX4 SITL children.
+    // These were never stopped on quit: closing the app orphaned a running
+    // px4, whose single-instance lock then failed every future launch with
+    // "PX4 server already running for instance 0" (exit 255) until the
+    // orphan was hunted down by hand.
+    ardupilotSitlProcess.stop();
+    swarmSitlProcess.stop();
+    px4SitlProcess.stop();
+    stopPx4ManualControlStream();
+  } catch (err) {
+    console.warn('[Shutdown] Error stopping firmware SITLs:', err);
   }
 
   try {

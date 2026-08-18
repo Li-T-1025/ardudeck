@@ -10,10 +10,10 @@ import { createPortal } from 'react-dom';
 import type { ArduPilotVehicleClass } from '../../../../shared/telemetry-types';
 import {
   FLIGHT_MODES,
+  PX4_FLIGHT_MODES,
   GROUP_LABEL,
   GROUP_ORDER,
   modeBlockedReason,
-  modeMetaFor,
   type FlightModeMeta,
   type ModeGateContext,
 } from '../../../../shared/flight-mode-meta';
@@ -23,6 +23,12 @@ export interface ModePickerProps {
   /** The annunciator element the popover anchors under. */
   anchorRef: RefObject<HTMLElement | null>;
   vehicleClass: ArduPilotVehicleClass;
+  /**
+   * Mode vocabulary. 'px4' uses its own list whose modeNums are encoded
+   * custom_mode values; everything else keeps the ArduPilot
+   * per-vehicle-class tables.
+   */
+  firmware?: string;
   currentModeNum?: number;
   requestedModeNum: number | null;
   pendingCommit: number | null;
@@ -50,6 +56,7 @@ function statusChipStyle(status: StatusVar): CSSProperties {
 function ModePickerImpl({
   anchorRef,
   vehicleClass,
+  firmware,
   currentModeNum,
   requestedModeNum,
   pendingCommit,
@@ -126,19 +133,22 @@ function ModePickerImpl({
   }, [onClose, anchorRef]);
 
   const q = query.toLowerCase().trim();
+  const activeModes = useMemo(
+    () => (firmware === 'px4' ? PX4_FLIGHT_MODES : FLIGHT_MODES[vehicleClass]),
+    [firmware, vehicleClass],
+  );
   const groups = useMemo(() => {
-    const all = FLIGHT_MODES[vehicleClass];
     return GROUP_ORDER
-      .map((g) => ({ group: g, items: all.filter((mm) => mm.group === g && mm.name.toLowerCase().includes(q)) }))
+      .map((g) => ({ group: g, items: activeModes.filter((mm) => mm.group === g && mm.name.toLowerCase().includes(q)) }))
       .filter((s) => s.items.length > 0);
-  }, [vehicleClass, q]);
+  }, [activeModes, q]);
 
   const recentMetas = useMemo(
-    () => recents.map((n) => modeMetaFor(vehicleClass, n)).filter((mm): mm is FlightModeMeta => !!mm),
-    [recents, vehicleClass],
+    () => recents.map((n) => activeModes.find((mm) => mm.modeNum === n)).filter((mm): mm is FlightModeMeta => !!mm),
+    [recents, activeModes],
   );
 
-  const pendingMeta = pendingCommit != null ? modeMetaFor(vehicleClass, pendingCommit) : undefined;
+  const pendingMeta = pendingCommit != null ? activeModes.find((mm) => mm.modeNum === pendingCommit) : undefined;
 
   function Chip({ meta }: { meta: FlightModeMeta }) {
     const reason = modeBlockedReason(meta, ctx);

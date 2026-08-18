@@ -55,3 +55,45 @@ describe('dispatchMapCommand land (firmware-aware)', () => {
     expect(api.mavlinkSetMode).not.toHaveBeenCalled();
   });
 });
+
+// PX4 DO_REPOSITION ignores the COMMAND_INT frame and reads z as AMSL. A
+// home-relative altitude passed through unconverted once flew the vehicle
+// into the ground (50m rel at a 47m-MSL field = 3m AGL commanded). Pin the
+// conversion: PX4 gets home-AMSL + rel and frame 5; ArduPilot keeps rel + 6.
+describe('dispatchMapCommand goto altitude frames (firmware-aware)', () => {
+  beforeEach(async () => {
+    vi.restoreAllMocks();
+    const { useTelemetryStore } = await import('../../stores/telemetry-store');
+    // Vehicle at 147m MSL, 100m above home => home sits at 47m AMSL.
+    useTelemetryStore.setState({
+      position: { lat: 42, lon: 19, alt: 147, relativeAlt: 100, vx: 0, vy: 0, vz: 0 },
+    });
+  });
+
+  it('PX4: converts relative altitude to AMSL and sends frame 5', async () => {
+    const api = installApi();
+    await dispatchMapCommand(
+      { type: 'goto', lat: 42.44, lon: 19.26, alt: 50, frame: 'relative' },
+      { firmware: 'px4' },
+    );
+    expect(api.mavlinkGoto).toHaveBeenCalledWith(42.44, 19.26, 97, 5);
+  });
+
+  it('PX4: passes AMSL altitude through unchanged', async () => {
+    const api = installApi();
+    await dispatchMapCommand(
+      { type: 'goto', lat: 42.44, lon: 19.26, alt: 120, frame: 'asl' },
+      { firmware: 'px4' },
+    );
+    expect(api.mavlinkGoto).toHaveBeenCalledWith(42.44, 19.26, 120, 5);
+  });
+
+  it('ArduPilot: keeps relative altitude with frame 6', async () => {
+    const api = installApi();
+    await dispatchMapCommand(
+      { type: 'goto', lat: 42.44, lon: 19.26, alt: 50, frame: 'relative' },
+      { firmware: 'ardupilot' },
+    );
+    expect(api.mavlinkGoto).toHaveBeenCalledWith(42.44, 19.26, 50, 6);
+  });
+});

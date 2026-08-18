@@ -43,6 +43,25 @@ export const MAP_LAYERS = {
     maxNativeZoom: 20,
     headers: { Referer: 'https://www.google.com/' },
   },
+  // Bing aerial via the classic keyless quadkey endpoints (the same ones
+  // Mission Planner ships). Offered because Google tiles are unreachable in
+  // some regions (China notably); Esri "Satellite" is the other option there.
+  // Microsoft is sunsetting Bing Maps for Enterprise (2028) so these may die
+  // eventually; the {q} token is resolved to a quadkey in resolveTileUrl.
+  bingSat: {
+    name: 'Bing Sat',
+    url: 'https://ecn.t{s}.tiles.virtualearth.net/tiles/a{q}.jpeg?g=14364&n=z',
+    subdomains: ['0', '1', '2', '3'],
+    maxZoom: 21,
+    maxNativeZoom: 19,
+  },
+  bingHybrid: {
+    name: 'Bing Hybrid',
+    url: 'https://ecn.t{s}.tiles.virtualearth.net/tiles/h{q}.jpeg?g=14364&n=z',
+    subdomains: ['0', '1', '2', '3'],
+    maxZoom: 21,
+    maxNativeZoom: 19,
+  },
   terrain: {
     name: 'Terrain',
     url: 'https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png',
@@ -80,8 +99,25 @@ export const MAP_LAYERS = {
 export type LayerKey = keyof typeof MAP_LAYERS;
 
 /**
+ * Bing-style quadkey: one base-4 digit per zoom level, interleaving the x/y
+ * bits from most-significant down. z=3, x=3, y=5 -> "213".
+ */
+export function tileToQuadkey(z: number, x: number, y: number): string {
+  let quadkey = '';
+  for (let i = z; i > 0; i--) {
+    const mask = 1 << (i - 1);
+    let digit = 0;
+    if (x & mask) digit += 1;
+    if (y & mask) digit += 2;
+    quadkey += digit;
+  }
+  return quadkey;
+}
+
+/**
  * Resolve the real HTTP tile URL for a given layer/z/x/y.
- * Handles subdomain rotation and different URL patterns (e.g. Esri {z}/{y}/{x}).
+ * Handles subdomain rotation and different URL patterns (Esri {z}/{y}/{x},
+ * Bing {q} quadkeys).
  */
 export function resolveTileUrl(layerKey: LayerKey, z: number, x: number, y: number): string {
   const layer = MAP_LAYERS[layerKey];
@@ -94,6 +130,7 @@ export function resolveTileUrl(layerKey: LayerKey, z: number, x: number, y: numb
   }
 
   return url
+    .replace('{q}', tileToQuadkey(z, x, y))
     .replace('{z}', String(z))
     .replace('{x}', String(x))
     .replace('{y}', String(y));
@@ -101,12 +138,14 @@ export function resolveTileUrl(layerKey: LayerKey, z: number, x: number, y: numb
 
 /**
  * Get the tile URL template for MapLibre (replaces {s} with first subdomain).
- * MapLibre handles {z}/{x}/{y} substitution itself.
+ * MapLibre handles {z}/{x}/{y} substitution itself, and speaks quadkeys
+ * natively via its {quadkey} token.
  */
 export function getMapLibreTileUrl(layerKey: LayerKey): string {
   const layer = MAP_LAYERS[layerKey];
+  let url: string = layer.url;
   if (layer.subdomains.length > 0) {
-    return layer.url.replace('{s}', layer.subdomains[0]!);
+    url = url.replace('{s}', layer.subdomains[0]!);
   }
-  return layer.url;
+  return url.replace('{q}', '{quadkey}');
 }

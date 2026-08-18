@@ -617,6 +617,9 @@ export const IPC_CHANNELS = {
   CALIBRATION_LARGE_VEHICLE_MAGCAL: 'calibration:large-vehicle-magcal', // ArduPilot MAV_CMD_FIXED_MAG_CAL_YAW (42006)
   CALIBRATION_COMPASSMOT_START: 'calibration:compassmot-start', // ArduPilot compass/motor cal (PREFLIGHT_CALIBRATION param6=1)
   CALIBRATION_COMPASSMOT_STOP: 'calibration:compassmot-stop', // Finish compassmot (COMMAND_ACK for PREFLIGHT_CALIBRATION)
+  // Per-frame magnetometer coverage for the calibration sphere: which of
+  // ArduPilot's 80 geodesic sections have samples yet.
+  CALIBRATION_MAG_COVERAGE: 'calibration:mag-coverage',
   CALIBRATION_PROGRESS: 'calibration:progress', // Event from main
   CALIBRATION_COMPLETE: 'calibration:complete', // Event from main
   // Per-board calibration records, kept so a calibration can be proven after

@@ -26,7 +26,7 @@ import { useMissionStore } from '../../../stores/mission-store';
 import { useParameterStore } from '../../../stores/parameter-store';
 import { useArduPilotSitlStore } from '../../../stores/ardupilot-sitl-store';
 import { useSettingsStore } from '../../../stores/settings-store';
-import { getVehicleClass, VEHICLE_CAPABILITIES } from '../../../../shared/telemetry-types';
+import { getVehicleClass, VEHICLE_CAPABILITIES, encodePx4CustomMode } from '../../../../shared/telemetry-types';
 import { executeTakeoff, presentTakeoff } from '../../panels/takeoff-strategies';
 import {
   altitudeValueFromMeters,
@@ -36,6 +36,7 @@ import {
 } from '../../../../shared/user-units.js';
 import {
   FLIGHT_MODES,
+  PX4_FLIGHT_MODES,
   GROUP_LABEL,
   GROUP_ORDER,
   MISSION_MODES,
@@ -78,7 +79,14 @@ export function FlightControlInstrument(): JSX.Element {
     qEnable: typeof qEnableParam === 'number' ? qEnableParam : undefined,
     sitlFrame: sitlIsRunning ? sitlFrame : undefined,
   });
-  const missionModes = MISSION_MODES[vehicleClass];
+  // PX4 speaks its own mode vocabulary (encoded custom_mode values); every
+  // mode list/lookup below must use it or the instrument commands ArduPilot
+  // mode numbers at a PX4 and gets refused.
+  const isPx4 = connectionState.firmware === 'px4';
+  const activeModes = isPx4 ? PX4_FLIGHT_MODES : FLIGHT_MODES[vehicleClass];
+  const missionModes = isPx4
+    ? { auto: encodePx4CustomMode(4, 4), pause: encodePx4CustomMode(4, 3), pauseLabel: 'Hold', abort: encodePx4CustomMode(4, 5), abortLabel: 'Return' }
+    : MISSION_MODES[vehicleClass];
   const capabilities = VEHICLE_CAPABILITIES[vehicleClass];
   const isInAuto = flight.modeNum === missionModes.auto;
   // Paused = sitting in the mission's pause mode (Brake/Loiter/Hold) with a
@@ -93,7 +101,7 @@ export function FlightControlInstrument(): JSX.Element {
       return false;
     }
   }, []);
-  const mode = useModeRequest(vehicleClass, flight.modeNum, sendMode);
+  const mode = useModeRequest(vehicleClass, flight.modeNum, sendMode, connectionState.firmware);
 
   // Two-step arm/disarm: first press arms the button for 3s, second sends.
   const [armPending, setArmPending] = useState(false);
@@ -153,7 +161,7 @@ export function FlightControlInstrument(): JSX.Element {
     return check();
   }, []);
 
-  const takeoffPresentation = presentTakeoff(vehicleClass);
+  const takeoffPresentation = presentTakeoff(vehicleClass, connectionState.firmware);
   const takeoffPrecision = altitudeUnit === 'km' ? 3 : altitudeUnit === 'm' ? 0 : 1;
   const takeoffAltDisplay = Number(altitudeValueFromMeters(takeoffAltM, altitudeUnit).toFixed(takeoffPrecision));
 
@@ -166,6 +174,7 @@ export function FlightControlInstrument(): JSX.Element {
       formatAltitude: (m) => formatAltitudeFromMeters(m, altitudeUnit),
       forceArm: false,
       vehicleClass,
+      firmware: connectionState.firmware,
       capabilities,
       isSitl: connectionState.isSitl ?? sitlIsRunning,
       getFlight: () => store().flight,
@@ -235,8 +244,8 @@ export function FlightControlInstrument(): JSX.Element {
     }
   }, [pickerOpen]);
 
-  const pendingMeta = mode.pendingCommit != null ? modeMetaFor(vehicleClass, mode.pendingCommit) : undefined;
-  const requestedMeta = mode.requestedMode != null ? modeMetaFor(vehicleClass, mode.requestedMode) : undefined;
+  const pendingMeta = mode.pendingCommit != null ? modeMetaFor(vehicleClass, mode.pendingCommit, connectionState.firmware) : undefined;
+  const requestedMeta = mode.requestedMode != null ? modeMetaFor(vehicleClass, mode.requestedMode, connectionState.firmware) : undefined;
 
   const modeName = (flight.mode || 'Unknown').toUpperCase();
   const modeColor = categoryColor(flight.mode);
@@ -499,7 +508,7 @@ export function FlightControlInstrument(): JSX.Element {
               style={{ top: pickerPos.top, left: pickerPos.left, width: PICKER_WIDTH, maxHeight: pickerPos.maxHeight }}
             >
               {GROUP_ORDER.map((group) => {
-                const modes = FLIGHT_MODES[vehicleClass].filter((m) => m.group === group);
+                const modes = activeModes.filter((m) => m.group === group);
                 if (modes.length === 0) return null;
                 return (
                   <div key={group}>

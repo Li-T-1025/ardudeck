@@ -297,6 +297,18 @@ export const usePx4SitlStore = create<Px4SitlStore>()(
           await window.electronAPI.px4SitlStop();
           set({ isRunning: false, isStopping: false, pid: null });
           appendConsole('SITL stopped.\n');
+          // The SITL link is UDP, which never "closes": killing px4 leaves the
+          // app connected to silence (TCP-based ArduPilot SITL disconnects for
+          // free when its socket dies). If the active connection is a PX4,
+          // it can only be this SITL, so drop the link explicitly.
+          try {
+            const { useConnectionStore } = await import('./connection-store');
+            const conn = useConnectionStore.getState();
+            if (conn.connectionState.isConnected && conn.connectionState.firmware === 'px4') {
+              appendConsole('Disconnecting from stopped SITL.\n');
+              await conn.disconnect();
+            }
+          } catch { /* disconnect is best-effort; the stop itself succeeded */ }
           return true;
         } catch (error) {
           const message = error instanceof Error ? error.message : 'Unknown error';

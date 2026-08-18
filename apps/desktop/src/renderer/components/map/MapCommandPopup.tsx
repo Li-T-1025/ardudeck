@@ -9,6 +9,7 @@ import { useScriptHealth } from '../script-installer/useScriptHealth';
 import { useSettingsStore } from '../../stores/settings-store';
 import { useConnectionStore } from '../../stores/connection-store';
 import { useActiveVehicleStore, formationOf } from '../../stores/active-vehicle-store';
+import { useTelemetryStore } from '../../stores/telemetry-store';
 import { mavTypeToTacticalClass, type TacticalVehicleClass } from './tactical-icon-pool';
 import { ScriptInstallModal } from '../script-installer/ScriptInstallModal';
 import { fenceWarningForPoint } from '../../utils/fence-check';
@@ -485,6 +486,23 @@ export const MapCommandPopup: React.FC<MapCommandPopupProps> = ({
                       <FrameSeg value={altFrame} onChange={chooseAltFrame} />
                     </ParamRow>
                   )}
+                  {altFrame === 'asl' && (() => {
+                    // Sea-level altitudes are absolute: the same number that is a
+                    // safe height at the beach is underground on a hill. Show what
+                    // this AMSL value means above THIS home so a too-low entry is
+                    // caught before it becomes a descent into the ground.
+                    const t = useTelemetryStore.getState();
+                    const homeAmsl = t.position.alt - t.position.relativeAlt;
+                    const aboveHome = altitude - homeAmsl;
+                    return (
+                      <div className="col-span-2 text-[11px] rounded-md px-2 py-1.5 border"
+                        style={{ borderColor: 'var(--status-warn)', color: 'var(--status-warn-fg)', background: 'var(--status-warn-bg)' }}>
+                        {aboveHome <= 0
+                          ? `${altitude} m above sea level is AT or BELOW home ground level here (home is ${homeAmsl.toFixed(0)} m AMSL).`
+                          : `${altitude} m above sea level = ${aboveHome.toFixed(0)} m above home here.`}
+                      </div>
+                    );
+                  })()}
                 </>
               )}
               {(meta.id === 'orbit' || meta.id === 'spiral') && (

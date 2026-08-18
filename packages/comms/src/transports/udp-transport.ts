@@ -59,8 +59,18 @@ export class UdpTransport extends BaseTransport {
       return;
     }
 
+    // A previous open() that failed at bind leaves a created-but-dead socket
+    // behind; binding a second one while it lingers is how the app ends up
+    // fighting itself for the port (EADDRINUSE against its own zombie).
+    if (this.socket) {
+      try { this.socket.close(); } catch { /* already closed */ }
+      this.socket = null;
+    }
+
     return new Promise((resolve, reject) => {
-      this.socket = createSocket('udp4');
+      // reuseAddr matches standard GCS behavior (QGC binds 14550 shared) and
+      // lets a fresh app instance recover the port from a crashed one.
+      this.socket = createSocket({ type: 'udp4', reuseAddr: true });
 
       this.socket.on('message', (msg: Buffer, rinfo) => {
         const uint8 = new Uint8Array(msg);
@@ -77,6 +87,10 @@ export class UdpTransport extends BaseTransport {
       this.socket.on('error', (err: Error) => {
         this.emit('error', err);
         if (!this._isOpen) {
+          // Bind failed: reap the socket so this transport can't hold the
+          // port (or a half-created socket) with isOpen reading false.
+          try { this.socket?.close(); } catch { /* never bound */ }
+          this.socket = null;
           reject(err);
         }
       });

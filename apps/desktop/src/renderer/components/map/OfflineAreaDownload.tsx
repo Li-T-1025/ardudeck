@@ -10,7 +10,7 @@ import { useTileCacheStore } from '../../stores/tile-cache-store';
 
 const api = (window as any).electronAPI;
 
-const BASE_LAYERS: LayerKey[] = ['osm', 'satellite', 'googleSat', 'googleHybrid', 'terrain', 'dark'];
+const BASE_LAYERS: LayerKey[] = ['osm', 'satellite', 'googleSat', 'googleHybrid', 'bingSat', 'bingHybrid', 'terrain', 'dark'];
 
 function formatBytes(bytes: number): string {
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;

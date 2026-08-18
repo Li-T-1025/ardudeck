@@ -779,7 +779,7 @@ function MavlinkFlightControl({ mavTypeOverride }: { mavTypeOverride?: number })
     }
   }, [squadKeys, connectionState.isSitl, sitlIsRunning, flight.armed, vehicleClass, startRcHold, stopRcHold]);
 
-  const mode = useModeRequest(vehicleClass, flight.modeNum, sendMode);
+  const mode = useModeRequest(vehicleClass, flight.modeNum, sendMode, connectionState.firmware);
 
   // Start-mission gate: switching to AUTO while the local plan was never
   // uploaded (or edited since) flies nothing or a stale mission; the map and
@@ -807,13 +807,13 @@ function MavlinkFlightControl({ mavTypeOverride }: { mavTypeOverride?: number })
   // live sim canvas.
   const gpsOk = (gps?.fixType ?? 0) >= 3;
   const modeCtx = useMemo(() => ({ gpsOk, armed: flight.armed }), [gpsOk, flight.armed]);
-  const requestedModeName = mode.requestedMode != null ? modeMetaFor(vehicleClass, mode.requestedMode)?.name : undefined;
-  const currentSubline = modeSubline(modeMetaFor(vehicleClass, flight.modeNum)) || 'MAVLink';
+  const requestedModeName = mode.requestedMode != null ? modeMetaFor(vehicleClass, mode.requestedMode, connectionState.firmware)?.name : undefined;
+  const currentSubline = modeSubline(modeMetaFor(vehicleClass, flight.modeNum, connectionState.firmware)) || 'MAVLink';
 
   const togglePicker = useCallback(() => setPickerOpen((o) => !o), []);
   const closePicker = useCallback(() => setPickerOpen(false), []);
   const handlePickMode = useCallback((n: number) => {
-    const meta = modeMetaFor(vehicleClass, n);
+    const meta = modeMetaFor(vehicleClass, n, connectionState.firmware);
     requestMode(n);
     if (!meta?.commit) setPickerOpen(false);
   }, [vehicleClass, requestMode]);
@@ -955,6 +955,7 @@ function MavlinkFlightControl({ mavTypeOverride }: { mavTypeOverride?: number })
         <ModePicker
           anchorRef={modeAnchorRef}
           vehicleClass={vehicleClass}
+          firmware={connectionState.firmware}
           currentModeNum={flight.modeNum}
           requestedModeNum={mode.requestedMode}
           pendingCommit={mode.pendingCommit}

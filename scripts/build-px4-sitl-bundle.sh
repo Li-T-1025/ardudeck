@@ -217,6 +217,55 @@ echo "==> px4 module shims created: $(find "$OUT/bin" -maxdepth 1 -type l | wc -
 # test_data is referenced by some airframes; ship it when present.
 [[ -d "$SRC/test_data" ]] && cp -R "$SRC/test_data" "$OUT/test_data" || true
 
+# ── SIH home-position mapping ─────────────────────────────────────────────────
+# PX4_HOME_* env only positions external simulators; the built-in SIH model
+# reads SIH_LOC_LAT0/LON0/H0 params. Insert the mapping before `dataman start`
+# so bundles work out of the box (the app also patches older bundles at
+# runtime; keep the marker text identical to px4-sitl-process.ts).
+RCS="$OUT/etc/init.d-posix/rcS"
+if [[ -f "$RCS" ]] && ! grep -q 'ArduDeck: SIH home' "$RCS"; then
+  python3 - "$RCS" <<'PYEOF'
+import sys
+path = sys.argv[1]
+src = open(path).read()
+block = '''
+# ArduDeck: SIH home from PX4_HOME_*
+if [ -n "${PX4_HOME_LAT:-}" ]; then
+\tparam set SIH_LOC_LAT0 $(awk "BEGIN {printf \\"%.0f\\", ${PX4_HOME_LAT}*10000000}")
+fi
+if [ -n "${PX4_HOME_LON:-}" ]; then
+\tparam set SIH_LOC_LON0 $(awk "BEGIN {printf \\"%.0f\\", ${PX4_HOME_LON}*10000000}")
+fi
+if [ -n "${PX4_HOME_ALT:-}" ]; then
+\tparam set SIH_LOC_H0 ${PX4_HOME_ALT}
+fi
+
+'''
+anchor = '\ndataman start'
+assert anchor in src, 'rcS anchor not found'
+open(path, 'w').write(src.replace(anchor, block + 'dataman start'))
+PYEOF
+  echo "==> rcS patched with SIH home-position mapping"
+fi
+
+# Upstream (v1.15.x at least) feeds RAW DEGREES into SIH_LOC_LAT0/LON0, which
+# are Int32 deg*1e7 — the vehicle spawns at (0,0). Rescale the mapping.
+SIMRC="$OUT/etc/init.d-posix/px4-rc.simulator"
+if [[ -f "$SIMRC" ]] && ! grep -q 'SIH_LOC_LAT0 \$(awk' "$SIMRC"; then
+  python3 - "$SIMRC" <<'PYEOF'
+import sys
+path = sys.argv[1]
+src = open(path).read()
+raw_lat = 'param set SIH_LOC_LAT0 ${PX4_HOME_LAT}'
+raw_lon = 'param set SIH_LOC_LON0 ${PX4_HOME_LON}'
+if raw_lat in src and raw_lon in src:
+    src = src.replace(raw_lat, 'param set SIH_LOC_LAT0 $(awk "BEGIN {printf \\"%.0f\\", ${PX4_HOME_LAT}*10000000}")')
+    src = src.replace(raw_lon, 'param set SIH_LOC_LON0 $(awk "BEGIN {printf \\"%.0f\\", ${PX4_HOME_LON}*10000000}")')
+    open(path, 'w').write(src)
+PYEOF
+  echo "==> px4-rc.simulator SIH_LOC scaling fixed"
+fi
+
 # ── Launcher the app spawns ───────────────────────────────────────────────────
 # This exact invocation was verified against a real bundle: run px4 from the
 # bundle root (which holds etc/), pass the ROMFS data dir as the positional,

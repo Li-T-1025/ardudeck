@@ -238,6 +238,27 @@ const ROVER_TABS: TabNode[] = [
   STORAGE_GROUP,
 ];
 
+// Tabs whose content speaks ArduPilot-only params/commands and has no PX4
+// variant yet: Rates (ACRO_RP_*), Tuning presets, Serial Ports (SERIALn_*),
+// Motor Test (DO_MOTOR_TEST, which PX4 rejects). Hidden on PX4 rather than
+// shown hunting for parameters that don't exist; the full parameter table
+// still exposes everything with PX4's own metadata.
+const PX4_UNSUPPORTED_TABS: ReadonlySet<TabId> = new Set(['rates', 'tuning', 'serial-ports', 'motor-test']);
+
+function filterTabsForFirmware(nodes: TabNode[], isPx4: boolean): TabNode[] {
+  if (!isPx4) return nodes;
+  const out: TabNode[] = [];
+  for (const node of nodes) {
+    if (node.kind === 'item') {
+      if (!PX4_UNSUPPORTED_TABS.has(node.id)) out.push(node);
+    } else {
+      const children = node.children.filter((c) => !PX4_UNSUPPORTED_TABS.has(c.id));
+      if (children.length > 0) out.push({ ...node, children });
+    }
+  }
+  return out;
+}
+
 function collectTabIds(nodes: TabNode[]): TabId[] {
   const ids: TabId[] = [];
   for (const node of nodes) {
@@ -271,7 +292,11 @@ export const MavlinkConfigView: React.FC = () => {
   const vehicleCategory = getVehicleCategory(connectionState.mavType);
   const isRover = vehicleCategory === 'rover';
   const isPlane = vehicleCategory === 'plane';
-  const tabs = useMemo(() => isRover ? ROVER_TABS : isPlane ? PLANE_TABS : COPTER_TABS, [isRover, isPlane]);
+  const isPx4Fw = connectionState.firmware === 'px4';
+  const tabs = useMemo(
+    () => filterTabsForFirmware(isRover ? ROVER_TABS : isPlane ? PLANE_TABS : COPTER_TABS, isPx4Fw),
+    [isRover, isPlane, isPx4Fw],
+  );
   const defaultTab = isRover ? 'rover-tuning' : 'pid';
   const [activeTab, setActiveTab] = useState<TabId>(defaultTab);
 

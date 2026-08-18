@@ -89,7 +89,19 @@ export default function SitlView() {
   const ardupilotSitlStore = useArduPilotSitlStore();
   const px4SitlStore = usePx4SitlStore();
   const outputRef = useRef<HTMLDivElement>(null);
-  const [activeTab, setActiveTab] = useState<SitlTab>('ardupilot');
+  // Remember the last-used firmware tab across sessions; a PX4 user should
+  // not land on ArduPilot every time they open the view.
+  const [activeTab, setActiveTab] = useState<SitlTab>(() => {
+    try {
+      const saved = localStorage.getItem('ardudeck.sitlTab');
+      return saved === 'inav' || saved === 'ardupilot' || saved === 'px4' ? saved : 'ardupilot';
+    } catch {
+      return 'ardupilot';
+    }
+  });
+  useEffect(() => {
+    try { localStorage.setItem('ardudeck.sitlTab', activeTab); } catch { /* non-fatal */ }
+  }, [activeTab]);
   const [showNewProfile, setShowNewProfile] = useState(false);
   const [newProfileName, setNewProfileName] = useState('');
   const [newProfileDesc, setNewProfileDesc] = useState('');

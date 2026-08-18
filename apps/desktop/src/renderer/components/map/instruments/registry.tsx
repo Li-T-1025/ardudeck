@@ -386,7 +386,14 @@ function FlightDataInstrument(): JSX.Element {
           </div>
           <div className="flex justify-between">
             <span className="text-[var(--gauge-text-dim)]">Brng</span>
-            <span className="font-mono text-[var(--gauge-green)]">{homeStats.bearing.toFixed(0)}<span className="text-[var(--gauge-text-dim)] ml-0.5">°</span></span>
+            {/* Bearing to a point you are standing on is undefined: within GPS
+                noise of home (~sub-meter jitter) it swings tens of degrees per
+                sample. Blank it until the distance makes direction meaningful. */}
+            {homeStats.distance >= 5 ? (
+              <span className="font-mono text-[var(--gauge-green)]">{homeStats.bearing.toFixed(0)}<span className="text-[var(--gauge-text-dim)] ml-0.5">°</span></span>
+            ) : (
+              <span className="font-mono text-[var(--gauge-text-dim)]">--</span>
+            )}
           </div>
         </>
       )}

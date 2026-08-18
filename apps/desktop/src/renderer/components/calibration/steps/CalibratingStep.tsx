@@ -12,6 +12,8 @@ import { useCalibrationStore } from '../../../stores/calibration-store';
 import { useConnectionStore } from '../../../stores/connection-store';
 import { CALIBRATION_TYPES, ACCEL_6POINT_POSITIONS } from '../../../../shared/calibration-types';
 import { CalibrationProgress } from '../shared/CalibrationProgress';
+import { CompassCoverageView } from '../shared/CompassCoverageView';
+import { useCompassCoverageStore, slowestCompassProgress } from '../../../stores/compass-coverage-store';
 import { LiveOrientationGuide } from '../shared/LiveOrientationGuide';
 import { CountdownTimer } from '../shared/CountdownTimer';
 
@@ -129,7 +131,10 @@ export function CalibratingStep() {
     !positionStatus[currentPosition] && fcHasRequestedPosition;
 
   // Compass: has the vehicle reported any real percentage yet?
-  const compassHasData = compassProgress.length > 0 || progress > 0;
+  const coverageByCompass = useCompassCoverageStore((s) => s.byCompass);
+  const coverageProgress = slowestCompassProgress(coverageByCompass);
+  // Coverage frames prove the run is live even when the FC's percentage is 0.
+  const compassHasData = compassProgress.length > 0 || progress > 0 || coverageByCompass.size > 0;
   // PX4 compass runs side-by-side like an accel cal; a side has been seen
   // once any position is marked or the status mentions one.
   const px4CompassStarted = positionStatus.some(Boolean) || progress > 0;
@@ -152,7 +157,21 @@ export function CalibratingStep() {
           <CompassWaitingForData elapsed={elapsed} />
         )}
         {calibrationType === 'compass' && !isPx4 && compassHasData && (
-          <CalibrationProgress progress={progress} label="slowest compass" />
+          <div className="flex flex-col items-center gap-3">
+            {/* The sphere IS the progress: ArduPilot's completion mask says
+                which of the 80 directions still have no samples, so the dark
+                patches tell the pilot where to turn next. The bar underneath
+                keeps the slowest-compass number. */}
+            <CompassCoverageView active={!isFinalizing} />
+            {/* Same numbers as the spheres. ArduPilot's own completion_pct
+                tracks the sphere FIT, not the rotation, so it sits at 0 for
+                most of a run: reading it here put "0%" under a solid that was
+                visibly most of the way covered. */}
+            <CalibrationProgress
+              progress={coverageProgress ?? progress}
+              label="slowest compass"
+            />
+          </div>
         )}
 
         {/* Compass (PX4): side-driven, reuse the position dots. */}

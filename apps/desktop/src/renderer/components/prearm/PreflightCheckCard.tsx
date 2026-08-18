@@ -9,6 +9,7 @@ import {
   type PreArmCategory,
 } from '../../../shared/prearm-checks';
 import { PreArmParamFix } from './PreArmParamFix';
+import { SafetyConfigCard } from './SafetyConfigCard';
 import { PanelContainer } from '../panels/panel-utils';
 
 export function PreflightCheckCard() {
@@ -101,6 +102,12 @@ export function PreflightCheckCard() {
 
       {/* Category list */}
       <div className="flex-1 overflow-auto">
+        {/* Settings that will never appear as a pre-arm failure because the FC
+            is happy with them, and that decide whether a bad flight ends in a
+            landing. Renders nothing when the aircraft is set up sensibly. */}
+        <div className="px-3 pt-2 empty:hidden">
+          <SafetyConfigCard />
+        </div>
         <div className="divide-y divide-subtle/50">
           {PREARM_CATEGORIES.map(({ id, label }) => {
             const errors = errorsByCategory.get(id);

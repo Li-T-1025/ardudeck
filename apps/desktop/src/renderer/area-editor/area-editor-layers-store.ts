@@ -16,6 +16,8 @@ import type { LayerKey } from '../../shared/map-layers';
 export const AREA_EDITOR_BASE_LAYERS: { key: LayerKey; label: string }[] = [
   { key: 'googleSat', label: 'Satellite' },
   { key: 'googleHybrid', label: 'Hybrid' },
+  { key: 'bingSat', label: 'Bing Sat' },
+  { key: 'bingHybrid', label: 'Bing Hybrid' },
   { key: 'osm', label: 'Street' },
   { key: 'terrain', label: 'Terrain' },
   { key: 'dark', label: 'Dark' },

@@ -35,10 +35,13 @@ export interface TakeoffContext {
   formatAltitude?: (meters: number) => string;
   forceArm: boolean;
   vehicleClass: ArduPilotVehicleClass;
-  /** Detected firmware family. PX4 takes a completely separate, standard-MAVLink
+  /** Detected firmware family. REQUIRED so a call site can never silently
+   *  fall through to the ArduPilot procedure on a PX4 vehicle (that exact
+   *  omission shipped once: the map instrument ran stabilize->guided at PX4).
+   *  PX4 takes a completely separate, standard-MAVLink
    *  takeoff path (see takeoffPx4); ArduPilot and unknown fall through to the
    *  per-vehicle ArduPilot strategies unchanged. */
-  firmware?: FirmwareSource;
+  firmware: FirmwareSource | undefined;
   capabilities: VehicleCapabilities;
   /** True when we're driving the bundled SITL simulator (vs real FC). Lets
    *  strategies fall back to virtual-RC throttle ramping when upstream's

@@ -1,5 +1,22 @@
 import { encodePx4CustomMode } from '../../../shared/telemetry-types';
 import type { FirmwareSource } from '../../../shared/firmware-types';
+import { useTelemetryStore } from '../../stores/telemetry-store';
+
+/**
+ * PX4's DO_REPOSITION / DO_ORBIT implementations IGNORE the COMMAND_INT frame
+ * and read z as altitude AMSL (QGC sends AMSL for exactly this reason).
+ * Sending a home-relative value therefore commands "N meters above sea level":
+ * at a field 47m MSL, a 50m-relative fly-here became 3m AGL and the vehicle
+ * flew into the ground. Convert to AMSL using home's AMSL (current MSL minus
+ * current relative alt). Terrain frame has no PX4 equivalent on this command;
+ * approximate it as home-relative rather than refuse.
+ */
+function px4AmslFromFrame(alt: number, frame: AltReferenceFrame | undefined): number {
+  if (frame === 'asl') return alt;
+  const t = useTelemetryStore.getState();
+  const homeAmsl = t.position.alt - t.position.relativeAlt;
+  return homeAmsl + alt;
+}
 
 /**
  * Map command types - extensible union for all commands issuable from the map.
@@ -108,6 +125,8 @@ export interface DispatchOptions {
 export interface DispatchResult {
   success: boolean;
   path: DispatchPath;
+  /** PX4 goto only: the AMSL altitude actually commanded (for Look Here re-issue). */
+  px4Amsl?: number;
 }
 
 /**
@@ -135,10 +154,16 @@ export async function dispatchMapCommand(
   void SCRIPT_HOLDS_VEHICLE;
   switch (command.type) {
     case 'goto': {
+      const px4 = options.firmware === 'px4';
+      const amsl = px4 ? px4AmslFromFrame(command.alt, command.frame) : undefined;
       const ok = await window.electronAPI.mavlinkGoto(
-        command.lat, command.lon, command.alt, altFrameToCommandIntFrame(command.frame),
+        command.lat, command.lon,
+        px4 ? amsl! : command.alt,
+        px4 ? 5 : altFrameToCommandIntFrame(command.frame),
       );
-      return { success: ok, path: 'native' };
+      // px4Amsl rides along so a later Look Here can re-issue THIS goto with a
+      // pinned heading without recomputing (or losing) the commanded altitude.
+      return { success: ok, path: 'native', px4Amsl: amsl };
     }
     case 'orbit': {
       if (options.preferScript && window.electronAPI.mavlinkUserCommand) {
@@ -153,9 +178,12 @@ export async function dispatchMapCommand(
         return { success: ok, path: 'script' };
       }
       // Native fallback ignores revolutions (DO_ORBIT has no count param).
+      const px4Orbit = options.firmware === 'px4';
       const ok = await window.electronAPI.mavlinkOrbit(
-        command.lat, command.lon, command.alt, command.radius,
-        altFrameToCommandIntFrame(command.frame),
+        command.lat, command.lon,
+        px4Orbit ? px4AmslFromFrame(command.alt, command.frame) : command.alt,
+        command.radius,
+        px4Orbit ? 5 : altFrameToCommandIntFrame(command.frame),
       );
       return { success: ok, path: 'native' };
     }
@@ -253,7 +281,7 @@ export async function dispatchMapCommand(
  * Carries enough info to render the right overlay per command type.
  */
 export type ActiveCommandTarget =
-  | { type: 'goto'; lat: number; lon: number; alt: number }
+  | { type: 'goto'; lat: number; lon: number; alt: number; px4Amsl?: number }
   | { type: 'orbit'; lat: number; lon: number; alt: number; radius: number }
   | { type: 'spiral'; lat: number; lon: number; radius: number; startAlt: number; targetAlt: number }
   | { type: 'watchtower'; lat: number; lon: number; alt: number; yawRate: number }
