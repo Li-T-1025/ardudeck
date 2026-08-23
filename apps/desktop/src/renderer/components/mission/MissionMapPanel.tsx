@@ -34,6 +34,8 @@ import { SurveyStartButton } from '../survey/SurveyStartButton';
 import { PersistentSurveyOverlay } from '../survey/PersistentSurveyOverlay';
 import { GuidesOverlay } from './GuidesOverlay';
 import { PlanReplayOverlay } from './PlanReplayOverlay';
+import { FlightPreviewGizmo } from './FlightPreviewOverlay';
+import { useFlightPreviewStore } from '../../stores/flight-preview-store';
 import { useSurveyStore } from '../../stores/survey-store';
 import { isSurveyGroup } from '../../../shared/mission-group-types';
 
@@ -1264,6 +1266,7 @@ function MissionMapPanel2D({ readOnly = false }: MissionMapPanelProps) {
         <PersistentSurveyOverlay />
         <GuidesOverlay />
         <PlanReplayOverlay />
+        <FlightPreviewGizmo />
 
         {/* Survey grid overlay */}
         {surveyIsActive && (
@@ -1402,6 +1405,22 @@ function MissionMapPanel2D({ readOnly = false }: MissionMapPanelProps) {
                 {isSettingHome ? 'Click map' : homePosition ? 'Home Set' : 'Set Home'}
               </button>
             )}
+
+            {/* Flight preview: kinematic playback of the planned mission. */}
+            <button
+              onClick={() => {
+                const fp = useFlightPreviewStore.getState();
+                if (fp.isActive) fp.close();
+                else fp.open();
+              }}
+              className="px-2.5 py-1.5 rounded text-xs font-medium bg-surface border border-subtle text-content hover:bg-surface-raised shadow-sm transition-colors flex items-center gap-1.5"
+              data-tip="Preview the flight: a gizmo flies the plan at mission speed, showing where the camera points"
+            >
+              <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 5v14l11-7z" />
+              </svg>
+              Preview
+            </button>
 
             {/* Hint for Set Home mode */}
             {!readOnly && isSettingHome && (

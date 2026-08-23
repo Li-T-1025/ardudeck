@@ -175,6 +175,15 @@ export function ObjectsPanel(): JSX.Element {
                           WS
                         </span>
                       )}
+                      {o.role === 'guide' && (
+                        <span
+                          className="text-[9px] font-bold px-1 rounded leading-tight"
+                          style={{ background: '#c084fc', color: '#0a0a0a' }}
+                          data-tip="Guide - sent to the mission map as a reference outline, no waypoints generated"
+                        >
+                          GD
+                        </span>
+                      )}
                     </div>
                     <div className="text-[10px] text-content-tertiary">
                       {TYPE_LABEL[o.type]}
@@ -263,7 +272,7 @@ export function ObjectsPanel(): JSX.Element {
 
             {canFence && (
               <div className="px-3 pb-2 space-y-1.5">
-                <div className="text-[10px] font-medium text-content-tertiary uppercase tracking-wide">Workspace</div>
+                <div className="text-[10px] font-medium text-content-tertiary uppercase tracking-wide">Role</div>
                 <button
                   type="button"
                   onClick={() => setObjectRole(sel!.id, sel!.role === 'workspace' ? null : 'workspace')}
@@ -274,6 +283,17 @@ export function ObjectsPanel(): JSX.Element {
                   data-tip="Allowed flight area attached to every sent survey; only one object can be the workspace"
                 >
                   {sel!.role === 'workspace' ? 'Workspace (click to clear)' : 'Mark as workspace'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setObjectRole(sel!.id, sel!.role === 'guide' ? null : 'guide')}
+                  className={'w-full h-7 rounded-md text-[11px] font-medium transition-colors ' +
+                    (sel!.role === 'guide'
+                      ? 'bg-purple-600 text-white'
+                      : 'bg-surface-raised text-content-secondary hover:text-content')}
+                  data-tip="Sent to the mission map as a reference outline; no waypoints are generated from it"
+                >
+                  {sel!.role === 'guide' ? 'Guide (click to clear)' : 'Mark as guide'}
                 </button>
               </div>
             )}

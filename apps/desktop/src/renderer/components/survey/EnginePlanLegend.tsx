@@ -44,26 +44,39 @@ export function EnginePlanLegend() {
             </button>
           </div>
           <div className="flex items-start gap-2">
-            <span className="mt-0.5 w-4 h-3 shrink-0 rounded-sm border border-dashed border-amber-400 bg-amber-400/20" />
+            {/* Swatches use the real per-cell hue formula so the legend matches the map. */}
+            <span className="mt-0.5 flex shrink-0 gap-0.5">
+              {[0, 1, 2].map((i) => (
+                <span
+                  key={i}
+                  className="w-2 h-3 rounded-sm border border-dashed"
+                  style={{
+                    borderColor: `hsl(${(i * 47) % 360} 70% 55%)`,
+                    background: `hsl(${(i * 47) % 360} 70% 55% / 0.2)`,
+                  }}
+                />
+              ))}
+            </span>
             <span className="text-[11px] leading-snug text-content-secondary">
-              <span className="text-content">{cellCount} coverage cells</span> - the engine split
-              the area into regions, each flown with its own optimal line direction.
+              <span className="text-content">{cellCount} zones</span> - the area is flown one
+              numbered zone at a time. A color just means a different zone.
             </span>
           </div>
           {hasCurve && (
             <div className="flex items-start gap-2">
-              <span className="mt-1.5 w-4 h-0.5 shrink-0 rounded bg-teal-400" />
+              <span className="mt-1.5 w-4 h-0.5 shrink-0 rounded bg-teal-400/60" />
               <span className="text-[11px] leading-snug text-content-secondary">
-                <span className="text-content">Smoothed flight path</span> - the true curve
-                bounded by your turn radius; waypoints approximate it.
+                <span className="text-content">Planned route</span> (teal) - the route the
+                engine calculated, with real turns.
               </span>
             </div>
           )}
           <div className="flex items-start gap-2">
             <span className="mt-1.5 w-4 h-0.5 shrink-0 rounded bg-sky-400" />
             <span className="text-[11px] leading-snug text-content-secondary">
-              <span className="text-content">Mission waypoints</span> - what actually uploads to
-              the vehicle.
+              <span className="text-content">Your mission</span> (blue) - the waypoints that
+              go to the drone. It skips the turn loops: a copter just turns in place at each
+              line end.
             </span>
           </div>
           <p className="text-[10px] leading-snug text-content-tertiary pt-1 border-t border-subtle">

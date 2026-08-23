@@ -192,12 +192,12 @@ export function ObjectEditorMap({ onMapReady }: ObjectEditorMapProps): JSX.Eleme
       map.addLayer({
         id: 'handles-rotate', type: 'circle', source: 'handles',
         filter: ['==', ['get', 'role'], 'rotate'],
-        paint: { 'circle-radius': 6, 'circle-color': '#34d399', 'circle-stroke-color': '#0f172a', 'circle-stroke-width': 2 },
+        paint: { 'circle-radius': 7, 'circle-color': '#34d399', 'circle-stroke-color': '#0f172a', 'circle-stroke-width': 2 },
       });
       map.addLayer({
         id: 'handles-scale', type: 'circle', source: 'handles',
         filter: ['==', ['get', 'role'], 'scale'],
-        paint: { 'circle-radius': 5, 'circle-color': '#ffffff', 'circle-stroke-color': '#0f172a', 'circle-stroke-width': 2 },
+        paint: { 'circle-radius': 6, 'circle-color': '#ffffff', 'circle-stroke-color': '#0f172a', 'circle-stroke-width': 2 },
       });
 
       // ---- vertex handles (edit tool) ----
@@ -205,7 +205,7 @@ export function ObjectEditorMap({ onMapReady }: ObjectEditorMapProps): JSX.Eleme
       map.addLayer({
         id: 'vertices-circle', type: 'circle', source: 'vertices',
         paint: {
-          'circle-radius': ['case', ['==', ['get', 'selected'], true], 7, 5],
+          'circle-radius': ['case', ['==', ['get', 'selected'], true], 8, 6],
           'circle-color': ['case', ['==', ['get', 'selected'], true], '#f59e0b', '#22d3ee'],
           'circle-stroke-color': '#0f172a', 'circle-stroke-width': 2,
         },

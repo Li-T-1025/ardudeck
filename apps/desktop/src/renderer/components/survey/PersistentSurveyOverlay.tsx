@@ -13,11 +13,13 @@
  * Spec: docs/superpowers/specs/2026-05-28-mission-groups-design.md
  */
 import { useMemo } from 'react';
-import { Polygon, Polyline } from 'react-leaflet';
+import { Polygon, Polyline, Marker } from 'react-leaflet';
+import L from 'leaflet';
 import { useMissionStore } from '../../stores/mission-store';
 import { useSurveyStore } from '../../stores/survey-store';
 import { isSurveyGroup, type SurveyGroup } from '../../../shared/mission-group-types';
 import { extractGeneratorOverlays } from './generator-overlays';
+import { bezierSpline, type SplineTangent } from './geo-edit';
 
 export function PersistentSurveyOverlay() {
   const groups = useMissionStore((s) => s.groups);
@@ -40,11 +42,25 @@ export function PersistentSurveyOverlay() {
   const layers: React.ReactNode[] = [];
 
   for (const g of surveyGroups) {
-    const isCorridor = g.generatorId === 'builtin.corridor';
+    const isPanorama = g.generatorId === 'builtin.panorama';
+    const isCorridor = g.generatorId === 'builtin.corridor' || isPanorama;
     // Corridors are an open centerline (2+ points); area patterns need a ring.
     if (g.polygon.length < (isCorridor ? 2 : 3)) continue;
     const isSelected = g.id === selectedGroupId;
-    const positions = g.polygon.map((p) => [p.lat, p.lng] as [number, number]);
+    // Panorama stores spline CONTROL POINTS: the committed line must render as
+    // the same Bezier curve the editor shows, or a saved survey looks straight
+    // until it is reopened.
+    const positions = (isPanorama && g.polygon.length >= 2
+      ? bezierSpline(
+          g.polygon,
+          (() => {
+            const tans = (g.config as { panoramaTangents?: Record<number, SplineTangent> }).panoramaTangents;
+            return tans ? g.polygon.map((_, i) => tans[i]) : undefined;
+          })(),
+          5,
+        )
+      : g.polygon
+    ).map((p) => [p.lat, p.lng] as [number, number]);
 
     // Corridor: draw the centerline as a dashed open polyline (white casing +
     // group color), no fill — it's a path, not an area.
@@ -182,6 +198,7 @@ export function PersistentSurveyOverlay() {
 
     // Generator-contributed decorations (e.g. TOPAS decomposition cells).
     // Non-interactive so they never steal clicks from the group polygon.
+    let cellNo = 0;
     extractGeneratorOverlays(g.generatorResult).forEach((ov, oi) => {
       const points = ov.points.map((p) => [p.lat, p.lng] as [number, number]);
       const pathOptions = {
@@ -190,23 +207,54 @@ export function PersistentSurveyOverlay() {
         opacity: 0.55,
         ...(ov.dashed ? { dashArray: '4, 4' } : {}),
       };
-      layers.push(
-        ov.type === 'polygon' ? (
+      if (ov.type === 'polygon') {
+        layers.push(
           <Polygon
             key={`gen-ov-${g.id}-${oi}`}
             positions={points}
             interactive={false}
             pathOptions={{ ...pathOptions, fillColor: ov.color ?? g.color, fillOpacity: 0.14 }}
-          />
-        ) : (
+          />,
+        );
+        // Cell number badge, matching the draft overlay: the per-cell colors
+        // only make sense once the cells read as "region 1..N".
+        cellNo += 1;
+        let clat = 0;
+        let clng = 0;
+        for (const p of ov.points) { clat += p.lat; clng += p.lng; }
+        const centroid: [number, number] = [clat / ov.points.length, clng / ov.points.length];
+        layers.push(
+          <Marker
+            key={`gen-ov-badge-${g.id}-${oi}`}
+            position={centroid}
+            interactive={false}
+            icon={L.divIcon({
+              className: 'survey-cell-badge',
+              html: `<div style="
+                min-width: 16px; height: 16px; padding: 0 3px;
+                border-radius: 8px;
+                background: ${ov.color ?? g.color};
+                color: #fff; font-size: 10px; font-weight: 600;
+                display: flex; align-items: center; justify-content: center;
+                border: 1.5px solid rgba(255,255,255,0.85);
+                box-shadow: 0 1px 3px rgba(0,0,0,0.4);
+                opacity: 0.85;
+              ">${cellNo}</div>`,
+              iconSize: [16, 16],
+              iconAnchor: [8, 8],
+            })}
+          />,
+        );
+      } else {
+        layers.push(
           <Polyline
             key={`gen-ov-${g.id}-${oi}`}
             positions={points}
             interactive={false}
             pathOptions={pathOptions}
-          />
-        ),
-      );
+          />,
+        );
+      }
     });
   }
 

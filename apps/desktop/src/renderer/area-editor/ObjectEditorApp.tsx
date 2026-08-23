@@ -21,7 +21,9 @@ import { attachTrafficLayer } from './attachTrafficLayer';
 import { TrafficAltitudeFilterCard } from '../components/map/overlays/TrafficAltitudeFilter';
 import { useAreaEditorLayersStore } from './area-editor-layers-store';
 import { WindControls } from '../components/map/overlays/WindControls';
-import { useObjectsStore, type AreaTool } from './objects-store';
+import { useObjectsStore, initAreaEditorAutosave, type AreaTool } from './objects-store';
+import { corridorSwath } from '../components/survey/geo-edit';
+import { objectWorldBranches } from './area-object';
 import { useSurveyStore } from '../stores/survey-store';
 import { objectWorldRing, objectWorldHoles, buildCommitAreas } from './area-object';
 import { parseGisArea } from '../../shared/gis-area-import';
@@ -39,6 +41,8 @@ const S = { className: 'w-4 h-4', viewBox: '0 0 24 24', fill: 'none', stroke: 'c
 const ICursor = () => <svg {...S}><path d="M4 3l7.07 16.97 2.51-7.39 7.39-2.51L4 3z" /></svg>;
 const IPolygon = () => <svg {...S}><path d="M12 3l8 6-3 9H7L4 9z" /></svg>;
 const ICorridor = () => <svg {...S}><path d="M4 18l5-5 4 4 7-7" /><circle cx="4" cy="18" r="1.4" /><circle cx="20" cy="10" r="1.4" /></svg>;
+const ISpline = () => <svg {...S}><path d="M4 18c6 0 4-12 10-12 4 0 3 6 6 6" /><circle cx="4" cy="18" r="1.4" /><circle cx="20" cy="12" r="1.4" /></svg>;
+const IMerge = () => <svg {...S}><rect x="4" y="4" width="11" height="11" rx="1.5" /><rect x="9" y="9" width="11" height="11" rx="1.5" /></svg>;
 const IBranch = () => <svg {...S}><path d="M5 21V8M5 8l6-5M5 13l7-4" /><circle cx="11" cy="3" r="1.3" /><circle cx="12" cy="9" r="1.3" /></svg>;
 const IRect = () => <svg {...S}><rect x="3" y="6" width="18" height="12" rx="1" /></svg>;
 const ICircle = () => <svg {...S}><circle cx="12" cy="12" r="8" /></svg>;
@@ -67,12 +71,14 @@ const TOOLS: { id: AreaTool; icon: () => JSX.Element; tip: string }[] = [
   { id: 'select', icon: ICursor, tip: 'Select & transform: move, rotate, scale' },
   { id: 'polygon', icon: IPolygon, tip: 'Draw area: click points, double-click to finish' },
   { id: 'corridor', icon: ICorridor, tip: 'Draw corridor: a centerline for a linear survey' },
+  { id: 'spline', icon: ISpline, tip: 'Spline corridor: click points along a shoreline or road, get a smooth curve (double-click to finish)' },
   { id: 'branch', icon: IBranch, tip: 'Branch: select a corridor, draw a fork off it (double-click to finish)' },
   { id: 'rectangle', icon: IRect, tip: 'Rectangle: drag on the map' },
   { id: 'circle', icon: ICircle, tip: 'Circle: drag from the center' },
   { id: 'edit', icon: IEdit, tip: 'Edit points of the selected object' },
   { id: 'hole', icon: IHole, tip: 'Cut a hole: select an area, then click an inner ring (double-click to finish)' },
   { id: 'split', icon: ISplit, tip: 'Split: select an area, then draw a line across it (two clicks)' },
+  { id: 'merge', icon: IMerge, tip: 'Merge: click a polygon to combine it with everything it overlaps' },
   { id: 'measure', icon: IRuler, tip: 'Measure distance & area' },
 ];
 
@@ -192,8 +198,24 @@ export function ObjectEditorApp(): JSX.Element {
   const distanceUnit = useSettingsStore((s) => s.unitPreferences.distance);
   const [sent, setSent] = useState(false);
   const [bufferM, setBufferM] = useState(10);
+  // 'idle' until the first change, then flips saving->saved on each autosave.
+  const [saveState, setSaveState] = useState<'idle' | 'saved'>('idle');
+  const [exportNoteText, setExportNoteText] = useState<string | null>(null);
+  const exportNoteTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const setExportNote = useCallback((text: string) => {
+    setExportNoteText(text);
+    if (exportNoteTimer.current) clearTimeout(exportNoteTimer.current);
+    exportNoteTimer.current = setTimeout(() => setExportNoteText(null), 2500);
+  }, []);
+  useEffect(() => {
+    const stop = initAreaEditorAutosave(() => setSaveState('saved'));
+    return () => {
+      stop();
+      if (exportNoteTimer.current) clearTimeout(exportNoteTimer.current);
+    };
+  }, []);
 
-  const { setTool, setCorridorWidth, clearMeasure, loadWorldRings, bufferSelected, clearBranches, undo, redo } = useObjectsStore.getState();
+  const { setTool, setCorridorWidth, clearMeasure, loadWorldRings, bufferSelected, clearBranches, mergeOverlapping, undo, redo } = useObjectsStore.getState();
 
   const windOn = useAreaEditorLayersStore((s) => s.overlays.wind);
   const trafficOn = useAreaEditorLayersStore((s) => s.overlays.traffic || s.overlays.gliders);
@@ -292,12 +314,34 @@ export function ObjectEditorApp(): JSX.Element {
   const handleExport = useCallback(async (format: 'kml' | 'kmz') => {
     try {
       const exportAreas = useObjectsStore.getState().objects
-        .filter((o) => o.type !== 'corridor' && o.visible && objectWorldRing(o).length >= 3)
-        .map((o, i) => ({ name: o.name || `Area ${i + 1}`, polygon: objectWorldRing(o), holes: objectWorldHoles(o) }));
-      if (exportAreas.length === 0) return;
+        .filter((o) => o.visible)
+        .flatMap((o, i) => {
+          // Corridors export as their swath outline (KML has no "centerline +
+          // width" concept); previously they were silently dropped.
+          if (o.type === 'corridor') {
+            const width = o.corridorWidthM ?? 60;
+            const centerlines = [objectWorldRing(o), ...objectWorldBranches(o)];
+            return centerlines
+              .map((cl) => corridorSwath(cl, width))
+              .filter((swath) => swath.length >= 3)
+              .map((swath, bi) => ({
+                name: bi === 0 ? (o.name || `Corridor ${i + 1}`) : `${o.name || `Corridor ${i + 1}`} branch ${bi}`,
+                polygon: swath,
+                holes: [] as ReturnType<typeof objectWorldHoles>,
+              }));
+          }
+          const ring = objectWorldRing(o);
+          if (ring.length < 3) return [];
+          return [{ name: o.name || `Area ${i + 1}`, polygon: ring, holes: objectWorldHoles(o) }];
+        });
+      if (exportAreas.length === 0) {
+        setExportNote('Nothing to export: no visible areas');
+        return;
+      }
       await window.electronAPI.exportAreasKml(exportAreas, format);
     } catch (err) {
       console.warn('[ObjectEditor] export failed:', err);
+      setExportNote('Export failed');
     }
   }, []);
 
@@ -312,7 +356,17 @@ export function ObjectEditorApp(): JSX.Element {
 
         {/* Context options for the active tool */}
         <div className="flex items-center gap-2 min-w-0">
-          {(tool === 'corridor' || tool === 'branch' || selectedIsCorridor) && (
+          {tool === 'spline' && (
+            <span className="text-xs text-content-secondary">
+              Click points along the line to capture · double-click to finish the smooth curve
+            </span>
+          )}
+          {tool === 'merge' && (
+            <span className="text-xs text-content-secondary">
+              Click a polygon to combine it with everything it overlaps
+            </span>
+          )}
+          {(tool === 'corridor' || tool === 'spline' || tool === 'branch' || selectedIsCorridor) && (
             <div className="flex items-center gap-1.5" data-tip="Corridor swath width">
               <span className="text-content-tertiary"><ICorridor /></span>
               <DistanceDraftInput
@@ -372,6 +426,21 @@ export function ObjectEditorApp(): JSX.Element {
                 className="w-6 h-7 inline-flex items-center justify-center rounded bg-surface-raised text-content hover:brightness-125">+</button>
             </div>
           )}
+          {tool === 'select' && selected && !selectedIsCorridor && !selected.fenceType && !selected.role && (
+            <button
+              type="button"
+              onClick={() => {
+                const absorbed = mergeOverlapping(selected.id);
+                setExportNote(absorbed > 0
+                  ? `Merged ${absorbed + 1} shapes into one`
+                  : 'Nothing to merge: no shape overlaps this one');
+              }}
+              data-tip="Combine this polygon with every polygon it overlaps into one shape"
+              className="h-7 px-2.5 inline-flex items-center rounded bg-surface-raised text-xs text-content hover:brightness-125"
+            >
+              Merge
+            </button>
+          )}
           {tool === 'measure' && (
             <div className="flex items-center gap-2">
               <span className="text-xs text-content-secondary">Click to measure · double-click to finish</span>
@@ -384,6 +453,17 @@ export function ObjectEditorApp(): JSX.Element {
 
         {/* Global actions */}
         <div className="ml-auto flex items-center gap-1">
+          {exportNoteText && (
+            <span className="text-[11px] text-amber-500 mr-2">{exportNoteText}</span>
+          )}
+          {saveState === 'saved' && !exportNoteText && (
+            <span
+              className="text-[11px] text-content-tertiary mr-2 select-none"
+              data-tip="Objects are autosaved on this computer and restored when the editor reopens"
+            >
+              Saved
+            </span>
+          )}
           <ActionButton tip="Undo (Ctrl+Z)" disabled={!canUndo} onClick={undo}><IUndo /></ActionButton>
           <ActionButton tip="Redo (Ctrl+Shift+Z)" disabled={!canRedo} onClick={redo}><IRedo /></ActionButton>
           <div className="w-px h-6 bg-subtle mx-1" />

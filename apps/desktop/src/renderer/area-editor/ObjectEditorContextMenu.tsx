@@ -74,7 +74,7 @@ export function ObjectEditorContextMenu(): JSX.Element | null {
 
   const {
     closeContextMenu, setTool, selectObject, deleteObject, duplicateObject, reorderObject,
-    convertSelectedToPolygon, setObjectRole, clearBranches, clearMeasure, editMeasurement,
+    convertSelectedToPolygon, setObjectRole, mergeOverlapping, clearBranches, clearMeasure, editMeasurement,
     insertMeasurePointAt, deleteMeasurePoint, undo, redo,
   } = useObjectsStore.getState();
 
@@ -101,9 +101,17 @@ export function ObjectEditorContextMenu(): JSX.Element | null {
             <Divider />
             <Item label="Cut hole" onClick={run(() => setTool('hole'))} />
             <Item label="Split with line" onClick={run(() => setTool('split'))} />
+            {!obj.fenceType && !obj.role && (
+              <Item label="Merge overlapping" hint="union" onClick={run(() => mergeOverlapping(obj.id))} />
+            )}
             <Item
               label={obj.role === 'workspace' ? 'Clear workspace role' : 'Mark as workspace'}
               onClick={run(() => setObjectRole(obj.id, obj.role === 'workspace' ? null : 'workspace'))}
+            />
+            <Item
+              label={obj.role === 'guide' ? 'Clear guide role' : 'Mark as guide'}
+              hint={obj.role === 'guide' ? undefined : 'no waypoints'}
+              onClick={run(() => setObjectRole(obj.id, obj.role === 'guide' ? null : 'guide'))}
             />
           </>
         )}

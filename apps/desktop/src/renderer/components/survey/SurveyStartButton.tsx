@@ -34,6 +34,14 @@ const CORRIDOR_ICON = (
   </svg>
 );
 
+const PANORAMA_ICON = (
+  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 16c5 0 4-8 9-8s4 6 9 6" />
+    <circle cx="7" cy="6" r="1.6" strokeWidth={2} />
+    <path strokeLinecap="round" strokeWidth={2} d="M7 8v2" />
+  </svg>
+);
+
 const SURVEY_TYPES: SurveyType[] = [
   {
     pattern: 'grid',
@@ -46,6 +54,12 @@ const SURVEY_TYPES: SurveyType[] = [
     label: 'Corridor survey',
     desc: 'Draw a centerline (roads, rail, power lines), strips run parallel',
     icon: CORRIDOR_ICON,
+  },
+  {
+    pattern: 'panorama',
+    label: 'Panorama capture',
+    desc: 'Draw the SUBJECT (shoreline, cliff, frontage); flight path, camera yaw and triggers are computed for you',
+    icon: PANORAMA_ICON,
   },
 ];
 

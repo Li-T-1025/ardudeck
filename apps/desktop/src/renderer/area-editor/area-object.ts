@@ -53,10 +53,12 @@ export interface EditorObject {
   /**
    * Commit role: 'workspace' marks this object as the allowed-flight-area whose
    * outer ring is attached to every committed survey area (for remote coverage
-   * engines) instead of being surveyed itself. Undefined = 'area'. At most one
-   * object holds the workspace role; only closed shapes can.
+   * engines) instead of being surveyed itself. 'guide' commits the shape as a
+   * reference outline on the mission map (guide-store) with no waypoint
+   * generation. Undefined = 'area'. At most one object holds the workspace
+   * role; only closed shapes can carry either role.
    */
-  role?: 'area' | 'workspace';
+  role?: 'area' | 'workspace' | 'guide';
 }
 
 // ---------------------------------------------------------------------------
@@ -314,7 +316,8 @@ export function isVertexEditable(obj: EditorObject): boolean {
 export interface CommitAreaPayload {
   polygon: LatLng[];
   holes?: LatLng[][];
-  kind?: 'corridor';
+  name?: string;
+  kind?: 'corridor' | 'guide';
   corridorWidth?: number;
   corridorBranches?: LatLng[][];
   config?: Record<string, unknown>;
@@ -343,7 +346,14 @@ export function buildCommitAreas(
   return valid
     .filter((o) => o !== wsObj)
     .map((o) =>
-      o.type === 'corridor'
+      o.role === 'guide' && o.type !== 'corridor'
+        ? {
+            polygon: objectWorldRing(o),
+            holes: objectWorldHoles(o),
+            name: o.name,
+            kind: 'guide' as const,
+          }
+        : o.type === 'corridor'
         ? {
             polygon: objectWorldRing(o),
             kind: 'corridor' as const,

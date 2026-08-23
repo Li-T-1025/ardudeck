@@ -15,8 +15,26 @@
 
 import { create } from 'zustand';
 import { subscribeWithSelector } from 'zustand/middleware';
+import * as polygonClippingModule from 'polygon-clipping';
+import type {
+  Polygon as PCPolygon,
+  MultiPolygon as PCMultiPolygon,
+  Ring as PCRing,
+} from 'polygon-clipping';
+
+// polygon-clipping ships a UMD bundle: under Vite's dev pre-bundling the
+// named exports aren't statically detectable and land on `.default`, while
+// vitest/node resolve them on the namespace. Accept both shapes.
+type PCGeomFn = (geom: PCPolygon | PCMultiPolygon, ...geoms: Array<PCPolygon | PCMultiPolygon>) => PCMultiPolygon;
+const pcApi = ((polygonClippingModule as { default?: unknown }).default ?? polygonClippingModule) as {
+  union: PCGeomFn;
+  intersection: PCGeomFn;
+};
+const pcUnion: PCGeomFn = (...args) => pcApi.union(...args);
+const pcIntersection: PCGeomFn = (...args) => pcApi.intersection(...args);
 import type { LatLng } from '../components/survey/survey-types';
 import { latLngToLocal } from '../components/survey/geo-math';
+import { catmullRomSpline } from '../components/survey/geo-edit';
 import {
   makeFromWorldRing,
   translateObject,
@@ -29,15 +47,17 @@ import {
   splitObjectByLine,
   clipRingToPolygon,
   snapToNearestPolyline,
+  objectWorldRing,
+  objectWorldHoles,
   type EditorObject,
   type EditorObjectType,
   type LocalPt,
 } from './area-object';
 
-export type AreaTool = 'select' | 'polygon' | 'corridor' | 'rectangle' | 'circle' | 'edit' | 'measure' | 'hole' | 'split' | 'branch';
+export type AreaTool = 'select' | 'polygon' | 'corridor' | 'spline' | 'rectangle' | 'circle' | 'edit' | 'measure' | 'hole' | 'split' | 'branch' | 'merge';
 
 /** A draw tool collects world points before the object is finalized. */
-const DRAW_TOOLS: AreaTool[] = ['polygon', 'corridor', 'hole', 'branch'];
+const DRAW_TOOLS: AreaTool[] = ['polygon', 'corridor', 'spline', 'hole', 'branch'];
 
 function minPointsForType(type: EditorObjectType): number {
   return type === 'corridor' ? 2 : 3;
@@ -172,7 +192,15 @@ interface ObjectsActions {
   setObjectColor: (id: string, color: string) => void;
   setObjectFenceType: (id: string, fenceType: 'inclusion' | 'exclusion' | null) => void;
   /** Grant/clear the workspace role; at most one object holds it at a time. */
-  setObjectRole: (id: string, role: 'workspace' | null) => void;
+  setObjectRole: (id: string, role: 'workspace' | 'guide' | null) => void;
+  /**
+   * Union the given polygon with every visible overlapping polygon (transitively,
+   * so chains of overlaps collapse into one pass). Merged sources are removed and
+   * replaced by the union result. Corridors, fences and role-carrying objects
+   * (workspace/guide) are never merged. Returns the number of objects absorbed
+   * (0 = nothing overlapped, no change).
+   */
+  mergeOverlapping: (id: string) => number;
   deleteObject: (id: string) => void;
   deleteSelected: () => void;
   toggleVisible: (id: string) => void;
@@ -266,7 +294,7 @@ export const useObjectsStore = create<Store>()(
         draftPoints: [],
         // 'branch' reuses the corridor draft (an open centerline); finishBranch
         // commits it onto the selected corridor instead of as a new object.
-        draftType: tool === 'polygon' ? 'polygon' : (tool === 'corridor' || tool === 'branch') ? 'corridor' : tool === 'hole' ? 'polygon' : null,
+        draftType: tool === 'polygon' ? 'polygon' : (tool === 'corridor' || tool === 'spline' || tool === 'branch') ? 'corridor' : tool === 'hole' ? 'polygon' : null,
         selectedVertex: tool === 'edit' ? get().selectedVertex : null,
         measureDone: tool === 'measure' ? true : get().measureDone,
       });
@@ -330,13 +358,18 @@ export const useObjectsStore = create<Store>()(
     },
 
     finishDraft: () => {
-      const { draftType, draftPoints, corridorWidthM, nameSeq } = get();
+      const { draftType, draftPoints, corridorWidthM, nameSeq, tool } = get();
       if (draftType === null || draftPoints.length < minPointsForType(draftType)) {
         set({ draftPoints: [], draftType: null });
         return;
       }
+      // Spline tool: the clicked points are control points, the corridor's
+      // centerline is the smooth curve through them.
+      const outline = tool === 'spline' && draftPoints.length >= 3
+        ? catmullRomSpline(draftPoints)
+        : draftPoints;
       const seq = nameSeq + 1;
-      const obj = makeFromWorldRing(draftType, draftPoints, `${TYPE_LABEL[draftType]} ${seq}`, {
+      const obj = makeFromWorldRing(draftType, outline, `${tool === 'spline' ? 'Spline' : TYPE_LABEL[draftType]} ${seq}`, {
         ...(draftType === 'corridor' ? { corridorWidthM } : {}),
       });
       get().pushHistory();
@@ -478,6 +511,84 @@ export const useObjectsStore = create<Store>()(
           return role === 'workspace' && o.role === 'workspace' ? { ...o, role: undefined } : o;
         }),
       }));
+    },
+
+    mergeOverlapping: (id) => {
+      const s = get();
+      const target = s.objects.find((o) => o.id === id);
+      if (!target || target.type === 'corridor' || target.fenceType || target.role) return 0;
+
+      const toGeom = (o: EditorObject): PCPolygon => {
+        const closeRing = (ring: LatLng[]): PCRing => {
+          const pts: PCRing = ring.map((p) => [p.lng, p.lat]);
+          return pts;
+        };
+        return [
+          closeRing(objectWorldRing(o)),
+          ...objectWorldHoles(o).map(closeRing),
+        ];
+      };
+
+      const candidates = s.objects.filter(
+        (o) =>
+          o.id !== id &&
+          o.type !== 'corridor' &&
+          !o.fenceType &&
+          !o.role &&
+          o.visible &&
+          objectWorldRing(o).length >= 3,
+      );
+
+      let mergedGeom: PCMultiPolygon = [toGeom(target)];
+      const absorbed = new Set<string>([target.id]);
+      // Repeat until fixpoint so A-B-C chains merge even when A and C don't touch.
+      let changed = true;
+      while (changed) {
+        changed = false;
+        for (const o of candidates) {
+          if (absorbed.has(o.id)) continue;
+          const g: PCMultiPolygon = [toGeom(o)];
+          try {
+            if (pcIntersection(mergedGeom, g).length === 0) continue;
+            mergedGeom = pcUnion(mergedGeom, g);
+          } catch {
+            continue; // degenerate geometry: skip this candidate, keep merging others
+          }
+          absorbed.add(o.id);
+          changed = true;
+        }
+      }
+      if (absorbed.size <= 1) return 0;
+
+      const fromPC = (ring: PCRing): LatLng[] => {
+        const pts = ring.map(([lng, lat]) => ({ lat, lng }));
+        // polygon-clipping closes its rings; editor rings are open.
+        const first = pts[0];
+        const last = pts[pts.length - 1];
+        if (pts.length > 1 && first && last && first.lat === last.lat && first.lng === last.lng) pts.pop();
+        return pts;
+      };
+
+      get().pushHistory();
+      const replacements = mergedGeom
+        .filter((poly) => (poly[0]?.length ?? 0) >= 4)
+        .map((poly, i) => ({
+          ...makeFromWorldRing(
+            'polygon',
+            fromPC(poly[0]!),
+            mergedGeom.length > 1 ? `${target.name} merged ${i + 1}` : `${target.name} merged`,
+            { holes: poly.slice(1).map(fromPC).filter((h) => h.length >= 3) },
+          ),
+          ...(target.color ? { color: target.color } : {}),
+        }));
+      if (replacements.length === 0) return 0;
+      set((st) => ({
+        objects: [...st.objects.filter((o) => !absorbed.has(o.id)), ...replacements],
+        selectedId: replacements[0]!.id,
+        selectedVertex: null,
+        tool: 'select',
+      }));
+      return absorbed.size - 1;
     },
 
     deleteObject: (id) => {
@@ -718,3 +829,70 @@ export const useObjectsStore = create<Store>()(
     },
   })),
 );
+
+// ── Autosave ─────────────────────────────────────────────────────────────────
+// The editor runs in a detached window with pure in-memory state; before this,
+// closing the window silently lost every drawn area. Objects are plain
+// serializable data, so a debounced localStorage mirror is enough. Undo
+// history and transient tool state are intentionally NOT persisted.
+
+const AUTOSAVE_KEY = 'ardudeck:area-editor-autosave';
+const AUTOSAVE_DEBOUNCE_MS = 800;
+
+interface AutosavePayload {
+  version: 1;
+  objects: EditorObject[];
+  nameSeq: number;
+  corridorWidthM: number;
+}
+
+/**
+ * Hydrate from the last autosave (only when the editor is empty, so a
+ * mid-session HMR or double-init never clobbers live work), then mirror every
+ * objects change back to localStorage. Returns an unsubscribe. `onSaved` fires
+ * after each successful write so the UI can show a saved indicator.
+ */
+export function initAreaEditorAutosave(onSaved?: () => void): () => void {
+  try {
+    const raw = localStorage.getItem(AUTOSAVE_KEY);
+    if (raw && useObjectsStore.getState().objects.length === 0) {
+      const data = JSON.parse(raw) as AutosavePayload;
+      if (data.version === 1 && Array.isArray(data.objects) && data.objects.length > 0) {
+        useObjectsStore.setState({
+          objects: data.objects,
+          nameSeq: data.nameSeq ?? data.objects.length,
+          corridorWidthM: data.corridorWidthM ?? 60,
+        });
+      }
+    }
+  } catch {
+    // Corrupt autosave: start empty rather than crash the editor.
+  }
+
+  let timer: ReturnType<typeof setTimeout> | null = null;
+  const unsub = useObjectsStore.subscribe(
+    (s) => s.objects,
+    (objects) => {
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(() => {
+        const s = useObjectsStore.getState();
+        const payload: AutosavePayload = {
+          version: 1,
+          objects,
+          nameSeq: s.nameSeq,
+          corridorWidthM: s.corridorWidthM,
+        };
+        try {
+          localStorage.setItem(AUTOSAVE_KEY, JSON.stringify(payload));
+          onSaved?.();
+        } catch {
+          // Quota/serialization failure: keep editing, autosave is best-effort.
+        }
+      }, AUTOSAVE_DEBOUNCE_MS);
+    },
+  );
+  return () => {
+    if (timer) clearTimeout(timer);
+    unsub();
+  };
+}

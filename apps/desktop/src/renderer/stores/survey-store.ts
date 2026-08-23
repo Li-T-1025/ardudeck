@@ -11,7 +11,7 @@ import { getSurveyGenerator, patternToGeneratorId, resolveGeneratorId } from '..
 import { surveyToMissionItems } from '../components/survey/mission-builder';
 import { computeTerrainFollowAltitudes } from '../components/survey/survey-terrain-follow';
 import { calculateAltitudeForGSD } from '../components/survey/survey-stats';
-import { simplifyPolygon } from '../components/survey/geo-math';
+import { simplifyPolygon, bufferPolygonLatLng } from '../components/survey/geo-math';
 import { runWithActivity } from './activity-store';
 import { parseGisArea } from '../../shared/gis-area-import';
 import { computeSurveyGroupSignature } from '../components/survey/survey-group-signature';
@@ -67,6 +67,10 @@ interface SurveyStore {
   // Drawing actions
   startDrawing: () => void;
   addVertex: (lat: number, lng: number) => void;
+  /** Move an already-placed vertex while still drawing (drag its handle). */
+  updateDrawingVertex: (index: number, lat: number, lng: number) => void;
+  /** Remove a placed vertex while still drawing (right-click its handle). */
+  removeDrawingVertex: (index: number) => void;
   completePolygon: () => void;
   cancelDrawing: () => void;
   /** Begin drawing a branch centerline on the current corridor (map clicks). */
@@ -133,6 +137,11 @@ interface SurveyStore {
   setCrossGridAltitudeOffset: (percent: number) => void;
   // Corridor pattern tuning
   setCorridorWidth: (meters: number) => void;
+  // Panorama pattern tuning
+  setPanoramaSide: (side: 'left' | 'right') => void;
+  setPanoramaStandoff: (meters: number) => void;
+  /** Set (or clear with null) the dragged tangent handles of one anchor. */
+  setPanoramaTangent: (index: number, tangent: { inX: number; inY: number; outX: number; outY: number } | null) => void;
   setCorridorStrips: (count: number) => void;
   setCorridorMode: (mode: CorridorMode) => void;
   setCorridorSideOffset: (meters: number) => void;
@@ -142,6 +151,8 @@ interface SurveyStore {
 
   // Polygon editing
   updateVertex: (index: number, lat: number, lng: number) => void;
+  /** Insert a vertex after `index` (click the line to add a control point). */
+  insertVertexAfter: (index: number, lat: number, lng: number) => void;
   removeVertex: (index: number) => void;
   /** Move a vertex of a corridor branch centerline (live edit). */
   updateBranchVertex: (branchIndex: number, vertexIndex: number, lat: number, lng: number) => void;
@@ -235,13 +246,25 @@ interface SurveyStore {
 async function runGenerator(config: SurveyConfig): Promise<SurveyResult | null> {
   // Corridors are an open centerline (>= 2 points); every other pattern is a
   // closed area (>= 3 points).
-  const minPoints = config.pattern === 'corridor' ? 2 : 3;
+  const minPoints = config.pattern === 'corridor' || config.pattern === 'panorama' ? 2 : 3;
   if (config.polygon.length < minPoints) return null;
 
-  const id = resolveGeneratorId(config);
+  // Panorama is line-based; module coverage engines (TOPAS) are polygon-only
+  // and would 422 or produce garbage on an open line, so the pattern always
+  // wins over a lingering generatorId here.
+  const id = config.pattern === 'panorama' ? 'builtin.panorama' : resolveGeneratorId(config);
   const reg = getSurveyGenerator(id) ?? getSurveyGenerator('builtin.grid');
   if (!reg) return null;
-  return await reg.generate(config);
+  // External engines (TOPAS etc.) have no margin field in their request API;
+  // honor the Margin setting host-side by buffering the boundary before
+  // dispatch. Built-ins apply margin themselves, so don't double-apply.
+  let effective = config;
+  const margin = config.margin ?? 0;
+  if (margin !== 0 && !id.startsWith('builtin.') && config.pattern !== 'corridor' && config.pattern !== 'panorama') {
+    const buffered = bufferPolygonLatLng(config.polygon, margin);
+    if (buffered) effective = { ...config, polygon: buffered };
+  }
+  return await reg.generate(effective);
 }
 
 /** Whether the config's resolved generator is async (shows a busy state). */
@@ -365,12 +388,25 @@ export const useSurveyStore = create<SurveyStore>()(subscribeWithSelector((set, 
     set((s) => ({ drawingVertices: [...s.drawingVertices, { lat, lng }] }));
   },
 
+  updateDrawingVertex: (index, lat, lng) => {
+    set((s) => ({
+      drawingVertices: s.drawingVertices.map((v, i) => (i === index ? { lat, lng } : v)),
+    }));
+  },
+
+  removeDrawingVertex: (index) => {
+    set((s) => ({ drawingVertices: s.drawingVertices.filter((_, i) => i !== index) }));
+  },
+
   completePolygon: () => {
     const { drawingVertices } = get();
     if (drawingVertices.length < 3) return;
 
     const polygon = [...drawingVertices];
-    set({ drawMode: 'none', drawingVertices: [], polygon });
+    // A freshly drawn boundary starts clean: holes belong to the polygon they
+    // were cut into. Keeping them produced no-fly rings outside the new
+    // boundary, which remote engines reject (TOPAS 422).
+    set((s) => ({ drawMode: 'none', drawingVertices: [], polygon, config: { ...s.config, holes: [] } }));
     // Generation runs through the shared path so async (remote) generators
     // get the same busy/error handling as config edits.
     void get().generateSurvey();
@@ -540,7 +576,7 @@ export const useSurveyStore = create<SurveyStore>()(subscribeWithSelector((set, 
     );
     // Clamp to the same range as the altitude slider so a wild GSD can't drive
     // the aircraft past sane limits.
-    const clamped = Math.max(10, Math.min(500, Math.round(altitude)));
+    const clamped = Math.max(1, Math.min(500, Math.round(altitude)));
     set({ config: { ...config, altitude: clamped } });
     get().requestRecompute();
   },
@@ -558,6 +594,29 @@ export const useSurveyStore = create<SurveyStore>()(subscribeWithSelector((set, 
   setCorridorWidth: (meters) => {
     const clamped = Math.max(1, Math.min(2000, Math.round(meters)));
     set({ config: { ...get().config, corridorWidth: clamped } });
+    get().requestRecompute();
+  },
+
+  setPanoramaSide: (side) => {
+    set({ config: { ...get().config, panoramaSide: side } });
+    get().requestRecompute();
+  },
+
+  setPanoramaStandoff: (meters) => {
+    const clamped = Math.max(1, Math.min(1000, Math.round(meters)));
+    set({ config: { ...get().config, panoramaStandoff: clamped } });
+    get().requestRecompute();
+  },
+
+  setPanoramaTangent: (index, tangent) => {
+    const { config } = get();
+    const rec = { ...(config.panoramaTangents ?? {}) };
+    if (tangent) rec[index] = tangent;
+    else delete rec[index];
+    set({ config: { ...config, panoramaTangents: rec } });
+    // Fired on every drag frame: the subject curve redraws instantly from the
+    // config change; the full plan (flight path, yaws, band) regenerates on
+    // the debounce so a drag doesn't run the generator per mouse move.
     get().requestRecompute();
   },
 
@@ -606,10 +665,38 @@ export const useSurveyStore = create<SurveyStore>()(subscribeWithSelector((set, 
     else get().requestRecompute({ immediate: true });
   },
 
+  insertVertexAfter: (index, lat, lng) => {
+    const { polygon, polygonEditMode, config } = get();
+    if (!polygon || index < 0 || index >= polygon.length) return;
+    const newPolygon = [...polygon.slice(0, index + 1), { lat, lng }, ...polygon.slice(index + 1)];
+    // Dragged tangent handles are keyed by anchor index - shift the ones after
+    // the insertion point so they stay attached to their anchors.
+    if (config.panoramaTangents) {
+      const shifted: NonNullable<typeof config.panoramaTangents> = {};
+      for (const [k, t] of Object.entries(config.panoramaTangents)) {
+        const i = Number(k);
+        shifted[i > index ? i + 1 : i] = t;
+      }
+      set({ config: { ...config, panoramaTangents: shifted } });
+    }
+    set({ polygon: newPolygon });
+    if (polygonEditMode) set({ pendingRecompute: true });
+    else get().requestRecompute({ immediate: true });
+  },
+
   removeVertex: (index) => {
-    const { polygon, polygonEditMode } = get();
+    const { polygon, polygonEditMode, config } = get();
     if (!polygon || polygon.length <= 3) return; // Need at least 3 vertices
     const newPolygon = polygon.filter((_, i) => i !== index);
+    if (config.panoramaTangents) {
+      const shifted: NonNullable<typeof config.panoramaTangents> = {};
+      for (const [k, t] of Object.entries(config.panoramaTangents)) {
+        const i = Number(k);
+        if (i === index) continue;
+        shifted[i > index ? i - 1 : i] = t;
+      }
+      set({ config: { ...config, panoramaTangents: shifted } });
+    }
     set({ polygon: newPolygon });
     if (polygonEditMode) set({ pendingRecompute: true });
     else get().requestRecompute({ immediate: true });
@@ -696,7 +783,7 @@ export const useSurveyStore = create<SurveyStore>()(subscribeWithSelector((set, 
     const sync = opts?.sync ?? true;
     const { polygon, config, editingGroupId } = get();
     // Corridors are an open centerline (2+ points); area patterns need a ring (3+).
-    const minPoints = config.pattern === 'corridor' ? 2 : 3;
+    const minPoints = config.pattern === 'corridor' || config.pattern === 'panorama' ? 2 : 3;
     if (!polygon || polygon.length < minPoints) return;
 
     const fullConfig: SurveyConfig = { ...config, polygon };
@@ -955,7 +1042,7 @@ export const useSurveyStore = create<SurveyStore>()(subscribeWithSelector((set, 
     for (const [i, area] of areas.entries()) {
       const areaConfig = area.configOverride ? { ...config, ...area.configOverride } : config;
       // Corridors are open centerlines (>= 2 points); areas are closed (>= 3).
-      const minPoints = areaConfig.pattern === 'corridor' ? 2 : 3;
+      const minPoints = areaConfig.pattern === 'corridor' || areaConfig.pattern === 'panorama' ? 2 : 3;
       if (area.polygon.length < minPoints) continue;
       const name = area.name ?? `Survey ${baseCount + entries.length + 1}`;
       try {

@@ -14,6 +14,7 @@ import { generateCircular } from './circular-generator';
 import { generateSpiral } from './spiral-generator';
 import { generatePerimeterFill } from './perimeter-fill-generator';
 import { generateCorridor } from './corridor-generator';
+import { generatePanorama } from './panorama-generator';
 
 registerSurveyGenerator({
   id: 'builtin.grid',
@@ -91,6 +92,22 @@ registerSurveyGenerator({
     isRemote: false,
   },
   generate: generateCorridor,
+});
+
+registerSurveyGenerator({
+  id: 'builtin.panorama',
+  version: '1.0.0',
+  displayName: 'Panorama',
+  description:
+    'Capture a line (shoreline, cliff, frontage): the drawn line is the subject, the flight path is derived to the side, and the camera yaws onto the subject the whole way.',
+  capabilities: {
+    supportsHoles: false,
+    supportsWorkspace: false,
+    requiresCamera: true,
+    isAsync: false,
+    isRemote: false,
+  },
+  generate: generatePanorama,
 });
 
 registerSurveyGenerator({

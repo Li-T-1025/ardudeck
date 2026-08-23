@@ -36,6 +36,11 @@ interface GuideStore {
    * file dialog. One guide per polygon, holes preserved, no generation.
    */
   importGuides: () => Promise<{ ok: boolean; count: number; error?: string }>;
+  /**
+   * Add guides from already-parsed polygons (Area Editor "Mark as guide"
+   * commit path). Same simplification and coloring as the file import.
+   */
+  addGuidesFromAreas: (areas: Array<{ polygon: LatLng[]; holes?: LatLng[][]; name?: string }>) => number;
   toggleGuide: (id: string) => void;
   setAllVisible: (visible: boolean) => void;
   removeGuide: (id: string) => void;
@@ -101,6 +106,28 @@ export const useGuideStore = create<GuideStore>((set, get) => ({
     set({ guides });
     persist(guides);
     return { ok: true, count: added.length };
+  },
+
+  addGuidesFromAreas: (areas) => {
+    const toleranceM = useSettingsStore.getState().surveyPerformance.importSimplifyToleranceM;
+    const base = get().guides.length;
+    const added: MapGuide[] = areas
+      .filter((a) => a.polygon.length >= 3)
+      .map((a, i) => ({
+        id: uuid(),
+        name: a.name || `Guide ${base + i + 1}`,
+        polygon: simplifyPolygon(a.polygon.map((p) => ({ lat: p.lat, lng: p.lng })), toleranceM),
+        holes: (a.holes ?? []).map((ring) =>
+          simplifyPolygon(ring.map((p) => ({ lat: p.lat, lng: p.lng })), toleranceM),
+        ),
+        visible: true,
+        color: GROUP_COLOR_PALETTE[(base + i) % GROUP_COLOR_PALETTE.length]!,
+      }));
+    if (added.length === 0) return 0;
+    const guides = [...get().guides, ...added];
+    set({ guides });
+    persist(guides);
+    return added.length;
   },
 
   toggleGuide: (id) => {

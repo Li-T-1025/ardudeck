@@ -62,8 +62,9 @@ interface CommitArea {
   polygon: Array<{ lat: number; lng: number }>;
   holes?: Array<Array<{ lat: number; lng: number }>>;
   name?: string;
-  /** 'corridor' marks an open centerline (linear survey); absent/'area' = closed polygon. */
-  kind?: 'area' | 'corridor';
+  /** 'corridor' = open centerline (linear survey); 'guide' = reference outline,
+   *  no waypoint generation; absent/'area' = closed survey polygon. */
+  kind?: 'area' | 'corridor' | 'guide';
   /** Corridor swath width in meters (only meaningful when kind === 'corridor'). */
   corridorWidth?: number;
   /** Corridor branch centerlines that fork off the main one (kind === 'corridor'). */

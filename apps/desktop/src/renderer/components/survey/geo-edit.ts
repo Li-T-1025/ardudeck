@@ -370,6 +370,127 @@ export function pointInRing(p: LatLng, ring: LatLng[]): boolean {
  * averaged-normal (miter) offset in a local tangent plane; corner offsets are
  * approximate, which is fine for a preview. Empty for < 2 points or width <= 0.
  */
+/**
+ * Centripetal Catmull-Rom spline through the given control points, sampled in
+ * the local meters frame. Centripetal parameterization avoids the loops and
+ * overshoots the uniform variant produces on unevenly spaced clicks, which is
+ * exactly what hand-clicked shoreline points are.
+ *
+ * Used by the Area Editor's Spline tool: the pilot clicks a handful of points
+ * along a coastline / road and gets a smooth corridor centerline. Sample
+ * density adapts to segment length (one point every ~`stepM` meters, minimum
+ * 4 per segment) so short and long segments both come out smooth.
+ */
+export function catmullRomSpline(points: LatLng[], stepM = 5): LatLng[] {
+  if (points.length < 3) return [...points];
+  const origin = points[0]!;
+  const pts = points.map((p) => latLngToLocal(origin, p));
+  type Pt = { x: number; y: number };
+  const out: Pt[] = [pts[0]!];
+
+  const dist = (a: Pt, b: Pt): number => Math.hypot(b.x - a.x, b.y - a.y);
+  // Centripetal knots: t[i+1] = t[i] + sqrt(|P[i+1]-P[i]|).
+  for (let i = 0; i < pts.length - 1; i++) {
+    const p0 = pts[Math.max(0, i - 1)]!;
+    const p1 = pts[i]!;
+    const p2 = pts[i + 1]!;
+    const p3 = pts[Math.min(pts.length - 1, i + 2)]!;
+
+    const t0 = 0;
+    const t1 = t0 + Math.sqrt(dist(p0, p1)) || t0 + 1e-6;
+    const t2 = t1 + Math.sqrt(dist(p1, p2)) || t1 + 1e-6;
+    const t3 = t2 + Math.sqrt(dist(p2, p3)) || t2 + 1e-6;
+
+    const samples = Math.max(4, Math.ceil(dist(p1, p2) / stepM));
+    for (let s = 1; s <= samples; s++) {
+      const t = t1 + ((t2 - t1) * s) / samples;
+      const lerp = (a: Pt, b: Pt, ta: number, tb: number): Pt => {
+        const f = tb - ta === 0 ? 0 : (t - ta) / (tb - ta);
+        return { x: a.x + (b.x - a.x) * f, y: a.y + (b.y - a.y) * f };
+      };
+      const a1 = lerp(p0, p1, t0, t1);
+      const a2 = lerp(p1, p2, t1, t2);
+      const a3 = lerp(p2, p3, t2, t3);
+      const b1 = lerp(a1, a2, t0, t2);
+      const b2 = lerp(a2, a3, t1, t3);
+      out.push(lerp(b1, b2, t1, t2));
+    }
+  }
+  return out.map((p) => localToLatLng(origin, p.x, p.y));
+}
+
+/**
+ * Per-anchor spline tangent, meters east (x) / north (y) relative to the
+ * anchor. `out` shapes the curve leaving the anchor, `in` the curve arriving.
+ * Editors drag these as the classic two-arm handles on a selected point.
+ */
+export interface SplineTangent {
+  inX: number;
+  inY: number;
+  outX: number;
+  outY: number;
+}
+
+/**
+ * Auto tangent for an anchor with no user-set handles: the Catmull-Rom
+ * construction ((next - prev) / 6), which makes the default curve identical to
+ * a smooth spline through the points. Exported so the editor can draw the
+ * arms a user is ABOUT to grab at their true default positions.
+ */
+export function defaultSplineTangent(points: LatLng[], i: number): SplineTangent {
+  const origin = points[i] ?? points[0]!;
+  const prev = latLngToLocal(origin, points[Math.max(0, i - 1)]!);
+  const next = latLngToLocal(origin, points[Math.min(points.length - 1, i + 1)]!);
+  const vx = (next.x - prev.x) / 6;
+  const vy = (next.y - prev.y) / 6;
+  return { inX: -vx, inY: -vy, outX: vx, outY: vy };
+}
+
+/**
+ * Cubic Bezier spline through anchors with optional per-anchor tangents.
+ * Anchors without a tangent use the Catmull-Rom default, so an untouched
+ * curve looks like a smooth spline and each dragged handle overrides only its
+ * own anchor. Sampled at ~`stepM` meters per point, minimum 6 per segment.
+ */
+export function bezierSpline(
+  points: LatLng[],
+  tangents: Array<SplineTangent | undefined> | undefined,
+  stepM = 5,
+): LatLng[] {
+  if (points.length < 2) return [...points];
+  const origin = points[0]!;
+  const pts = points.map((p) => latLngToLocal(origin, p));
+  const tangentOf = (i: number): SplineTangent => {
+    const t = tangents?.[i];
+    if (t) return t;
+    const prev = pts[Math.max(0, i - 1)]!;
+    const next = pts[Math.min(pts.length - 1, i + 1)]!;
+    const vx = (next.x - prev.x) / 6;
+    const vy = (next.y - prev.y) / 6;
+    return { inX: -vx, inY: -vy, outX: vx, outY: vy };
+  };
+  const out = [pts[0]!];
+  for (let i = 0; i < pts.length - 1; i++) {
+    const p0 = pts[i]!;
+    const p3 = pts[i + 1]!;
+    const t0 = tangentOf(i);
+    const t1 = tangentOf(i + 1);
+    const p1 = { x: p0.x + t0.outX, y: p0.y + t0.outY };
+    const p2 = { x: p3.x + t1.inX, y: p3.y + t1.inY };
+    const chord = Math.hypot(p3.x - p0.x, p3.y - p0.y);
+    const n = Math.max(6, Math.ceil(chord / stepM));
+    for (let s = 1; s <= n; s++) {
+      const u = s / n;
+      const v = 1 - u;
+      out.push({
+        x: v * v * v * p0.x + 3 * v * v * u * p1.x + 3 * v * u * u * p2.x + u * u * u * p3.x,
+        y: v * v * v * p0.y + 3 * v * v * u * p1.y + 3 * v * u * u * p2.y + u * u * u * p3.y,
+      });
+    }
+  }
+  return out.map((p) => localToLatLng(origin, p.x, p.y));
+}
+
 export function corridorSwath(centerline: LatLng[], widthM: number): LatLng[] {
   if (centerline.length < 2 || widthM <= 0) return [];
   const origin = centerline[0]!;

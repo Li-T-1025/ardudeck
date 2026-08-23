@@ -17,6 +17,9 @@ import { createPortal } from 'react-dom';
 import { useSurveyStore } from '../../stores/survey-store';
 import { useMissionStore } from '../../stores/mission-store';
 import { useConnectionStore } from '../../stores/connection-store';
+import { useParameterStore } from '../../stores/parameter-store';
+import { useArduPilotSitlStore } from '../../stores/ardupilot-sitl-store';
+import { getVehicleClass } from '../../../shared/telemetry-types';
 import { useSettingsStore } from '../../stores/settings-store';
 import { useNavigationStore } from '../../stores/navigation-store';
 import { CameraPresetSelector } from './CameraPresetSelector';
@@ -146,6 +149,8 @@ export function SurveyConfigPanel() {
   const setCorridorWidth = useSurveyStore((s) => s.setCorridorWidth);
   const setCorridorStrips = useSurveyStore((s) => s.setCorridorStrips);
   const setCorridorMode = useSurveyStore((s) => s.setCorridorMode);
+  const setPanoramaSide = useSurveyStore((s) => s.setPanoramaSide);
+  const setPanoramaStandoff = useSurveyStore((s) => s.setPanoramaStandoff);
   const setCorridorSideOffset = useSurveyStore((s) => s.setCorridorSideOffset);
   const startBranchDraw = useSurveyStore((s) => s.startBranchDraw);
   const completeBranch = useSurveyStore((s) => s.completeBranch);
@@ -192,6 +197,43 @@ export function SurveyConfigPanel() {
   const engineFields: GeneratorConfigField[] = config.generatorId
     ? (activeGenerator?.configFields ?? [])
     : [];
+  // Module engines (TOPAS etc.) compute their own line direction and turns;
+  // the built-in Grid tuning controls would be dead knobs that still fire a
+  // full (possibly remote) recompute, so hide them entirely.
+  const externalEngine = !resolveGeneratorId(config).startsWith('builtin.');
+
+  // Airframe awareness for external engines: the only flight characteristic
+  // TOPAS models is min turn radius, and its module default (2 m) is a copter
+  // number a fixed wing cannot fly. Derive the class the same way the mission
+  // store does and prefill/sanity-check the radius.
+  const mavType = useConnectionStore((s) => s.connectionState.mavType);
+  const qEnable = useParameterStore((s) => {
+    const p = s.parameters.get('Q_ENABLE');
+    return typeof p?.value === 'number' ? p.value : undefined;
+  });
+  const sitlFrame = useArduPilotSitlStore((s) => (s.isRunning ? s.model : undefined));
+  const vehicleClass = getVehicleClass(mavType, { qEnable, sitlFrame });
+  const isFixedWing = vehicleClass === 'plane' || vehicleClass === 'vtol';
+  const turnRadiusField = engineFields.find(
+    (f): f is Extract<GeneratorConfigField, { type: 'number' }> => f.type === 'number' && f.id === 'minTurnRadius',
+  );
+  // Level-turn radius at a conservative 30° bank: r = v² / (g·tan(bank)).
+  const suggestedTurnRadius = Math.max(25, Math.round((config.speed * config.speed) / (9.81 * Math.tan(Math.PI / 6)) / 5) * 5);
+  const currentTurnRadius = config.engineParams?.['minTurnRadius'];
+  useEffect(() => {
+    if (!externalEngine || !turnRadiusField || !isFixedWing) return;
+    // Only prefill while the field is untouched (unset or still the module
+    // default); a hand-entered radius is the pilot's call.
+    const untouched = currentTurnRadius === undefined || currentTurnRadius === turnRadiusField.default;
+    if (!untouched) return;
+    setEngineParam('minTurnRadius', suggestedTurnRadius);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [externalEngine, isFixedWing, turnRadiusField, suggestedTurnRadius]);
+  const turnRadiusTooTight =
+    externalEngine && isFixedWing && typeof currentTurnRadius === 'number' &&
+    currentTurnRadius < suggestedTurnRadius * 0.7;
+  const smoothedOnCopter =
+    externalEngine && vehicleClass === 'copter' && config.engineParams?.['waypointMode'] === 'smoothed';
   const [importError, setImportError] = useState<string | null>(null);
   // null = not naming; '' or text = inline camera-name entry open. (Electron has
   // no window.prompt, so naming is an inline field.)
@@ -241,7 +283,12 @@ export function SurveyConfigPanel() {
     // this, switching camera→mower while on 'circular' (camera-only) leaves
     // the row of buttons with nothing highlighted.
     const mode = nextIsManual ? 'mower' : 'camera';
-    const currentValid = ALL_PATTERN_OPTIONS.find((o) => o.id === config.pattern)?.modes.includes(mode);
+    // Panorama lives outside the area-pattern catalog and works with any real
+    // camera - snapping it to 'grid' here would close the subject line into a
+    // polygon just because the user picked a camera.
+    const currentValid =
+      config.pattern === 'panorama' ||
+      ALL_PATTERN_OPTIONS.find((o) => o.id === config.pattern)?.modes.includes(mode);
     if (!currentValid) setPattern('grid');
   }, [setCamera, config.pattern, setPattern]);
 
@@ -286,7 +333,9 @@ export function SurveyConfigPanel() {
     // pattern (e.g. circular carried over from camera→mower). Snap to grid.
     const resolvedPattern = preset.config.pattern ?? config.pattern;
     const mode = nextIsManual ? 'mower' : 'camera';
-    const valid = ALL_PATTERN_OPTIONS.find((o) => o.id === resolvedPattern)?.modes.includes(mode);
+    const valid =
+      resolvedPattern === 'panorama' ||
+      ALL_PATTERN_OPTIONS.find((o) => o.id === resolvedPattern)?.modes.includes(mode);
     if (!valid) setPattern('grid');
     setLastSurveyPresetId(preset.id);
   }, [applyPresetConfig, isManualCamera, config.pattern, setPattern, setLastSurveyPresetId]);
@@ -587,10 +636,39 @@ export function SurveyConfigPanel() {
           </div>
         )}
 
+        {/* Panorama is a line-based capture, not an area survey: the pattern
+            grid and module coverage engines (TOPAS is polygon-only) don't
+            apply, so the whole selector is replaced by a type banner. */}
+        {config.pattern === 'panorama' && (
+          <Section title="Type">
+            <div className="px-2 py-1.5 rounded-lg bg-purple-600/15 border border-purple-500/30">
+              <span className="text-xs font-medium text-purple-300">Panorama capture</span>
+              <p className="text-[10px] text-content-tertiary leading-snug mt-0.5">
+                Line-based capture along a subject. To plan an area survey instead,
+                exit and pick another survey type from the Survey menu.
+              </p>
+              <p className="text-[10px] text-content-secondary leading-snug mt-1.5">
+                Editing the curve: <span className="text-content">click</span> a point to
+                select it - its <span className="text-content">tangent arms</span> appear.
+                Drag the square arm handles to shape the curve through that point
+                (right-click an arm to reset it). Drag the point itself to move it,
+                right-click to delete, click a faint dot or the dashed line to add a point.
+              </p>
+            </div>
+            {isManualCamera && (
+              <p className="mt-1.5 text-[10px] text-amber-500 leading-snug">
+                Panorama needs a real camera: the frame size at range drives the plan.
+                Pick a camera preset instead of Manual corridor.
+              </p>
+            )}
+          </Section>
+        )}
+
         {/* Pattern — filtered by mode so the user only sees patterns that
             make sense (mower hides Circular which generates wedge-leaving
             circles regardless of polygon shape; camera mode hides Spiral and
             Perimeter+Fill which are mowing-specific). */}
+        {config.pattern !== 'panorama' && (
         <Section title="Pattern">
           {(() => {
             const mode = isManualCamera ? 'mower' : 'camera';
@@ -716,6 +794,7 @@ export function SurveyConfigPanel() {
             </div>
           )}
         </Section>
+        )}
 
         {/* Engine parameters - declared by the active module generator via
             its configFields schema. Only shown while that engine is selected. */}
@@ -730,6 +809,19 @@ export function SurveyConfigPanel() {
                   onChange={(v) => setEngineParam(field.id, v)}
                 />
               ))}
+              {turnRadiusTooTight && (
+                <p className="text-[10px] text-amber-500 leading-snug">
+                  {String(currentTurnRadius)} m turn radius looks too tight for a fixed wing at{' '}
+                  {config.speed} m/s: a level 30° bank turn needs about {suggestedTurnRadius} m.
+                  The engine will plan turns the aircraft can't track.
+                </p>
+              )}
+              {smoothedOnCopter && (
+                <p className="text-[10px] text-content-tertiary leading-snug">
+                  Smoothed waypoints on a copter add many extra waypoints for turn curves it
+                  doesn't need; Corners is usually the better choice.
+                </p>
+              )}
             </div>
           </Section>
         )}
@@ -837,7 +929,7 @@ export function SurveyConfigPanel() {
                     </p>
                   </>
                 ) : (
-                  <AltitudeSliderInput label="Altitude" valueMeters={config.altitude} onChangeMeters={setAltitude} minMeters={10} maxMeters={500} stepMeters={5} />
+                  <AltitudeSliderInput label="Altitude" valueMeters={config.altitude} onChangeMeters={setAltitude} minMeters={1} maxMeters={500} stepMeters={1} />
                 )}
                 <div className="flex items-center gap-2">
                   <span className="text-xs text-content-secondary w-14 flex-shrink-0">Alt Ref</span>
@@ -891,6 +983,52 @@ export function SurveyConfigPanel() {
             </p>
           </div>
         </Section>
+
+        {/* Panorama: the drawn line is the SUBJECT; the flight path is derived
+            to one side of it with the camera yawed onto the subject. */}
+        {config.pattern === 'panorama' && (
+          <Section title="Panorama">
+            <div className="space-y-2">
+              <p className="text-[10px] text-content-tertiary leading-snug">
+                The line you draw is what gets captured. The flight path is computed
+                beside it, the highlighted band shows what fits in frame, and the
+                camera turns to face the line at every waypoint.
+              </p>
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-content-secondary w-14 flex-shrink-0">Fly on</span>
+                <div className="flex gap-1 flex-1">
+                  {(['left', 'right'] as const).map((side) => (
+                    <button
+                      key={side}
+                      onClick={() => setPanoramaSide(side)}
+                      className={`flex-1 px-2 py-1 text-[11px] rounded-md transition-colors ${
+                        (config.panoramaSide ?? 'right') === side
+                          ? 'bg-purple-600/80 text-white'
+                          : 'bg-surface-raised text-content-secondary hover:text-content'
+                      }`}
+                      title={`Aircraft flies on the ${side} side of the line (in drawing direction); camera faces the other way`}
+                    >
+                      {side === 'left' ? 'Left side' : 'Right side'}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <SliderInput label="Standoff" value={config.panoramaStandoff ?? 30} onChange={setPanoramaStandoff} min={2} max={500} step={1} unit="m" />
+              <p className="text-[10px] text-content-tertiary leading-snug -mt-1">
+                Distance from the subject to the flight path. Together with altitude it
+                sets the camera range, so it drives frame size and photo spacing.
+              </p>
+              <p className="text-[10px] text-content-tertiary leading-snug">
+                The mission pans the camera smoothly: each leg carries a yaw command
+                whose turn rate spreads the rotation across the whole leg.
+              </p>
+              <p className="text-[10px] text-amber-500 leading-snug">
+                Copter: set WP_YAW_BEHAVIOR to 0 so mission yaw commands hold;
+                otherwise the aircraft snaps toward each next waypoint instead.
+              </p>
+            </div>
+          </Section>
+        )}
 
         {/* Corridor settings — only when the corridor pattern is active. The
             drawn polygon is treated as a centerline, not an area. */}
@@ -1100,7 +1238,25 @@ export function SurveyConfigPanel() {
                 </Section>
               )}
 
-              {config.pattern !== 'circular' && config.pattern !== 'corridor' && (
+              {externalEngine && config.pattern !== 'circular' && config.pattern !== 'corridor' && (
+                <Section title="Grid">
+                  <div className="space-y-2">
+                    <SliderInput label="Margin" value={config.margin ?? 0} onChange={setMargin} min={-50} max={50} step={1} unit="m" />
+                    <p className="text-[10px] text-content-tertiary leading-snug -mt-1">
+                      Buffers the boundary before it is sent to the engine: positive grows
+                      coverage past the edge, negative keeps lines inside.
+                    </p>
+                    <p className="text-[10px] text-content-tertiary leading-snug">
+                      {activeGenerator?.displayName ?? 'The engine'} picks each region's line
+                      direction and turn style itself, so the Angle, Overshoot and Turns
+                      controls don't apply. Use the engine parameters above (turn radius,
+                      waypoints, track width) to steer the plan.
+                    </p>
+                  </div>
+                </Section>
+              )}
+
+              {!externalEngine && config.pattern !== 'circular' && config.pattern !== 'corridor' && (
                 <Section title="Grid">
                   <div className="space-y-2">
                     <SliderInput label="Angle" value={config.gridAngle} onChange={setGridAngle} min={0} max={359} step={1} unit="°" />
@@ -1138,7 +1294,7 @@ export function SurveyConfigPanel() {
                 </Section>
               )}
 
-              {!isManualCamera && (config.pattern === 'grid' || config.pattern === 'crosshatch') && (
+              {!externalEngine && !isManualCamera && (config.pattern === 'grid' || config.pattern === 'crosshatch') && (
                 <div className="flex items-center justify-between px-1">
                   <span className="text-xs text-content-secondary" title="Camera triggers only along the scan lines; off during the turn-arounds outside the boundary">Camera off on turns</span>
                   <button

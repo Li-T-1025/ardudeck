@@ -99,6 +99,9 @@ export function surveyToMissionItems(
   // we insert DO_SET_REVERSE between line pairs (waypoints come as start/end
   // pairs from grid-generator, so every 2 waypoints = one line). Lines 0,2,4
   // go forward; lines 1,3,5 go reverse.
+  // Commanded camera heading so far (panorama) - deltas below ~2° emit nothing.
+  let currentYaw: number | null = null;
+
   const frame = isManual
     ? MAV_FRAME.GLOBAL_RELATIVE_ALT  // rover ignores altitude anyway
     // Continuous terrain-follow bakes absolute (MSL) ground+AGL altitudes into
@@ -153,6 +156,70 @@ export function surveyToMissionItems(
       // (e.g. crosshatch second-pass offset); otherwise the flat config value.
       altitude: isManual ? 0 : (result.altitudes?.[i] ?? config.altitude),
     });
+
+    // Panorama: the camera pans SMOOTHLY because each leg gets one
+    // CONDITION_YAW whose turn RATE is sized so the rotation spreads across
+    // the entire leg (delta / leg time). The vehicle therefore rotates
+    // continuously from this waypoint's heading to the next one's instead of
+    // snapping - mission-level smooth panning, no ROI target-jump sawtooth.
+    if (!isManual && result.waypointYaws) {
+      // First leg: aim at the subject FAST (firmware default rate). Without
+      // this the spread-rate math below assumes the camera already faces the
+      // subject, and a vehicle that took off facing along-track would creep
+      // toward it for half the flight.
+      if (i === 0 && typeof result.waypointYaws[0] === 'number') {
+        items.push({
+          seq: seq++,
+          frame: MAV_FRAME.GLOBAL_RELATIVE_ALT,
+          command: MAV_CMD.CONDITION_YAW,
+          current: false,
+          autocontinue: true,
+          param1: Math.round(((result.waypointYaws[0] % 360) + 360) % 360 * 10) / 10,
+          param2: 0, // default (fast) rate
+          param3: 0, // shortest direction
+          param4: 0, // absolute
+          latitude: 0,
+          longitude: 0,
+          altitude: 0,
+        });
+        currentYaw = result.waypointYaws[0];
+      }
+      const targetYaw = i === 0 ? null : result.waypointYaws[i + 1];
+      const next = result.waypoints[i + 1];
+      if (typeof targetYaw === 'number') {
+        const fromYaw: number = currentYaw ?? result.waypointYaws[i] ?? targetYaw;
+        const delta = ((targetYaw - fromYaw + 540) % 360) - 180;
+        if (Math.abs(delta) >= 2) {
+          const legM = next
+            ? Math.hypot(
+                (next.lat - wp.lat) * 111320,
+                (next.lng - wp.lng) * 111320 * Math.cos((wp.lat * Math.PI) / 180),
+              )
+            : 0;
+          const legS = legM / Math.max(0.5, config.speed);
+          // Spread the turn over the leg; floor keeps crawling turns alive,
+          // cap keeps the command sane on very short legs (0 = firmware default).
+          const rate = legS > 0.3 ? Math.min(90, Math.max(1.5, Math.abs(delta) / legS)) : 0;
+          items.push({
+            seq: seq++,
+            frame: MAV_FRAME.GLOBAL_RELATIVE_ALT,
+            command: MAV_CMD.CONDITION_YAW,
+            current: false,
+            autocontinue: true,
+            param1: Math.round(((targetYaw % 360) + 360) % 360 * 10) / 10,
+            param2: Math.round(rate * 10) / 10, // deg/s; 0 = default rate
+            param3: Math.sign(delta),           // turn direction
+            param4: 0,                          // absolute angle
+            latitude: 0,
+            longitude: 0,
+            altitude: 0,
+          });
+          currentYaw = targetYaw;
+        } else if (currentYaw === null) {
+          currentYaw = fromYaw;
+        }
+      }
+    }
 
     if (i === 0) {
       // DO_CHANGE_SPEED — applies to both aircraft (airspeed) and rovers (ground speed).

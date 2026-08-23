@@ -23,7 +23,7 @@ import {
   worldToLocal, objectWorldRing, objectWorldHoles, isVertexEditable, type EditorObject, type LocalPt,
 } from './area-object';
 import { buildObjectsData, buildTransformHandles, buildVertexHandles, buildDraftData } from './objects-geo';
-import { rectangleRing, circleRing, nearestEdgeIndex, polylineLength } from '../components/survey/geo-edit';
+import { rectangleRing, circleRing, nearestEdgeIndex, polylineLength, catmullRomSpline } from '../components/survey/geo-edit';
 import { latLngToLocal, distanceLatLng, polygonArea } from '../components/survey/geo-math';
 import { useSettingsStore } from '../stores/settings-store';
 import { formatSurveyDistanceM } from './survey-units';
@@ -127,7 +127,21 @@ export function attachObjectInteractions(map: maplibregl.Map): () => void {
         : shapePreview
           ? { type: 'FeatureCollection', features: shapePreview.length >= 3 ? [{ type: 'Feature', geometry: { type: 'Polygon', coordinates: [[...shapePreview, shapePreview[0]!].map((p) => [p.lng, p.lat])] }, properties: {} }] : [] }
           : draftType
-            ? buildDraftData(draftPoints, draftCursor)
+            ? tool === 'spline' && draftPoints.length >= 2
+              // Spline tool: preview the smooth curve live (the pilot judges
+              // the curve, not the chords), but keep dots on the clicked
+              // control points only - not on every curve sample.
+              ? {
+                  type: 'FeatureCollection',
+                  features: [
+                    ...buildDraftData(
+                      catmullRomSpline(draftCursor ? [...draftPoints, draftCursor] : draftPoints),
+                      null,
+                    ).features.filter((f) => f.geometry.type === 'LineString'),
+                    ...buildDraftData(draftPoints, null).features.filter((f) => f.geometry.type === 'Point'),
+                  ],
+                } as GeoJSON.FeatureCollection
+              : buildDraftData(draftPoints, draftCursor)
             : EMPTY_FC,
     );
 
@@ -160,7 +174,7 @@ export function attachObjectInteractions(map: maplibregl.Map): () => void {
   const unsubTool = useObjectsStore.subscribe(
     (s) => s.tool,
     (tool) => {
-      const placing = tool === 'polygon' || tool === 'corridor' || tool === 'measure' || tool === 'rectangle' || tool === 'circle' || tool === 'hole' || tool === 'split' || tool === 'branch';
+      const placing = tool === 'polygon' || tool === 'corridor' || tool === 'spline' || tool === 'measure' || tool === 'rectangle' || tool === 'circle' || tool === 'hole' || tool === 'split' || tool === 'branch' || tool === 'merge';
       if (placing) map.doubleClickZoom.disable(); else map.doubleClickZoom.enable();
       map.getCanvas().style.cursor = placing ? 'crosshair' : '';
       if (tool !== 'measure') { measureCursor = null; label.style.display = 'none'; }
@@ -279,6 +293,68 @@ export function attachObjectInteractions(map: maplibregl.Map): () => void {
     e.preventDefault();
   };
 
+  // ---- grab arbitration with hit-slop ----
+  // A bare layer-scoped mousedown only fires when the cursor is exactly inside
+  // a ~7px rendered circle, which made handles and vertices frustrating to
+  // grab. This dispatcher queries a padded box around the cursor and routes to
+  // the highest-priority hit for the active tool (handles > measure points >
+  // object body), picking the nearest point feature when several fall inside
+  // the slop. The body itself stays exact-point: grabbing a fill from outside
+  // the shape would fight the pan gesture.
+  const GRAB_SLOP_PX = 8;
+  const grabHandlers: Record<string, (e: MapLayerMouseEvent) => void> = {
+    'handles-rotate': onRotateDown,
+    'handles-scale': onScaleDown,
+    'vertices-circle': onVertexDown,
+    'measure-points': onMeasureVertexDown,
+  };
+  const nearestPointFeature = (
+    feats: maplibregl.MapGeoJSONFeature[],
+    at: { x: number; y: number },
+  ): maplibregl.MapGeoJSONFeature => {
+    let best = feats[0]!;
+    let bestD = Infinity;
+    for (const f of feats) {
+      if (f.geometry.type !== 'Point') continue;
+      const [lng, lat] = f.geometry.coordinates as [number, number];
+      const pt = map.project([lng, lat]);
+      const d = Math.hypot(pt.x - at.x, pt.y - at.y);
+      if (d < bestD) { bestD = d; best = f; }
+    }
+    return best;
+  };
+  const onGrabDown = (e: MapMouseEvent): void => {
+    if (e.originalEvent.button !== 0) return;
+    const t = get().tool;
+    const layerPriority =
+      t === 'select'
+        ? ['handles-rotate', 'handles-scale', ...(get().selectedMeasure ? ['measure-points'] : [])]
+        : t === 'edit'
+          ? ['vertices-circle']
+          : null;
+    if (!layerPriority) return;
+    const box: [maplibregl.PointLike, maplibregl.PointLike] = [
+      [e.point.x - GRAB_SLOP_PX, e.point.y - GRAB_SLOP_PX],
+      [e.point.x + GRAB_SLOP_PX, e.point.y + GRAB_SLOP_PX],
+    ];
+    for (const layer of layerPriority) {
+      if (!map.getLayer(layer)) continue;
+      const feats = map.queryRenderedFeatures(box, { layers: [layer] });
+      if (feats.length === 0) continue;
+      const ev = e as MapLayerMouseEvent;
+      ev.features = [nearestPointFeature(feats, e.point)];
+      grabHandlers[layer]!(ev);
+      return;
+    }
+    if (!map.getLayer('objects-fill')) return;
+    const bodyFeats = map.queryRenderedFeatures(e.point, { layers: ['objects-fill'] });
+    if (bodyFeats.length > 0) {
+      const ev = e as MapLayerMouseEvent;
+      ev.features = bodyFeats;
+      onObjectDown(ev);
+    }
+  };
+
   // ---- shape tools: drag to create ----
   const onShapeDown = (e: MapMouseEvent): void => {
     if (e.originalEvent.button !== 0) return;
@@ -327,7 +403,7 @@ export function attachObjectInteractions(map: maplibregl.Map): () => void {
 
     // No drag: update draft / measure rubber-bands.
     const t = get().tool;
-    if ((t === 'polygon' || t === 'corridor' || t === 'hole' || t === 'branch') && get().draftPoints.length >= 1) {
+    if ((t === 'polygon' || t === 'corridor' || t === 'spline' || t === 'hole' || t === 'branch') && get().draftPoints.length >= 1) {
       draftCursor = p;
       syncObjects();
     } else if (t === 'split' && splitStart) {
@@ -367,7 +443,7 @@ export function attachObjectInteractions(map: maplibregl.Map): () => void {
   // ---- click (draft / measure / deselect) ----
   const onClick = (e: MapMouseEvent): void => {
     const t = get().tool;
-    if (t === 'polygon' || t === 'corridor' || t === 'hole' || t === 'branch') {
+    if (t === 'polygon' || t === 'corridor' || t === 'spline' || t === 'hole' || t === 'branch') {
       // Hole tool: the first click also targets the area underneath, so the user
       // doesn't have to select it first (unless a suitable area is already chosen).
       if (t === 'hole' && get().draftPoints.length === 0) {
@@ -410,6 +486,16 @@ export function attachObjectInteractions(map: maplibregl.Map): () => void {
       syncObjects();
     } else if (t === 'measure') {
       get().addMeasurePoint({ lat: e.lngLat.lat, lng: e.lngLat.lng });
+    } else if (t === 'merge') {
+      // Merge tool: click a polygon to union it with everything it overlaps.
+      // The tool stays active so several clusters can be merged in a row.
+      const hit = map.queryRenderedFeatures(e.point, { layers: ['objects-fill'] });
+      const id = hit[0]?.properties?.['id'];
+      if (typeof id === 'string') {
+        get().selectObject(id);
+        get().mergeOverlapping(id);
+        syncObjects();
+      }
     } else if (t === 'select') {
       if (drag) return;
       const objHits = map.queryRenderedFeatures(e.point, { layers: ['objects-fill', 'handles-scale', 'handles-rotate', 'vertices-circle'] });
@@ -423,7 +509,7 @@ export function attachObjectInteractions(map: maplibregl.Map): () => void {
 
   const onDblClick = (e: MapMouseEvent): void => {
     const t = get().tool;
-    if (t === 'polygon' || t === 'corridor') {
+    if (t === 'polygon' || t === 'corridor' || t === 'spline') {
       e.preventDefault();
       draftCursor = null;
       get().finishDraft();
@@ -482,7 +568,7 @@ export function attachObjectInteractions(map: maplibregl.Map): () => void {
   };
   const clearPointer = (): void => {
     const t = get().tool;
-    map.getCanvas().style.cursor = (t === 'polygon' || t === 'corridor' || t === 'measure' || t === 'rectangle' || t === 'circle' || t === 'hole' || t === 'split' || t === 'branch') ? 'crosshair' : '';
+    map.getCanvas().style.cursor = (t === 'polygon' || t === 'corridor' || t === 'spline' || t === 'measure' || t === 'rectangle' || t === 'circle' || t === 'hole' || t === 'split' || t === 'branch') ? 'crosshair' : t === 'merge' ? 'pointer' : '';
   };
 
   // Edit tool: hovering the active shape's edge shows an add-point ("+") cursor;
@@ -499,11 +585,7 @@ export function attachObjectInteractions(map: maplibregl.Map): () => void {
     }
   };
 
-  map.on('mousedown', 'handles-scale', onScaleDown);
-  map.on('mousedown', 'handles-rotate', onRotateDown);
-  map.on('mousedown', 'objects-fill', onObjectDown);
-  map.on('mousedown', 'vertices-circle', onVertexDown);
-  map.on('mousedown', 'measure-points', onMeasureVertexDown);
+  map.on('mousedown', onGrabDown);
   map.on('click', 'objects-outline', onOutlineClick);
   map.on('mousemove', 'objects-outline', onOutlineMove);
   map.on('mouseleave', 'objects-outline', clearPointer);
@@ -527,11 +609,7 @@ export function attachObjectInteractions(map: maplibregl.Map): () => void {
     map.dragPan.enable();
     map.doubleClickZoom.enable();
     map.getCanvas().style.cursor = '';
-    map.off('mousedown', 'handles-scale', onScaleDown);
-    map.off('mousedown', 'handles-rotate', onRotateDown);
-    map.off('mousedown', 'objects-fill', onObjectDown);
-    map.off('mousedown', 'vertices-circle', onVertexDown);
-    map.off('mousedown', 'measure-points', onMeasureVertexDown);
+    map.off('mousedown', onGrabDown);
     map.off('click', 'objects-outline', onOutlineClick);
     map.off('mousemove', 'objects-outline', onOutlineMove);
     map.off('mouseleave', 'objects-outline', clearPointer);

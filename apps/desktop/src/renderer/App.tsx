@@ -44,6 +44,7 @@ import { isViewAvailable, useEnabledCapabilitySlugs } from './modules/capabiliti
 import { useParameterStore } from './stores/parameter-store';
 import { useMissionStore, hasMissionAutosave, restoreMissionAutosave } from './stores/mission-store';
 import { useSurveyStore } from './stores/survey-store';
+import { useGuideStore } from './stores/guide-store';
 import type { SurveyConfig } from './components/survey/survey-types';
 import { useFenceStore } from './stores/fence-store';
 import { useRallyStore } from './stores/rally-store';
@@ -957,11 +958,19 @@ function App() {
   // all of them in one atomic step, then navigate to the mission view.
   useEffect(() => {
     const unsub = window.electronAPI?.onAreasReceived?.((data) => {
+      // Guide-role shapes become reference outlines on the mission map, not
+      // survey areas: no generation, no group.
+      const guideAreas = data.areas.filter((a) => a.kind === 'guide');
+      if (guideAreas.length > 0) {
+        useGuideStore.getState().addGuidesFromAreas(
+          guideAreas.map((a) => ({ polygon: a.polygon, holes: a.holes, name: a.name })),
+        );
+      }
       // Use the editor's own survey config so the mission reproduces exactly
       // what the editor briefing showed. A corridor additionally forces the
       // corridor pattern + swath width so its polygon is treated as an open
       // centerline rather than a filled area.
-      const areas = data.areas.map((a) => {
+      const areas = data.areas.filter((a) => a.kind !== 'guide').map((a) => {
         const base = a.config as Partial<Omit<SurveyConfig, 'polygon' | 'holes'>> | undefined;
         // The editor's workspace polygon (allowed flight area) rides in via the
         // config so it lands on SurveyConfig.workspace -> SurveyGroup.workspace.
@@ -980,7 +989,7 @@ function App() {
               : base;
         return { polygon: a.polygon, holes: a.holes, name: a.name, configOverride };
       });
-      void useSurveyStore.getState().addSurveyAreasFromPolygons(areas);
+      if (areas.length > 0) void useSurveyStore.getState().addSurveyAreasFromPolygons(areas);
       useNavigationStore.getState().setView('mission');
     });
     return () => { unsub?.(); };

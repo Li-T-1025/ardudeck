@@ -16,6 +16,8 @@ import { MissionStatusBar } from './MissionStatusBar';
 import { MissionMapPanel } from './MissionMapPanel';
 import { WaypointTablePanel } from './WaypointTablePanel';
 import { AltitudeProfilePanel } from './AltitudeProfilePanel';
+import { FlightPreviewPanel } from './FlightPreviewPanel';
+import { useFlightPreviewStore } from '../../stores/flight-preview-store';
 import { FlightInfoPanel } from './FlightInfoPanel';
 import { SurveyConfigPanel } from '../survey/SurveyConfigPanel';
 import { ErrorBoundary } from '../ui/ErrorBoundary';
@@ -47,7 +49,12 @@ const components: Record<string, React.FC<IDockviewPanelProps>> = {
   AltitudeProfilePanel: () => <ErrorBoundary label="altitude profile"><AltitudeProfilePanel /></ErrorBoundary>,
   FlightInfoPanel: () => <ErrorBoundary label="flight info"><FlightInfoPanel /></ErrorBoundary>,
   SurveyConfigPanel: () => <ErrorBoundary label="survey panel"><SurveyConfigPanel /></ErrorBoundary>,
+  FlightPreviewPanel: () => <ErrorBoundary label="flight preview"><FlightPreviewPanel /></ErrorBoundary>,
 };
+
+// Flight Preview tab: opened/closed with the preview store, docked as a
+// sibling tab of the Altitude Profile.
+const FLIGHT_PREVIEW_PANEL_ID = 'flightPreview';
 
 // Ensure the Flight Info tab exists next to Waypoints. Called for fresh layouts
 // and after restoring a saved one (older layouts predate this panel), so the
@@ -415,9 +422,32 @@ export function MissionPlanningView() {
       if (panel.id === SURVEY_PANEL_ID && useSurveyStore.getState().isActive) {
         deactivateSurvey();
       }
+      if (panel.id === FLIGHT_PREVIEW_PANEL_ID && useFlightPreviewStore.getState().isActive) {
+        useFlightPreviewStore.getState().close();
+      }
     });
     return () => disposable.dispose();
   }, [layoutLoaded, deactivateSurvey]);
+
+  // Flight Preview tab follows the preview store, next to the Altitude Profile.
+  const flightPreviewActive = useFlightPreviewStore((s) => s.isActive);
+  useEffect(() => {
+    if (!apiRef.current || !layoutLoaded) return;
+    const api = apiRef.current;
+    const existing = api.getPanel(FLIGHT_PREVIEW_PANEL_ID);
+    if (flightPreviewActive && !existing) {
+      const refGroup = api.getPanel('altitudeProfile')?.group;
+      api.addPanel({
+        id: FLIGHT_PREVIEW_PANEL_ID,
+        component: 'FlightPreviewPanel',
+        title: 'Flight Preview',
+        ...(refGroup ? { position: { referenceGroup: refGroup } } : {}),
+      });
+      api.getPanel(FLIGHT_PREVIEW_PANEL_ID)?.api.setActive();
+    } else if (!flightPreviewActive && existing) {
+      api.removePanel(existing);
+    }
+  }, [flightPreviewActive, layoutLoaded]);
 
   // The Flight Info tour highlights that panel, but dockview drops inactive tab
   // content from the DOM, so bring the tab forward when its tour starts.

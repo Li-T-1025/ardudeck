@@ -3,7 +3,7 @@
  * Types and interfaces for photogrammetry survey planning
  */
 
-export type SurveyPattern = 'grid' | 'crosshatch' | 'circular' | 'spiral' | 'perimeter-fill' | 'corridor';
+export type SurveyPattern = 'grid' | 'crosshatch' | 'circular' | 'spiral' | 'perimeter-fill' | 'corridor' | 'panorama';
 
 /**
  * Corridor flight strategy.
@@ -178,6 +178,23 @@ export interface SurveyConfig {
   flipLegs?: boolean;
   /** Reverse the travel direction along the centerline. */
   invertPath?: boolean;
+
+  /**
+   * Panorama only. The drawn line is the SUBJECT to capture (a shoreline,
+   * cliff, building frontage). The flight path is derived: offset to one side
+   * at `panoramaStandoff` meters, flown once, camera yawed at the subject the
+   * whole way. 'left'/'right' = which side of the line (in drawing direction)
+   * the AIRCRAFT flies on.
+   */
+  panoramaSide?: 'left' | 'right';
+  /** Horizontal distance (m) from the subject line to the flight path. */
+  panoramaStandoff?: number;
+  /**
+   * Panorama only. User-dragged tangent handles per anchor index (meters
+   * east/north relative to the anchor). Anchors absent here use the smooth
+   * auto tangent. Indices are remapped by insert/remove vertex operations.
+   */
+  panoramaTangents?: Record<number, { inX: number; inY: number; outX: number; outY: number }>;
 }
 
 export interface SurveyResult {
@@ -189,6 +206,19 @@ export interface SurveyResult {
    * crosshatch with a second-pass altitude offset.
    */
   altitudes?: number[];
+  /**
+   * Optional per-waypoint absolute camera heading (degrees, 0-360), aligned
+   * 1:1 with `waypoints`. The mission builder emits a CONDITION_YAW after each
+   * waypoint so the camera holds on the subject (panorama pattern).
+   */
+  waypointYaws?: number[];
+  /**
+   * Optional per-waypoint look-at target on the subject, aligned 1:1 with
+   * `waypoints`. When present the mission builder emits ROI commands so the
+   * aircraft tracks the target continuously (smooth camera), instead of the
+   * stepwise CONDITION_YAW fallback used when only `waypointYaws` is set.
+   */
+  waypointLookAts?: LatLng[];
   photoPositions: LatLng[];
   footprints: LatLng[][];
   stats: SurveyStats;
@@ -244,6 +274,8 @@ export const DEFAULT_SURVEY_CONFIG: Omit<SurveyConfig, 'polygon'> = {
   perimeterPasses: 2,
   planBy: 'altitude',
   enduranceMinutes: 20,
+  panoramaSide: 'right',
+  panoramaStandoff: 30,
   crossGridAltitudeOffset: 0,
   corridorWidth: 60,
   corridorStrips: 0,

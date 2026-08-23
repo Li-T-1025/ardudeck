@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import {
   Camera, Clock, Gauge, Crosshair, RotateCw, RotateCcw,
   Repeat, Wrench, Ruler, ArrowUpDown, ChevronRight, MoreHorizontal,
-  RefreshCw, Pencil, Upload, Save, Play,
+  RefreshCw, Pencil, Upload, Save, Play, Copy, Check,
   type LucideIcon,
 } from 'lucide-react';
 import { useMissionStore } from '../../stores/mission-store';
@@ -23,6 +23,7 @@ import {
   COMMAND_DESCRIPTIONS,
   MAV_CMD,
   commandHasLocation,
+  hasValidCoordinates,
   isNavigationCommand,
   computeGroupWaypointNumbers,
   type MissionItem
@@ -2082,6 +2083,21 @@ function WaypointListContent({ readOnly = false }: { readOnly?: boolean }) {
     setLastCheckedSeq(null);
   };
 
+  const [coordsCopied, setCoordsCopied] = useState(false);
+  const [wpCoordCopied, setWpCoordCopied] = useState(false);
+  const handleCopyCoords = () => {
+    const source = multiSelected.size > 0
+      ? missionItems.filter(w => multiSelected.has(w.seq))
+      : missionItems;
+    const lines = source
+      .filter(w => commandHasLocation(w.command) && hasValidCoordinates(w.latitude, w.longitude))
+      .map(w => `${w.latitude.toFixed(7)}, ${w.longitude.toFixed(7)}`);
+    if (lines.length === 0) return;
+    navigator.clipboard.writeText(lines.join('\n'));
+    setCoordsCopied(true);
+    window.setTimeout(() => setCoordsCopied(false), 1200);
+  };
+
   const handleAddWaypoint = () => {
     const lastWp = missionItems[missionItems.length - 1];
     const gpsState = getGpsState();
@@ -2225,6 +2241,14 @@ function WaypointListContent({ readOnly = false }: { readOnly?: boolean }) {
                 </button>
                 <span className="text-content-tertiary text-[10px]">|</span>
                 <button
+                  onClick={handleCopyCoords}
+                  className="text-[10px] text-content-secondary hover:text-content transition-colors"
+                  data-tip="Copy lat, lng of selected waypoints (one per line)"
+                >
+                  {coordsCopied ? 'Copied' : 'Copy coords'}
+                </button>
+                <span className="text-content-tertiary text-[10px]">|</span>
+                <button
                   onClick={handleDeleteSelected}
                   className="text-[10px] text-red-400 hover:text-red-300 transition-colors font-medium"
                   title={`Delete ${multiSelected.size} selected waypoint${multiSelected.size === 1 ? '' : 's'}`}
@@ -2237,6 +2261,14 @@ function WaypointListContent({ readOnly = false }: { readOnly?: boolean }) {
             <>
               <span className="text-[10px] text-content-secondary">{missionItems.length} items</span>
               <div className="flex items-center gap-2">
+                <button
+                  onClick={handleCopyCoords}
+                  className="text-[10px] text-content-secondary hover:text-content transition-colors"
+                  data-tip="Copy lat, lng of all waypoints (one per line)"
+                >
+                  {coordsCopied ? 'Copied' : 'Copy coords'}
+                </button>
+                <span className="text-content-tertiary text-[10px]">|</span>
                 <button
                   onClick={collapseAll}
                   className="text-[10px] text-content-secondary hover:text-content transition-colors"
@@ -2615,6 +2647,20 @@ function WaypointListContent({ readOnly = false }: { readOnly?: boolean }) {
             <span className="text-xs font-medium text-content-secondary">
               Editing Waypoint {groupWaypointNumbers.get(selectedWaypoint.seq) ?? selectedWaypoint.seq + 1}
             </span>
+            <div className="flex items-center gap-2">
+              {commandHasLocation(selectedWaypoint.command) && (
+                <button
+                  onClick={() => {
+                    navigator.clipboard.writeText(`${selectedWaypoint.latitude}, ${selectedWaypoint.longitude}`);
+                    setWpCoordCopied(true);
+                    window.setTimeout(() => setWpCoordCopied(false), 1200);
+                  }}
+                  className="text-content-secondary hover:text-content"
+                  data-tip="Copy lat, lng of this waypoint"
+                >
+                  {wpCoordCopied ? <Check className="w-3.5 h-3.5 text-green-400" /> : <Copy className="w-3.5 h-3.5" />}
+                </button>
+              )}
             <button
               onClick={() => setSelectedSeq(null)}
               className="text-content-secondary hover:text-content"
@@ -2623,6 +2669,7 @@ function WaypointListContent({ readOnly = false }: { readOnly?: boolean }) {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
               </svg>
             </button>
+            </div>
           </div>
 
           {/* Command selector */}

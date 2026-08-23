@@ -259,6 +259,32 @@ export function offsetPolygonRings(
 }
 
 /**
+ * Buffer a lat/lng polygon by `margin` meters: positive grows the ring
+ * outward, negative shrinks it inward. Returns null when the offset collapses
+ * or flips the ring (over-shrink past the inscribed radius, miter spike), so
+ * callers can keep the original polygon.
+ *
+ * Exists to honor the survey Margin setting for external coverage engines
+ * (TOPAS etc.) whose request API has no margin concept - the boundary is
+ * buffered host-side before dispatch. Built-in generators apply margin
+ * themselves in their local rotated frame.
+ */
+export function bufferPolygonLatLng(polygon: LatLng[], margin: number): LatLng[] | null {
+  if (polygon.length < 3 || margin === 0) return null;
+  const origin = polygonCentroid(polygon);
+  const local = polygon.map((v) => latLngToLocal(origin, v));
+  // offsetPolygon's positive distance SHRINKS, so negate.
+  const buffered = offsetPolygon(local, -margin);
+  if (buffered.length < 3) return null;
+  const a0 = Math.abs(polygonSignedArea2D(local));
+  const a1 = Math.abs(polygonSignedArea2D(buffered));
+  const sameWinding = Math.sign(polygonSignedArea2D(buffered)) === Math.sign(polygonSignedArea2D(local));
+  const areaOk = margin > 0 ? a1 > a0 : a1 < a0 && a1 > 1;
+  if (!sameWinding || !areaOk) return null;
+  return buffered.map((p) => localToLatLng(origin, p.x, p.y));
+}
+
+/**
  * Ramer–Douglas–Peucker simplification of a lat/lng ring, with the tolerance
  * expressed in meters (perpendicular distance in the local projection).
  *
