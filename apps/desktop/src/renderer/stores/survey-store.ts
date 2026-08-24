@@ -11,7 +11,7 @@ import { getSurveyGenerator, patternToGeneratorId, resolveGeneratorId } from '..
 import { surveyToMissionItems } from '../components/survey/mission-builder';
 import { computeTerrainFollowAltitudes } from '../components/survey/survey-terrain-follow';
 import { calculateAltitudeForGSD } from '../components/survey/survey-stats';
-import { simplifyPolygon, bufferPolygonLatLng } from '../components/survey/geo-math';
+import { simplifyPolygon, bufferPolygonLatLng, latLngBboxOverlap } from '../components/survey/geo-math';
 import { runWithActivity } from './activity-store';
 import { parseGisArea } from '../../shared/gis-area-import';
 import { computeSurveyGroupSignature } from '../components/survey/survey-group-signature';
@@ -259,10 +259,22 @@ async function runGenerator(config: SurveyConfig): Promise<SurveyResult | null> 
   // honor the Margin setting host-side by buffering the boundary before
   // dispatch. Built-ins apply margin themselves, so don't double-apply.
   let effective = config;
+  // A workspace planned at another site (stale Area Editor object that rode
+  // along on a commit) can never contain this boundary; remote engines then
+  // reject the start point ("Startpoint is not included in workspace", 422).
+  // Groups saved before the commit-side overlap guard still carry one, so
+  // strip it here too.
+  if (
+    effective.workspace &&
+    effective.workspace.length >= 3 &&
+    !latLngBboxOverlap(effective.workspace, effective.polygon)
+  ) {
+    effective = { ...effective, workspace: undefined };
+  }
   const margin = config.margin ?? 0;
   if (margin !== 0 && !id.startsWith('builtin.') && config.pattern !== 'corridor' && config.pattern !== 'panorama') {
-    const buffered = bufferPolygonLatLng(config.polygon, margin);
-    if (buffered) effective = { ...config, polygon: buffered };
+    const buffered = bufferPolygonLatLng(effective.polygon, margin);
+    if (buffered) effective = { ...effective, polygon: buffered };
   }
   return await reg.generate(effective);
 }

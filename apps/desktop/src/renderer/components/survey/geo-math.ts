@@ -90,6 +90,23 @@ export function distanceLatLng(a: LatLng, b: LatLng): number {
   return 2 * EARTH_RADIUS * Math.asin(Math.sqrt(h));
 }
 
+/** Whether two lat/lng rings' bounding boxes overlap at all. */
+export function latLngBboxOverlap(a: LatLng[], b: LatLng[]): boolean {
+  const bbox = (ring: LatLng[]) => {
+    let minLat = Infinity, maxLat = -Infinity, minLng = Infinity, maxLng = -Infinity;
+    for (const p of ring) {
+      minLat = Math.min(minLat, p.lat);
+      maxLat = Math.max(maxLat, p.lat);
+      minLng = Math.min(minLng, p.lng);
+      maxLng = Math.max(maxLng, p.lng);
+    }
+    return { minLat, maxLat, minLng, maxLng };
+  };
+  const ba = bbox(a);
+  const bb = bbox(b);
+  return ba.minLat <= bb.maxLat && ba.maxLat >= bb.minLat && ba.minLng <= bb.maxLng && ba.maxLng >= bb.minLng;
+}
+
 /**
  * Distance between two 2D points.
  */

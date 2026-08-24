@@ -331,6 +331,28 @@ export function isCommittable(obj: EditorObject): boolean {
 }
 
 /**
+ * Loose overlap test via bounding boxes. Autosave keeps workspace objects
+ * from old sessions around; a workspace that doesn't even bbox-overlap an
+ * area is stale (planned kilometers away) and attaching it makes every
+ * coverage engine reject the start point.
+ */
+function ringsMayOverlap(a: LatLng[], b: LatLng[]): boolean {
+  const bbox = (ring: LatLng[]) => {
+    let minLat = Infinity, maxLat = -Infinity, minLng = Infinity, maxLng = -Infinity;
+    for (const p of ring) {
+      minLat = Math.min(minLat, p.lat);
+      maxLat = Math.max(maxLat, p.lat);
+      minLng = Math.min(minLng, p.lng);
+      maxLng = Math.max(maxLng, p.lng);
+    }
+    return { minLat, maxLat, minLng, maxLng };
+  };
+  const ba = bbox(a);
+  const bb = bbox(b);
+  return ba.minLat <= bb.maxLat && ba.maxLat >= bb.minLat && ba.minLng <= bb.maxLng && ba.maxLng >= bb.minLng;
+}
+
+/**
  * Build the "Send to mission" payload. The workspace-role object is not itself
  * a survey area: its outer ring rides along on every committed area as the
  * allowed flight area (holes on it are ignored - only the boundary matters to
@@ -345,30 +367,32 @@ export function buildCommitAreas(
   const workspace = wsObj ? objectWorldRing(wsObj) : undefined;
   return valid
     .filter((o) => o !== wsObj)
-    .map((o) =>
-      o.role === 'guide' && o.type !== 'corridor'
+    .map((o) => {
+      const ring = objectWorldRing(o);
+      const ws = workspace && ringsMayOverlap(workspace, ring) ? workspace : undefined;
+      return o.role === 'guide' && o.type !== 'corridor'
         ? {
-            polygon: objectWorldRing(o),
+            polygon: ring,
             holes: objectWorldHoles(o),
             name: o.name,
             kind: 'guide' as const,
           }
         : o.type === 'corridor'
         ? {
-            polygon: objectWorldRing(o),
+            polygon: ring,
             kind: 'corridor' as const,
             corridorWidth: o.corridorWidthM ?? 60,
             ...(o.branches && o.branches.length > 0 ? { corridorBranches: objectWorldBranches(o) } : {}),
             config: editorConfig,
-            ...(workspace ? { workspace } : {}),
+            ...(ws ? { workspace: ws } : {}),
           }
         : {
-            polygon: objectWorldRing(o),
+            polygon: ring,
             holes: objectWorldHoles(o),
             config: editorConfig,
-            ...(workspace ? { workspace } : {}),
-          },
-    );
+            ...(ws ? { workspace: ws } : {}),
+          };
+    });
 }
 
 // ---------------------------------------------------------------------------

@@ -304,9 +304,9 @@ describe('buildCommitAreas', () => {
     expect(out[0]!.workspace).toBeUndefined();
   });
 
-  it('excludes the workspace object and attaches its ring to each area', () => {
+  it('excludes the workspace object and attaches its ring to each overlapping area', () => {
     const a = makeRectangle(CENTER, 100, 100, 'A');
-    const b = makeRectangle({ lat: 42.01, lng: 19.01 }, 50, 50, 'B');
+    const b = makeRectangle({ lat: CENTER.lat + 0.002, lng: CENTER.lng }, 50, 50, 'B');
     const ws: EditorObject = { ...makeRectangle(CENTER, 1000, 1000, 'WS'), role: 'workspace' };
     const out = buildCommitAreas([a, ws, b], config);
     expect(out).toHaveLength(2); // workspace not committed as an area
@@ -314,6 +314,19 @@ describe('buildCommitAreas', () => {
     for (const area of out) {
       expect(area.workspace).toEqual(wsRing);
     }
+  });
+
+  it('does not attach a stale workspace that is nowhere near the area', () => {
+    // Autosave keeps old workspace objects around; one planned at a different
+    // site must not ride along (coverage engines 422 the start point).
+    const a = makeRectangle(CENTER, 100, 100, 'A');
+    const ws: EditorObject = {
+      ...makeRectangle({ lat: CENTER.lat + 0.5, lng: CENTER.lng + 0.5 }, 1000, 1000, 'WS'),
+      role: 'workspace',
+    };
+    const out = buildCommitAreas([a, ws], config);
+    expect(out).toHaveLength(1);
+    expect(out[0]!.workspace).toBeUndefined();
   });
 
   it('attaches the workspace to corridor commits too', () => {
