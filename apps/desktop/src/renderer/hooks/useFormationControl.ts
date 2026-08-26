@@ -23,6 +23,7 @@ import { useMissionStore } from '../stores/mission-store';
 import { useFormationStore, formationConfigOf, type FleetFormationConfig } from '../stores/formation-store';
 import { SHAPE_BY_VALUE } from '../components/fleet/FormationGlyphs';
 import { useFleetVehicles, selectActiveVehicle, type FleetVehicle } from './useFleet';
+import { isAssignedToVehicle } from '../../shared/mission-group-types';
 
 export interface FormationControl {
   /** True when an orchestration engine is connected. */
@@ -66,6 +67,11 @@ export interface FormationControl {
   takeOffFleet: (leaderKey: string, altitude: number) => Promise<void>;
   /** Start one formation leader's mission (AUTO); wingmen keep following. */
   startLeaderMission: (leaderKey: string) => Promise<void>;
+  /**
+   * Upload + start (AUTO) the assigned WP group of every vehicle that has
+   * one - the distributed-survey "go" button. Returns how many started.
+   */
+  startAssignedMissions: () => Promise<number>;
 }
 
 export function useFormationControl(): FormationControl {
@@ -280,7 +286,7 @@ export function useFormationControl(): FormationControl {
     setBusy(true);
     try {
       const ms = useMissionStore.getState();
-      const grp = ms.groups.find((g) => g.assignedVehicleKey === leaderV.key);
+      const grp = ms.groups.find((g) => isAssignedToVehicle(g.assignedVehicleKey, leaderV));
       if (grp) {
         const uploaded = await ms.uploadGroupToVehicle(grp.id, leaderV.key);
         if (!uploaded) return;
@@ -289,6 +295,28 @@ export function useFormationControl(): FormationControl {
     } finally {
       setBusy(false);
     }
+  };
+
+  // Distributed-survey start: every vehicle that has an assigned WP group gets
+  // it (re)uploaded and switched to AUTO, sequentially so uploads don't fight
+  // for the link. Vehicles without an assigned group are left untouched.
+  const startAssignedMissions = async (): Promise<number> => {
+    setBusy(true);
+    let started = 0;
+    try {
+      const ms = useMissionStore.getState();
+      for (const v of vehicles) {
+        const grp = ms.groups.find((g) => isAssignedToVehicle(g.assignedVehicleKey, v));
+        if (!grp) continue;
+        const uploaded = await ms.uploadGroupToVehicle(grp.id, v.key);
+        if (!uploaded) continue;
+        await window.electronAPI?.vehicleCommand?.(v.key, { kind: 'mission-start' });
+        started++;
+      }
+    } finally {
+      setBusy(false);
+    }
+    return started;
   };
 
   return {
@@ -313,5 +341,6 @@ export function useFormationControl(): FormationControl {
     takeOffAll,
     takeOffFleet,
     startLeaderMission,
+    startAssignedMissions,
   };
 }

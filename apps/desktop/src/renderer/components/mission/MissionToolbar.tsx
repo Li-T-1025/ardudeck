@@ -17,6 +17,8 @@ import { hasValidCoordinates, mavFrameToAltFrame } from '../../../shared/mission
 import { formatAltitudeFromMeters } from '../../../shared/user-units.js';
 import { VaultSyncBadge } from '../vault/VaultSyncBadge';
 import { useCargoEnabled, MISSION_LIBRARY_CARGO_SLUG } from '../../modules/capabilities';
+import { useFleetVehicles } from '../../hooks/useFleet';
+import { useVehicleAppearanceStore, resolveVehicleColor } from '../../stores/vehicle-appearance-store';
 
 type ToastType = 'success' | 'error' | 'info';
 
@@ -289,6 +291,36 @@ export function MissionToolbar({ onResetLayout, showToast }: MissionToolbarProps
   const missionIsDirty = missionStore.isDirty;
   const missionIsDownloading = missionIsLoading && missionStore.progress?.operation === 'download';
   const missionIsUploading = missionIsLoading && missionStore.progress?.operation === 'upload';
+
+  // Distributed survey: split the current plan across the connected swarm.
+  // Target = the selected group when it qualifies, else the biggest
+  // unassigned group with enough waypoints to give every vehicle a share.
+  const fleetVehiclesLive = useFleetVehicles();
+  const vehicleColorOverrides = useVehicleAppearanceStore((s) => s.overrides);
+  const distributeTarget = useMemo(() => {
+    if (fleetVehiclesLive.length < 2) return null;
+    const counts = new Map<string, number>();
+    for (const it of missionStore.missionItems) {
+      if (it.groupId) counts.set(it.groupId, (counts.get(it.groupId) ?? 0) + 1);
+    }
+    const candidates = missionStore.groups
+      .filter((g) => !g.assignedVehicleKey && (counts.get(g.id) ?? 0) >= fleetVehiclesLive.length * 2)
+      .sort((a, b) => (counts.get(b.id) ?? 0) - (counts.get(a.id) ?? 0));
+    return candidates.find((g) => g.id === missionStore.selectedGroupId) ?? candidates[0] ?? null;
+  }, [fleetVehiclesLive, missionStore.groups, missionStore.missionItems, missionStore.selectedGroupId]);
+
+  const handleDistribute = () => {
+    if (!distributeTarget) return;
+    const vehicles = fleetVehiclesLive.map((v) => ({
+      key: v.key,
+      label: v.label,
+      color: resolveVehicleColor(vehicleColorOverrides, v.key, v.sysid),
+    }));
+    const ids = missionStore.distributeGroupAcrossFleet(distributeTarget.id, vehicles);
+    if (ids) {
+      showToast?.(`${distributeTarget.name} split across ${ids.length} vehicles - Fleet Ops has the Start missions button`, 'success');
+    }
+  };
 
   // Fence store
   const fenceStore = useFenceStore();
@@ -681,6 +713,40 @@ export function MissionToolbar({ onResetLayout, showToast }: MissionToolbarProps
         )}
         {activeMode === 'mission' && (
           <GuidesButton showToast={showToast} />
+        )}
+        {/* Swarm survey: prominent by design - the one-click wow moment. Only
+            appears when a fleet is connected and a group is big enough to split.
+            After a split it hands over to a quiet "distributed" pill so the
+            feature does not vanish without a trace. */}
+        {activeMode === 'mission' && !distributeTarget && fleetVehiclesLive.length >= 2 &&
+          missionStore.groups.filter((g) => g.assignedVehicleKey).length >= 2 && (
+          <div
+            className="px-2.5 py-1.5 rounded flex items-center gap-1.5 text-xs font-medium text-cyan-500 border border-cyan-500/30 bg-cyan-500/10"
+            data-tip="This plan is already split across the fleet - Fleet Ops has the Start missions button. Regenerate or add a survey to distribute again."
+          >
+            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+            </svg>
+            Distributed ({missionStore.groups.filter((g) => g.assignedVehicleKey).length})
+          </div>
+        )}
+        {activeMode === 'mission' && distributeTarget && (
+          <button
+            onClick={handleDistribute}
+            className="px-2.5 py-1.5 rounded flex items-center gap-1.5 text-xs font-semibold text-white bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 shadow-[0_0_10px_rgba(34,211,238,0.35)] transition-all"
+            data-tip={`Split "${distributeTarget.name}" into ${fleetVehiclesLive.length} missions, one per vehicle, coloured by vehicle`}
+          >
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <circle cx="12" cy="5" r="2.2" />
+              <circle cx="5" cy="18" r="2.2" />
+              <circle cx="19" cy="18" r="2.2" />
+              <path strokeLinecap="round" d="M12 7.5v4m0 0l-5 4.5m5-4.5l5 4.5" />
+            </svg>
+            Distribute to fleet
+            <span className="px-1.5 py-0.5 rounded-full bg-white/20 text-[10px] font-bold">
+              {fleetVehiclesLive.length}
+            </span>
+          </button>
         )}
         {activeMode === 'mission' && (
           <button

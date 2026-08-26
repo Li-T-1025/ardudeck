@@ -20,6 +20,7 @@ import {
   type SurveyGroup,
   type MissionMirrorSnapshot,
 } from '../../shared/mission-group-types';
+import { splitMissionForFleet } from '../components/mission/distribute-fleet';
 import { useSettingsStore } from './settings-store';
 import { useConnectionStore } from './connection-store';
 import { useParameterStore } from './parameter-store';
@@ -345,6 +346,16 @@ interface MissionStore {
    * flight groups at once. Returns the new group ids in order.
    */
   addGroupsWithItems: (entries: Array<{ group: Group; items: MissionItem[] }>) => string[];
+  /**
+   * Split one group's mission into N per-vehicle groups (balanced by path
+   * length, takeoff/RTL/config replicated per chunk), each assigned to and
+   * coloured by a fleet vehicle. The original group is removed. Returns the
+   * new group ids, or null when the group cannot be split (too few WPs).
+   */
+  distributeGroupAcrossFleet: (
+    groupId: string,
+    vehicles: Array<{ key: string; label: string; color: string }>,
+  ) => string[] | null;
   /**
    * Replace the WPs of an existing survey group, keeping the group itself
    * (id, polygon, config). Used on regeneration. The group's
@@ -1155,6 +1166,23 @@ export const useMissionStore = create<MissionStore>((set, get) => ({
       isDirty: true,
     });
     return ids;
+  },
+
+  distributeGroupAcrossFleet: (groupId, vehicles) => {
+    const { missionItems, groups } = get();
+    const source = groups.find((g) => g.id === groupId);
+    if (!source || vehicles.length < 2) return null;
+    const sourceItems = missionItems.filter((it) => it.groupId === groupId);
+    const chunks = splitMissionForFleet(sourceItems, vehicles.length);
+    if (chunks.length !== vehicles.length) return null;
+
+    const entries = chunks.map((chunk, i) => {
+      const v = vehicles[i]!;
+      const group = createManualGroup({ name: `${source.name} ${i + 1}/${vehicles.length} - ${v.label}`, color: v.color });
+      return { group: { ...group, assignedVehicleKey: v.key } as Group, items: chunk };
+    });
+    get().deleteGroup(groupId);
+    return get().addGroupsWithItems(entries);
   },
 
   replaceSurveyGroupItems: (groupId, items, signature, generatorResult) => {

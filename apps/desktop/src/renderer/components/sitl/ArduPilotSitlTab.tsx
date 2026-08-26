@@ -11,6 +11,7 @@ import { useSettingsStore } from '../../stores/settings-store';
 import type { VirtualRCState, ArduPilotVehicleType, ArduPilotReleaseTrack, ArduPilotFrameInfo, SwarmFormation, SwarmInstanceState } from '../../../shared/ipc-channels';
 import { getIpLocation } from '../../utils/ip-geolocation';
 import { getElevation } from '../../utils/elevation-api';
+import { MapPointPickerDialog } from '../map/MapPointPickerDialog';
 import SitlEnvironmentPanel from './SitlEnvironmentPanel';
 import SitlFailurePanel from './SitlFailurePanel';
 import { CustomFramePanel } from './CustomFramePanel';
@@ -204,6 +205,20 @@ export default function ArduPilotSitlTab() {
       setIsGettingLocation(false);
     }
   }, [setHomeLocation, homeLocation.alt, homeLocation.heading]);
+
+  // Map-first spawn placement: pick the home point on a map instead of typing
+  // coordinates. Confirming also fetches the real ground elevation so SITL's
+  // flat ground matches the terrain at the picked spot.
+  const [showMapPicker, setShowMapPicker] = useState(false);
+  const handleMapPick = useCallback(async (lat: number, lng: number) => {
+    const elevation = await getElevation(lat, lng).catch(() => null);
+    setHomeLocation({
+      ...homeLocation,
+      lat,
+      lng,
+      ...(elevation !== null ? { alt: elevation } : {}),
+    });
+  }, [setHomeLocation, homeLocation]);
 
   /** Re-fetch real elevation for the CURRENT lat/lng (manual edits, presets, or
       a map pick can leave the altitude stale/arbitrary). Same terrain-match
@@ -676,11 +691,33 @@ export default function ArduPilotSitlTab() {
                 <path strokeLinecap="round" strokeLinejoin="round" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
               </svg>
             </div>
-            <div>
+            <div className="flex-1">
               <h3 className="text-sm font-semibold text-content">Home &amp; Scenarios</h3>
               <p className="text-xs text-content-secondary">Spawn location for the simulated vehicle</p>
             </div>
+            <button
+              onClick={() => setShowMapPicker(true)}
+              disabled={isRunning || isStarting}
+              data-tip="Pick the spawn point on a map (ground elevation is filled in automatically)"
+              className="shrink-0 px-2.5 py-1.5 text-xs font-medium rounded-lg border border-emerald-500/30 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 transition-colors flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                <path strokeLinecap="round" strokeLinejoin="round" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+              </svg>
+              Pick on map
+            </button>
           </div>
+          {showMapPicker && (
+            <MapPointPickerDialog
+              title="SITL spawn location"
+              subtitle="Click where the simulated vehicle should spawn. Ground elevation is looked up automatically."
+              initial={{ lat: homeLocation.lat, lng: homeLocation.lng }}
+              confirmLabel="Set spawn point"
+              onConfirm={(lat, lng) => { void handleMapPick(lat, lng); }}
+              onClose={() => setShowMapPicker(false)}
+            />
+          )}
 
           {/* Scenario presets — populate the home fields below */}
           <div className="mb-4">

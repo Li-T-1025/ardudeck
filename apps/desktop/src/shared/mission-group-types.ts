@@ -244,3 +244,19 @@ export function createSurveyGroup(opts: CreateSurveyGroupOptions): SurveyGroup {
     updatedAt: now,
   };
 }
+
+/**
+ * Whether a group's assigned vehicle key refers to this fleet vehicle.
+ * Vehicle keys are `${transportId}:${sysid}.${compid}` and the transport id
+ * changes whenever the engine/link restarts, which would silently orphan
+ * every assignment. Exact match first, then fall back to the sysid.compid
+ * suffix (unique within a swarm).
+ */
+export function isAssignedToVehicle(
+  assignedKey: string | undefined,
+  vehicle: { key: string; sysid: number; compid: number },
+): boolean {
+  if (!assignedKey) return false;
+  if (assignedKey === vehicle.key) return true;
+  return assignedKey.endsWith(`:${vehicle.sysid}.${vehicle.compid}`);
+}

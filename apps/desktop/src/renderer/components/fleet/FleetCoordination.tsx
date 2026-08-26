@@ -9,16 +9,24 @@
 
 import { useState } from 'react';
 import { useFormationControl } from '../../hooks/useFormationControl';
+import { useMissionStore } from '../../stores/mission-store';
+import { isAssignedToVehicle } from '../../../shared/mission-group-types';
 import { useFleetUiStore, isFleetExpanded } from '../../stores/fleet-ui-store';
 import { SHAPE_OPTIONS, FormationGlyph } from './FormationGlyphs';
 import { FleetChevron, FleetCountHeader } from './FleetDisclosure';
 import { tacButton } from './tactical';
 
 export function FleetCoordination() {
-  const { hasServer, vehicles, canTakeoff, canFollow, formations, configFor, busy, takeOffAll, takeOffFleet, startLeaderMission, reshapeFleet } = useFormationControl();
+  const { hasServer, vehicles, canTakeoff, canFollow, formations, configFor, busy, takeOffAll, takeOffFleet, startLeaderMission, startAssignedMissions, reshapeFleet } = useFormationControl();
   const uiOverrides = useFleetUiStore((s) => s.overrides);
   const toggleFleet = useFleetUiStore((s) => s.toggle);
   const [alt, setAlt] = useState(10);
+  // Distributed survey: how many connected vehicles have a WP group assigned
+  // to them (via Distribute to fleet or manual assignment).
+  const missionGroups = useMissionStore((s) => s.groups);
+  const assignedCount = vehicles.filter((v) =>
+    missionGroups.some((g) => isAssignedToVehicle(g.assignedVehicleKey, v)),
+  ).length;
 
   if (!hasServer || vehicles.length === 0) return null;
   if (!canTakeoff && !canFollow) return null;
@@ -56,6 +64,17 @@ export function FleetCoordination() {
             />
           </label>
         </div>
+      )}
+
+      {assignedCount >= 2 && (
+        <button
+          onClick={() => { void startAssignedMissions(); }}
+          disabled={busy}
+          data-tip={`Upload each vehicle's assigned WP group and start all ${assignedCount} missions in AUTO`}
+          className={takeoffBtn}
+        >
+          Start missions ({assignedCount})
+        </button>
       )}
 
       <FleetCountHeader leaderKeys={leaderKeys} className="px-0.5" />

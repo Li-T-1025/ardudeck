@@ -8,7 +8,7 @@ import {
 } from 'lucide-react';
 import { useMissionStore } from '../../stores/mission-store';
 import { useSurveyStore } from '../../stores/survey-store';
-import { type Group, isSurveyGroup, type SurveyGroup, GROUP_COLOR_PALETTE } from '../../../shared/mission-group-types';
+import { type Group, isSurveyGroup, type SurveyGroup, GROUP_COLOR_PALETTE, isAssignedToVehicle } from '../../../shared/mission-group-types';
 import { isSurveyGroupStale } from '../survey/survey-group-signature';
 import { regenerateSurveyGroup } from '../survey/survey-regen';
 import { hasReplayData } from './plan-replay';
@@ -1392,6 +1392,7 @@ function GroupHeaderRow({
   fleetVehicles,
   assignedVehicleKey,
   onAssignVehicle,
+  onDistribute,
 }: {
   group: Group;
   count: number;
@@ -1436,6 +1437,8 @@ function GroupHeaderRow({
   fleetVehicles?: Array<{ key: string; label: string; color: string }>;
   assignedVehicleKey?: string;
   onAssignVehicle?: (vehicleKey: string | null) => void;
+  /** Split this group into one mission per fleet vehicle (swarm survey). */
+  onDistribute?: () => void;
 }) {
   const isStaleSurvey = isSurveyGroup(group) && isSurveyGroupStale(group);
   const [editing, setEditing] = useState(false);
@@ -1762,6 +1765,17 @@ function GroupHeaderRow({
                   >
                     Rename
                   </button>
+                  {onDistribute && (
+                    <button
+                      onClick={() => {
+                        setMenuOpen(false);
+                        onDistribute();
+                      }}
+                      className="w-full text-left px-3 py-1.5 text-xs text-content hover:bg-surface-raised transition-colors"
+                    >
+                      Distribute to fleet ({fleetVehicles?.length})
+                    </button>
+                  )}
                   <button
                     onClick={() => {
                       setMenuOpen(false);
@@ -1817,6 +1831,7 @@ function WaypointListContent({ readOnly = false }: { readOnly?: boolean }) {
     uploadGroup,
     uploadGroupToVehicle,
     saveGroupToFile,
+    distributeGroupAcrossFleet,
     lastUploadedAt,
     lastUploadedGroupIds,
   } = useMissionStore();
@@ -2366,6 +2381,13 @@ function WaypointListContent({ readOnly = false }: { readOnly?: boolean }) {
               const showGroupHeader = !prevWp || prevWp.groupId !== wp.groupId;
               const group = wp.groupId ? groupById.get(wp.groupId) : undefined;
               const hideByGroupCollapse = group?.collapsed === true;
+              // Assignments store the vehicle key of the moment; transport ids
+              // rotate on engine restart, so resolve to the LIVE vehicle key
+              // (sysid fallback) for both display and upload targeting.
+              const liveAssignedKey = group?.assignedVehicleKey
+                ? fleetVehicles.find((v) => isAssignedToVehicle(group.assignedVehicleKey, v))?.key
+                  ?? group.assignedVehicleKey
+                : undefined;
               const headerNode =
                 showGroupHeader && group ? (
                   <GroupHeaderRow
@@ -2382,7 +2404,13 @@ function WaypointListContent({ readOnly = false }: { readOnly?: boolean }) {
                       setGroupVisible(group.id, !group.visible)
                     }
                     fleetVehicles={fleetVehicleOptions}
-                    assignedVehicleKey={group.assignedVehicleKey}
+                    assignedVehicleKey={liveAssignedKey}
+                    onDistribute={
+                      fleetVehicleOptions &&
+                      (itemCountByGroup.get(group.id) ?? 0) >= fleetVehicleOptions.length * 2
+                        ? () => distributeGroupAcrossFleet(group.id, fleetVehicleOptions)
+                        : undefined
+                    }
                     onAssignVehicle={(vehicleKey) => {
                       setGroupVehicle(group.id, vehicleKey);
                       // Assigning a vehicle colours the group by that vehicle's
@@ -2393,13 +2421,13 @@ function WaypointListContent({ readOnly = false }: { readOnly?: boolean }) {
                       }
                     }}
                     onSync={() =>
-                      group.assignedVehicleKey
-                        ? uploadGroupToVehicle(group.id, group.assignedVehicleKey)
+                      liveAssignedKey
+                        ? uploadGroupToVehicle(group.id, liveAssignedKey)
                         : connectionState.isConnected
                           ? uploadGroup(group.id)
                           : saveGroupToFile(group.id)
                     }
-                    connected={connectionState.isConnected || !!group.assignedVehicleKey}
+                    connected={connectionState.isConnected || !!liveAssignedKey}
                     onRename={(name) => renameGroup(group.id, name)}
                     onSetColor={(color) => setGroupColor(group.id, color)}
                     onDelete={() => deleteGroup(group.id)}
