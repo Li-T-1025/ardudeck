@@ -284,6 +284,18 @@ const simObstaclesStore = new Store<SimObstacleStoreSchema>({
   defaults: { sites: {} },
 });
 
+/**
+ * MAVLink system id this GCS transmits as. Cached (serialization is hot
+ * path), refreshed on settings save. Clamped to 1-255: 0 is broadcast and
+ * invalid as a source id. Distinct ids let multiple stations share one
+ * vehicle without interleaving params/mission/FTP transfers.
+ */
+function clampGcsSysid(v: unknown): number {
+  return typeof v === 'number' && Number.isFinite(v)
+    ? Math.min(255, Math.max(1, Math.round(v)))
+    : 255;
+}
+
 // Settings/vehicle profile storage
 const settingsStore = new Store<SettingsStoreSchema>({
   name: 'settings',
@@ -313,6 +325,8 @@ const settingsStore = new Store<SettingsStoreSchema>({
     },
   },
 });
+
+let gcsSysid = clampGcsSysid(settingsStore.get('gcsSysid'));
 
 let currentTransport: Transport | null = null;
 let currentVehicleType = 0; // 1=plane, 2=copter, etc.
@@ -718,7 +732,7 @@ async function sendMavlinkPacket(
   crcExtra: number,
   options: { sysid?: number; compid?: number; sequence?: number } = {}
 ): Promise<Uint8Array> {
-  const opts = { sysid: 255, compid: 190, ...options };
+  const opts = { sysid: gcsSysid, compid: 190, ...options };
 
   if (signingEnabled && signingKey && detectedMavlinkVersion === 2) {
     if (!signingLoggedOnce) {
@@ -2198,7 +2212,7 @@ async function sendFenceItem(mainWindow: BrowserWindow, item: FenceItem): Promis
       current: 0, autocontinue: 1, param1: item.param1, param2: item.param2, param3: item.param3, param4: item.param4,
       x: item.latitude, y: item.longitude, z: item.altitude, missionType: 0,
     });
-    packet = serializeV1(MISSION_ITEM_ID, fullPayload.slice(0, 37), MISSION_ITEM_CRC_EXTRA_V1, { sysid: 255, compid: 190 });
+    packet = serializeV1(MISSION_ITEM_ID, fullPayload.slice(0, 37), MISSION_ITEM_CRC_EXTRA_V1, { sysid: gcsSysid, compid: 190 });
   }
 
   currentTransport.write(packet).catch((err) => {
@@ -3951,7 +3965,7 @@ async function requestMissionItem(mainWindow: BrowserWindow, seq: number, missio
     payload[1] = (seq >> 8) & 0xff;       // seq high byte
     payload[2] = targetSystem & 0xff;     // target_system
     payload[3] = 1;                       // target_component
-    packet = serializeV1(MISSION_REQUEST_ID, payload, MISSION_REQUEST_CRC_EXTRA_V1, { sysid: 255, compid: 190 });
+    packet = serializeV1(MISSION_REQUEST_ID, payload, MISSION_REQUEST_CRC_EXTRA_V1, { sysid: gcsSysid, compid: 190 });
   }
 
   sendLog(mainWindow, 'debug', `Requesting mission item ${seq} (MAVLink v${detectedMavlinkVersion})`);
@@ -4021,7 +4035,7 @@ async function sendMissionItem(mainWindow: BrowserWindow, item: MissionItem): Pr
     // Slice off the last byte (mission_type) for v1
     // v1 path: manual payload without mission_type extension
     const payload = fullPayload.slice(0, 37);
-    packet = serializeV1(MISSION_ITEM_ID, payload, MISSION_ITEM_CRC_EXTRA_V1, { sysid: 255, compid: 190 });
+    packet = serializeV1(MISSION_ITEM_ID, payload, MISSION_ITEM_CRC_EXTRA_V1, { sysid: gcsSysid, compid: 190 });
   }
 
   sendLog(mainWindow, 'debug', `Sending mission item ${item.seq} (MAVLink v${detectedMavlinkVersion})`);
@@ -4058,7 +4072,7 @@ async function sendMissionAck(mainWindow: BrowserWindow, result: number, mission
     payload[0] = targetSystem & 0xff;
     payload[1] = 1; // target_component
     payload[2] = result & 0xff;
-    packet = serializeV1(MISSION_ACK_ID, payload, MISSION_ACK_CRC_EXTRA_V1, { sysid: 255, compid: 190 });
+    packet = serializeV1(MISSION_ACK_ID, payload, MISSION_ACK_CRC_EXTRA_V1, { sysid: gcsSysid, compid: 190 });
   }
 
   transport.write(packet).catch(err => {
@@ -6560,6 +6574,7 @@ export function setupIpcHandlers(mainWindow: BrowserWindow): void {
 
   ipcMain.handle(IPC_CHANNELS.SETTINGS_SAVE, async (_, settings: SettingsStoreSchema): Promise<void> => {
     settingsStore.set(settings);
+    gcsSysid = clampGcsSysid(settings.gcsSysid);
   });
 
   // Simulator authored obstacles, keyed by test site id.
@@ -6762,7 +6777,7 @@ export function setupIpcHandlers(mainWindow: BrowserWindow): void {
       // Send SETUP_SIGNING unsigned (FC doesn't know the key yet)
       // Sent twice for reliability, matching Mission Planner behavior
       const packet = serializeV2(SETUP_SIGNING_ID, payload, SETUP_SIGNING_CRC_EXTRA, {
-        sysid: 255,
+        sysid: gcsSysid,
         compid: 190,
       });
 
@@ -6842,14 +6857,14 @@ export function setupIpcHandlers(mainWindow: BrowserWindow): void {
         // An unsigned packet would be silently dropped by a signing-enabled FC.
         const packet = signingEnabled && signingKey && detectedMavlinkVersion === 2
           ? serializeV2(SETUP_SIGNING_ID, payload, SETUP_SIGNING_CRC_EXTRA, {
-              sysid: 255,
+              sysid: gcsSysid,
               compid: 190,
               sign: true,
               signingKey,
               linkId: signingLinkId,
             })
           : serializeV2(SETUP_SIGNING_ID, payload, SETUP_SIGNING_CRC_EXTRA, {
-              sysid: 255,
+              sysid: gcsSysid,
               compid: 190,
             });
         await currentTransport.write(packet);
@@ -9566,7 +9581,7 @@ export function setupIpcHandlers(mainWindow: BrowserWindow): void {
         const payload = new Uint8Array(2);
         payload[0] = targetSystem & 0xff;
         payload[1] = 1; // target_component
-        packet = serializeV1(MISSION_REQUEST_LIST_ID, payload, MISSION_REQUEST_LIST_CRC_EXTRA_V1, { sysid: 255, compid: 190 });
+        packet = serializeV1(MISSION_REQUEST_LIST_ID, payload, MISSION_REQUEST_LIST_CRC_EXTRA_V1, { sysid: gcsSysid, compid: 190 });
       }
 
       await target.transport.write(packet);
@@ -9639,7 +9654,7 @@ export function setupIpcHandlers(mainWindow: BrowserWindow): void {
         payload[2] = targetSystem & 0xff;         // target_system
         payload[3] = 1;                           // target_component
         console.log(`[MISSION UPLOAD] v1 payload: ${Array.from(payload).map(b => b.toString(16).padStart(2, '0')).join(' ')}`);
-        packet = serializeV1(MISSION_COUNT_ID, payload, MISSION_COUNT_CRC_EXTRA_V1, { sysid: 255, compid: 190 });
+        packet = serializeV1(MISSION_COUNT_ID, payload, MISSION_COUNT_CRC_EXTRA_V1, { sysid: gcsSysid, compid: 190 });
       }
 
       console.log(`[MISSION UPLOAD] Full packet (${packet.length} bytes): ${Array.from(packet).map(b => b.toString(16).padStart(2, '0')).join(' ')}`);
@@ -9715,7 +9730,7 @@ export function setupIpcHandlers(mainWindow: BrowserWindow): void {
             payload[1] = (total >> 8) & 0xff;
             payload[2] = target.sysid & 0xff;
             payload[3] = 1;
-            packet = serializeV1(MISSION_COUNT_ID, payload, MISSION_COUNT_CRC_EXTRA_V1, { sysid: 255, compid: 190 });
+            packet = serializeV1(MISSION_COUNT_ID, payload, MISSION_COUNT_CRC_EXTRA_V1, { sysid: gcsSysid, compid: 190 });
           }
           await target.transport.write(packet);
           connectionState.packetsSent++;
@@ -9762,7 +9777,7 @@ export function setupIpcHandlers(mainWindow: BrowserWindow): void {
         const payload = new Uint8Array(2);
         payload[0] = targetSystem & 0xff;
         payload[1] = 1; // target_component
-        packet = serializeV1(MISSION_CLEAR_ALL_ID, payload, MISSION_CLEAR_ALL_CRC_EXTRA_V1, { sysid: 255, compid: 190 });
+        packet = serializeV1(MISSION_CLEAR_ALL_ID, payload, MISSION_CLEAR_ALL_CRC_EXTRA_V1, { sysid: gcsSysid, compid: 190 });
       }
 
       // Set pending flag before sending
@@ -9813,7 +9828,7 @@ export function setupIpcHandlers(mainWindow: BrowserWindow): void {
         payload[1] = (seq >> 8) & 0xff;       // seq high byte
         payload[2] = targetSystem & 0xff;     // target_system
         payload[3] = 1;                       // target_component
-        packet = serializeV1(MISSION_SET_CURRENT_ID, payload, MISSION_SET_CURRENT_CRC_EXTRA, { sysid: 255, compid: 190 });
+        packet = serializeV1(MISSION_SET_CURRENT_ID, payload, MISSION_SET_CURRENT_CRC_EXTRA, { sysid: gcsSysid, compid: 190 });
       }
 
       await target.transport.write(packet);
@@ -9979,7 +9994,7 @@ export function setupIpcHandlers(mainWindow: BrowserWindow): void {
         payload[0] = targetSystem & 0xff;
         payload[1] = 1;
         payload[2] = MAV_MISSION_TYPE.FENCE;
-        packet = serializeV1(MISSION_REQUEST_LIST_ID, payload, MISSION_REQUEST_LIST_CRC_EXTRA_V1, { sysid: 255, compid: 190 });
+        packet = serializeV1(MISSION_REQUEST_LIST_ID, payload, MISSION_REQUEST_LIST_CRC_EXTRA_V1, { sysid: gcsSysid, compid: 190 });
       }
 
       await currentTransport.write(packet);
@@ -10038,7 +10053,7 @@ export function setupIpcHandlers(mainWindow: BrowserWindow): void {
         payload[2] = targetSystem & 0xff;
         payload[3] = 1;
         payload[4] = MAV_MISSION_TYPE.FENCE;
-        packet = serializeV1(MISSION_COUNT_ID, payload, MISSION_COUNT_CRC_EXTRA_V1, { sysid: 255, compid: 190 });
+        packet = serializeV1(MISSION_COUNT_ID, payload, MISSION_COUNT_CRC_EXTRA_V1, { sysid: gcsSysid, compid: 190 });
       }
 
       await currentTransport.write(packet);
@@ -10084,7 +10099,7 @@ export function setupIpcHandlers(mainWindow: BrowserWindow): void {
         payload[0] = targetSystem & 0xff;
         payload[1] = 1;
         payload[2] = MAV_MISSION_TYPE.FENCE;
-        packet = serializeV1(MISSION_CLEAR_ALL_ID, payload, MISSION_CLEAR_ALL_CRC_EXTRA_V1, { sysid: 255, compid: 190 });
+        packet = serializeV1(MISSION_CLEAR_ALL_ID, payload, MISSION_CLEAR_ALL_CRC_EXTRA_V1, { sysid: gcsSysid, compid: 190 });
       }
 
       fenceClearPending = true;
@@ -10193,7 +10208,7 @@ export function setupIpcHandlers(mainWindow: BrowserWindow): void {
         payload[0] = targetSystem & 0xff;
         payload[1] = 1;
         payload[2] = MAV_MISSION_TYPE.RALLY;
-        packet = serializeV1(MISSION_REQUEST_LIST_ID, payload, MISSION_REQUEST_LIST_CRC_EXTRA_V1, { sysid: 255, compid: 190 });
+        packet = serializeV1(MISSION_REQUEST_LIST_ID, payload, MISSION_REQUEST_LIST_CRC_EXTRA_V1, { sysid: gcsSysid, compid: 190 });
       }
 
       await currentTransport.write(packet);
@@ -10252,7 +10267,7 @@ export function setupIpcHandlers(mainWindow: BrowserWindow): void {
         payload[2] = targetSystem & 0xff;
         payload[3] = 1;
         payload[4] = MAV_MISSION_TYPE.RALLY;
-        packet = serializeV1(MISSION_COUNT_ID, payload, MISSION_COUNT_CRC_EXTRA_V1, { sysid: 255, compid: 190 });
+        packet = serializeV1(MISSION_COUNT_ID, payload, MISSION_COUNT_CRC_EXTRA_V1, { sysid: gcsSysid, compid: 190 });
       }
 
       await currentTransport.write(packet);
@@ -10298,7 +10313,7 @@ export function setupIpcHandlers(mainWindow: BrowserWindow): void {
         payload[0] = targetSystem & 0xff;
         payload[1] = 1;
         payload[2] = MAV_MISSION_TYPE.RALLY;
-        packet = serializeV1(MISSION_CLEAR_ALL_ID, payload, MISSION_CLEAR_ALL_CRC_EXTRA_V1, { sysid: 255, compid: 190 });
+        packet = serializeV1(MISSION_CLEAR_ALL_ID, payload, MISSION_CLEAR_ALL_CRC_EXTRA_V1, { sysid: gcsSysid, compid: 190 });
       }
 
       rallyClearPending = true;
@@ -11138,8 +11153,8 @@ export function setupIpcHandlers(mainWindow: BrowserWindow): void {
       });
 
       const packet = mavlinkVersion === 2
-        ? serializeV2(COMMAND_LONG_ID, cmdPayload, COMMAND_LONG_CRC_EXTRA, { sysid: 255, compid: 190, sequence: 0 })
-        : serializeV1(COMMAND_LONG_ID, cmdPayload, COMMAND_LONG_CRC_EXTRA, { sysid: 255, compid: 190, sequence: 0 });
+        ? serializeV2(COMMAND_LONG_ID, cmdPayload, COMMAND_LONG_CRC_EXTRA, { sysid: gcsSysid, compid: 190, sequence: 0 })
+        : serializeV1(COMMAND_LONG_ID, cmdPayload, COMMAND_LONG_CRC_EXTRA, { sysid: gcsSysid, compid: 190, sequence: 0 });
 
       await transport.write(packet);
       sendLog(mainWindow, 'debug', 'Sent MAV_CMD_REQUEST_MESSAGE for AUTOPILOT_VERSION');
@@ -11361,8 +11376,8 @@ export function setupIpcHandlers(mainWindow: BrowserWindow): void {
         });
 
         const packet = heartbeatResult.mavVersion === 2
-          ? serializeV2(COMMAND_LONG_ID, cmdPayload, COMMAND_LONG_CRC_EXTRA, { sysid: 255, compid: 190, sequence: 0 })
-          : serializeV1(COMMAND_LONG_ID, cmdPayload, COMMAND_LONG_CRC_EXTRA, { sysid: 255, compid: 190, sequence: 0 });
+          ? serializeV2(COMMAND_LONG_ID, cmdPayload, COMMAND_LONG_CRC_EXTRA, { sysid: gcsSysid, compid: 190, sequence: 0 })
+          : serializeV1(COMMAND_LONG_ID, cmdPayload, COMMAND_LONG_CRC_EXTRA, { sysid: gcsSysid, compid: 190, sequence: 0 });
 
         await transport.write(packet);
 

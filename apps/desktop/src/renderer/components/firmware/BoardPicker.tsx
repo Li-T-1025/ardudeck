@@ -296,8 +296,10 @@ export function BoardPicker({
                         `}
                       >
                         <span className="font-medium">{board.name}</span>
-                        <span className="ml-2 text-xs text-content-secondary">
-                          {board.category}
+                        {/* The wire target name - lets users verify the row
+                            against firmware.ardupilot.org directory names. */}
+                        <span className="ml-2 text-xs text-content-secondary font-mono">
+                          {board.id}
                         </span>
                       </button>
                     ))}
@@ -349,6 +351,9 @@ export function BoardPicker({
                           `}
                         >
                           {board.name}
+                          <span className="ml-2 text-xs text-content-secondary font-mono">
+                            {board.id}
+                          </span>
                         </button>
                       );
                     })}

@@ -22,9 +22,17 @@ const SCROLL_PX_PER_ZOOM = 140;
 const PINCH_PX_PER_ZOOM = 60;
 // Legacy line-mode wheel events (some external mice): px equivalent per line.
 const LINE_HEIGHT_PX = 40;
-// Fraction of the remaining zoom distance applied per frame.
+// Fraction of the remaining zoom distance applied per 60fps-frame; scaled by
+// actual frame time so slow machines converge in the same wall time instead
+// of feeling rubber-bandy.
 const EASE = 0.3;
+const EASE_FRAME_MS = 1000 / 60;
 const SNAP_EPS = 0.003;
+// Coarse wheels (mouse notches, touchpad edge-scroll) emit fat ~120px ticks
+// in bursts; without a cap the target runs several levels ahead of the map
+// and zoom keeps flying after the input stops. The cap limits backlog, not
+// speed - held input keeps re-extending the target each event.
+const MAX_TARGET_LEAD = 1.5;
 
 // Leaflet's move transaction, private but stable across 1.x. Going through
 // setZoomAround per frame would run the full view-reset pipeline 60x per
@@ -50,20 +58,25 @@ export function SmoothWheelZoom() {
     let anchor: L.Point | null = null;
     let raf = 0;
     let inTransaction = false;
+    let lastStepAt = 0;
 
     const finish = () => {
       raf = 0;
+      lastStepAt = 0;
       if (inTransaction) {
         inTransaction = false;
         internals._moveEnd(true);
       }
     };
 
-    const step = () => {
+    const step = (now: number) => {
       if (!anchor) { finish(); return; }
+      const dt = lastStepAt > 0 ? Math.min(100, now - lastStepAt) : EASE_FRAME_MS;
+      lastStepAt = now;
+      const ease = 1 - Math.pow(1 - EASE, dt / EASE_FRAME_MS);
       const current = map.getZoom();
       const diff = target - current;
-      const next = Math.abs(diff) < SNAP_EPS ? target : current + diff * EASE;
+      const next = Math.abs(diff) < SNAP_EPS ? target : current + diff * ease;
       if (!inTransaction) {
         inTransaction = true;
         internals._moveStart(true, false);
@@ -85,7 +98,12 @@ export function SmoothWheelZoom() {
       // Resync after idle so zoom buttons / fitBounds between gestures don't
       // make the next gesture snap back to a stale target.
       if (raf === 0 && !inTransaction) target = map.getZoom();
-      target = Math.max(map.getMinZoom(), Math.min(map.getMaxZoom(), target - px / perZoom));
+      const current = map.getZoom();
+      target = Math.max(
+        current - MAX_TARGET_LEAD,
+        Math.min(current + MAX_TARGET_LEAD, target - px / perZoom),
+      );
+      target = Math.max(map.getMinZoom(), Math.min(map.getMaxZoom(), target));
       anchor = L.DomEvent.getMousePosition(e, container);
       if (!raf) raf = requestAnimationFrame(step);
     };

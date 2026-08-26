@@ -1990,6 +1990,8 @@ export function SettingsView() {
 
         {selectedCategory === 'advanced' && (
           <>
+            {/* SECTION: MAVLink identity */}
+            <MavlinkSettingsSection />
             {/* SECTION: Console */}
             <ConsoleSettingsSection />
             {/* SECTION: Experimental Features (AI Flight Analysis lives here). */}
@@ -2053,6 +2055,61 @@ function OpenAipKeyInput() {
       {hasKey && !saved && (
         <p className="text-xs text-emerald-400 mt-1">Key configured</p>
       )}
+    </div>
+  );
+}
+
+function MavlinkSettingsSection() {
+  const gcsSysid = useSettingsStore((s) => s.gcsSysid);
+  const setGcsSysid = useSettingsStore((s) => s.setGcsSysid);
+  const [draft, setDraft] = useState(String(gcsSysid));
+
+  useEffect(() => setDraft(String(gcsSysid)), [gcsSysid]);
+
+  const commit = () => {
+    const n = parseInt(draft, 10);
+    if (Number.isFinite(n)) setGcsSysid(n);
+    else setDraft(String(gcsSysid));
+  };
+
+  return (
+    <div className="mt-8">
+      <div className="flex items-center gap-2 mb-4">
+        <div className="w-1.5 h-5 bg-content-secondary rounded-full" />
+        <h2 className="text-sm font-medium text-content uppercase tracking-wider">MAVLink</h2>
+      </div>
+
+      <section className="bg-gradient-to-br from-surface to-surface-base rounded-xl border border-subtle p-5">
+        <div className="space-y-3">
+          <div className="flex items-center justify-between bg-surface-input rounded-lg p-3">
+            <div className="flex-1 mr-3">
+              <div className="text-sm text-content font-medium">GCS System ID</div>
+              <div className="text-xs text-content-secondary mt-0.5">
+                The MAVLink system id this station transmits as (1 to 255, default 255).
+                Give each station on a shared link its own id, or parameter and mission
+                transfers interleave between stations.
+              </div>
+              {gcsSysid !== 255 && (
+                <div className="text-xs text-amber-500 mt-1">
+                  The vehicle only accepts joystick / RC override from, and runs its GCS
+                  failsafe against, the id in SYSID_MYGCS (MAV_GCS_SYSID on ArduPilot 4.6+).
+                  Keep the station that flies the vehicle matched to that parameter.
+                </div>
+              )}
+            </div>
+            <input
+              type="number"
+              min={1}
+              max={255}
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+              onBlur={commit}
+              onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
+              className="w-20 px-2 py-1.5 text-sm text-right bg-surface-raised border border-subtle rounded-md text-content focus:outline-none focus:ring-1 focus:ring-blue-500 flex-shrink-0"
+            />
+          </div>
+        </div>
+      </section>
     </div>
   );
 }

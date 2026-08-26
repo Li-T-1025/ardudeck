@@ -326,6 +326,11 @@ interface SettingsStore {
   showDebugLogs: boolean;
   setShowDebugLogs: (enabled: boolean) => void;
 
+  // MAVLink source system id of this station (1-255). Distinct ids let
+  // several GCS share one vehicle without corrupting param/mission transfers.
+  gcsSysid: number;
+  setGcsSysid: (sysid: number) => void;
+
   // AI Analysis
   aiProvider: 'claude' | 'openai' | 'gemini' | null;
   setAiProvider: (provider: 'claude' | 'openai' | 'gemini' | null) => void;
@@ -798,6 +803,12 @@ export const useSettingsStore = create<SettingsStore>()(
     set({ showDebugLogs: enabled });
   },
 
+  gcsSysid: 255,
+  setGcsSysid: (sysid: number) => {
+    const clamped = Number.isFinite(sysid) ? Math.min(255, Math.max(1, Math.round(sysid))) : 255;
+    set({ gcsSysid: clamped });
+  },
+
   aiProvider: null,
   setAiProvider: (provider) => {
     set({ aiProvider: provider });
@@ -969,6 +980,9 @@ export const useSettingsStore = create<SettingsStore>()(
           tourPromptsEnabled: settingsRecord.tourPromptsEnabled !== false,
           voiceAlertsMuted: !!settingsRecord.voiceAlertsMuted,
           showDebugLogs: !!settingsRecord.showDebugLogs,
+          gcsSysid: typeof settingsRecord.gcsSysid === 'number'
+            ? Math.min(255, Math.max(1, Math.round(settingsRecord.gcsSysid)))
+            : 255,
           aiProvider: (settingsRecord.aiProvider as 'claude' | 'openai' | 'gemini' | null) ?? null,
           aiWarningDismissed: !!settingsRecord.aiWarningDismissed,
           surveyPresets: (settings.surveyPresets ?? []) as PersistedSurveyPreset[],
@@ -1017,6 +1031,7 @@ export const useSettingsStore = create<SettingsStore>()(
         tourPromptsEnabled: state.tourPromptsEnabled,
         voiceAlertsMuted: state.voiceAlertsMuted,
         showDebugLogs: state.showDebugLogs,
+        gcsSysid: state.gcsSysid,
         aiProvider: state.aiProvider,
         aiWarningDismissed: state.aiWarningDismissed,
         surveyPresets: state.surveyPresets,
@@ -1336,6 +1351,7 @@ useSettingsStore.subscribe(
     defaultCommandAltFrame: state.defaultCommandAltFrame,
     voiceAlertsMuted: state.voiceAlertsMuted,
     showDebugLogs: state.showDebugLogs,
+    gcsSysid: state.gcsSysid,
     aiProvider: state.aiProvider,
     aiWarningDismissed: state.aiWarningDismissed,
     surveyPresets: state.surveyPresets,
@@ -1369,6 +1385,7 @@ useSettingsStore.subscribe(
         curr.defaultCommandAltFrame !== prev.defaultCommandAltFrame ||
         curr.voiceAlertsMuted !== prev.voiceAlertsMuted ||
         curr.showDebugLogs !== prev.showDebugLogs ||
+        curr.gcsSysid !== prev.gcsSysid ||
         curr.aiProvider !== prev.aiProvider ||
         curr.aiWarningDismissed !== prev.aiWarningDismissed ||
         curr.surveyPresets !== prev.surveyPresets ||

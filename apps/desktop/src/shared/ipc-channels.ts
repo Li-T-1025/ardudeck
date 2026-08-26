@@ -1382,6 +1382,14 @@ export interface SettingsStoreSchema {
    * renderer-only survey types.
    */
   surveySavedConfig?: Record<string, unknown>;
+  /**
+   * MAVLink system id this GCS transmits as (1-255, default 255). Multiple
+   * stations on one link must use distinct ids or stateful transfers (params,
+   * missions, FTP) interleave. The vehicle only honors RC override / joystick
+   * from, and runs GCS failsafe against, the id in SYSID_MYGCS (MAV_GCS_SYSID
+   * on ArduPilot 4.6+).
+   */
+  gcsSysid?: number;
 }
 
 // =============================================================================

@@ -162,14 +162,44 @@ async function fetchArduPilotManifest(): Promise<any> {
 }
 
 /**
- * Get boards for a vehicle type
- * Uses static list for instant loading - no network required
- * The manifest is only fetched when selecting versions for a specific board
+ * Get boards for a vehicle type.
+ *
+ * The curated static list is metadata (friendly names, categories, popular
+ * flags), NOT a filter: every platform the firmware server publishes for the
+ * vehicle must be selectable, curated or not. Uncurated platforms get an
+ * auto-formatted name and category. Offline (or before the manifest arrives
+ * once per hour) the curated list alone is the fallback.
  */
-export async function getArduPilotBoards(_vehicleType: FirmwareVehicleType): Promise<BoardInfo[]> {
-  // Return static board list instantly - same boards work for all vehicle types
-  // The actual firmware availability is checked when fetching versions
-  return getStaticBoards();
+export async function getArduPilotBoards(vehicleType: FirmwareVehicleType): Promise<BoardInfo[]> {
+  try {
+    const manifest = await fetchArduPilotManifest();
+    const cached = manifestCache?.boards.get(vehicleType);
+    if (cached) return cached;
+
+    const firmwareType = VEHICLE_TO_FIRMWARE[vehicleType];
+    const platforms = new Set<string>();
+    for (const entry of manifest.firmware ?? []) {
+      if (entry?.vehicletype !== firmwareType) continue;
+      if (typeof entry.platform === 'string' && entry.platform.length > 0) {
+        platforms.add(entry.platform);
+      }
+    }
+    if (platforms.size === 0) return getStaticBoards();
+
+    const curated = getStaticBoards();
+    const known = new Set(curated.map((b) => b.id));
+    const extras: BoardInfo[] = [];
+    for (const p of platforms) {
+      if (known.has(p)) continue;
+      extras.push({ id: p, name: formatBoardName(p), category: categorizeboard(p) });
+    }
+    extras.sort((a, b) => a.name.localeCompare(b.name));
+    const result = [...curated, ...extras];
+    manifestCache?.boards.set(vehicleType, result);
+    return result;
+  } catch {
+    return getStaticBoards();
+  }
 }
 
 /**
@@ -208,7 +238,8 @@ function formatBoardName(platform: string): string {
   // Capitalize first letter of each word
   name = name.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
 
-  return name;
+  // Firmware-build suffixes with established casing.
+  return name.replace(/\bBdshot\b/g, '(BDShot)').replace(/\bHeli\b/g, 'Heli');
 }
 
 /**
@@ -268,20 +299,24 @@ const STATIC_BOARDS: BoardInfo[] = [
   { id: 'SpeedyBeeF405WINGV2', name: 'SpeedyBee F405 Wing V2', category: 'SpeedyBee' },
   { id: 'SpeedyBeeF7V3', name: 'SpeedyBee F7 v3', category: 'SpeedyBee' },
 
-  // Matek (H743 is popular)
+  // Matek (H743 is popular). BDShot entries are the same hardware with the
+  // bidirectional-DShot firmware build; every id here must exist as a
+  // platform on firmware.ardupilot.org (v3/SE hardware flashes the base
+  // MatekH743 target - there are no such server targets).
   { id: 'MatekH743', name: 'Matek H743-SLIM/WING', category: 'Matek', isPopular: true },
+  { id: 'MatekH743-bdshot', name: 'Matek H743-SLIM/WING (BDShot)', category: 'Matek', isPopular: true },
   { id: 'MatekF405-Wing', name: 'Matek F405-Wing', category: 'Matek', isPopular: true },
   { id: 'MatekF405', name: 'Matek F405-STD', category: 'Matek' },
   { id: 'MatekF405-bdshot', name: 'Matek F405 (BDShot)', category: 'Matek' },
   { id: 'MatekF405-Wing-bdshot', name: 'Matek F405-Wing (BDShot)', category: 'Matek' },
   { id: 'MatekF405-TE', name: 'Matek F405-TE', category: 'Matek' },
+  { id: 'MatekF405-TE-bdshot', name: 'Matek F405-TE (BDShot)', category: 'Matek' },
   { id: 'MatekF765-Wing', name: 'Matek F765-Wing', category: 'Matek' },
-  { id: 'MatekH743-bdshot', name: 'Matek H743 (BDShot)', category: 'Matek' },
-  { id: 'MatekH743SE', name: 'Matek H743 SE', category: 'Matek' },
+  { id: 'MatekF765-Wing-bdshot', name: 'Matek F765-Wing (BDShot)', category: 'Matek' },
   { id: 'MatekH743-periph', name: 'Matek H743 Periph', category: 'Matek' },
-  { id: 'MatekH743v3', name: 'Matek H743 v3', category: 'Matek' },
   { id: 'MatekH7A3', name: 'Matek H7A3', category: 'Matek' },
-  { id: 'MatekL431', name: 'Matek L431 (Wing Periph)', category: 'Matek' },
+  { id: 'MatekH7A3-Wing', name: 'Matek H7A3-Wing', category: 'Matek' },
+  { id: 'MatekL431-Periph', name: 'Matek L431 (Wing Periph)', category: 'Matek' },
 
   // mRo
   { id: 'mRoPixracer', name: 'mRo Pixracer', category: 'mRo' },
