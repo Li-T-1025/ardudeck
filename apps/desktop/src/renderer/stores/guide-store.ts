@@ -23,6 +23,14 @@ export interface MapGuide {
   holes: LatLng[][];
   visible: boolean;
   color: string;
+  /**
+   * 'points' renders numbered markers (surveyed RTK points) instead of an
+   * outline; `polygon` then holds the points in measurement order. Absent =
+   * 'polygon' (guides that predate the field).
+   */
+  kind?: 'polygon' | 'points';
+  /** Per-point labels for 'points' guides (parallel to `polygon`). */
+  pointLabels?: (string | null)[];
 }
 
 interface GuideStore {
@@ -41,6 +49,15 @@ interface GuideStore {
    * commit path). Same simplification and coloring as the file import.
    */
   addGuidesFromAreas: (areas: Array<{ polygon: LatLng[]; holes?: LatLng[][]; name?: string }>) => number;
+  /**
+   * Add surveyed points (RTK pole measurements) as a guide. `connect: true`
+   * closes them into a polygon outline (needs >= 3); otherwise they render as
+   * numbered markers. Points are deliberate measurements - no simplification.
+   */
+  addSurveyedPoints: (
+    points: Array<{ lat: number; lng: number; label?: string | null }>,
+    opts: { connect: boolean; name?: string },
+  ) => { ok: boolean; error?: string };
   toggleGuide: (id: string) => void;
   setAllVisible: (visible: boolean) => void;
   removeGuide: (id: string) => void;
@@ -128,6 +145,29 @@ export const useGuideStore = create<GuideStore>((set, get) => ({
     set({ guides });
     persist(guides);
     return added.length;
+  },
+
+  addSurveyedPoints: (points, opts) => {
+    if (points.length === 0) return { ok: false, error: 'No valid points to add.' };
+    if (opts.connect && points.length < 3) {
+      return { ok: false, error: 'A polygon needs at least 3 points - add as markers instead.' };
+    }
+    const base = get().guides.length;
+    const guide: MapGuide = {
+      id: uuid(),
+      name: opts.name?.trim() || `RTK points ${base + 1}`,
+      polygon: points.map((p) => ({ lat: p.lat, lng: p.lng })),
+      holes: [],
+      visible: true,
+      color: GROUP_COLOR_PALETTE[base % GROUP_COLOR_PALETTE.length]!,
+      kind: opts.connect ? 'polygon' : 'points',
+      pointLabels: points.map((p) => p.label ?? null),
+    };
+    const guides = [...get().guides, guide];
+    set({ guides });
+    persist(guides);
+    get().focusGuide(guide.id);
+    return { ok: true };
   },
 
   toggleGuide: (id) => {

@@ -6,6 +6,7 @@
  */
 import { useEffect, useRef, useState } from 'react';
 import { useGuideStore } from '../../stores/guide-store';
+import { SurveyedPointsDialog } from './SurveyedPointsDialog';
 
 export function GuidesButton({ showToast }: { showToast?: (msg: string, kind: 'success' | 'error') => void }) {
   const guides = useGuideStore((s) => s.guides);
@@ -17,6 +18,7 @@ export function GuidesButton({ showToast }: { showToast?: (msg: string, kind: 's
   const focusGuide = useGuideStore((s) => s.focusGuide);
 
   const [open, setOpen] = useState(false);
+  const [showPointsDialog, setShowPointsDialog] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -72,6 +74,13 @@ export function GuidesButton({ showToast }: { showToast?: (msg: string, kind: 's
                 </button>
               )}
               <button
+                onClick={() => { setShowPointsDialog(true); setOpen(false); }}
+                className="text-[10px] font-medium text-teal-300 hover:text-teal-200 transition-colors"
+                data-tip="Paste surveyed RTK points as markers or a polygon"
+              >
+                Points...
+              </button>
+              <button
                 onClick={handleImport}
                 className="text-[10px] font-medium text-teal-300 hover:text-teal-200 transition-colors"
               >
@@ -120,16 +129,18 @@ export function GuidesButton({ showToast }: { showToast?: (msg: string, kind: 's
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 2v3m0 14v3M2 12h3m14 0h3" />
                     </svg>
                   </button>
-                  <button
-                    onClick={() => {
-                      startSurveyFromGuide(g.id);
-                      setOpen(false);
-                    }}
-                    className="shrink-0 px-1.5 py-0.5 rounded text-[10px] font-medium bg-purple-600/80 hover:bg-purple-500 text-white transition-colors"
-                    data-tip="Load into the survey panel and plan with the selected engine"
-                  >
-                    Plan
-                  </button>
+                  {g.polygon.length >= 3 && (
+                    <button
+                      onClick={() => {
+                        startSurveyFromGuide(g.id);
+                        setOpen(false);
+                      }}
+                      className="shrink-0 px-1.5 py-0.5 rounded text-[10px] font-medium bg-purple-600/80 hover:bg-purple-500 text-white transition-colors"
+                      data-tip="Load into the survey panel and plan with the selected engine"
+                    >
+                      Plan
+                    </button>
+                  )}
                   <button
                     onClick={() => removeGuide(g.id)}
                     className="shrink-0 text-content-tertiary hover:text-red-400 transition-colors"
@@ -144,6 +155,9 @@ export function GuidesButton({ showToast }: { showToast?: (msg: string, kind: 's
             </div>
           )}
         </div>
+      )}
+      {showPointsDialog && (
+        <SurveyedPointsDialog onClose={() => setShowPointsDialog(false)} showToast={showToast} />
       )}
     </div>
   );
