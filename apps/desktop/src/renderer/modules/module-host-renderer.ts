@@ -53,7 +53,7 @@ import {
 } from '../components/survey/generator-registry';
 import { t, i18n } from '../../shared/i18n/index.js';
 import {
-  boardPortRegistry, configCardRegistry, nodeProfileRegistry, detectHardware, firmwareSourceRegistry, hardwareCatalogRegistry,
+  boardPortRegistry, configCardRegistry, nodeProfileRegistry, detectHardware, firmwareSourceRegistry, hardwareCatalogRegistry, hardwareSetupRegistry,
   viewBodyRegistry,
 } from './module-extension-registries';
 import { viewOwnerSlug, CARGO_VIEWS } from './capabilities';
@@ -152,6 +152,7 @@ export function unregisterModuleExtensionsForSlug(slug: string): void {
   for (const lang of Object.keys(i18n.store.data)) i18n.removeResourceBundle(lang, cargoNamespace(slug));
   configCardRegistry.unregisterAll(slug);
   hardwareCatalogRegistry.unregisterAll(slug);
+  hardwareSetupRegistry.unregisterAll(slug);
   firmwareSourceRegistry.unregisterAll(slug);
   boardPortRegistry.unregisterAll(slug);
   nodeProfileRegistry.unregisterAll(slug);
@@ -277,6 +278,8 @@ export function createRendererHostApi(
       unregisterProducts: () => hardwareCatalogRegistry.unregister(slug, 'catalog'),
       getDetected: () => currentDetectedHardware(),
       registerBoardPorts: (boardId, ports) => boardPortRegistry.register(slug, `board:${boardId}`, { boardId, ports: Array.isArray(ports) ? ports : [] }),
+      registerSetups: (entries) => hardwareSetupRegistry.register(slug, 'setups', Array.isArray(entries) ? entries.filter((e) => e && typeof e.open === 'function' && typeof e.name === 'string') : []),
+      unregisterSetups: () => hardwareSetupRegistry.unregister(slug, 'setups'),
       subscribe: (listener) => {
         const notify = () => listener(currentDetectedHardware());
         const offs = [

@@ -1,5 +1,5 @@
 import type {
-  BoardPortLabel, ConfigCardRegistration, ConfigCardSlot, DetectedHardware, DroneCanNodeProfile, FirmwareSourceRegistration, HardwareProduct,
+  BoardPortLabel, ConfigCardRegistration, ConfigCardSlot, DetectedHardware, DroneCanNodeProfile, FirmwareSourceRegistration, HardwareProduct, HardwareSetupEntry,
 } from '@ardudeck/module-sdk';
 import type { ComponentType } from 'react';
 import type { DroneCanNode } from '../../shared/dronecan-types.js';
@@ -7,6 +7,7 @@ import { createSlugRegistry, type SlugEntry } from './slug-registry';
 
 export const configCardRegistry = createSlugRegistry<ConfigCardRegistration>();
 export const hardwareCatalogRegistry = createSlugRegistry<HardwareProduct[]>();
+export const hardwareSetupRegistry = createSlugRegistry<HardwareSetupEntry[]>();
 export const firmwareSourceRegistry = createSlugRegistry<FirmwareSourceRegistration>();
 export const boardPortRegistry = createSlugRegistry<{ boardId: number; ports: BoardPortLabel[] }>();
 export const nodeProfileRegistry = createSlugRegistry<DroneCanNodeProfile>();

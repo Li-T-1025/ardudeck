@@ -258,7 +258,20 @@ export function useDraggableOverlay(
     if (changed) setAttachRev((v) => v + 1);
     if (!anchorRef.current) {
       const stored = readStored(storageKey);
-      if (!stored) return;
+      if (!stored) {
+        // never moved: it sits at its class position, which a short panel can leave off-screen
+        requestAnimationFrame(() => {
+          if (elRef.current !== el || anchorRef.current) return;
+          const parent = el.offsetParent as HTMLElement | null;
+          if (!parent) return;
+          const r = el.getBoundingClientRect();
+          const pr = parent.getBoundingClientRect();
+          const here = { x: r.left - pr.left, y: r.top - pr.top };
+          const inside = clampToParent(el, here, oh());
+          if (inside.x !== here.x || inside.y !== here.y) applyPos(inside);
+        });
+        return;
+      }
       if (stored.kind === 'anchor' && stored.current) {
         anchorRef.current = stored.anchor;
       } else {

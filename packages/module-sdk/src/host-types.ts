@@ -611,6 +611,26 @@ export type ProductionHostView = 'calibration' | 'firmware' | 'parameters' | 'va
  */
 export type ConfigCardSlot = 'notify' | 'gps' | 'hardware';
 
+/** Where a setup entry is listed in Add hardware. */
+export type HardwareSetupCategory =
+  | 'rangefinder' | 'airspeed' | 'proximity' | 'flow' | 'gps' | 'telemetry'
+  | 'compass' | 'esc' | 'power' | 'lighting' | 'receiver' | 'datalink' | 'autopilot' | 'other';
+
+/** A product in the host's Add hardware dialog that hands over to this module's own setup. */
+export interface HardwareSetupEntry {
+  id: string;
+  category: HardwareSetupCategory;
+  /** Official product name, shown as is. */
+  name: string;
+  /** Shown as a badge on the tile, e.g. your brand. */
+  vendor?: string;
+  /** One line on what it is for, already translated. */
+  description?: string;
+  connection?: 'serial' | 'i2c' | 'can' | 'usb' | 'network';
+  /** The dialog closes, then this runs: open your setup for this product. */
+  open(): void;
+}
+
 export interface ConfigCardRegistration {
   /** Stable id within this module. Re-registering the same id replaces it. */
   id: string;
@@ -1113,6 +1133,9 @@ export interface RendererHostApi {
     /** Name the serial connectors of an autopilot (APJ board id) in the Serial Ports tab. */
     registerBoardPorts(boardId: number, ports: BoardPortLabel[]): void;
     subscribe(listener: (detected: DetectedHardware[]) => void): () => void;
+    /** Add or replace this module's entries in the Add hardware dialog. */
+    registerSetups(entries: HardwareSetupEntry[]): void;
+    unregisterSetups(): void;
   };
   dronecan: {
     /**

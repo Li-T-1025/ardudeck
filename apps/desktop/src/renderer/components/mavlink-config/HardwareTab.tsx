@@ -1,7 +1,7 @@
-import { useEffect, useMemo, type ComponentType } from 'react';
+import { useEffect, useMemo, useState, type ComponentType } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
-  Battery, Boxes, Box, Cpu, ExternalLink, Fan, HelpCircle, Lightbulb, Navigation, Network, Radio, Satellite, Wifi,
+  Battery, Boxes, Box, Cpu, ExternalLink, Fan, HelpCircle, Lightbulb, Navigation, Network, Plus, Radio, Satellite, Wifi,
 } from 'lucide-react';
 import type { DetectedHardware, HardwareCategory } from '@ardudeck/module-sdk';
 import { useConnectionStore } from '../../stores/connection-store';
@@ -10,6 +10,7 @@ import { useDroneCanStore } from '../../stores/dronecan-store';
 import { droneCanPorts } from '../../lib/dronecan-ports';
 import { detectHardware, hardwareCatalogRegistry } from '../../modules/module-extension-registries';
 import { ModuleConfigCards } from '../../modules/ModuleConfigCards';
+import { HardwareSetupWizard } from './hardware-setup/HardwareSetupWizard';
 
 const CATEGORY_STYLE: Record<HardwareCategory | 'unknown', { Icon: ComponentType<{ className?: string }>; box: string; icon: string }> = {
   autopilot: { Icon: Cpu, box: 'bg-sky-500/20', icon: 'text-sky-400' },
@@ -46,8 +47,29 @@ export default function HardwareTab() {
     [catalogs, connection.isConnected, connection.boardId, connection.boardVersion, nodes, port?.fcNodeId],
   );
 
+  const [setupOpen, setSetupOpen] = useState(false);
+
   return (
     <div className="p-6 space-y-6">
+      {setupOpen && <HardwareSetupWizard onClose={() => setSetupOpen(false)} />}
+      <div className="bg-surface rounded-xl border border-subtle p-5">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-lg bg-blue-500/20 flex items-center justify-center">
+            <Plus className="w-5 h-5 text-blue-400" />
+          </div>
+          <div className="min-w-0 flex-1">
+            <h3 className="font-medium text-content">{t('mavlink-config:hardwareSetup.cardTitle')}</h3>
+            <p className="text-xs text-content-secondary">{t('mavlink-config:hardwareSetup.cardSubtitle')}</p>
+          </div>
+          <button
+            onClick={() => setSetupOpen(true)}
+            disabled={!connection.isConnected || parameters.size === 0}
+            className="btn btn-primary text-sm disabled:opacity-40"
+          >
+            {t('mavlink-config:hardwareSetup.add')}
+          </button>
+        </div>
+      </div>
       <div className="bg-surface rounded-xl border border-subtle p-5">
         <div className="flex items-center gap-3 mb-5">
           <div className="w-10 h-10 rounded-lg bg-teal-500/20 flex items-center justify-center">
