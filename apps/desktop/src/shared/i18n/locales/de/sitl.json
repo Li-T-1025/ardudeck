@@ -84,7 +84,8 @@
     "topSpeedDesc": "Diesen VTOL zu einem schnellen Flugzeug machen, um Hochgeschwindigkeitsflug zu testen.",
     "topSpeedToggle": "Schnelles Flugzeug",
     "topSpeedLabel": "Höchstgeschwindigkeit im Horizontalflug",
-    "topSpeedHint": "Setzt AIRSPEED_MAX auf {{max}} m/s und AIRSPEED_CRUISE auf {{cruise}} m/s. Gilt ab dem nächsten Start; wurden diese Parameter in diesem Simulator schon geändert, EEPROM löschen anhaken, damit die neuen Grenzen greifen."
+    "topSpeedHint": "Setzt AIRSPEED_MAX auf {{max}} m/s und AIRSPEED_CRUISE auf {{cruise}} m/s. Gilt ab dem nächsten Start; wurden diese Parameter in diesem Simulator schon geändert, EEPROM löschen anhaken, damit die neuen Grenzen greifen.",
+    "topSpeedValue": "{{speed}} km/h"
   },
   "customFrame": {
     "active": "Aktiv",

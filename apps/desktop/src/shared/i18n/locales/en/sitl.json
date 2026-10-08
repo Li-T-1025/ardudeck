@@ -84,7 +84,8 @@
     "topSpeedDesc": "Turn this VTOL into a fast airframe for testing high-speed flight.",
     "topSpeedToggle": "Fast airframe",
     "topSpeedLabel": "Level top speed",
-    "topSpeedHint": "Sets AIRSPEED_MAX to {{max}} m/s and AIRSPEED_CRUISE to {{cruise}} m/s. Takes effect on the next start; if you changed those parameters on this simulator before, tick Wipe EEPROM so the new limits apply."
+    "topSpeedHint": "Sets AIRSPEED_MAX to {{max}} m/s and AIRSPEED_CRUISE to {{cruise}} m/s. Takes effect on the next start; if you changed those parameters on this simulator before, tick Wipe EEPROM so the new limits apply.",
+    "topSpeedValue": "{{speed}} km/h"
   },
   "customFrame": {
     "active": "Active",

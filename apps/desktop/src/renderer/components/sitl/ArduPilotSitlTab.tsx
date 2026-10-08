@@ -580,7 +580,7 @@ export default function ArduPilotSitlTab() {
                   <div className="mt-3 space-y-2">
                     <div className="flex items-center justify-between">
                       <label className="text-xs text-content-secondary">{t('sitl:ardupilot.topSpeedLabel')}</label>
-                      <span className="text-xs font-mono text-content tabular-nums">{topSpeedKmh} km/h</span>
+                      <span className="text-xs font-mono text-content tabular-nums">{t('sitl:ardupilot.topSpeedValue', { speed: topSpeedKmh })}</span>
                     </div>
                     <input
                       type="range"
