@@ -181,7 +181,10 @@
     "uploadWaypointsFailed": "Failed to upload waypoints",
     "uploadedToFc": "Uploaded {{count}} waypoints to FC",
     "uploadedToFlightController": "Uploaded {{count}} waypoints to flight controller",
-    "uploadedToVehicle": "Uploaded {{count}} waypoints to vehicle"
+    "uploadedToVehicle": "Uploaded {{count}} waypoints to vehicle",
+    "vehicleMissionLabel": "Vehicle mission @ {{stamp}}",
+    "fromVehicleGroup": "From vehicle @ {{stamp}}",
+    "downloadedGroup": "Downloaded @ {{stamp}}"
   },
   "modesWizardStore": {
     "clearSlotFailed": "Failed to clear mode slot {{i}}",

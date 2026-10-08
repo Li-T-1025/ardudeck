@@ -1028,7 +1028,16 @@
     "travel": "Travel",
     "travelHint": "Full stick reaches {{percent}}% ({{low}}–{{high}} µs)",
     "unassigned_one": "{{count}} output unassigned ({{list}}).",
-    "unassigned_other": "{{count}} outputs unassigned ({{list}})."
+    "unassigned_other": "{{count}} outputs unassigned ({{list}}).",
+    "drivenBy": "Driven by",
+    "noChannel": "No radio channel",
+    "channelOption": "Channel {{ch}} ({{note}})",
+    "freeChannel": "free",
+    "flightModes": "flight modes",
+    "drivenByTip": "This output copies the chosen radio channel (RCIN passthrough).",
+    "drivenByAuxTip": "This output keeps its function; the chosen radio channel controls it through the matching aux function (RCn_OPTION). Channels already doing something else are not offered.",
+    "mountOff": "The gimbal driver is off (MNT{{n}}_TYPE = None), so nothing moves this output. Set MNT{{n}}_TYPE to Servo (1) and restart the board.",
+    "belowDocumented": "Below 800 µs, the lowest ArduPilot documents. The board accepts it; check your servo really moves there and does not strain at the end."
   },
   "outputVisual": {
     "atPwm": "Servo {{channel}} at {{pwm}} µs",
@@ -1958,7 +1967,7 @@
     "detectTip": "Watches all channels and names the one you move",
     "detecting": "Flick a switch on your radio...",
     "discard": "Discard",
-    "drivesTip": "Makes the chosen servo output follow this switch (RCIN passthrough)",
+    "drivesTip": "Makes the chosen output respond to this channel. A free output follows it directly; a gimbal, camera trigger, gripper or landing gear output keeps its job and this channel controls it. Motors and control surfaces are never handed to a switch.",
     "findSwitch": "Find my switch",
     "flightModesAbove": "Flight modes (configured above)",
     "fn": "fn {{fn}}",
@@ -1972,7 +1981,11 @@
     "staged_other": "{{count}} changes staged. Nothing is written to the vehicle until Apply.",
     "subtitle": "What each transmitter switch does: assign an aux function, or drive a servo output directly.",
     "thisSwitch": "this switch",
-    "title": "Switch Actions"
+    "title": "Switch Actions",
+    "controls": "controls {{fn}}",
+    "inUse": "in use: {{fn}}",
+    "mountModeHint": "The gimbal follows this channel only in RC Targeting mode. Its default mode is {{mode}}: set MNT1_DEFLT_MODE to RC Targeting (3) if it should follow the stick from power-up.",
+    "mountOff": "The gimbal driver is off (MNT{{n}}_TYPE = None), so nothing moves this output. Set MNT{{n}}_TYPE to Servo (1) and restart the board."
   },
   "telemetryRatesTab": {
     "bootDefaults": "These parameters are the port's defaults at boot. A connected ground station can ask for different rates for its own session, and ArduDeck does: that is why the measured column can run well above the slider.",
@@ -2173,5 +2186,39 @@
     "manualDone": "{{param}} is {{label}}.",
     "manualWhy": "ArduDeck never changes motor output settings for you: a wrong value can spin the motors. Do it with the props off; this list ticks itself off as soon as the vehicle reports it.",
     "escValue": "{{n}} motors reporting · {{rpm}} rpm"
+  },
+  "gimbalRange": {
+    "open": "Set camera range",
+    "title": "Camera tilt range",
+    "cancel": "Cancel and put everything back",
+    "step": {
+      "low": "Step 1 of 3: lowest position",
+      "high": "Step 2 of 3: highest position",
+      "angles": "Step 3 of 3: what the camera points at"
+    },
+    "knobDown": "Turn the tilt knob all the way down.",
+    "knobUp": "Turn the tilt knob all the way up.",
+    "knobThere": "Knob is at the end.",
+    "knobNotThere": "Knob (channel {{ch}}) is not at the end yet.",
+    "nudgeLow": "Now move the camera to the lowest position it should ever reach. It moves as you press.",
+    "nudgeHigh": "Now move the camera to the highest position it should ever reach. It moves as you press.",
+    "upBig": "Up a lot",
+    "up": "Up",
+    "down": "Down",
+    "downBig": "Down a lot",
+    "signal": "Signal {{us}} µs · output now {{live}}",
+    "wrongWay": "Moves the wrong way? Swap",
+    "keys": "Arrow keys nudge too; hold Shift for big steps.",
+    "lowQuestion": "At the lowest position, where does the camera point?",
+    "highQuestion": "At the highest position, where does the camera point?",
+    "angle": {
+      "m90": "Straight down",
+      "m60": "-60°",
+      "m45": "-45°",
+      "p0": "Straight ahead",
+      "p20": "+20°",
+      "p45": "+45°"
+    },
+    "anglesWhy": "Rough is fine. ArduPilot uses this to aim the camera at points in missions and to report where it looks."
   }
 }

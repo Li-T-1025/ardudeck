@@ -181,7 +181,10 @@
     "uploadWaypointsFailed": "Wegpunkte konnten nicht hochgeladen werden",
     "uploadedToFc": "{{count}} Wegpunkte auf den FC hochgeladen",
     "uploadedToFlightController": "{{count}} Wegpunkte auf den Flugcontroller hochgeladen",
-    "uploadedToVehicle": "{{count}} Wegpunkte auf das Fahrzeug hochgeladen"
+    "uploadedToVehicle": "{{count}} Wegpunkte auf das Fahrzeug hochgeladen",
+    "vehicleMissionLabel": "Mission des Fluggeräts @ {{stamp}}",
+    "fromVehicleGroup": "Vom Fluggerät @ {{stamp}}",
+    "downloadedGroup": "Heruntergeladen @ {{stamp}}"
   },
   "modesWizardStore": {
     "clearSlotFailed": "Modus-Slot {{i}} konnte nicht gelöscht werden",

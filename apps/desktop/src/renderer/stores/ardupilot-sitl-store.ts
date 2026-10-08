@@ -5,6 +5,7 @@
  * process lifecycle, binary downloads, and configuration.
  */
 
+import { clampTopSpeedKmh, supportsTopSpeed } from '../../shared/sitl-top-speed';
 import { create } from 'zustand';
 import { t as i18nT } from '../../shared/i18n/index.js';
 import { persist } from 'zustand/middleware';
@@ -88,6 +89,9 @@ export interface ArduPilotSitlStore {
   setSimWindIntensity: (v: number) => void;
   setSimSensorNoise: (on: boolean) => void;
   setSimBatterySag: (on: boolean) => void;
+  /** Level top speed (km/h) for fast VTOL testing; 0 = the frame's stock speed. */
+  topSpeedKmh: number;
+  setTopSpeedKmh: (kmh: number) => void;
 
   // RC State
   isRcSending: boolean;
@@ -309,6 +313,8 @@ export const useArduPilotSitlStore = create<ArduPilotSitlStore>()(
       setSimWindIntensity: (v) => set({ simWindIntensity: Math.max(0, Math.min(1, v)) }),
       setSimSensorNoise: (on) => set({ simSensorNoise: on }),
       setSimBatterySag: (on) => set({ simBatterySag: on }),
+      topSpeedKmh: 0,
+      setTopSpeedKmh: (kmh) => set({ topSpeedKmh: kmh > 0 ? clampTopSpeedKmh(kmh) : 0 }),
 
       isRcSending: false,
       rcState: DEFAULT_RC_STATE,
@@ -349,6 +355,7 @@ export const useArduPilotSitlStore = create<ArduPilotSitlStore>()(
           simWindIntensity,
           simSensorNoise,
           simBatterySag,
+          topSpeedKmh,
           appendOutput,
           autoUpgradedFrames,
           crashedFrameTracks,
@@ -422,6 +429,7 @@ export const useArduPilotSitlStore = create<ArduPilotSitlStore>()(
             simWindIntensity,
             simSensorNoise,
             simBatterySag,
+            topSpeedKmh: topSpeedKmh > 0 && supportsTopSpeed(vehicleType, model) ? topSpeedKmh : undefined,
           };
 
           const result = await window.electronAPI.ardupilotSitlStart(config);
@@ -977,6 +985,7 @@ export const useArduPilotSitlStore = create<ArduPilotSitlStore>()(
         simWindIntensity: state.simWindIntensity,
         simSensorNoise: state.simSensorNoise,
         simBatterySag: state.simBatterySag,
+        topSpeedKmh: state.topSpeedKmh,
         // Remember auto-upgrades so a frame that crashes on stable goes
         // straight to dev on subsequent runs without the user seeing it.
         autoUpgradedFrames: state.autoUpgradedFrames,

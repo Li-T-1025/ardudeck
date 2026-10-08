@@ -22,6 +22,7 @@ import { IPC_CHANNELS } from '../../shared/ipc-channels.js';
 import { isVtolFrame } from './frame-config.js';
 import type { AuthoredObstacle, SimObstacleStoreSchema } from '../../shared/sim-obstacle-types.js';
 import { generateDefaultParams, resolveCopterFrame, sitlFrameForMotorCount, killProcessTree, reapSitlOnPort, withPathPrepended } from '@ardudeck/sitl';
+import { supportsTopSpeed, topSpeedModel, topSpeedParamLines, topSpeedAeroJson, TOP_SPEED_AERO_FILE } from '../../shared/sitl-top-speed.js';
 import { ardupilotSitlDownloader } from './ardupilot-sitl-downloader.js';
 import { simEngineProcess } from '../sim/sim-engine-process.js';
 import { t } from '../../shared/i18n/index.js';
@@ -166,7 +167,11 @@ export function simModelFor(config: ArduPilotSitlConfig): string {
   if (config.customFramePath && config.customFrameMotors) {
     return `${sitlFrameForMotorCount(config.customFrameMotors)}:${config.customFramePath}`;
   }
-  return config.model || DEFAULT_MODELS[config.vehicleType];
+  const base = config.model || DEFAULT_MODELS[config.vehicleType];
+  if (config.topSpeedAeroFile && supportsTopSpeed(config.vehicleType, base)) {
+    return topSpeedModel(base, config.topSpeedAeroFile);
+  }
+  return base;
 }
 
 /**
@@ -494,7 +499,8 @@ class ArduPilotSitlProcessManager {
         effBattVoltage,
         effBattCapAh,
       );
-      const overlayExtras = [...frameBattLines, ...vtolMixerLines];
+      const fastVtol = !!config.topSpeedKmh && supportsTopSpeed(config.vehicleType, config.model || DEFAULT_MODELS[config.vehicleType]);
+      const overlayExtras = [...frameBattLines, ...vtolMixerLines, ...(fastVtol ? topSpeedParamLines(config.topSpeedKmh!) : [])];
       const overlay = overlayExtras.length > 0
         ? `${overlayBase}\n${overlayExtras.join('\n')}`
         : overlayBase;
@@ -506,6 +512,14 @@ class ArduPilotSitlProcessManager {
 
       if (defaultsStack.length > 0 && !config.defaultsFile) {
         config = { ...config, defaultsFile: defaultsStack.join(',') };
+      }
+
+      // Same staging rule as custom frames: a bare file name inside SITL's own folder.
+      if (fastVtol) {
+        await writeFile(path.join(path.dirname(binaryPath), TOP_SPEED_AERO_FILE), topSpeedAeroJson(config.topSpeedKmh!), 'utf-8');
+        config = { ...config, topSpeedAeroFile: TOP_SPEED_AERO_FILE };
+      } else if (config.topSpeedAeroFile) {
+        config = { ...config, topSpeedAeroFile: undefined };
       }
 
       // Stage the active custom frame so ArduPilot SITL can actually open it.

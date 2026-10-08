@@ -14,7 +14,7 @@ import { useSyncExternalStore } from 'react';
 import type { ReactNode } from 'react';
 import type { HudInstrumentContext, HudMissionWaypoint, HudCommandTarget } from '@ardudeck/module-sdk';
 import { listModuleHudInstruments, subscribeModuleHudInstruments } from '../../../modules/module-hud-registry';
-import { useMissionStore } from '../../../stores/mission-store';
+import { useVehicleMissionView } from '../../../stores/vehicle-mission-store';
 import { useActiveVehicleTarget } from '../../../stores/command-target-store';
 import { buildHudProjection } from './hud-projection';
 import type { HudConfig } from './hud-config';
@@ -28,7 +28,7 @@ interface Props {
 export function ModuleHudInstruments({ v, config }: Props) {
   // Re-read when a module registers/unregisters an instrument (snapshot on count).
   useSyncExternalStore(subscribeModuleHudInstruments, () => listModuleHudInstruments().length);
-  const missionItems = useMissionStore((s) => s.missionItems);
+  const { items: missionItems } = useVehicleMissionView();
   const commandTarget = useActiveVehicleTarget();
 
   const instruments = listModuleHudInstruments();

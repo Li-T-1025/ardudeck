@@ -1,13 +1,22 @@
-import React, { useMemo, useCallback } from 'react';
+import React, { useMemo, useCallback, useState } from 'react';
 import { Trans, useTranslation } from 'react-i18next';
 import { useParameterStore } from '../../../stores/parameter-store';
 import { DraggableSlider } from '../../ui/DraggableSlider';
 import { DraftNumberInput } from '../../../hooks/useNumericDraft';
 import { OutputVisual } from './OutputVisual';
+import { GimbalRangeDialog, type GimbalRangeTarget } from './GimbalRangeDialog';
 import { classifyOutput, isTravelEditable, travelFromEndpoints, type OutputShape } from './output-shape';
+import { mountOf, outputUse } from '../switches/aux-control';
+import { rcinPassthroughFunction } from '../switches/switch-detect';
+
+const FIRST_AUX_CH = 5;
+const LAST_CH = 16;
+const isPassthroughFn = (fn: number) => fn >= rcinPassthroughFunction(1) && fn <= rcinPassthroughFunction(16);
 
 const SERVO_TRAVEL_MAX_US = 500;
-const PWM_FLOOR = 800;
+// ArduPilot documents 800 but accepts lower; some servos (360 degree gimbals) need it
+const PWM_FLOOR = 500;
+const DOCUMENTED_FLOOR = 800;
 const PWM_CEILING = 2200;
 
 interface OutputGroup {
@@ -94,6 +103,35 @@ export const OutputCards: React.FC<OutputCardsProps> = ({
     return free;
   }, [parameters, channelCount]);
 
+  const [rangeTarget, setRangeTarget] = useState<GimbalRangeTarget | null>(null);
+  const servoLabels = useMemo(() => new Map(Object.entries(metadata?.['SERVO1_FUNCTION']?.values ?? {}).map(([k, v]) => [Number(k), String(v)] as const)), [metadata]);
+  const optionLabels = useMemo(() => new Map(Object.entries((metadata?.['RC5_OPTION'] ?? metadata?.['RC7_OPTION'])?.values ?? {}).map(([k, v]) => [Number(k), String(v)] as const)), [metadata]);
+  const modeChannel = (parameters.get('FLTMODE_CH')?.value ?? parameters.get('MODE_CH')?.value) || 5;
+
+  /** Which radio channel drives this output now, and how a new choice is written. */
+  const driver = (g: OutputGroup): { channel: number | null; set: (ch: number) => void; viaAux: boolean } | null => {
+    if (isPassthroughFn(g.key)) {
+      return {
+        channel: g.key - rcinPassthroughFunction(0),
+        viaAux: false,
+        set: (ch) => { for (const c of g.channels) setParameter(`SERVO${c}_FUNCTION`, ch > 0 ? rcinPassthroughFunction(ch) : 0); },
+      };
+    }
+    const use = outputUse(g.key, servoLabels, optionLabels, isPassthroughFn);
+    if (use.kind !== 'aux') return null;
+    let current: number | null = null;
+    for (let ch = FIRST_AUX_CH; ch <= LAST_CH; ch++) if (parameters.get(`RC${ch}_OPTION`)?.value === use.option) { current = ch; break; }
+    return {
+      channel: current,
+      viaAux: true,
+      // the output keeps its function; the chosen channel takes over the matching aux function
+      set: (ch) => {
+        if (current !== null) setParameter(`RC${current}_OPTION`, 0);
+        if (ch > 0) setParameter(`RC${ch}_OPTION`, use.option);
+      },
+    };
+  };
+
   const setFunction = useCallback(
     (channels: number[], fn: number) => {
       for (const ch of channels) setParameter(`SERVO${ch}_FUNCTION`, fn);
@@ -165,6 +203,51 @@ export const OutputCards: React.FC<OutputCardsProps> = ({
                     ? t('mavlink-config:outputCards.outputsList', { list: g.channels.join(', ') })
                     : t('mavlink-config:outputCards.outputSingle', { n: g.primary })}
                 </div>
+                {(() => {
+                  const d = driver(g);
+                  if (!d) return null;
+                  return (
+                    <label className="mt-1 flex items-center gap-2 px-1 text-[11px] text-content-secondary" data-tip={t(d.viaAux ? 'mavlink-config:outputCards.drivenByAuxTip' : 'mavlink-config:outputCards.drivenByTip')}>
+                      {t('mavlink-config:outputCards.drivenBy')}
+                      <select
+                        value={d.channel ?? 0}
+                        onChange={(e) => d.set(Number(e.target.value))}
+                        className="flex-1 rounded bg-surface-input border border-subtle px-1.5 py-0.5 text-[11px] text-content"
+                      >
+                        <option value={0}>{t('mavlink-config:outputCards.noChannel')}</option>
+                        {Array.from({ length: LAST_CH - FIRST_AUX_CH + 1 }, (_, i) => FIRST_AUX_CH + i).map((ch) => {
+                          const opt = parameters.get(`RC${ch}_OPTION`)?.value ?? 0;
+                          const mine = ch === d.channel;
+                          const isMode = ch === modeChannel;
+                          const busy = !mine && (isMode || (d.viaAux && opt !== 0));
+                          const note = isMode ? t('mavlink-config:outputCards.flightModes') : opt !== 0 && !mine ? (optionLabels.get(opt) ?? String(opt)) : t('mavlink-config:outputCards.freeChannel');
+                          return <option key={ch} value={ch} disabled={busy}>{t('mavlink-config:outputCards.channelOption', { ch, note })}</option>;
+                        })}
+                      </select>
+                    </label>
+                  );
+                })()}
+                {(g.key === 7 || g.key === 13) && (parameters.get(`MNT${g.key === 7 ? 1 : 2}_TYPE`)?.value ?? 0) !== 0 && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const mount: 1 | 2 = g.key === 7 ? 1 : 2;
+                      const option = mount === 1 ? 213 : 216;
+                      let knob: number | null = null;
+                      for (let ch = FIRST_AUX_CH; ch <= LAST_CH; ch++) if (parameters.get(`RC${ch}_OPTION`)?.value === option) { knob = ch; break; }
+                      setRangeTarget({ outputs: g.channels, mount, knobChannel: knob });
+                    }}
+                    className="mt-1.5 ml-1 rounded-md border border-blue-500/40 bg-blue-500/10 px-2 py-1 text-[11px] font-medium text-blue-300 hover:bg-blue-500/20"
+                  >
+                    {t('mavlink-config:gimbalRange.open')}
+                  </button>
+                )}
+                {(() => {
+                  const mount = mountOf(g.key);
+                  return mount !== null && (parameters.get(`MNT${mount}_TYPE`)?.value ?? 0) === 0 ? (
+                    <p className="mt-1 px-1 text-[10px] leading-snug text-amber-400">{t('mavlink-config:outputCards.mountOff', { n: mount })}</p>
+                  ) : null;
+                })()}
               </div>
               {!g.confident && (
                 <span
@@ -221,6 +304,9 @@ export const OutputCards: React.FC<OutputCardsProps> = ({
               ))}
             </div>
 
+            {Math.min(g.min, g.trim) < DOCUMENTED_FLOOR && (
+              <p className="text-[11px] text-amber-400">{t('mavlink-config:outputCards.belowDocumented')}</p>
+            )}
             {g.min >= g.max && (
               <p className="text-[11px] text-amber-400">
                 {t('mavlink-config:outputCards.minNotBelowMax')}
@@ -254,6 +340,7 @@ export const OutputCards: React.FC<OutputCardsProps> = ({
         {t('mavlink-config:outputCards.openAll')}
       </button>
     </div>
+      {rangeTarget && <GimbalRangeDialog target={rangeTarget} onClose={() => setRangeTarget(null)} />}
     </>
   );
 };

@@ -8,6 +8,7 @@
 
 import { memo, useMemo } from 'react';
 import { useMissionStore } from '../../../stores/mission-store';
+import { useVehicleMissionView } from '../../../stores/vehicle-mission-store';
 import { useHudStore } from '../../../stores/hud-store';
 import { useConnectionStore } from '../../../stores/connection-store';
 import { bearingDeg, haversineMeters } from '../../../utils/osd/live-telemetry';
@@ -34,7 +35,7 @@ export interface WorldOverlayPose {
 }
 
 export const LiveHudWorldOverlay = memo(function LiveHudWorldOverlay({ pose }: { pose: WorldOverlayPose }) {
-  const missionItems = useMissionStore((s) => s.missionItems);
+  const { items: missionItems } = useVehicleMissionView();
   const currentSeq = useMissionStore((s) => s.currentSeq);
   const home = useMissionStore((s) => s.homePosition);
 

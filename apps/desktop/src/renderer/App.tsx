@@ -57,6 +57,7 @@ import { useNavigationStore, isViewId, type ViewId } from './stores/navigation-s
 import { useModuleStore } from './stores/module-store';
 import { isViewAvailable, useEnabledCapabilitySlugs } from './modules/capabilities';
 import { useParameterStore } from './stores/parameter-store';
+import { useVehicleMissionStore } from './stores/vehicle-mission-store';
 import { useMissionStore, hasMissionAutosave, restoreMissionAutosave } from './stores/mission-store';
 import { useSurveyStore } from './stores/survey-store';
 import { useGuideStore } from './stores/guide-store';
@@ -645,6 +646,9 @@ function App() {
         const mission = useMissionStore.getState();
         if (mission.missionItems.length === 0 && mission.groups.length === 0) {
           fetchMission();
+        } else {
+          // the planner holds other work: read what the vehicle flies for the telemetry map only
+          void mission.fetchVehicleSnapshot();
         }
         // Refresh the safety monitor's parameter context (IMAX / AHRS_TRIM /
         // GCS_PID_MASK) so the integrator gauges and PID signals are scaled.
@@ -903,19 +907,24 @@ function App() {
         groups: s.groups,
         home: s.homePosition,
         fcSeqOffset: s.fcSeqOffset,
+        vehicle: (() => { const v = useVehicleMissionStore.getState(); return { epoch: v.epoch, primary: v.primary, fleet: v.fleet }; })(),
       }).catch(() => {});
     };
     publish(); // seed the cache for pop-outs opened before the first edit
     let prevItems = useMissionStore.getState().missionItems;
     let prevGroups = useMissionStore.getState().groups;
     let prevHome = useMissionStore.getState().homePosition;
-    return useMissionStore.subscribe((state) => {
+    const offPlanner = useMissionStore.subscribe((state) => {
       if (state.missionItems === prevItems && state.groups === prevGroups && state.homePosition === prevHome) return;
       prevItems = state.missionItems;
       prevGroups = state.groups;
       prevHome = state.homePosition;
       publish();
     });
+    const offVehicle = useVehicleMissionStore.subscribe((s, prev) => {
+      if (s.epoch !== prev.epoch || s.primary !== prev.primary || s.fleet !== prev.fleet) publish();
+    });
+    return () => { offPlanner(); offVehicle(); };
   }, []);
 
   // Fence events

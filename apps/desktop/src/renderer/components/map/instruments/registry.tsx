@@ -20,6 +20,7 @@ import { create } from 'zustand';
 import { useTelemetryStore } from '../../../stores/telemetry-store';
 import { useParameterStore } from '../../../stores/parameter-store';
 import { useMissionStore } from '../../../stores/mission-store';
+import { useVehicleMissionView } from '../../../stores/vehicle-mission-store';
 import { useSettingsStore } from '../../../stores/settings-store';
 import {
   altitudeValueFromMeters,
@@ -1152,7 +1153,7 @@ function formatEta(seconds: number): string {
 function MissionInstrument(): JSX.Element {
   const { t } = useTranslation();
   const connected = useLinkUp();
-  const missionItems = useMissionStore((s) => s.missionItems);
+  const { items: missionItems } = useVehicleMissionView();
   const currentSeq = useMissionStore((s) => s.currentSeq);
   const dirty = useMissionStore((s) => s.isDirty);
   const lat = useTelemetryStore((s) => s.position.lat);

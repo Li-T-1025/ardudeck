@@ -7,6 +7,10 @@ import { useParameterStore } from '../../../stores/parameter-store';
 import { useTelemetryStore } from '../../../stores/telemetry-store';
 import { useEffectiveRc } from '../../../stores/pseudo-tx-store';
 import { SwitchDetector, switchPosition, rcinPassthroughFunction } from './switch-detect';
+import { mountOf, outputUse, servoFnForOption } from './aux-control';
+
+const isPassthroughFn = (fn: number) => fn >= rcinPassthroughFunction(1) && fn <= rcinPassthroughFunction(16);
+const MOUNT_RC_TARGETING = 3;
 
 const PWM_MIN = 900;
 const PWM_MAX = 2100;
@@ -44,6 +48,8 @@ export const SwitchActionsSection: React.FC = () => {
     if (meta?.values) for (const [val, label] of Object.entries(meta.values)) map.set(Number(val), String(label));
     return map;
   }, [metadata]);
+
+  const optionLabels = useMemo(() => new Map((optionChoices ?? []).map((o) => [o.value, o.label] as const)), [optionChoices]);
 
   const modeChannel = useMemo(() => {
     const v = parameters.get('FLTMODE_CH')?.value ?? parameters.get('MODE_CH')?.value;
@@ -142,13 +148,25 @@ export const SwitchActionsSection: React.FC = () => {
             const isModeCh = ch === modeChannel;
             const found = ch === foundChannel;
 
-            // The output currently following this channel via RCIN passthrough.
+            // The output this channel drives: one following it (RCIN passthrough), or one whose function its aux option controls.
             const followFn = rcinPassthroughFunction(ch);
+            const servoFnOf = (s: number) => pending.get(`SERVO${s}_FUNCTION`) ?? parameters.get(`SERVO${s}_FUNCTION`)?.value;
+            const controlledFn = servoFnForOption(stagedOption ?? currentOption);
             let followingServo = 0;
+            let viaAux = false;
             for (let s = 1; s <= 16; s++) {
-              const fn = pending.get(`SERVO${s}_FUNCTION`) ?? parameters.get(`SERVO${s}_FUNCTION`)?.value;
-              if (fn === followFn) { followingServo = s; break; }
+              if (servoFnOf(s) === followFn) { followingServo = s; break; }
             }
+            if (!followingServo && controlledFn !== null) {
+              for (let s = 1; s <= 16; s++) {
+                if (servoFnOf(s) === controlledFn) { followingServo = s; viaAux = true; break; }
+              }
+            }
+            const mount = viaAux ? mountOf(controlledFn) : null;
+            // with no gimbal type set, nothing drives the output however the channel moves
+            const mountOff = mount !== null && (parameters.get(`MNT${mount}_TYPE`)?.value ?? 0) === 0;
+            const mountMode = parameters.get('MNT1_DEFLT_MODE')?.value;
+            const mountNeedsRc = viaAux && controlledFn !== null && [6, 7, 8].includes(controlledFn) && mountMode !== undefined && mountMode !== MOUNT_RC_TARGETING;
 
             return (
               <div
@@ -198,10 +216,14 @@ export const SwitchActionsSection: React.FC = () => {
                       const servo = Number(e.target.value);
                       if (followingServo > 0 && servo !== followingServo) {
                         // Stop driving the old output; a stale passthrough keeps twitching hardware.
-                        stage(`SERVO${followingServo}_FUNCTION`, 0, parameters.get(`SERVO${followingServo}_FUNCTION`)?.value);
+                        if (viaAux) stage(optionParam, 0, currentOption);
+                        else stage(`SERVO${followingServo}_FUNCTION`, 0, parameters.get(`SERVO${followingServo}_FUNCTION`)?.value);
                       }
                       if (servo > 0) {
-                        stage(`SERVO${servo}_FUNCTION`, followFn, parameters.get(`SERVO${servo}_FUNCTION`)?.value);
+                        // a gimbal or gripper output keeps its function: the channel gets the matching aux function instead
+                        const use = outputUse(servoFnOf(servo), servoFnLabels, optionLabels, isPassthroughFn);
+                        if (use.kind === 'aux') stage(optionParam, use.option, currentOption);
+                        else if (use.kind === 'passthrough') stage(`SERVO${servo}_FUNCTION`, followFn, parameters.get(`SERVO${servo}_FUNCTION`)?.value);
                       }
                     }}
                     className={`w-full px-2 py-1.5 text-sm rounded-md bg-surface-input border text-content focus:outline-none focus:ring-1 focus:ring-cyan-500 ${
@@ -213,17 +235,29 @@ export const SwitchActionsSection: React.FC = () => {
                   >
                     <option value={0}>{t('mavlink-config:switchActionsSection.nothing')}</option>
                     {Array.from({ length: 16 }, (_, s) => s + 1).map((s) => {
-                      const fn = pending.get(`SERVO${s}_FUNCTION`) ?? parameters.get(`SERVO${s}_FUNCTION`)?.value;
+                      const fn = servoFnOf(s);
+                      const name = fn !== undefined ? servoFnLabels.get(fn) ?? t('mavlink-config:switchActionsSection.fn', { fn }) : '';
+                      const use = outputUse(fn, servoFnLabels, optionLabels, isPassthroughFn);
                       const label = fn === undefined || fn === 0
                         ? t('mavlink-config:switchActionsSection.free')
-                        : fn === followFn ? t('mavlink-config:switchActionsSection.thisSwitch') : servoFnLabels.get(fn) ?? t('mavlink-config:switchActionsSection.fn', { fn });
+                        : fn === followFn ? t('mavlink-config:switchActionsSection.thisSwitch')
+                          : use.kind === 'aux' ? t('mavlink-config:switchActionsSection.controls', { fn: name })
+                            : use.kind === 'busy' ? t('mavlink-config:switchActionsSection.inUse', { fn: name }) : name;
                       return (
-                        <option key={s} value={s}>
+                        <option key={s} value={s} disabled={use.kind === 'busy' && s !== followingServo}>
                           SERVO{s} ({label})
                         </option>
                       );
                     })}
                   </select>
+                  {mountOff && (
+                    <p className="mt-1 text-[10px] leading-snug text-amber-400">{t('mavlink-config:switchActionsSection.mountOff', { n: mount })}</p>
+                  )}
+                  {!mountOff && mountNeedsRc && (
+                    <p className="mt-1 text-[10px] leading-snug text-amber-400">
+                      {t('mavlink-config:switchActionsSection.mountModeHint', { mode: metadata?.['MNT1_DEFLT_MODE']?.values?.[mountMode!] ?? mountMode })}
+                    </p>
+                  )}
                 </div>
               </div>
             );

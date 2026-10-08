@@ -1873,6 +1873,10 @@ export interface ArduPilotSitlConfig {
   simSensorNoise?: boolean;
   /** Model battery voltage sag under load. */
   simBatterySag?: boolean;
+  /** Level top speed (km/h) for quadplanes with a forward motor; built-in physics only. */
+  topSpeedKmh?: number;
+  /** Set by the launcher once the matching aero file is staged in SITL's folder. */
+  topSpeedAeroFile?: string;
 }
 
 /**

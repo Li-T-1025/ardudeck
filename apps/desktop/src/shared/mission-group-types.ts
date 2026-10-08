@@ -141,6 +141,8 @@ export interface MissionMirrorSnapshot {
   groups: Group[];
   home: { lat: number; lon: number; alt: number } | null;
   fcSeqOffset: number;
+  /** What is on the vehicle (vehicle-mission-store), so pop-out telemetry maps draw the same. */
+  vehicle?: { epoch: number; primary: unknown; fleet: Record<string, unknown> };
 }
 
 export function isManualGroup(g: Group): g is ManualGroup {

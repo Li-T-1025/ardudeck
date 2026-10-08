@@ -7,6 +7,7 @@ import 'leaflet/dist/leaflet.css';
 import { useTelemetryStore } from '../../stores/telemetry-store';
 import { useConnectionStore } from '../../stores/connection-store';
 import { useMissionStore } from '../../stores/mission-store';
+import { useVehicleMissionView } from '../../stores/vehicle-mission-store';
 import { commandHasLocation, hasValidCoordinates, MAV_CMD, type MissionItem } from '../../../shared/mission-types';
 import { splitMissionMarkers } from '../../utils/mission-markers';
 import { useIpLocation } from '../../utils/ip-geolocation';
@@ -1881,8 +1882,8 @@ const MissionOverlays = React.memo(function MissionOverlays() {
   const { t } = useTranslation();
   const startIcon = useMemo(() => createEndpointIcon(t('panels:mapPanel.start'), '#22c55e'), [t]);
   const endIcon = useMemo(() => createEndpointIcon(t('panels:mapPanel.end'), '#ef4444'), [t]);
-  const missionItems = useMissionStore((s) => s.missionItems);
-  const groups = useMissionStore((s) => s.groups);
+  // what is on the vehicle, never the planner: a restored or edited plan is not what it flies
+  const { items: missionItems, plans: vehiclePlans } = useVehicleMissionView();
   const missionHome = useMissionStore((s) => s.homePosition);
   const currentSeq = useMissionStore((s) => s.currentSeq);
   const reachedSeq = useMissionStore((s) => s.reachedSeq);
@@ -1900,38 +1901,26 @@ const MissionOverlays = React.memo(function MissionOverlays() {
   // fleet's per-vehicle missions are distinguishable. Falls back to the single
   // global mission for the common one-group case (colour = that group's colour).
   const groupPlans = useMemo(() => {
-    const hasAssignments = groups.some((g) => g.assignedVehicleKey);
-    const byOrder = [...groups].sort((a, b) => a.order - b.order);
+    const hasAssignments = vehiclePlans.some((p) => p.vehicleKey);
     const plans: Array<{
       id: string;
       color: string;
       dim: boolean;
       waypoints: MissionItem[];
     }> = [];
-    for (const g of byOrder) {
-      if (g.visible === false) continue;
-      const wps = missionItems.filter(
-        (it) =>
-          it.groupId === g.id &&
-          commandHasLocation(it.command) &&
-          hasValidCoordinates(it.latitude, it.longitude),
-      );
+    for (const p of vehiclePlans) {
+      const wps = p.items.filter((it) => commandHasLocation(it.command) && hasValidCoordinates(it.latitude, it.longitude));
       if (wps.length === 0) continue;
-
-      // Per-vehicle visibility/dimming only kicks in once the operator has
-      // actually assigned groups to vehicles; otherwise everything is solid
-      // (single-mission behaviour, unchanged).
-      const isUnassigned = !g.assignedVehicleKey;
-      const isActiveGroup = !!g.assignedVehicleKey && g.assignedVehicleKey === activeVehicleKey;
+      // fleet vehicles' missions dim (or hide) unless that vehicle is the active one
       let dim = false;
-      if (hasAssignments && !isUnassigned && !isActiveGroup) {
-        if (viewMode === 'selected') continue; // hidden entirely
-        dim = true; // shown but de-emphasised
+      if (hasAssignments && p.vehicleKey && p.vehicleKey !== activeVehicleKey) {
+        if (viewMode === 'selected') continue;
+        dim = true;
       }
-      plans.push({ id: g.id, color: g.color, dim, waypoints: wps });
+      plans.push({ id: p.id, color: p.color, dim, waypoints: wps });
     }
     return plans;
-  }, [groups, missionItems, activeVehicleKey, viewMode]);
+  }, [vehiclePlans, activeVehicleKey, viewMode]);
 
   // Last located waypoint the FC reported reached: the route up to it has been flown
   const doneIdx = (wps: MissionItem[]) => {
@@ -2248,7 +2237,8 @@ const TelemetryMap2D = React.memo(function TelemetryMap2D() {
   // Mission store - only what the large-mission badge below needs. The actual
   // mission overlays render in <MissionOverlays/>, which self-subscribes so
   // telemetry re-renders can't rebuild its markers.
-  const { missionItems, currentSeq } = useMissionStore();
+  const currentSeq = useMissionStore((s) => s.currentSeq);
+  const { items: missionItems } = useVehicleMissionView();
 
   // Filter to only items with real coordinates (badge counts what gets thinned).
   const waypoints = useMemo(() =>

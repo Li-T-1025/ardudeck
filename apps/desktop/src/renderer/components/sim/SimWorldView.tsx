@@ -19,6 +19,10 @@ import SimTestPanel from './SimTestPanel';
 import { SimStreamControl } from './SimStreamControl';
 import { useSimObstaclesStore } from '../../stores/sim-obstacles-store';
 import { useMissionStore } from '../../stores/mission-store';
+import { useVehicleMissionStore, currentPrimary } from '../../stores/vehicle-mission-store';
+import type { MissionItem } from '../../../shared/mission-types';
+
+const NO_ITEMS: MissionItem[] = [];
 import { useFenceStore } from '../../stores/fence-store';
 import { useConnectionStore } from '../../stores/connection-store';
 import { useActiveVehicleStore, formationOf } from '../../stores/active-vehicle-store';
@@ -539,7 +543,7 @@ export default function SimWorldView() {
       // a result that only changes when the mission or the origin does.
       let waypoints: SimWaypoint[] | undefined;
       if (origin) {
-        const items = useMissionStore.getState().missionItems;
+        const items = currentPrimary(useVehicleMissionStore.getState())?.items ?? NO_ITEMS;
         const cache = wpCacheRef.current;
         if (cache.items !== items || cache.lat !== origin.lat || cache.lon !== origin.lon) {
           const wps = items

@@ -1028,7 +1028,16 @@
     "travel": "Weg",
     "travelHint": "Voller Stickausschlag erreicht {{percent}}% ({{low}}–{{high}} µs)",
     "unassigned_one": "{{count}} Ausgang nicht zugewiesen ({{list}}).",
-    "unassigned_other": "{{count}} Ausgänge nicht zugewiesen ({{list}})."
+    "unassigned_other": "{{count}} Ausgänge nicht zugewiesen ({{list}}).",
+    "drivenBy": "Gesteuert von",
+    "noChannel": "Kein Funkkanal",
+    "channelOption": "Kanal {{ch}} ({{note}})",
+    "freeChannel": "frei",
+    "flightModes": "Flugmodi",
+    "drivenByTip": "Dieser Ausgang übernimmt den gewählten Funkkanal (RCIN-Durchleitung).",
+    "drivenByAuxTip": "Dieser Ausgang behält seine Funktion; der gewählte Funkkanal steuert ihn über die passende Aux-Funktion (RCn_OPTION). Kanäle, die schon etwas anderes tun, werden nicht angeboten.",
+    "mountOff": "Der Gimbal-Treiber ist aus (MNT{{n}}_TYPE = None), daher bewegt nichts diesen Ausgang. MNT{{n}}_TYPE auf Servo (1) setzen und das Board neu starten.",
+    "belowDocumented": "Unter 800 µs, dem niedrigsten Wert, den ArduPilot dokumentiert. Das Board akzeptiert es; prüfen, dass der Servo wirklich dorthin fährt und am Anschlag nicht drückt."
   },
   "outputVisual": {
     "atPwm": "Servo {{channel}} bei {{pwm}} µs",
@@ -1958,7 +1967,7 @@
     "detectTip": "Beobachtet alle Kanäle und nennt den, den Sie bewegen",
     "detecting": "Betätigen Sie einen Schalter an Ihrer Fernsteuerung...",
     "discard": "Verwerfen",
-    "drivesTip": "Lässt den gewählten Servoausgang diesem Schalter folgen (RCIN-Durchleitung)",
+    "drivesTip": "Lässt den gewählten Ausgang auf diesen Kanal reagieren. Ein freier Ausgang folgt ihm direkt; ein Gimbal-, Kameraauslöser-, Greifer- oder Fahrwerksausgang behält seine Aufgabe und dieser Kanal steuert ihn. Motoren und Ruder werden nie einem Schalter übergeben.",
     "findSwitch": "Meinen Schalter finden",
     "flightModesAbove": "Flugmodi (oben konfiguriert)",
     "fn": "Fn {{fn}}",
@@ -1972,7 +1981,11 @@
     "staged_other": "{{count}} Änderungen vorgemerkt. Bis zum Übernehmen wird nichts auf das Fahrzeug geschrieben.",
     "subtitle": "Was jeder Schalter am Sender tut: eine Aux-Funktion zuweisen oder einen Servoausgang direkt ansteuern.",
     "thisSwitch": "dieser Schalter",
-    "title": "Schalteraktionen"
+    "title": "Schalteraktionen",
+    "controls": "steuert {{fn}}",
+    "inUse": "belegt: {{fn}}",
+    "mountModeHint": "Das Gimbal folgt diesem Kanal nur im Modus RC Targeting. Sein Standardmodus ist {{mode}}: MNT1_DEFLT_MODE auf RC Targeting (3) setzen, wenn es ab dem Einschalten dem Stick folgen soll.",
+    "mountOff": "Der Gimbal-Treiber ist aus (MNT{{n}}_TYPE = None), daher bewegt nichts diesen Ausgang. MNT{{n}}_TYPE auf Servo (1) setzen und das Board neu starten."
   },
   "telemetryRatesTab": {
     "bootDefaults": "Diese Parameter sind die Standardwerte des Ports beim Booten. Eine verbundene Bodenstation kann für ihre eigene Sitzung andere Raten anfordern, und ArduDeck tut das: Deshalb kann die gemessene Spalte deutlich über dem Schieberegler liegen.",
@@ -2173,5 +2186,39 @@
     "manualDone": "{{param}} ist {{label}}.",
     "manualWhy": "ArduDeck ändert Motorausgangs-Einstellungen nie für dich: ein falscher Wert kann die Motoren drehen lassen. Mit abgenommenen Propellern machen; diese Liste hakt sich ab, sobald das Fluggerät den Wert meldet.",
     "escValue": "{{n}} Motoren melden · {{rpm}} U/min"
+  },
+  "gimbalRange": {
+    "open": "Kamerabereich einstellen",
+    "title": "Neigebereich der Kamera",
+    "cancel": "Abbrechen und alles zurücksetzen",
+    "step": {
+      "low": "Schritt 1 von 3: tiefste Stellung",
+      "high": "Schritt 2 von 3: höchste Stellung",
+      "angles": "Schritt 3 von 3: wohin die Kamera zeigt"
+    },
+    "knobDown": "Den Neigeregler ganz nach unten drehen.",
+    "knobUp": "Den Neigeregler ganz nach oben drehen.",
+    "knobThere": "Regler ist am Anschlag.",
+    "knobNotThere": "Regler (Kanal {{ch}}) ist noch nicht am Anschlag.",
+    "nudgeLow": "Jetzt die Kamera in die tiefste Stellung bringen, die sie je erreichen soll. Sie bewegt sich beim Drücken.",
+    "nudgeHigh": "Jetzt die Kamera in die höchste Stellung bringen, die sie je erreichen soll. Sie bewegt sich beim Drücken.",
+    "upBig": "Viel höher",
+    "up": "Höher",
+    "down": "Tiefer",
+    "downBig": "Viel tiefer",
+    "signal": "Signal {{us}} µs · Ausgang jetzt {{live}}",
+    "wrongWay": "Bewegt sich falsch herum? Tauschen",
+    "keys": "Pfeiltasten verschieben auch; mit Shift in großen Schritten.",
+    "lowQuestion": "Wohin zeigt die Kamera in der tiefsten Stellung?",
+    "highQuestion": "Wohin zeigt die Kamera in der höchsten Stellung?",
+    "angle": {
+      "m90": "Senkrecht nach unten",
+      "m60": "-60°",
+      "m45": "-45°",
+      "p0": "Geradeaus",
+      "p20": "+20°",
+      "p45": "+45°"
+    },
+    "anglesWhy": "Ungefähr reicht. ArduPilot nutzt das, um die Kamera in Missionen auf Punkte zu richten und zu melden, wohin sie schaut."
   }
 }

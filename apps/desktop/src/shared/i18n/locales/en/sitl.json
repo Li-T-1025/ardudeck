@@ -79,7 +79,12 @@
     "viewFlightGearStartFirstTip": "Start SITL first, then view it in FlightGear",
     "viewFlightGearTip": "Open FlightGear as a 3D view of the running SITL mission",
     "virtualRc": "Virtual RC Control (UDP)",
-    "wipeEeprom": "Wipe EEPROM"
+    "wipeEeprom": "Wipe EEPROM",
+    "topSpeed": "Top speed",
+    "topSpeedDesc": "Turn this VTOL into a fast airframe for testing high-speed flight.",
+    "topSpeedToggle": "Fast airframe",
+    "topSpeedLabel": "Level top speed",
+    "topSpeedHint": "Sets AIRSPEED_MAX to {{max}} m/s and AIRSPEED_CRUISE to {{cruise}} m/s. Takes effect on the next start; if you changed those parameters on this simulator before, tick Wipe EEPROM so the new limits apply."
   },
   "customFrame": {
     "active": "Active",

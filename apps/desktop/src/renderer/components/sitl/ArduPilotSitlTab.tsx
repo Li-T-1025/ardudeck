@@ -9,6 +9,7 @@ import { useTranslation, Trans } from 'react-i18next';
 import type { TFunction } from 'i18next';
 import { DraftNumberInput } from '../../hooks/useNumericDraft';
 import { useArduPilotSitlStore, ARDUPILOT_MODELS } from '../../stores/ardupilot-sitl-store';
+import { supportsTopSpeed, TOP_SPEED_MIN_KMH, TOP_SPEED_MAX_KMH } from '../../../shared/sitl-top-speed';
 import { useConnectionStore } from '../../stores/connection-store';
 import { useSettingsStore } from '../../stores/settings-store';
 import type { VirtualRCState, ArduPilotVehicleType, ArduPilotReleaseTrack, ArduPilotFrameInfo, SwarmFormation, SwarmInstanceState } from '../../../shared/ipc-channels';
@@ -102,6 +103,8 @@ export default function ArduPilotSitlTab() {
     setWipeOnStart,
     useArduDeckSim,
     setUseArduDeckSim,
+    topSpeedKmh,
+    setTopSpeedKmh,
     startRcSender,
     stopRcSender,
     setRcState,
@@ -553,6 +556,52 @@ export default function ArduPilotSitlTab() {
             </div>
 
             <CustomFramePanel />
+
+            {/* Fast VTOL: built-in quadplane physics with the jet cruise motor and matching drag */}
+            {supportsTopSpeed(vehicleType, model) && (
+              <div className="rounded-lg border border-subtle bg-surface p-3 mt-3">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <div className="text-sm font-medium text-content">{t('sitl:ardupilot.topSpeed')}</div>
+                    <div className="text-xs text-content-secondary">{t('sitl:ardupilot.topSpeedDesc')}</div>
+                  </div>
+                  <label className="flex items-center gap-2 cursor-pointer shrink-0">
+                    <input
+                      type="checkbox"
+                      checked={topSpeedKmh > 0}
+                      onChange={(e) => setTopSpeedKmh(e.target.checked ? 450 : 0)}
+                      disabled={isRunning || isStarting}
+                      className="w-4 h-4 rounded border bg-surface-raised text-blue-500 focus:ring-blue-500/50"
+                    />
+                    <span className="text-xs text-content-secondary">{t('sitl:ardupilot.topSpeedToggle')}</span>
+                  </label>
+                </div>
+                {topSpeedKmh > 0 && (
+                  <div className="mt-3 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <label className="text-xs text-content-secondary">{t('sitl:ardupilot.topSpeedLabel')}</label>
+                      <span className="text-xs font-mono text-content tabular-nums">{topSpeedKmh} km/h</span>
+                    </div>
+                    <input
+                      type="range"
+                      min={TOP_SPEED_MIN_KMH}
+                      max={TOP_SPEED_MAX_KMH}
+                      step={10}
+                      value={topSpeedKmh}
+                      onChange={(e) => setTopSpeedKmh(parseFloat(e.target.value))}
+                      disabled={isRunning || isStarting}
+                      className="w-full h-2 bg-surface-raised rounded-lg appearance-none cursor-pointer accent-amber-500 disabled:opacity-50"
+                    />
+                    <p className="text-xs text-content-tertiary">
+                      {t('sitl:ardupilot.topSpeedHint', {
+                        max: Math.round(topSpeedKmh / 3.6),
+                        cruise: Math.round((topSpeedKmh / 3.6) * 0.8),
+                      })}
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* Physics engine (copter only in v1) */}
             {vehicleType === 'copter' && (

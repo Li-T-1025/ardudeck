@@ -15,6 +15,7 @@ import {
 import {
   createManualGroup,
   createImportedGroup,
+  isImportedGroup,
   duplicateGroup,
   nextGroupColor,
   type Group,
@@ -30,6 +31,7 @@ import { buildArduPilotWireMission, shiftJumpTargets } from '../../shared/missio
 import { useSettingsStore } from './settings-store';
 import { effectiveMissionFirmware } from '../utils/mission-firmware';
 import { useConnectionStore } from './connection-store';
+import { useVehicleMissionStore, groupVehicleState } from './vehicle-mission-store';
 import { useParameterStore } from './parameter-store';
 import { useArduPilotSitlStore } from './ardupilot-sitl-store';
 import { getVehicleClass } from '../../shared/telemetry-types';
@@ -340,6 +342,8 @@ interface MissionStore {
   getUploadItems: () => MissionItem[];
   /** Flatten just one group's WPs into a standalone uploadable list (seq from 0). */
   getUploadItemsForGroup: (groupId: string) => MissionItem[];
+  /** Read the vehicle's mission into the telemetry snapshot without touching the planner. */
+  fetchVehicleSnapshot: () => Promise<void>;
 
   // Actions
   fetchMission: () => Promise<void>;
@@ -692,6 +696,9 @@ function applySurveyItems(
   return { groups, missionItems: normalizeItemOrder(spliced, groups) };
 }
 
+/** What the in-flight upload sends, so its completion can record exactly that as the vehicle's mission. */
+let pendingUpload: { items: MissionItem[]; groups: Group[] } | null = null;
+
 export const useMissionStore = create<MissionStore>((set, get) => ({
   // Initial state
   missionItems: [],
@@ -766,6 +773,19 @@ export const useMissionStore = create<MissionStore>((set, get) => ({
       .map((it, i) => ({ ...it, seq: i }));
   },
 
+  fetchVehicleSnapshot: async () => {
+    const { connectionState } = useConnectionStore.getState();
+    if (connectionState.protocol === 'msp' && connectionState.fcVariant === 'INAV') {
+      const waypoints = await window.electronAPI?.mspGetWaypoints();
+      if (waypoints) useVehicleMissionStore.getState().setPrimary(waypoints.map((wp) => mspWaypointToMissionItem(wp)), []);
+      return;
+    }
+    // completes in setMissionItems, which sees the flag and leaves the planner alone
+    useVehicleMissionStore.getState().setSnapshotOnlyDownload(true);
+    const result = await window.electronAPI?.downloadMission();
+    if (!result?.success) useVehicleMissionStore.getState().setSnapshotOnlyDownload(false);
+  },
+
   // Actions - FC communication (will be wired to IPC)
   // Automatically detects protocol (MAVLink vs MSP) and uses appropriate method
   fetchMission: async () => {
@@ -796,8 +816,8 @@ export const useMissionStore = create<MissionStore>((set, get) => ({
         const stamp = new Date().toLocaleString();
         const importedGroup = createImportedGroup({
           importedFrom: 'fc',
-          sourceLabel: `Vehicle mission @ ${stamp}`,
-          name: `From vehicle @ ${stamp}`,
+          sourceLabel: t('stores:missionStore.vehicleMissionLabel', { stamp }),
+          name: t('stores:missionStore.fromVehicleGroup', { stamp }),
           color: nextGroupColor(groups),
           order: -1,
         });
@@ -810,6 +830,8 @@ export const useMissionStore = create<MissionStore>((set, get) => ({
           seq: startSeq + i,
           groupId: importedGroup.id,
         }));
+        // before the planner changes, so the new group is already true when it appears
+        useVehicleMissionStore.getState().setPrimary(stampedItems, [importedGroup]);
         set({
           missionItems: [...existingItems, ...stampedItems],
           groups: reorderedGroups,
@@ -839,6 +861,7 @@ export const useMissionStore = create<MissionStore>((set, get) => ({
     // one group anyway). Snapshot for the completion handler's "on vehicle"
     // markers.
     set({ pendingUploadGroupIds: get().groups.map((g) => g.id) });
+    pendingUpload = { items: itemsToUpload, groups: get().groups };
     const { connectionState } = useConnectionStore.getState();
     const isMsp = connectionState.protocol === 'msp';
     const isInav = connectionState.fcVariant === 'INAV';
@@ -861,6 +884,7 @@ export const useMissionStore = create<MissionStore>((set, get) => ({
 
         const success = await window.electronAPI?.mspSaveWaypoints(mspWaypoints);
         if (success) {
+          useVehicleMissionStore.getState().setPrimary(itemsToUpload, get().groups);
           set({
             isLoading: false,
             isDirty: false,
@@ -902,6 +926,7 @@ export const useMissionStore = create<MissionStore>((set, get) => ({
     // Snapshot just this group so the completion handler marks only it as
     // "on vehicle".
     set({ pendingUploadGroupIds: [groupId] });
+    pendingUpload = { items: itemsToUpload, groups: get().groups };
 
     const { connectionState } = useConnectionStore.getState();
     const isMsp = connectionState.protocol === 'msp';
@@ -920,6 +945,7 @@ export const useMissionStore = create<MissionStore>((set, get) => ({
         );
         const success = await window.electronAPI?.mspSaveWaypoints(mspWaypoints);
         if (success) {
+          useVehicleMissionStore.getState().setPrimary(itemsToUpload, get().groups);
           set({
             isLoading: false,
             isDirty: false,
@@ -960,6 +986,7 @@ export const useMissionStore = create<MissionStore>((set, get) => ({
       // fcSeqOffset untouched: MISSION_CURRENT tracking for fleet vehicles is per-vehicle.
       const result = await window.electronAPI?.uploadMissionToVehicle?.(vehicleKey, toWireMission(itemsToUpload, get().homePosition));
       if (result?.success) {
+        useVehicleMissionStore.getState().setFleet(vehicleKey, itemsToUpload, get().groups);
         set({
           isDirty: false,
           lastUploadedAt: Date.now(),
@@ -1007,6 +1034,7 @@ export const useMissionStore = create<MissionStore>((set, get) => ({
       if (isMsp && isInav) {
         const success = await window.electronAPI?.mspClearWaypoints();
         if (success) {
+          useVehicleMissionStore.getState().setPrimary([], []);
           set({
             isLoading: false,
             progress: null,
@@ -1707,6 +1735,15 @@ export const useMissionStore = create<MissionStore>((set, get) => ({
   // WPs are placed in a fresh `imported` group at the top of the table.
   // Existing local groups (Manual surveys, etc.) are untouched.
   setMissionItems: (items: MissionItem[]) => {
+    if (useVehicleMissionStore.getState().snapshotOnlyDownload) {
+      useVehicleMissionStore.getState().setSnapshotOnlyDownload(false);
+      const strip = missionHasHomeSlot();
+      const vehicleItems = items.filter((it) => !(strip && it.seq === 0));
+      const aligned = strip ? shiftJumpTargets(vehicleItems, -1) : vehicleItems;
+      useVehicleMissionStore.getState().setPrimary(aligned.map((it) => ({ ...it, groupId: undefined })), []);
+      set({ isLoading: false, progress: null });
+      return;
+    }
     // Extract home waypoint: seq=0 is always the home position in ArduPilot missions.
     // It shares MAV_CMD 16 (WAYPOINT) but has current=true in the protocol.
     // Also detect seq=0 at 0,0 (placeholder when no GPS fix).
@@ -1754,8 +1791,8 @@ export const useMissionStore = create<MissionStore>((set, get) => ({
     const stamp = now.toLocaleString();
     const importedGroup = createImportedGroup({
       importedFrom: 'fc',
-      sourceLabel: `Vehicle mission @ ${stamp}`,
-      name: `From vehicle @ ${stamp}`,
+      sourceLabel: t('stores:missionStore.vehicleMissionLabel', { stamp }),
+      name: t('stores:missionStore.fromVehicleGroup', { stamp }),
       color: nextGroupColor(keptGroups),
       // Place at order = -1 then renumber so the imported group sits at
       // the top of the table. The user can drag-reorder later.
@@ -1773,6 +1810,8 @@ export const useMissionStore = create<MissionStore>((set, get) => ({
       seq: startSeq + i,
       groupId: importedGroup.id,
     }));
+
+    useVehicleMissionStore.getState().setPrimary(stampedNewItems, [importedGroup]);
 
     // If we stripped HOME at seq=0, the FC will keep reporting raw seqs that
     // are 1 ahead of our renumbered indices in MISSION_CURRENT events. Record
@@ -1802,6 +1841,7 @@ export const useMissionStore = create<MissionStore>((set, get) => ({
       homePosition: snapshot.home,
       fcSeqOffset: snapshot.fcSeqOffset,
     });
+    if (snapshot.vehicle) useVehicleMissionStore.getState().applyMirror(snapshot.vehicle as Parameters<ReturnType<typeof useVehicleMissionStore.getState>['applyMirror']>[0]);
   },
 
   // For file loading (toolbar handles toast via showToast prop)
@@ -1898,6 +1938,8 @@ export const useMissionStore = create<MissionStore>((set, get) => ({
     // `group.updatedAt` against `lastUploadedAt`. The participating ids were
     // captured at upload start (toolbar = all groups, per-group = just one).
     const uploadedGroupIds = get().pendingUploadGroupIds;
+    if (pendingUpload) useVehicleMissionStore.getState().setPrimary(pendingUpload.items, pendingUpload.groups);
+    pendingUpload = null;
     set({
       isLoading: false,
       isDirty: false,
@@ -1911,6 +1953,7 @@ export const useMissionStore = create<MissionStore>((set, get) => ({
   },
 
   setClearComplete: () => {
+    useVehicleMissionStore.getState().setPrimary([], []);
     set({
       isLoading: false,
       progress: null,
@@ -2139,4 +2182,36 @@ export function restoreMissionAutosave(): boolean {
   } catch {
     return false;
   }
+}
+
+// A "From vehicle" group may only say so while it is exactly what the connected vehicle holds:
+// once edited, or after a disconnect or another vehicle, it becomes an ordinary downloaded copy.
+const FROM_VEHICLE_NAME = /^(?:From vehicle|Vom Fluggerät) @ (.+)$/;
+function demoteStaleVehicleGroups(): void {
+  const { groups, missionItems } = useMissionStore.getState();
+  const vm = useVehicleMissionStore.getState();
+  let changed = false;
+  const next = groups.map((g) => {
+    if (!isImportedGroup(g) || g.importedFrom !== 'fc') return g;
+    if (groupVehicleState(vm, missionItems, g.id) === 'on-vehicle') return g;
+    changed = true;
+    const m = FROM_VEHICLE_NAME.exec(g.name);
+    return { ...g, importedFrom: 'file' as const, name: m ? t('stores:missionStore.downloadedGroup', { stamp: m[1] }) : g.name };
+  });
+  if (changed) useMissionStore.setState({ groups: next });
+}
+useMissionStore.subscribe((s, prev) => {
+  if (s.groups !== prev.groups || s.missionItems !== prev.missionItems) demoteStaleVehicleGroups();
+});
+useVehicleMissionStore.subscribe((s, prev) => {
+  if (s.epoch !== prev.epoch || s.primary !== prev.primary) demoteStaleVehicleGroups();
+});
+// every connect, disconnect or switch of vehicle starts a new epoch: what we knew is history
+{
+  let was = useConnectionStore.getState().connectionState;
+  useConnectionStore.subscribe((s) => {
+    const now = s.connectionState;
+    if (now.isConnected !== was.isConnected || now.systemId !== was.systemId) useVehicleMissionStore.getState().newEpoch();
+    was = now;
+  });
 }

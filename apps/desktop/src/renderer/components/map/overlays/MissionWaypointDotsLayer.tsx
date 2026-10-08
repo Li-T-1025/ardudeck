@@ -11,6 +11,7 @@ import { useEffect, useMemo, useRef } from 'react';
 import { useMap } from 'react-leaflet';
 import { commandHasLocation, hasValidCoordinates } from '../../../../shared/mission-types';
 import { useMissionStore } from '../../../stores/mission-store';
+import { useVehicleMissionView } from '../../../stores/vehicle-mission-store';
 import {
   buildGridIndex,
   meanConsecutiveSpacing,
@@ -29,7 +30,7 @@ const EMPTY_SUPPRESSED: ReadonlySet<number> = new Set();
 
 export function MissionWaypointDotsLayer() {
   const map = useMap();
-  const missionItems = useMissionStore((s) => s.missionItems);
+  const { items: missionItems } = useVehicleMissionView();
   const currentSeq = useMissionStore((s) => s.currentSeq);
   const reachedSeq = useMissionStore((s) => s.reachedSeq);
   // Highlight the fly-to target the operator is stepping through in the flight

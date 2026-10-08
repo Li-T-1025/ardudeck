@@ -8,6 +8,7 @@ import {
   RefreshCw, Pencil, Upload, Save, Play, Copy, Check,
   type LucideIcon,
 } from 'lucide-react';
+import { useVehicleMissionStore, groupVehicleState } from '../../stores/vehicle-mission-store';
 import { useMissionStore } from '../../stores/mission-store';
 import { useSurveyStore } from '../../stores/survey-store';
 import { useSurveyAreaStore } from '../../stores/survey-area-store';
@@ -2135,8 +2136,6 @@ function WaypointListContent({ readOnly = false }: { readOnly?: boolean }) {
     uploadGroupToVehicle,
     saveGroupToFile,
     distributeGroupAcrossFleet,
-    lastUploadedAt,
-    lastUploadedGroupIds,
   } = useMissionStore();
 
   const libraryEnabled = useCargoEnabled(MISSION_LIBRARY_CARGO_SLUG);
@@ -2174,18 +2173,13 @@ function WaypointListContent({ readOnly = false }: { readOnly?: boolean }) {
     [fleetVehicles, colorOverrides],
   );
 
-  // Pre-compute upload state per group id. Doing this once per render keeps
-  // the GroupHeaderRow props cheap and avoids each header subscribing.
-  const uploadedSet = useMemo(
-    () => new Set(lastUploadedGroupIds),
-    [lastUploadedGroupIds],
-  );
+  // from what the connected vehicle holds, not from the last upload: a disconnect or another vehicle clears it
+  const vehicleEpoch = useVehicleMissionStore((s) => s.epoch);
+  const vehiclePrimary = useVehicleMissionStore((s) => s.primary);
   const computeOnVehicleState = useCallback(
-    (g: Group): 'none' | 'on-vehicle' | 'stale-on-vehicle' => {
-      if (!lastUploadedAt || !uploadedSet.has(g.id)) return 'none';
-      return g.updatedAt > lastUploadedAt ? 'stale-on-vehicle' : 'on-vehicle';
-    },
-    [lastUploadedAt, uploadedSet],
+    (g: Group): 'none' | 'on-vehicle' | 'stale-on-vehicle' =>
+      groupVehicleState({ epoch: vehicleEpoch, primary: vehiclePrimary }, missionItems, g.id),
+    [vehicleEpoch, vehiclePrimary, missionItems],
   );
 
   const advancedLabels = useSettingsStore((s) => s.missionDefaults.advancedMissionLabels);

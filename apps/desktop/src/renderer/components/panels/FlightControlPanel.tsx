@@ -15,6 +15,7 @@ import { useFlightControlStore } from '../../stores/flight-control-store';
 import { useConnectionStore } from '../../stores/connection-store';
 import { useMessagesStore } from '../../stores/messages-store';
 import { useMissionStore, useFcSeqOffset } from '../../stores/mission-store';
+import { useVehicleMissionView } from '../../stores/vehicle-mission-store';
 import { useParameterStore } from '../../stores/parameter-store';
 import { useArduPilotSitlStore } from '../../stores/ardupilot-sitl-store';
 import { useSettingsStore } from '../../stores/settings-store';
@@ -536,12 +537,16 @@ function MavlinkFlightControl({ mavTypeOverride }: { mavTypeOverride?: number })
   // NOTE: the ModePicker itself is still ArduPilot-vehicle-class based (master's
   // mode-UI rewrite); PX4 mode *selection* through the picker is a follow-up.
   const isPx4 = connectionState.firmware === 'px4';
-  const missionItems = useMissionStore((s) => s.missionItems);
+  // counts, targets and jumps follow what the vehicle holds; the planner only matters for Upload & Start
+  const plannerItems = useMissionStore((s) => s.missionItems);
+  const { items: vehicleItems } = useVehicleMissionView();
+  const notOnVehicle = vehicleItems.length === 0 && plannerItems.length > 0;
+  const missionItems = notOnVehicle ? plannerItems : vehicleItems;
   const currentSeq = useMissionStore((s) => s.currentSeq);
   const fetchMission = useMissionStore((s) => s.fetchMission);
   // True when the local plan differs from what the vehicle is known to hold
   // (never uploaded this session, or edited since upload/download).
-  const missionDirty = useMissionStore((s) => s.isDirty);
+  const missionDirty = useMissionStore((s) => s.isDirty) || notOnVehicle;
   const uploadMissionToFc = useMissionStore((s) => s.uploadMission);
   const altitudeUnit = useSettingsStore((s) => s.unitPreferences.altitude);
   const missionLoaded = missionItems.length > 0;
@@ -1502,7 +1507,7 @@ function MavlinkFlightControl({ mavTypeOverride }: { mavTypeOverride?: number })
                 <span className="text-sm font-semibold text-content">{t('panels:flightControl.missionNotOnVehicle')}</span>
               </div>
               <p className="text-xs text-content-secondary leading-relaxed mb-3">
-                {t('panels:flightControl.missionNotOnVehicleBody', { count: missionItems.length })}
+                {t('panels:flightControl.missionNotOnVehicleBody', { count: plannerItems.length })}
               </p>
               <div className="flex justify-end gap-2">
                 <button

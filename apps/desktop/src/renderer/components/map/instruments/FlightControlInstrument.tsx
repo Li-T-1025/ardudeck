@@ -24,6 +24,7 @@ import { useTelemetryStore } from '../../../stores/telemetry-store';
 import { useConnectionStore } from '../../../stores/connection-store';
 import { useActiveVehicleStore } from '../../../stores/active-vehicle-store';
 import { useMissionStore } from '../../../stores/mission-store';
+import { useVehicleMissionView } from '../../../stores/vehicle-mission-store';
 import { useParameterStore } from '../../../stores/parameter-store';
 import { useArduPilotSitlStore } from '../../../stores/ardupilot-sitl-store';
 import { useSettingsStore } from '../../../stores/settings-store';
@@ -78,8 +79,10 @@ export function FlightControlInstrument({ variant = 'full' }: { variant?: Flight
   const connected = useInstrumentLinkUp();
   const flight = useTelemetryStore((s) => s.flight);
   const connectionState = useConnectionStore((s) => s.connectionState);
-  const missionDirty = useMissionStore((s) => s.isDirty);
-  const missionCount = useMissionStore((s) => s.missionItems.length);
+  const plannerCount = useMissionStore((s) => s.missionItems.length);
+  const vehicleCount = useVehicleMissionView().items.length;
+  const missionDirty = useMissionStore((s) => s.isDirty) || (vehicleCount === 0 && plannerCount > 0);
+  const missionCount = vehicleCount || plannerCount;
   const uploadMission = useMissionStore((s) => s.uploadMission);
 
   const vehicleClass = useVehicleClass();

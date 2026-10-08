@@ -21,7 +21,8 @@ import { StickTestPanel } from './StickTestPanel';
 import Px4ServoOutput from './Px4ServoOutput';
 import OutputCards from './OutputCards';
 
-const PWM_MIN = 800;
+// ArduPilot documents 800 but accepts lower; some servos need it
+const PWM_MIN = 500;
 const PWM_MAX = 2200;
 
 const ServoOutputTab: React.FC = () => {
