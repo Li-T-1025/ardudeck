@@ -20,7 +20,7 @@ Include this line in your first pull request description:
 I have read and agree to the ArduDeck Contributor License Agreement (CLA.md).
 ```
 
-Pull requests from contributors who have not agreed to the CLA cannot be merged.
+This is not optional. Pull requests whose description does not contain this line are **closed automatically** with a message explaining why. Edit the description to add the line and the pull request reopens by itself. Once you have agreed in one pull request, your later pull requests are covered.
 
 ---
 
@@ -40,9 +40,9 @@ Pull requests from contributors who have not agreed to the CLA cannot be merged.
 
 ## Code Guidelines
 
-- **TypeScript strict mode** — handle `undefined` from indexed access (`noUncheckedIndexedAccess` is enabled)
-- **No emojis in UI** — use [Lucide React](https://lucide.dev/) icons instead
-- **Use existing components** — especially `DraggableSlider` for all slider UIs
+- **TypeScript strict mode**: handle `undefined` from indexed access (`noUncheckedIndexedAccess` is enabled)
+- **No emojis in UI**: use [Lucide React](https://lucide.dev/) icons instead
+- **Use existing components**: especially `DraggableSlider` for all slider UIs
 - **Check reference implementations** before implementing MSP/MAVLink features (see `CLAUDE.md` for details)
 
 ---

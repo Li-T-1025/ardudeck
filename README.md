@@ -5,7 +5,7 @@
 <p align="center">
   <a href="https://opensource.org/licenses/GPL-3.0"><img src="https://img.shields.io/badge/License-GPL%203.0-blue.svg" alt="License: GPL-3.0" /></a>
   <a href="https://www.typescriptlang.org/"><img src="https://img.shields.io/badge/TypeScript-5.0-blue?logo=typescript" alt="TypeScript" /></a>
-  <a href="https://www.electronjs.org/"><img src="https://img.shields.io/badge/Electron-28-47848F?logo=electron" alt="Electron" /></a>
+  <a href="https://www.electronjs.org/"><img src="https://img.shields.io/badge/Electron-44-47848F?logo=electron" alt="Electron" /></a>
   <a href="https://reactjs.org/"><img src="https://img.shields.io/badge/React-18-61DAFB?logo=react" alt="React" /></a>
   <a href="https://mavlink.io/"><img src="https://img.shields.io/badge/MAVLink-v1%2Fv2-green" alt="MAVLink" /></a>
   <a href="https://github.com/iNavFlight/inav/wiki/MSP-V2"><img src="https://img.shields.io/badge/MSP-v1%2Fv2-orange" alt="MSP" /></a>
@@ -36,7 +36,7 @@
 
 ArduDeck is an open-source ground control station built with Electron, React, and TypeScript. One app covers the whole workflow: connect, configure, calibrate, plan, fly, and analyze, for vehicles running ArduPilot (MAVLink) or Betaflight/iNav (MSP), from a single quad on USB to a fleet of vehicles on radio, IP, or cellular links.
 
-> **Beta 1 (0.1.0)** - ArduDeck is in beta. It is used in real flight operations, but expect rough edges and keep a backup configuration tool available. Ask questions and share setups on the [community forum](https://forum.ardudeck.com) or [Discord](https://discord.gg/JX2JdVXPPC), read the [documentation](https://ardudeck.com/docs/), or use the built-in [bug reporting](#bug-reporting) to help improve the project.
+> **Beta (0.1.2)** - ArduDeck is in beta. It is used in real flight operations, but expect rough edges and keep a backup configuration tool available. Ask questions and share setups on the [community forum](https://forum.ardudeck.com) or [Discord](https://discord.gg/JX2JdVXPPC), read the [documentation](https://ardudeck.com/docs/), or use the built-in [bug reporting](#bug-reporting) to help improve the project.
 
 ---
 
@@ -48,6 +48,7 @@ ArduDeck is an open-source ground control station built with Electron, React, an
 - [Supported Vehicles & Firmware](#supported-vehicles--firmware)
 - [Building from Source](#building-from-source)
 - [Bug Reporting](#bug-reporting)
+- [Languages & Translating](#languages--translating)
 - [Contributing](#contributing)
 - [Sponsors](#sponsors)
 - [License](#license)
@@ -91,8 +92,13 @@ More screenshots, guides, and full documentation live on the website: [ardudeck.
 - **Dockable telemetry dashboard** - attitude, altitude, speed, GPS, battery, flight mode, and messages in IDE-style panels with saveable layouts
 - **Interactive map** - live vehicle tracking, flight trail, multiple base layers, offline map downloads
 - **Map overlays** - weather radar, animated wind flow, airspace zones, OpenAIP aviation charts, terrain elevation, and live air traffic (ADS-B / OGN)
+- **Instruments on the map** - 30+ floating instruments (attitude, altitude and speed tapes, heading, battery, GPS and RTK, wind, rangefinder and proximity, EKF health, flight timer, mission progress, messages, and more), each with analog, numeric and compact variants; drag them anywhere and group them; they stay where you put them
+- **Synthetic vision** - 3D terrain view with satellite imagery from your choice of map provider
 - **Video and camera** - camera panel with pluggable sources (WebRTC, RTSP/ffmpeg, UVC), gimbal control, and a guided setup for wfb-ng / RunCam WiFiLink links
+- **Stream out** - publish the synthetic vision or 3D sim view as RTSP, SRT or WebRTC for OpenCV, VLC or a browser
 - **Flight commands** where they belong: arm/disarm, takeoff, mode changes, and guided "fly here" from the telemetry screen
+- **In-flight adjustments** - change speed, altitude and loiter radius mid-flight from an instrument, with one-click revert
+- **Virtual sticks** - fly from on-screen sticks or a USB joystick, with a handover check before control switches
 
 ### Multi-Vehicle
 - **One-button engine** - a single click starts a local coordination engine; ArduDeck connects to it automatically
@@ -100,6 +106,7 @@ More screenshots, guides, and full documentation live on the website: [ardudeck.
 - **Fleet operations** - per-vehicle telemetry and commanding, a fleet strip with health at a glance, colour-coded map markers, formation controls, and group actions
 - **Fleet survey split** - divide a survey area across multiple vehicles
 - **Fleet log retrieval** - download logs from every vehicle through the engine for side-by-side analysis
+- **Vehicle focus** - pick any fleet vehicle and calibrate, motor test, browse files, download logs or reboot it as if it were the only one
 
 ### RTK GPS Corrections (NTRIP)
 - **Built-in NTRIP client** - connect to any NTRIP caster, browse the sourcetable, and stream RTCM corrections to the vehicle
@@ -112,8 +119,9 @@ More screenshots, guides, and full documentation live on the website: [ardudeck.
 - **Mission groups** - waypoints organized into named, colored groups (manual or survey) with per-group stats, show/hide, and per-group upload or save
 - **Altitude-frame-aware profile** - the terrain profile understands relative, AMSL, and terrain MAVLink frames per waypoint, with drag-to-edit altitudes
 - **Terrain collision detection** - visual warnings where the path meets terrain, with one-click Auto Adjust
+- **Waypoint heading and insert** - set the heading at each waypoint and insert waypoints between existing ones
 - **Spline waypoints, 3D view, mission library** - curved paths, three-dimensional visualization, and a local library plus .waypoints (QGC WPL) and .plan import/export
-- **Full MAVLink mission protocol** - upload, download, geofence, and rally points
+- **Full MAVLink mission protocol** - upload, download, geofence, and rally points; the telemetry map shows only what is actually on the vehicle
 
 ### Survey Planning
 - **Patterns** - grid, crosshatch (optionally at two heights), circular, spiral, perimeter fill, and corridor surveys along a centerline with plane or copter turn strategies
@@ -122,6 +130,7 @@ More screenshots, guides, and full documentation live on the website: [ardudeck.
 - **Multi-polygon areas** - multiple survey polygons with no-fly holes, plus a dedicated area editor window for boundary work
 - **Battery sortie split** - split long surveys into battery-sized flights, each independently uploadable
 - **GIS import** - KML, KMZ, GeoJSON, and Shapefile boundaries
+- **Survey projects** - save a survey as a project, reopen and adjust it later
 
 ### Flight Log Analysis
 - **Log Explorer** - multi-chart plotting of ArduPilot DataFlash logs with independent y-axes, zoom/pan, windowed min/avg/max stats, and synchronized cursors across charts, map, and 3D flight path
@@ -141,6 +150,8 @@ More screenshots, guides, and full documentation live on the website: [ardudeck.
 - **PID tuning** - ArduPilot and Betaflight/iNav tuning with presets, rate curve editors, and a VTOL / fixed-wing controller switch on QuadPlanes
 - **Flight modes, safety, and failsafe** - mode channel assignment, failsafe actions, geofence behavior, and MAVLink signing
 - **Calibration** - accelerometer, compass (including CompassMot motor-interference calibration and large-vehicle mag cal), with step-by-step wizards
+- **Hardware quick setup** - add a rangefinder, airspeed sensor, GPS, optical flow, ESC telemetry and more by picking the product; ArduDeck sets the parameters, tells you what to wire, and shows a live check that it works
+- **Outputs and switches** - assign what each output does and which radio channel or switch drives it, without hunting for the right parameter
 - **Motor test, servo wizard, quick setup** - guided flows for frames, fixed wings, and first-time configuration
 - **CLI terminal** - xterm-based terminal with autocomplete and history, including full GUI configuration for legacy F3-era boards driven over CLI
 
@@ -150,17 +161,25 @@ More screenshots, guides, and full documentation live on the website: [ardudeck.
 - **Link Doctor** - connection diagnostics that identify what is actually on the link and why it is not talking
 - **MAVLink inspector** - live message browser with field graphs
 - **Robust telemetry links** - parameter download recovery tuned for slow SiK-style radio links
+- **CRSF telemetry** - receive telemetry over an ExpressLRS backpack
+- **MAVFTP** - browse and transfer files on the flight controller
 
 ### Simulation
 - **SITL built in** - download and run real ArduPilot firmware (Copter, Plane, Rover, Sub) on your computer, pick a frame and release track, and ArduDeck connects automatically
 - **Virtual RC and FlightGear bridge** - fly the simulated vehicle from the app, optionally visualized in FlightGear
 - **Swarm SITL** - spawn multiple SITL vehicles to exercise multi-vehicle features without hardware
+- **3D Sim World** - watch the vehicle in a 3D world (chase, FPV, orbit or top view), add obstacles and inject failures such as a dead barometer or a slung load
 
 ### Scripting & Companion Hardware
 - **Lua Graph Editor** - build ArduPilot Lua scripts by connecting nodes (sensors, logic, math, actions), with live code preview, templates, and one-click export ([docs](apps/desktop/src/renderer/components/lua-graph/docs/))
 - **Companion boards** - ESP32 flashing with pre-configured templates (DroneBridge, MAVLink bridge), DroneBridge auto-discovery, and an agent dashboard for Raspberry Pi-class companions (metrics, terminal, services)
 
+### Cargo (Extensions)
+- **The Hangar** - install extensions, called cargo, that add hardware support, instruments, map layers and whole new screens
+- **Module SDK** - build your own cargo; it loads from a folder and reloads itself while you develop
+
 ### Quality of Life
+- **Languages** - English and German, with more welcome (see [Translating](#languages--translating))
 - **Unit preferences** - metric or imperial per quantity (distance, altitude, speed, wind, weight, area, capacity)
 - **Feature tours** - short guided walkthroughs of new and existing screens
 - **Vehicle profiles** - per-vehicle configurations with type-specific properties and live weather at the launch site
@@ -247,9 +266,15 @@ ArduDeck includes a built-in bug reporting tool (bug icon in the sidebar). It co
 
 ---
 
+## Languages & Translating
+
+ArduDeck is available in **English** and **German** (Settings > Language). Want it in your language? Translations are plain JSON files, no programming needed: see the [translation guide](TRANSLATING.md).
+
+---
+
 ## Contributing
 
-Contributions are welcome. Please read [CONTRIBUTING.md](CONTRIBUTING.md) first (it covers the CLA and workflow), then:
+Contributions are welcome, including translations (see [TRANSLATING.md](TRANSLATING.md)). **Every contribution requires accepting the [Contributor License Agreement](CLA.md)**: pull requests without the agreement line in their description are closed automatically. [CONTRIBUTING.md](CONTRIBUTING.md) has the line and the workflow. Please read [CONTRIBUTING.md](CONTRIBUTING.md) first (it covers the CLA and workflow), then:
 
 1. Fork the repository and clone your fork
 2. Create a feature branch from `master`

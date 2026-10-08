@@ -1,7 +1,7 @@
 name: CLA PR Check
 
 # pull_request_target, not pull_request: fork PRs get a read-only token on
-# pull_request, so the bot could never comment on exactly the PRs this is
+# pull_request, so the bot could never comment on or close exactly the PRs this is
 # for. Safe here because the workflow never checks out or runs PR code.
 on:
   pull_request_target:
@@ -10,73 +10,67 @@ on:
 permissions:
   contents: read
   pull-requests: write
+  issues: write
 
 jobs:
   cla-check:
     runs-on: ubuntu-latest
     steps:
-      - name: Check PR body for CLA agreement line
-        id: check
+      - name: Check the contributor accepted the CLA
         uses: actions/github-script@v7
         with:
           script: |
             const required = "I have read and agree to the ArduDeck Contributor License Agreement (CLA.md).";
+            const normalize = (s) => (s || "").toLowerCase().replace(/\s+/g, " ").replace(/[.`*_>]/g, "");
+            const needle = normalize(required);
             const pr = context.payload.pull_request;
-
-            // The maintainer's own PRs don't need the CLA.
-            if (pr.author_association === "OWNER") {
-              core.setOutput("has_cla", "true");
-              return;
-            }
-
-            const body = pr.body || "";
-            const has = body.includes(required);
-
-            core.setOutput("has_cla", has ? "true" : "false");
-            core.setOutput("required_text", required);
-
-            const marker = "<!-- cla-check-comment -->";
-            const owner = context.repo.owner;
-            const repo = context.repo.repo;
+            const { owner, repo } = context.repo;
             const issue_number = pr.number;
+            const marker = "<!-- cla-check-comment -->";
 
-            const { data: comments } = await github.rest.issues.listComments({
-              owner, repo, issue_number, per_page: 100
-            });
+            if (pr.author_association === "OWNER" || pr.user?.type === "Bot") return;
 
-            const existing = comments.find(c =>
-              c.user?.type === "Bot" && c.body?.includes(marker)
-            );
+            let agreed = normalize(pr.body).includes(needle);
+            // Agreeing once covers later PRs from the same account.
+            if (!agreed) {
+              const q = `repo:${owner}/${repo} is:pr author:${pr.user.login} in:body "I have read and agree to the ArduDeck Contributor License Agreement"`;
+              const { data } = await github.rest.search.issuesAndPullRequests({ q, per_page: 5 });
+              agreed = data.items.some((i) => i.number !== issue_number && normalize(i.body).includes(needle));
+            }
 
-            if (!has) {
-              const message = `${marker}
-In order for this PR to be reviewed, please follow the contributing rules and accept the agreement.
+            const { data: comments } = await github.rest.issues.listComments({ owner, repo, issue_number, per_page: 100 });
+            const existing = comments.find((c) => c.user?.type === "Bot" && c.body?.includes(marker));
 
-Please add this exact line to the PR description:
-
-\`${required}\``;
-
+            if (agreed) {
               if (existing) {
-                await github.rest.issues.updateComment({
-                  owner, repo, comment_id: existing.id, body: message
-                });
-              } else {
-                await github.rest.issues.createComment({
-                  owner, repo, issue_number, body: message
-                });
+                await github.rest.issues.deleteComment({ owner, repo, comment_id: existing.id });
+                // Only reopen what this check closed.
+                if (pr.state === "closed" && !pr.merged) {
+                  await github.rest.pulls.update({ owner, repo, pull_number: issue_number, state: "open" });
+                  await github.rest.issues.createComment({ owner, repo, issue_number,
+                    body: "Thank you for accepting the Contributor License Agreement. This pull request is open again and will be reviewed." });
+                }
               }
-
-              core.setFailed("Missing required CLA agreement line in PR description.");
               return;
             }
 
-            // If compliant, clean up prior bot comment (if any)
-            if (existing) {
-              await github.rest.issues.deleteComment({
-                owner, repo, comment_id: existing.id
-              });
-            }
+            const message = `${marker}
+            Thank you for your contribution. Every contribution to ArduDeck, code, documentation or translation, requires accepting the [Contributor License Agreement](https://github.com/${owner}/${repo}/blob/master/CLA.md) (see [CONTRIBUTING.md](https://github.com/${owner}/${repo}/blob/master/CONTRIBUTING.md)).
 
-      - name: Success message
-        if: steps.check.outputs.has_cla == 'true'
-        run: echo "CLA agreement line found."
+            This pull request has been **closed** because its description does not contain the agreement. To reopen it, edit the description and add this exact line:
+
+            \`\`\`
+            ${required}
+            \`\`\`
+
+            It reopens automatically within a minute of saving the description.`;
+
+            if (existing) {
+              await github.rest.issues.updateComment({ owner, repo, comment_id: existing.id, body: message });
+            } else {
+              await github.rest.issues.createComment({ owner, repo, issue_number, body: message });
+            }
+            if (pr.state === "open") {
+              await github.rest.pulls.update({ owner, repo, pull_number: issue_number, state: "closed" });
+            }
+            core.setFailed("The CLA agreement line is missing from the PR description.");
