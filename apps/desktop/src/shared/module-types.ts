@@ -14,6 +14,8 @@ export interface InstalledModule {
   bundleName: string | null; // null if single-module license
   installPath?: string; // filesystem path where bundle was extracted (installable only)
   manifestVersion?: number; // schema version from module.json
+  /** Hangar app this cargo drives, installed with the cargo and removed with it. */
+  app?: string;
   activatable?: boolean; // built-in feature enabled by license, no bundle downloaded
   /** User toggle: false = keep installed but don't load. Absent means enabled. */
   enabled?: boolean;

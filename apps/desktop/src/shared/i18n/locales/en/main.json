@@ -467,7 +467,9 @@
     "validatingKey": "Validating license key...",
     "verifying": "Verifying {{slug}}...",
     "installingDependency": "Installing required cargo {{slug}}...",
-    "dependencyFailed": "Installed, but required cargo {{slug}} could not be installed: {{msg}}"
+    "dependencyFailed": "Installed, but required cargo {{slug}} could not be installed: {{msg}}",
+    "installingApp": "Installing the {{slug}} app...",
+    "appFailed": "Cargo installed, but its app {{slug}} could not be installed: {{msg}}"
   },
   "msp": {
     "notConnected": "Not connected"

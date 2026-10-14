@@ -87,8 +87,11 @@ export async function listApps(): Promise<HangarApp[]> {
 export async function installApp(
   slug: string,
   onProgress: (p: AppProgress) => void = () => {},
+  /** Licence key of the cargo that drives this app: unlocks a private app on the Hangar. */
+  licenseKey?: string,
 ): Promise<InstalledApp> {
   const platform = thisPlatform();
+  const headers: Record<string, string> = licenseKey ? { 'x-license-key': licenseKey } : {};
 
   // Refuse a release this ArduDeck is too old to host, BEFORE downloading half a gigabyte.
   //
@@ -96,7 +99,7 @@ export async function installApp(
   // declare `minAppVersion` and be installed by a build with none of the integration it needs.
   // The failure then arrives later and somewhere else: the app is on disk, the nav rail entry
   // is missing, and nothing connects the two.
-  const detail = await fetch(`${baseUrl()}/public/apps/${encodeURIComponent(slug)}`)
+  const detail = await fetch(`${baseUrl()}/public/apps/${encodeURIComponent(slug)}`, { headers })
     .then((r) => (r.ok ? (r.json() as Promise<HangarAppDetail>) : null))
     .catch(() => null);
   const release = detail?.releases?.find(
@@ -117,7 +120,7 @@ export async function installApp(
 
   let res: Response;
   try {
-    res = await fetch(url);
+    res = await fetch(url, { headers });
   } catch {
     throw new Error(t('main:appManager.hangarUnreachable', { url: baseUrl() }));
   }

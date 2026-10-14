@@ -12,6 +12,12 @@ export interface ModuleManifest {
   minArduDeckVersion?: string;
   /** Slugs of other cargo this one needs; the host installs missing free ones alongside it. */
   requires?: string[];
+  /**
+   * Slug of a Hangar app this cargo drives (a separate program, installed next to ArduDeck).
+   * The host installs it with the same licence key right after the cargo, so a private app
+   * needs no key of its own.
+   */
+  app?: string;
 }
 
 const SEMVER_RE = /^\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?$/;
@@ -64,6 +70,9 @@ export function parseModuleManifest(raw: unknown): ParseResult {
       if (typeof r !== 'string' || !SLUG_RE.test(r)) return { ok: false, error: `invalid required slug: ${String(r)}` };
       if (r === m.slug) return { ok: false, error: 'a module cannot require itself' };
     }
+  }
+  if (m.app !== undefined && (typeof m.app !== 'string' || !SLUG_RE.test(m.app))) {
+    return { ok: false, error: 'app must be a slug' };
   }
   return { ok: true, manifest: m as unknown as ModuleManifest };
 }

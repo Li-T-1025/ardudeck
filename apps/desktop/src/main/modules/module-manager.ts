@@ -17,6 +17,7 @@ import {
 } from './license-validator.js';
 import * as hangar from './hangar-client.js';
 import { extractBundle } from './module-extract.js';
+import { installApp, uninstallApp } from '../apps/app-manager.js';
 import { entitledSlugs } from './entitlements.js';
 import type {
   CargoDetail,
@@ -247,6 +248,7 @@ export async function activateLicense(
         bundleName: activateResult.bundle,
         installPath,
         manifestVersion: parsed.manifest.manifestVersion,
+        app: parsed.manifest.app,
       });
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
@@ -278,6 +280,24 @@ export async function activateLicense(
     if (!depResult.success) {
       onProgress({ stage: 'error', message: t('main:moduleManager.dependencyFailed', { slug: dep, msg: depResult.error ?? '' }) });
       return { success: false, error: t('main:moduleManager.dependencyFailed', { slug: dep, msg: depResult.error ?? '' }) };
+    }
+  }
+
+  // A cargo that drives a separate program installs it now, with the same key. Re-activation
+  // is the update path, so the app follows the cargo to its latest release as well.
+  for (const mod of newModules) {
+    if (!mod.app) continue;
+    onProgress({ stage: 'activating', message: t('main:moduleManager.installingApp', { slug: mod.app }) });
+    try {
+      await installApp(
+        mod.app,
+        (p) => onProgress({ stage: 'activating', message: p.message, percent: p.percent }),
+        key,
+      );
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      onProgress({ stage: 'error', message: t('main:moduleManager.appFailed', { slug: mod.app, msg }) });
+      return { success: false, error: t('main:moduleManager.appFailed', { slug: mod.app, msg }) };
     }
   }
 
@@ -438,11 +458,12 @@ export async function removeLicense(key: string): Promise<{ success: boolean; er
   const currentKeys = store.get('licenseKeys');
   store.set('licenseKeys', currentKeys.filter((k) => k !== key));
 
-  // Clean up downloaded files
+  // Clean up downloaded files, and the app a cargo brought along with it
   for (const mod of toRemove) {
     try {
       const moduleDir = join(app.getPath('userData'), 'modules', mod.slug);
       await rm(moduleDir, { recursive: true, force: true });
+      if (mod.app) await uninstallApp(mod.app);
     } catch {
       // Ignore cleanup errors
     }
