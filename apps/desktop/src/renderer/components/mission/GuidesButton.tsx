@@ -16,10 +16,12 @@ export function GuidesButton({ showToast }: { showToast?: (msg: string, kind: 's
   const toggleGuide = useGuideStore((s) => s.toggleGuide);
   const setAllVisible = useGuideStore((s) => s.setAllVisible);
   const removeGuide = useGuideStore((s) => s.removeGuide);
+  const clearGuides = useGuideStore((s) => s.clearGuides);
   const startSurveyFromGuide = useGuideStore((s) => s.startSurveyFromGuide);
   const focusGuide = useGuideStore((s) => s.focusGuide);
 
   const [open, setOpen] = useState(false);
+  const [confirmRemoveAll, setConfirmRemoveAll] = useState(false);
   const [showPointsDialog, setShowPointsDialog] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
@@ -61,18 +63,39 @@ export function GuidesButton({ showToast }: { showToast?: (msg: string, kind: 's
 
       {/* MissionToolbar sits at the top of the view, so the panel opens downward. */}
       {open && (
-        <div className="absolute right-0 top-full mt-1 z-[1100] w-72 bg-surface-solid border border-subtle rounded-lg shadow-xl py-1">
+        <div className="absolute right-0 top-full mt-1 z-[1100] w-96 bg-surface-solid border border-subtle rounded-lg shadow-xl py-1">
           <div className="flex items-center justify-between px-3 py-1.5 border-b border-subtle">
-            <span className="text-[10px] font-medium uppercase tracking-wider text-content-secondary">
+            <span className="text-[10px] font-medium uppercase tracking-wider text-content-secondary whitespace-nowrap">
               {t('mission:guidesButton.title')}
             </span>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-3 whitespace-nowrap">
               {guides.length > 0 && (
                 <button
                   onClick={() => setAllVisible(anyHidden)}
                   className="text-[10px] text-content-tertiary hover:text-content transition-colors"
                 >
                   {anyHidden ? t('mission:guidesButton.showAll') : t('mission:guidesButton.hideAll')}
+                </button>
+              )}
+              {guides.length > 0 && (
+                // Two-step like the waypoint table's delete-all: guides have no
+                // undo, and a KML can bring in hundreds of them.
+                <button
+                  onClick={() => {
+                    if (confirmRemoveAll) {
+                      clearGuides();
+                      setConfirmRemoveAll(false);
+                    } else {
+                      setConfirmRemoveAll(true);
+                    }
+                  }}
+                  onBlur={() => setConfirmRemoveAll(false)}
+                  className="text-[10px] text-red-400 hover:text-red-300 transition-colors"
+                  data-tip={t('mission:guidesButton.removeAllTip')}
+                >
+                  {confirmRemoveAll
+                    ? t('mission:guidesButton.removeAllConfirm', { count: guides.length })
+                    : t('mission:guidesButton.removeAll')}
                 </button>
               )}
               <button

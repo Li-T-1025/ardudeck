@@ -81,6 +81,7 @@ export default function ArduPilotSitlTab() {
     model,
     releaseTrack,
     homeLocation,
+    runningHome,
     speedup,
     wipeOnStart,
     lastCommand,
@@ -765,6 +766,12 @@ export default function ArduPilotSitlTab() {
               onConfirm={(lat, lng) => { void handleMapPick(lat, lng); }}
               onClose={() => setShowMapPicker(false)}
             />
+          )}
+
+          {isRunning && runningHome && (Math.abs(runningHome.lat - homeLocation.lat) > 1e-5 || Math.abs(runningHome.lng - homeLocation.lng) > 1e-5) && (
+            <div className="mb-3 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-300">
+              {t('sitl:tab.runningElsewhere', { lat: runningHome.lat.toFixed(5), lng: runningHome.lng.toFixed(5) })}
+            </div>
           )}
 
           {/* Scenario presets — populate the home fields below */}

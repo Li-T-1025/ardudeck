@@ -279,6 +279,12 @@
       "supports": "{{firmware}} unterstützt nur: {{types}}.",
       "title": "Problem mit der Profilkompatibilität"
     },
+    "terrainUplink": {
+      "title": "Gelände-Uplink",
+      "serve": "Gelände an Fluggeräte senden",
+      "serveHint": "Beantwortet die Geländeanfragen des Autopiloten aus den Höhendaten der Karte, einschließlich einer Vermessungsoberfläche aus einem Cargo",
+      "counts": "Gesendete Blöcke: {{served}}, fehlende Daten: {{missing}}"
+    },
     "console": {
       "title": "Konsole",
       "verbose": "Ausführliches Logging",
@@ -641,28 +647,27 @@
     "downloadComplete": "Download abgeschlossen",
     "downloadRegion": "Region herunterladen",
     "downloadTitle": "Region für Offline-Nutzung herunterladen",
-    "eastLon": "Östl. Länge",
     "elevation": "Höhendaten (DEM)",
     "estimated": "Geschätzt: <b>{{count}}</b> Kacheln (~{{size}})",
-    "example": "z. B. {{value}}",
     "failed": "({{count}} fehlgeschlagen)",
     "layersToDownload": "Herunterzuladende Ebenen",
     "maxAutoZoom": "Max. Zoom für Auto-Cache",
     "maxCacheSize": "Max. Cache-Größe",
     "maxZoom": "Max. Zoom: {{zoom}}",
     "minZoom": "Min. Zoom: {{zoom}}",
-    "northLat": "Nördl. Breite",
     "perLayer": "Aufschlüsselung nach Ebene",
     "regionMeta": "{{tiles}} Kacheln · z{{min}}-{{max}} · {{date}}",
     "removeAllRegions": "Alle gespeicherten Regionen entfernen",
     "removeRegion": "Diese gespeicherte Region entfernen",
     "savedRegions": "Gespeicherte Regionen ({{count}})",
-    "southLat": "Südl. Breite",
     "startDownload": "Download starten",
     "tilesBytes": "{{tiles}} Kacheln / {{size}}",
     "title": "Offline-Karten",
     "totalTiles": "{{n}} Kacheln",
-    "westLon": "Westl. Länge"
+    "areaChosen": "Gebiet: {{size}}",
+    "noArea": "Noch kein Gebiet gewählt.",
+    "chooseArea": "Auf der Karte wählen",
+    "changeArea": "Gebiet ändern"
   },
   "trafficSettingsCard": {
     "addZone": "Zone hier hinzufügen",
@@ -744,5 +749,16 @@
     "search": "Vorlagen suchen…",
     "templateHint": "Wählen Sie die Konfiguration, die zu Ihrem Luftfahrzeug passt; Felder können Sie danach anpassen.",
     "vtol": "VTOL"
+  },
+  "coordinateFormat": {
+    "title": "Koordinaten",
+    "decimal": "Dezimalgrad",
+    "dms": "Grad, Minuten, Sekunden",
+    "unavailable": "Format aus einem nicht geladenen Cargo (vorerst dezimal)",
+    "precision": "Koordinatengenauigkeit",
+    "decimals_one": "{{count}} Nachkommastelle",
+    "decimals_other": "{{count}} Nachkommastellen",
+    "secondDecimals_one": "Sekunden mit {{count}} Nachkommastelle",
+    "secondDecimals_other": "Sekunden mit {{count}} Nachkommastellen"
   }
 }

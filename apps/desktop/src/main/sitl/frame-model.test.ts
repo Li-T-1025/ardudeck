@@ -59,3 +59,13 @@ describe('the model the parameters are written for', () => {
     expect(paramModelFor(stock)).toBe('hexa');
   });
 });
+
+describe('a custom frame left selected from a copter', () => {
+  // the SITL tab keeps the frame across vehicle changes; a QuadPlane launched with it flew octa physics with Q_ENABLE 0
+  const QUADPLANE = { vehicleType: 'plane', model: 'quadplane', customFramePath: OCTA.customFramePath, customFrameMotors: 8 } as unknown as ArduPilotSitlConfig;
+
+  it('never replaces a plane model', () => {
+    expect(simModelFor(QUADPLANE)).toBe('quadplane');
+    expect(paramModelFor(QUADPLANE)).toBe('quadplane');
+  });
+});

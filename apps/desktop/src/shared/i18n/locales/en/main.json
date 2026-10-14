@@ -654,5 +654,15 @@
     "pickParamFile": "Parameter file for this model",
     "paramFiles": "Parameter files",
     "endpointInUse": "ArduDeck is already connected to {{endpoint}}, and a simulator talks to one client per port. Use the simulator's next port, {{alt}}."
+  },
+  "scriptInstall": {
+    "notConnected": "No flight controller connected.",
+    "busy": "Another script is being installed.",
+    "badName": "{{name}} is not a valid script file name.",
+    "armed": "Disarm before installing: the flight controller has to reboot.",
+    "setFailed": "Could not set {{param}}.",
+    "uploadFailed": "Upload failed.",
+    "noReconnect": "The flight controller did not come back after the reboot.",
+    "notStarted": "The script did not start. Check the Messages panel for a Lua error, such as \"Insufficent memory\"."
   }
 }

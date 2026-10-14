@@ -11,9 +11,9 @@
  * Pure and dependency-light so the split logic unit-tests in plain node.
  */
 
-import type { LatLng, SurveyConfig, SurveyResult } from './survey-types';
+import type { LatLng, SurveyConfig, SurveyFleetVehicle, SurveyResult } from './survey-types';
 import type { MissionItem } from '../../../shared/mission-types';
-import { getSurveyGenerator, patternToGeneratorId } from './generator-registry';
+import { getSurveyGenerator, patternToGeneratorId, resolveGeneratorId } from './generator-registry';
 import { surveyToMissionItems } from './mission-builder';
 import {
   extractSplitCells,
@@ -105,9 +105,21 @@ export interface FleetSurveyAssignment {
   areaCovered: number;
   /** Cruise altitude assigned to this vehicle (with any layer offset applied). */
   altitude: number;
+  /** Engine estimate for this vehicle's flight, seconds; only engine splits know it. */
+  flightTime?: number;
+  /** Engine warnings for this vehicle (e.g. the leg exceeds its endurance). */
+  warnings?: string[];
+  /** Who cut the plan: the engine itself, its cells, or geometric bands. */
+  source: 'engine' | 'cells' | 'bands';
 }
 
 export interface FleetSurveyOptions {
+  /**
+   * Per-vehicle details (position, endurance at current charge) for a
+   * generator that plans the whole fleet itself (`supportsFleet`). Vehicles
+   * missing here are planned with the survey defaults.
+   */
+  fleet?: SurveyFleetVehicle[];
   /**
    * Per-vehicle cruise-altitude offset (meters) applied as a safety layer:
    * vehicle i flies at baseAltitude + i * altitudeStepM. 0 = same altitude.
@@ -173,9 +185,83 @@ function buildCellFleetSurvey(
       waypointCount: slice.length,
       areaCovered: 0,
       altitude,
+      source: 'cells',
     });
   }
   return out.length > 0 ? out : null;
+}
+
+const EMPTY_STATS: SurveyResult['stats'] = {
+  gsd: 0, flightDistance: 0, flightTime: 0, photoCount: 0,
+  lineCount: 0, areaCovered: 0, footprintWidth: 0, footprintHeight: 0,
+  lineSpacing: 0, photoSpacing: 0,
+};
+
+// Engine split: a fleet-capable generator plans one mission per vehicle. If it
+// cannot serve every vehicle, its plan is cut by cells instead.
+async function buildEngineFleetSurvey(
+  polygon: LatLng[],
+  baseConfig: Omit<SurveyConfig, 'polygon'>,
+  vehicleKeys: string[],
+  fleet: SurveyFleetVehicle[],
+  altitudeStepM: number,
+): Promise<FleetSurveyAssignment[] | null> {
+  const gen = getSurveyGenerator(resolveGeneratorId(baseConfig));
+  if (!gen?.capabilities.supportsFleet) return null;
+  const byKey = new Map(fleet.map((v) => [v.key, v]));
+  const config: SurveyConfig = {
+    ...baseConfig,
+    polygon,
+    fleet: vehicleKeys.map((key) => byKey.get(key) ?? { key }),
+  };
+  const result = await gen.generate(config);
+  return (
+    assignmentsFromFleetMissions(result, polygon, baseConfig, vehicleKeys, altitudeStepM) ??
+    buildCellFleetSurvey(
+      { waypoints: result.waypoints, generatorResult: result.generatorResult },
+      baseConfig, vehicleKeys, altitudeStepM,
+    )
+  );
+}
+
+/**
+ * Assignments straight from an engine's per-vehicle missions (a survey
+ * generated with `config.fleet`). Null unless every vehicle has one.
+ */
+export function assignmentsFromFleetMissions(
+  result: Pick<SurveyResult, 'fleetMissions'>,
+  polygon: LatLng[],
+  baseConfig: Omit<SurveyConfig, 'polygon'>,
+  vehicleKeys: string[],
+  altitudeStepM: number,
+): FleetSurveyAssignment[] | null {
+  const missions = result.fleetMissions ?? [];
+  const missionOf = (key: string) =>
+    missions.find((m) => m.vehicleKey === key && m.waypoints.length >= 2);
+  if (vehicleKeys.length === 0 || !vehicleKeys.every((key) => missionOf(key))) return null;
+  return vehicleKeys.map((vehicleKey, i) => {
+    const m = missionOf(vehicleKey)!;
+    const altitude = baseConfig.altitude + i * altitudeStepM;
+    const subPolygon = m.subPolygon && m.subPolygon.length >= 3 ? m.subPolygon : polygon;
+    const vehicleConfig: SurveyConfig = { ...baseConfig, polygon: subPolygon, altitude };
+    const shell: SurveyResult = {
+      waypoints: m.waypoints,
+      photoPositions: [],
+      footprints: [],
+      stats: { ...EMPTY_STATS, ...(m.stats ?? {}) },
+    };
+    return {
+      vehicleKey,
+      subPolygon,
+      missionItems: surveyToMissionItems(shell, vehicleConfig),
+      waypointCount: m.waypoints.length,
+      areaCovered: m.stats?.areaCovered ?? 0,
+      altitude,
+      flightTime: m.stats?.flightTime,
+      warnings: m.warnings,
+      source: 'engine',
+    };
+  });
 }
 
 export async function buildFleetSurvey(
@@ -184,6 +270,12 @@ export async function buildFleetSurvey(
   vehicleKeys: string[],
   opts: FleetSurveyOptions = {},
 ): Promise<FleetSurveyAssignment[]> {
+  if (opts.fleet) {
+    const byEngine = await buildEngineFleetSurvey(
+      polygon, baseConfig, vehicleKeys, opts.fleet, opts.altitudeStepM ?? 0,
+    );
+    if (byEngine) return byEngine;
+  }
   if (opts.plan) {
     const byCells = buildCellFleetSurvey(
       opts.plan, baseConfig, vehicleKeys, opts.altitudeStepM ?? 0,
@@ -213,6 +305,7 @@ export async function buildFleetSurvey(
       waypointCount: result.waypoints.length,
       areaCovered: result.stats.areaCovered,
       altitude,
+      source: 'bands',
     });
   }
   return out;

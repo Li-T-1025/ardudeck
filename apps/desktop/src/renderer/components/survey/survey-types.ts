@@ -79,6 +79,12 @@ export interface SurveyConfig {
    * persists with the group config like every other field.
    */
   engineParams?: Record<string, unknown>;
+  /**
+   * The vehicles a fleet plan is for, set only by the fleet split. A
+   * generator declaring `supportsFleet` plans one mission per entry and
+   * returns them as `SurveyResult.fleetMissions`.
+   */
+  fleet?: SurveyFleetVehicle[];
   pattern: SurveyPattern;
   altitude: number;          // meters AGL
   speed: number;             // m/s
@@ -198,6 +204,12 @@ export interface SurveyConfig {
    */
   corridorBranches?: LatLng[][];
   /**
+   * Strip count for the branches alone; 0 or absent = same as the main line.
+   * A pilot flying the trunk at 3 strips often wants a spur at 2: out and
+   * back, ending at the junction it started from.
+   */
+  corridorBranchStrips?: number;
+  /**
    * Plane only. Centerline bends sharper than this (degrees of heading change)
    * get racetrack turn waypoints so the aircraft overshoots and re-enters the
    * next leg aligned instead of cutting the corner.
@@ -241,6 +253,45 @@ export interface SurveyConfig {
   panoramaTangents?: Record<number, { inX: number; inY: number; outX: number; outY: number }>;
 }
 
+/** Key of a planned (not yet connected) fleet slot; never collides with a link key. */
+export const FLEET_SLOT_PREFIX = 'vehicle:';
+export const FLEET_SLOTS_MAX = 16;
+
+export function fleetSlotKey(n: number): string {
+  return `${FLEET_SLOT_PREFIX}${n}`;
+}
+
+export function isFleetSlotKey(key: string): boolean {
+  return key.startsWith(FLEET_SLOT_PREFIX);
+}
+
+/** 1-based number of a planned slot, for its label. */
+export function fleetSlotIndex(key: string): number {
+  return Number(key.slice(FLEET_SLOT_PREFIX.length)) || 0;
+}
+
+/** One vehicle of a fleet plan, as handed to a fleet-capable generator. */
+export interface SurveyFleetVehicle {
+  key: string;
+  label?: string;
+  /** Cruise speed for this vehicle (m/s); defaults to the survey speed. */
+  speed?: number;
+  /** Endurance at the current charge; defaults to the survey endurance. */
+  enduranceMinutes?: number;
+  /** Where the vehicle is now, so the engine can start its leg there. */
+  start?: LatLng | null;
+}
+
+/** The part of a fleet plan one vehicle flies, produced by the generator. */
+export interface SurveyFleetMission {
+  vehicleKey: string;
+  waypoints: LatLng[];
+  /** Outline of this vehicle's share of the area, when the engine knows it. */
+  subPolygon?: LatLng[];
+  stats?: Partial<SurveyStats>;
+  warnings?: string[];
+}
+
 export interface SurveyResult {
   waypoints: LatLng[];
   /**
@@ -272,6 +323,8 @@ export interface SurveyResult {
   photoPositions: LatLng[];
   footprints: LatLng[][];
   stats: SurveyStats;
+  /** Per-vehicle missions of a fleet plan; only set when `config.fleet` was given. */
+  fleetMissions?: SurveyFleetMission[];
   /**
    * Non-fatal advisories from the generator (e.g. a remote engine reporting
    * the mission exceeds battery endurance). Shown in the panel; the result

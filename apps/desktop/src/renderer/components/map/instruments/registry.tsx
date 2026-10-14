@@ -54,6 +54,7 @@ import { NumericReadout } from './NumericReadout';
 import { LinkInstrument } from './LinkInstrument';
 import { useTelemetryFresh } from './useTelemetryFresh';
 import { RtkInstrument } from './RtkInstrument';
+import { useCoordinateFormat } from '../../../utils/coordinate-format';
 
 /** An alternative rendering of an instrument, chosen per-instrument and
  * persisted alongside the analog/numeric choice. */
@@ -571,6 +572,7 @@ function HeadingInstrument(): JSX.Element {
  */
 function FlightDataInstrument(): JSX.Element {
   const { t } = useTranslation();
+  const { format: formatPos } = useCoordinateFormat();
   const lat = useTelemetryStore((s) => s.gps.lat);
   const lon = useTelemetryStore((s) => s.gps.lon);
   const fixType = useTelemetryStore((s) => s.gps.fixType);
@@ -639,7 +641,7 @@ function FlightDataInstrument(): JSX.Element {
         <>
           <div className="my-1" style={{ borderTop: `1px solid ${GAUGE_COLORS.bezelEdge}` }} />
           <div className="text-[10px] text-[var(--gauge-text-dim)] font-mono">
-            {lat.toFixed(6)}, {lon.toFixed(6)}
+            {formatPos(lat, lon)}
           </div>
         </>
       )}

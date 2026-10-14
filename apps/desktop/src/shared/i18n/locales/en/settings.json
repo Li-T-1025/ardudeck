@@ -279,6 +279,12 @@
       "supports": "{{firmware}} only supports: {{types}}.",
       "title": "Profile Compatibility Issue"
     },
+    "terrainUplink": {
+      "title": "Terrain uplink",
+      "serve": "Serve terrain to vehicles",
+      "serveHint": "Answer the autopilot's terrain requests from the map's elevation data, including any survey surface a cargo provides",
+      "counts": "Blocks served: {{served}}, missing data: {{missing}}"
+    },
     "console": {
       "title": "Console",
       "verbose": "Verbose Logging",
@@ -641,28 +647,27 @@
     "downloadComplete": "Download complete",
     "downloadRegion": "Download Region",
     "downloadTitle": "Download Region for Offline Use",
-    "eastLon": "East Lon",
     "elevation": "Elevation (DEM)",
     "estimated": "Estimated: <b>{{count}}</b> tiles (~{{size}})",
-    "example": "e.g. {{value}}",
     "failed": "({{count}} failed)",
     "layersToDownload": "Layers to download",
     "maxAutoZoom": "Max auto-cache zoom",
     "maxCacheSize": "Max cache size",
     "maxZoom": "Max Zoom: {{zoom}}",
     "minZoom": "Min Zoom: {{zoom}}",
-    "northLat": "North Lat",
     "perLayer": "Per-layer breakdown",
     "regionMeta": "{{tiles}} tiles · z{{min}}-{{max}} · {{date}}",
     "removeAllRegions": "Remove all saved regions",
     "removeRegion": "Remove this saved region",
     "savedRegions": "Saved regions ({{count}})",
-    "southLat": "South Lat",
     "startDownload": "Start Download",
     "tilesBytes": "{{tiles}} tiles / {{size}}",
     "title": "Offline Maps",
     "totalTiles": "{{n}} tiles",
-    "westLon": "West Lon"
+    "areaChosen": "Area: {{size}}",
+    "noArea": "No area chosen yet.",
+    "chooseArea": "Choose on map",
+    "changeArea": "Change area"
   },
   "trafficSettingsCard": {
     "addZone": "Add zone here",
@@ -744,5 +749,16 @@
     "search": "Search templates…",
     "templateHint": "Pick the configuration that matches your aircraft, you can tweak fields after.",
     "vtol": "VTOL"
+  },
+  "coordinateFormat": {
+    "title": "Coordinates",
+    "decimal": "Decimal degrees",
+    "dms": "Degrees, minutes, seconds",
+    "unavailable": "Format from a cargo that is not loaded (decimal for now)",
+    "precision": "Coordinate precision",
+    "decimals_one": "{{count}} decimal",
+    "decimals_other": "{{count}} decimals",
+    "secondDecimals_one": "Seconds with {{count}} decimal",
+    "secondDecimals_other": "Seconds with {{count}} decimals"
   }
 }

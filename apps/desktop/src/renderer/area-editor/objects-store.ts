@@ -274,6 +274,8 @@ interface ObjectsActions {
    */
   mergeOverlapping: (id: string) => number;
   deleteObject: (id: string) => void;
+  /** Delete several objects as one undo step (the panel's ticked set). */
+  deleteObjects: (ids: string[]) => void;
   deleteSelected: () => void;
   toggleVisible: (id: string) => void;
   reorderObject: (id: string, dir: -1 | 1) => void;
@@ -734,12 +736,17 @@ export const useObjectsStore = create<Store>()(
       return absorbed.size - 1;
     },
 
-    deleteObject: (id) => {
+    deleteObject: (id) => get().deleteObjects([id]),
+
+    deleteObjects: (ids) => {
+      const gone = new Set(ids);
+      if (gone.size === 0 || !get().objects.some((o) => gone.has(o.id))) return;
       get().pushHistory();
       set((s) => ({
-        objects: s.objects.filter((o) => o.id !== id),
-        selectedId: s.selectedId === id ? null : s.selectedId,
-        selectedVertex: s.selectedId === id ? null : s.selectedVertex,
+        objects: s.objects.filter((o) => !gone.has(o.id)),
+        checkedIds: s.checkedIds.filter((id) => !gone.has(id)),
+        selectedId: s.selectedId !== null && gone.has(s.selectedId) ? null : s.selectedId,
+        selectedVertex: s.selectedId !== null && gone.has(s.selectedId) ? null : s.selectedVertex,
       }));
     },
 

@@ -17,6 +17,7 @@ import {
 } from '../../../shared/ntrip-types';
 import type { SerialPortInfo } from '@ardudeck/comms';
 import { PanelContainer, SectionTitle, StatRow } from './panel-utils';
+import { formatPosition } from '../../utils/coordinate-format';
 
 const BAUD_RATES = [9600, 19200, 38400, 57600, 115200, 230400, 460800, 921600];
 
@@ -467,7 +468,7 @@ export function NtripPanel() {
               {status.basePosition && (
                 <StatRow
                   label={t('panels:ntripPanel.basePosition')}
-                  value={`${status.basePosition.lat.toFixed(7)}, ${status.basePosition.lon.toFixed(7)} (${status.basePosition.altM.toFixed(1)} m)`}
+                  value={`${formatPosition(status.basePosition.lat, status.basePosition.lon)} (${status.basePosition.altM.toFixed(1)} m)`}
                 />
               )}
               {status.source !== 'serial' && (

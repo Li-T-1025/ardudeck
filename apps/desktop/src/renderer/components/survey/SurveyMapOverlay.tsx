@@ -14,6 +14,7 @@ import { cullPathForViewport } from './path-culling';
 import { useSurveyStore } from '../../stores/survey-store';
 import { useSettingsStore } from '../../stores/settings-store';
 import type { LatLng } from './survey-types';
+import { formatPosition } from '../../utils/coordinate-format';
 
 /** Preview cap: enough to read the coverage, few enough to stay smooth. */
 const MAX_FOOTPRINTS = 500;
@@ -21,6 +22,10 @@ const MAX_FOOTPRINTS = 500;
 // Colors
 const SURVEY_POLYGON_COLOR = '#d946ef';     // Fuchsia - kept clearly off the sky-blue grid lines
 const SURVEY_LINE_COLOR = '#38bdf8';         // Sky blue
+/** Same hue walk the TOPAS cargo uses for its per-robot paths. */
+export function fleetVehicleColor(index: number): string {
+  return `hsl(${(174 + index * 97) % 360} 70% 50%)`;
+}
 const SURVEY_PHOTO_COLOR = '#f59e0b';        // Amber
 const SURVEY_FOOTPRINT_COLOR = '#8b5cf6';    // Purple
 const SURVEY_DRAWING_COLOR = '#c084fc';      // Light purple
@@ -232,7 +237,7 @@ const VertexMarker = memo(function VertexMarker({
     >
       <Tooltip direction="top" offset={[0, -8]} opacity={0.9} pane="vertexTooltipPane">
         <span style={{ fontSize: '10px', fontFamily: 'monospace', whiteSpace: 'pre' }}>
-          {t('survey:surveyMapOverlay.vertexTooltip', { n: index + 1, lat: position.lat.toFixed(6), lng: position.lng.toFixed(6) })}
+          {t('survey:surveyMapOverlay.vertexTooltip', { n: index + 1, position: formatPosition(position.lat, position.lng) })}
           {locked ? `\n${t('survey:surveyMapOverlay.locked')}` : canDelete ? `\n${t('survey:surveyMapOverlay.rightClickDelete')}` : ''}
         </span>
       </Tooltip>
@@ -340,16 +345,23 @@ export function SurveyMapOverlay() {
   // Flight path: the result carries the full-fidelity plan (tens of
   // thousands of points on large plans) - drawing is viewport-culled and
   // zoom-simplified instead of ever thinning the data itself.
+  // A fleet plan draws one path per vehicle in its own colour; the combined
+  // waypoint list would join the vehicles' paths with phantom legs.
   const flightPathRuns = useMemo(() => {
-    const wps = result?.waypoints ?? [];
-    if (wps.length < 2 || !bounds || zoom == null) return [];
+    if (!bounds || zoom == null) return [];
     const vb = {
       west: bounds.getWest(),
       south: bounds.getSouth(),
       east: bounds.getEast(),
       north: bounds.getNorth(),
     };
-    return cullPathForViewport(wps, vb, zoom).map((run) => run.map(toLf));
+    const paths: Array<{ wps: LatLng[]; color: string }> =
+      result?.fleetMissions && result.fleetMissions.length > 1
+        ? result.fleetMissions.map((m, i) => ({ wps: m.waypoints, color: fleetVehicleColor(i) }))
+        : [{ wps: result?.waypoints ?? [], color: SURVEY_LINE_COLOR }];
+    return paths.flatMap(({ wps, color }) =>
+      wps.length < 2 ? [] : cullPathForViewport(wps, vb, zoom).map((run) => ({ positions: run.map(toLf), color })),
+    );
   }, [result, bounds, zoom]);
 
   // Numbered badge per flown line. Only worth drawing while the plan is small
@@ -758,9 +770,9 @@ export function SurveyMapOverlay() {
       {flightPathRuns.map((run, i) => (
         <Polyline
           key={`fp-run-${i}`}
-          positions={run}
+          positions={run.positions}
           pathOptions={{
-            color: SURVEY_LINE_COLOR,
+            color: run.color,
             weight: 2,
             opacity: 0.7,
           }}

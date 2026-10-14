@@ -96,6 +96,10 @@
     "pointsTip": "Paste surveyed RTK points as markers or a polygon",
     "pts": "{{count}} pts",
     "remove": "Remove guide",
+    "removeAll": "Remove all",
+    "removeAllConfirm_one": "Remove {{count}} guide?",
+    "removeAllConfirm_other": "Remove {{count}} guides?",
+    "removeAllTip": "Remove every guide from the map (cannot be undone)",
     "showAll": "Show all",
     "showOnMap": "Show on map",
     "tip": "Boundary guides: import KML / KMZ / GeoJSON / SHP outlines and plan surveys from them",
@@ -648,7 +652,14 @@
       "speedSet_other": "Speed set to {{speed}} m/s ({{count}} changes)",
       "speedZeroTip": "0 removes the selection's DO_CHANGE_SPEED commands",
       "surveyEditWarning": "Selection includes survey waypoints. Regenerating the survey rebuilds them from its config and overwrites this edit; prefer the survey's own altitude setting for lasting changes.",
-      "surveysConnected": "{{count}} surveys connected, flown as one"
+      "surveysConnected": "{{count}} surveys connected, flown as one",
+      "pastePositions": "Paste positions",
+      "pastePositionsTip": "Adds a waypoint for each position in the clipboard, one per line, in any coordinate format",
+      "pasteNone": "No positions found in the clipboard",
+      "pasteAdded_one": "Added {{count}} waypoint",
+      "pasteAdded_other": "Added {{count}} waypoints",
+      "position": "Position ({{format}})",
+      "positionInvalid": "Not a position in any coordinate format"
     },
     "noCommandsMatch": "No commands match \"{{search}}\"",
     "param": {

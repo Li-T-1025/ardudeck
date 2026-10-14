@@ -27,6 +27,8 @@ import {
   watchDevModules,
 } from './module-dev.js';
 import { killPty, resizePty, spawnPty, writePty } from './module-pty-service.js';
+import { unregisterTileSourcesFor } from '../terrain/tile-source-registry.js';
+import { unregisterSceneMeshesFor } from '../terrain/scene-mesh-registry.js';
 
 export function setupModuleIpc(mainWindow: BrowserWindow): void {
   // Activate a license key
@@ -88,6 +90,10 @@ export function setupModuleIpc(mainWindow: BrowserWindow): void {
   // Toggle a module on/off without removing it (bundle modules apply on restart)
   ipcMain.handle(IPC_CHANNELS.MODULE_SET_ENABLED, (_, slug: string, enabled: boolean) => {
     try {
+      if (!enabled) {
+        unregisterTileSourcesFor(slug);
+        unregisterSceneMeshesFor(slug);
+      }
       return { success: true, modules: setModuleEnabled(slug, enabled) };
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);

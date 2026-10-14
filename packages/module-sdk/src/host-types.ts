@@ -27,6 +27,14 @@ export interface SurveyGeneratorCapabilities {
   isAsync: boolean;
   /** Generator hits a network resource and is subject to remote failure modes. */
   isRemote: boolean;
+  /**
+   * Generator plans a whole fleet in one call: given `config.fleet` (one
+   * `{ key, label?, speed?, enduranceMinutes?, start? }` per vehicle) it
+   * returns `fleetMissions` (one `{ vehicleKey, waypoints, subPolygon?,
+   * stats?, warnings? }` per vehicle) on the result. Without it the host
+   * splits the single plan itself.
+   */
+  supportsFleet?: boolean;
 }
 
 export type SurveyGeneratorConfigField =
@@ -107,8 +115,10 @@ export interface MissionPanelRegistration {
 export interface FenceProposal {
   /** Shown to the pilot, so they know which boundary this is. */
   name: string;
-  /** Inclusion polygon the aircraft must stay within. */
-  inclusion: MapPoint[];
+  /** Inclusion polygon the aircraft must stay within. Replaces any held. */
+  inclusion?: MapPoint[];
+  /** Exclusion polygons appended to those the pilot already holds. */
+  exclusions?: Array<{ name: string; points: MapPoint[] }>;
   /** Why the module is asking, in the pilot's words. */
   reason: string;
 }
@@ -118,11 +128,56 @@ export interface ProposalResult {
   accepted: boolean;
   /** What the vehicle confirmed it stored. Absent when nothing was sent. */
   pointsAccepted?: number;
+  /** How many exclusion polygons were written. Absent when none were proposed. */
+  exclusionsAccepted?: number;
   /** Set when the write was attempted and failed. */
   error?: string;
 }
 
-// --- Terrain --------------------------------------------------------------
+/** Fence storage on the vehicle; ArduPilot keeps a few hundred bytes, 8 per vertex plus 2 per polygon. */
+export interface FenceBudget {
+  /** Bytes of fence storage on this vehicle class. */
+  capacityBytes: number;
+  /** Bytes the fence currently held would take. */
+  usedBytes: number;
+  bytesPerVertex: 8;
+  bytesPerPolygon: 2;
+}
+
+// --- Terrain and tile sources -------------------------------------------
+// Module tiles served by the host: a DEM overriding elevation inside a footprint, or a raster overlay.
+
+export interface TileSourceRegistration {
+  /** Stable id within this module. Re-registering the same id replaces it. */
+  id: string;
+  name: string;
+  /** 'dem': Terrarium PNG heights, MSL metres, composited over the host DEM. 'raster': RGBA PNG for a map layer. */
+  kind: 'dem' | 'raster';
+  /** Lon/lat ring. Outside it the host's own tiles apply. */
+  footprint: MapPoint[];
+  /** Absolute folder holding `{z}/{x}/{y}.png`. */
+  tileRoot: string;
+  minZoom: number;
+  maxZoom: number;
+  /** Among overlapping DEM sources the higher priority wins. Default 0. */
+  priority?: number;
+  /** Bumped by the module when tiles on disk changed, so caches refresh. */
+  version?: number;
+}
+
+export interface SceneMeshRegistration {
+  id: string;
+  name: string;
+  /** Absolute path of a binary glTF whose axes are x east, y up, z south, metres. */
+  glb: string;
+  /** Where the GLB origin sits. */
+  origin: { lat: number; lng: number; altMsl: number };
+  /** Rotation about the vertical axis, degrees clockwise from north. Default 0. */
+  yawDeg?: number;
+  /** Which scenes show it. Default both. */
+  scenes?: Array<'svt' | 'mission3d'>;
+  version?: number;
+}
 
 // --- Alerts extension point -----------------------------------------------
 // A module says something the pilot must see. It goes into the host's own
@@ -192,10 +247,47 @@ export interface MapMarkerFeature {
   label?: string;
 }
 
+/** Plain text on the map with a dark outline, for grid references and names. Not clickable. */
+export interface MapTextFeature {
+  kind: 'text';
+  at: MapPoint;
+  text: string;
+  color: string;
+  /** Font size in px, 9 to 20. Default 11. */
+  size?: number;
+  /** Which side of the text sits on `at`. Default 'center'. */
+  anchor?: 'center' | 'left' | 'right' | 'top' | 'bottom';
+}
+
 export type MapFeature =
   | MapPolygonFeature
   | MapPolylineFeature
-  | MapMarkerFeature;
+  | MapMarkerFeature
+  | MapTextFeature;
+
+/** A way to write positions, offered in the host's coordinate format setting next to Decimal and DMS. */
+export interface CoordinateFormatRegistration {
+  /** Stable id within this module. */
+  id: string;
+  /** Name in the setting, e.g. "MGRS". Called when shown, so it can follow the app language. */
+  name(): string;
+  /** Text for a position, e.g. "32T NT 12345 67890", at one of `precisions` (or your default). */
+  format(lat: number, lon: number, precision?: number): string;
+  /** Detail levels the pilot can pick in the setting, e.g. MGRS 1 m / 10 m / 100 m. */
+  precisions?: Array<{ value: number; name(): string }>;
+  defaultPrecision?: number;
+  /** A typed or pasted position, or null when the text is not in this format. */
+  parse(text: string): { lat: number; lon: number } | null;
+}
+
+/** What the map currently shows, for layers that draw only what is in view (grids, labels). */
+export interface MapView {
+  north: number;
+  south: number;
+  east: number;
+  west: number;
+  zoom: number;
+}
 
 export interface MapLayerRegistration {
   /** Stable id within this module. Re-registering the same id replaces it. */
@@ -210,8 +302,10 @@ export interface MapLayerRegistration {
    * cannot hide the aircraft.
    */
   order?: number;
-  /** Current features. Called when the host redraws, so keep it cheap. */
-  features(): MapFeature[];
+  /** A raster tile source this module registered on the main side, drawn under the features. */
+  tiles?: { sourceId: string; opacity?: number };
+  /** Current features. Called when the host redraws, so keep it cheap. `view` is what the map shows. */
+  features(view?: MapView): MapFeature[];
   /**
    * Tell the host the features changed. Return an unsubscribe. Without this
    * the layer is redrawn only when the map itself changes, which is right for
@@ -610,6 +704,24 @@ export type ProductionHostView = 'calibration' | 'firmware' | 'parameters' | 'va
  * `hardware`: ArduPilot configuration, Sensors, Hardware, below the detected parts.
  */
 export type ConfigCardSlot = 'notify' | 'gps' | 'hardware';
+
+/** A whole tab of its own on the ArduPilot configuration screen. */
+export interface ConfigTabRegistration {
+  /** Stable id within this module. Re-registering the same id replaces it. */
+  id: string;
+  /** Tab label. Called when the tab bar renders, so it follows the app language. */
+  title(): string;
+  /** Tooltip on the tab. */
+  description?(): string;
+  icon?: ComponentType<{ className?: string }>;
+  /** Vehicle kinds that get the tab; every ArduPilot vehicle when omitted. */
+  vehicles?: Array<'copter' | 'plane' | 'rover'>;
+  /** Put the tab inside one of the host's dropdowns instead of the tab bar. Falls back to the bar when that vehicle has no such group. */
+  group?: 'tuning' | 'rc' | 'outputs' | 'safety' | 'hardware' | 'links' | 'storage';
+  /** Order among module tabs, low first. They sit after the host's own tabs. */
+  order?: number;
+  component: ComponentType;
+}
 
 /** Where a setup entry is listed in Add hardware. */
 export type HardwareSetupCategory =
@@ -1084,6 +1196,8 @@ export interface RendererHostApi {
   };
   vehicle: {
     proposeFence(proposal: FenceProposal): Promise<ProposalResult>;
+    /** Fence storage on the connected vehicle, so a proposal can be cut to fit first. */
+    fenceBudget(): Promise<FenceBudget>;
   };
   /** Ground elevation, metres AMSL. Null where the host has no data. */
   terrain: {
@@ -1106,6 +1220,8 @@ export interface RendererHostApi {
      * Resolves with the ring, or null if they backed out.
      */
     pickPolygon(prompt?: string): Promise<MapPoint[] | null>;
+    /** Centre the telemetry map on a point (the pilot's follow mode is turned off). */
+    centerOn(point: MapPoint, zoom?: number): void;
   };
   /**
    * Translations for this module's own text. Ship every language you support;
@@ -1118,9 +1234,22 @@ export interface RendererHostApi {
     /** Active app language code, e.g. 'en' or 'de'. */
     language(): string;
   };
+  /** Positions in other notations: what you register appears in the host's coordinate format setting. */
+  coordinates: {
+    registerFormat(reg: CoordinateFormatRegistration): void;
+    unregisterFormat(id: string): void;
+    /** The format positions are shown in: 'decimal', 'dms', one of yours by its id, or another cargo's ('other'). */
+    current(): string;
+    /** Switch the pilot's coordinate format: 'decimal', 'dms' or one of your format ids. */
+    select(id: string): void;
+    subscribe(listener: (current: string) => void): () => void;
+  };
   /** Add a card to an existing configuration screen. */
   config: {
     registerCard(reg: ConfigCardRegistration): void;
+    /** Add a tab to the ArduPilot configuration screen (not shown for PX4 or INAV). */
+    registerTab(reg: ConfigTabRegistration): void;
+    unregisterTab(id: string): void;
     /** Remove a card this module registered. Other modules' ids are ignored. */
     unregisterCard(id: string): void;
   };
@@ -1251,6 +1380,32 @@ export interface CameraStreamInfo {
   rtspUrl: string;
 }
 
+// --- Lua scripts on the flight controller ----------------------------------
+
+export interface ScriptInstallRequest {
+  /** File name under /APM/scripts/, e.g. `my_script.lua`. */
+  filename: string;
+  /** The Lua source, written byte for byte. */
+  source: string;
+  /** Raise SCR_HEAP_SIZE to at least this many bytes when it is lower. */
+  minHeap?: number;
+  /** A parameter the script adds at boot; the install waits for it to prove the script runs. */
+  expectParam?: string;
+}
+
+export type ScriptInstallProgress =
+  | { phase: 'checking' }
+  | { phase: 'configuring'; param: string; value: number }
+  | { phase: 'uploading'; written: number; total: number }
+  | { phase: 'rebooting' }
+  | { phase: 'verifying' };
+
+export type ScriptInstallResult =
+  | { status: 'installed' }
+  /** The board will not take files over the link: the user copies it to `targetPath` on the SD card. */
+  | { status: 'manual'; targetPath: string; reason: string }
+  | { status: 'error'; message: string };
+
 export interface MainHostApi {
   moduleSlug: string;
   dataDir: string;
@@ -1288,6 +1443,26 @@ export interface MainHostApi {
   /** Live video feeds the host is relaying. */
   camera: {
     listStreams(): Promise<CameraStreamInfo[]>;
+  };
+  /** Map tiles this module serves (DEM override or raster overlay). */
+  tiles: {
+    register(reg: TileSourceRegistration): void;
+    unregister(id: string): void;
+  };
+  /** Textured meshes for the synthetic vision and 3D mission scenes. */
+  scene: {
+    registerMesh(reg: SceneMeshRegistration): void;
+    unregisterMesh(id: string): void;
+  };
+  /**
+   * Put a Lua script on the connected ArduPilot. Needs the 'scripts' permission.
+   * Turns scripting on, uploads, reboots (the host restarts SITL itself) and, with
+   * `expectParam`, waits until the script has started. Refuses while armed.
+   */
+  scripts: {
+    install(req: ScriptInstallRequest, onProgress?: (p: ScriptInstallProgress) => void): Promise<ScriptInstallResult>;
+    /** Let the user save the script to a file, for copying to the SD card by hand. Resolves to the saved path. */
+    saveCopy(filename: string, source: string): Promise<string | null>;
   };
 }
 

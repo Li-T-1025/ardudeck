@@ -788,6 +788,12 @@ export const IPC_CHANNELS = {
 
   // Tile Cache (offline maps)
   TILE_CACHE_GET_TILE: 'tile-cache:get-tile',
+  BUILDINGS_GET_TILE: 'buildings:get-tile',
+  BUILDINGS_COUNT_TILES: 'buildings:count-tiles',
+  BUILDINGS_BAKE: 'buildings:bake',
+  BUILDINGS_CANCEL_BAKE: 'buildings:cancel-bake',
+  BUILDINGS_CANCEL_VIEW: 'buildings:cancel-view',
+  BUILDINGS_BAKE_PROGRESS: 'buildings:bake-progress',
   TILE_CACHE_GET_STATS: 'tile-cache:get-stats',
   TILE_CACHE_CLEAR: 'tile-cache:clear',
   TILE_CACHE_DOWNLOAD_REGION: 'tile-cache:download-region',
@@ -1044,6 +1050,13 @@ export const IPC_CHANNELS = {
   // Procedural frame generator (ardudeck-frame crate)
   /** Renderer → main: build a FrameBlueprint for a given class/type via the native crate binary. */
   FRAME_GENERATE_BLUEPRINT: 'frame:generate-blueprint',
+
+  // Module tile sources and scene meshes (main registries, pushed to every window)
+  TILE_SOURCES_LIST: 'tile-sources:list',
+  TILE_SOURCES_CHANGED: 'tile-sources:changed',
+  SCENE_MESHES_LIST: 'scene-meshes:list',
+  SCENE_MESHES_CHANGED: 'scene-meshes:changed',
+  TERRAIN_UPLINK_STATUS: 'terrain-uplink:status',
 } as const;
 
 export type IpcChannels = typeof IPC_CHANNELS[keyof typeof IPC_CHANNELS];
@@ -1235,7 +1248,8 @@ export interface OrchestratorStatus {
 /** Orchestration server status pushed to the renderer (see `COMMS_ORCHESTRATION_STATUS`). */
 export interface OrchestrationStatusIpc {
   transportId: string;
-  kind: 'welcome' | 'control' | 'roster';
+  /** `closed`: the link is gone; drop the server so intents never target a dead engine. */
+  kind: 'welcome' | 'control' | 'roster' | 'closed';
   /** Present on `welcome`. */
   serverName?: string;
   serverVersion?: string;
@@ -1550,6 +1564,8 @@ export interface SettingsStoreSchema {
   experienceLevelVersion?: string;
   uiVisibility?: UiVisibilitySettings;
   showDebugLogs?: boolean;
+  /** Answer the autopilot's terrain requests from the map's DEM tiles. Default on. */
+  serveTerrain?: boolean;
   aiProvider?: 'claude' | 'openai' | 'gemini' | null;
   /** User-saved survey planner presets. Built-in presets ship in code. */
   surveyPresets?: PersistedSurveyPreset[];

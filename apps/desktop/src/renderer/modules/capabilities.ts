@@ -43,6 +43,8 @@ export function isWeatherBriefingAvailable(): boolean {
 export const MISSION_LIBRARY_CARGO_SLUG = 'com.ardudeck.mission-library';
 /** Cargo slug that enables the Lua Graph Editor view. */
 export const LUA_GRAPH_CARGO_SLUG = 'com.ardudeck.lua-graph';
+/** Cargo slug of ArduDeck Locus. Its view is cargo-owned (CARGO_VIEWS), so a dev folder can load it. */
+export const LOCUS_CARGO_SLUG = 'com.ardudeck.locus';
 // Public API-key Claude Advisor cargo. Enables both the live advisor panel and
 // the AI flight-log analysis surfaces. Note the slug is `ardudeck.advisor`, NOT
 // the `com.ardudeck.*` convention used by the other cargo above.
@@ -83,6 +85,8 @@ export const CAPABILITIES: Capability[] = [
  */
 export const CARGO_VIEWS: Readonly<Partial<Record<ViewId, string>>> = {
   production: 'production',
+  // Locus: PPK, photogrammetry and LiDAR. The cargo brings the view, its tiles and meshes.
+  locus: 'locus',
 };
 
 const GATED_VIEWS: ReadonlyMap<ViewId, string> = new Map(

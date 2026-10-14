@@ -86,6 +86,12 @@ export interface SurveyGeneratorCapabilities {
   isAsync: boolean;
   /** Generator hits a network resource and is subject to remote failure modes. */
   isRemote: boolean;
+  /**
+   * Generator plans a whole fleet in one call: `config.fleet` in,
+   * `result.fleetMissions` out (one per vehicle). Without it the host splits
+   * the single plan itself.
+   */
+  supportsFleet?: boolean;
 }
 
 export interface SurveyGeneratorRegistration {

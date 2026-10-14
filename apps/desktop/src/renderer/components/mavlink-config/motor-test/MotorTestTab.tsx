@@ -22,6 +22,7 @@ import { useConnectionStore } from '../../../stores/connection-store';
 import { useTelemetryStore } from '../../../stores/telemetry-store';
 import { useMotorTestStore } from '../../../stores/motor-test-store';
 import { FrameDiagram } from './FrameDiagram';
+import { InfoCard } from '../../ui/InfoCard';
 import { VibrationCard } from './VibrationCard';
 import { EscTelemetryCard } from './EscTelemetryCard';
 import {
@@ -35,7 +36,7 @@ import {
 
 const HIGH_THROTTLE_WARNING = 25;
 
-export const MotorTestTab: React.FC = () => {
+export const MotorTestTab: React.FC<{ isPlane?: boolean }> = ({ isPlane = false }) => {
   const { t } = useTranslation();
   const parameters = useParameterStore((s) => s.parameters);
   const connectionState = useConnectionStore((s) => s.connectionState);
@@ -57,6 +58,14 @@ export const MotorTestTab: React.FC = () => {
   } = useMotorTestStore();
 
   const [showSafetyDialog, setShowSafetyDialog] = useState(false);
+  // what the FC is running, so the diagram can spin the right props
+  const [run, setRun] = useState<{ mode: 'all' | 'sequence'; startedAt: number; seconds: number } | null>(null);
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    if (!run) return;
+    const id = window.setInterval(() => setNow(Date.now()), 150);
+    return () => window.clearInterval(id);
+  }, [run]);
 
   const isPx4 = connectionState.firmware === 'px4';
   // PX4 refuses ACTUATOR_TEST unless COM_MOT_TEST_EN is 1
@@ -158,6 +167,7 @@ export const MotorTestTab: React.FC = () => {
     if (!canTest) return;
     setLastError(null);
     setSequenceRunning(true);
+    setRun({ mode: 'sequence', startedAt: Date.now(), seconds: duration });
     try {
       // Start sequence at motor 1 (first in TestOrder), FC walks through motorCount motors
       const result = await window.electronAPI?.motorTestStart?.({
@@ -170,11 +180,13 @@ export const MotorTestTab: React.FC = () => {
       if (!result?.success) {
         setLastError(result?.error ?? t('mavlink-config:motorTestTab.commandFailed'));
         setSequenceRunning(false);
+        setRun(null);
         return;
       }
     } catch (err) {
       setLastError(err instanceof Error ? err.message : String(err));
       setSequenceRunning(false);
+      setRun(null);
       return;
     }
     // Release sequence lock after total duration
@@ -182,6 +194,7 @@ export const MotorTestTab: React.FC = () => {
       () => {
         setSequenceRunning(false);
         setActiveMotor(null);
+        setRun(null);
       },
       duration * motorCount * 1000 + 500
     );
@@ -191,6 +204,7 @@ export const MotorTestTab: React.FC = () => {
     if (!canTest) return;
     setLastError(null);
     setSequenceRunning(true);
+    setRun({ mode: 'all', startedAt: Date.now(), seconds: duration });
     try {
       // Send individual test commands for all motors simultaneously
       const promises = motorsByTestOrder.map((m) =>
@@ -206,28 +220,41 @@ export const MotorTestTab: React.FC = () => {
       if (failed) {
         setLastError(failed?.error ?? t('mavlink-config:motorTestTab.commandFailed'));
         setSequenceRunning(false);
+        setRun(null);
         return;
       }
     } catch (err) {
       setLastError(err instanceof Error ? err.message : String(err));
       setSequenceRunning(false);
+      setRun(null);
       return;
     }
     window.setTimeout(() => {
       setSequenceRunning(false);
       setActiveMotor(null);
+      setRun(null);
     }, duration * 1000 + 500);
   }, [canTest, throttle, duration, motorsByTestOrder, setActiveMotor, setLastError, setSequenceRunning, t]);
 
   const stopAll = useCallback(async () => {
     setSequenceRunning(false);
     setActiveMotor(null);
+    setRun(null);
     try {
       await window.electronAPI?.motorTestStop?.(motorCount);
     } catch (err) {
       setLastError(err instanceof Error ? err.message : String(err));
     }
   }, [motorCount, setActiveMotor, setLastError, setSequenceRunning]);
+
+  const spinning = useMemo(() => {
+    if (!run) return undefined;
+    if (run.mode === 'all') return new Set(layout.motors.map((m) => m.Number));
+    // the FC walks the motors in test order, `seconds` each
+    const step = Math.floor((now - run.startedAt) / (run.seconds * 1000));
+    const current = motorsByTestOrder[step];
+    return new Set(current ? [current.Number] : []);
+  }, [run, now, layout, motorsByTestOrder]);
 
   // Gate: not connected or not MAVLink
   if (!connectionState.isConnected) {
@@ -245,8 +272,23 @@ export const MotorTestTab: React.FC = () => {
     );
   }
 
+  // ArduPlane only runs the motor test for QuadPlane lift motors (GCS_MAVLink_Plane.cpp)
+  if (isPlane && !isPx4 && parameters.get('Q_ENABLE')?.value !== 1) {
+    return (
+      <div className="p-6">
+        <InfoCard title={t('mavlink-config:motorTestTab.planeTitle')} variant="info">
+          <p>{t('mavlink-config:motorTestTab.planeBody')}</p>
+          <p className="mt-2">{t('mavlink-config:motorTestTab.planeHow')}</p>
+        </InfoCard>
+      </div>
+    );
+  }
+
   return (
     <div className="p-6 space-y-5">
+      {isPlane && (
+        <p className="text-xs text-content-secondary">{t('mavlink-config:motorTestTab.quadplaneNote')}</p>
+      )}
       {/* Safety confirmation dialog */}
       {showSafetyDialog && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm">
@@ -338,8 +380,10 @@ export const MotorTestTab: React.FC = () => {
           <FrameDiagram
             layout={layout}
             activeMotor={activeMotor}
+            spinning={spinning}
             rpmByMotor={rpmByMotor}
             onMotorClick={canTest ? testMotor : undefined}
+            quadplane={isPlane}
           />
         </div>
 

@@ -8,6 +8,7 @@
  * vehicle predates the message, and the FC will reject terrain frames.
  */
 import { create } from 'zustand';
+import type { TerrainUplinkStatus } from '../../shared/tile-source-types';
 
 export interface TerrainStatus {
   loaded: number;
@@ -17,6 +18,9 @@ export interface TerrainStatus {
 
 interface TerrainStatusStore {
   bySysid: Record<number, TerrainStatus>;
+  /** GCS terrain uplink counters per vehicle (blocks served, blocks with missing data, ignored requests). */
+  uplink: Record<number, TerrainUplinkStatus>;
+  setUplink: (sysid: number, status: TerrainUplinkStatus) => void;
   setStatus: (sysid: number, status: TerrainStatus) => void;
   clearAll: () => void;
 }
@@ -33,7 +37,9 @@ export const useTerrainStatusStore = create<TerrainStatusStore>((set) => ({
       }
       return { bySysid: { ...state.bySysid, [sysid]: status } };
     }),
-  clearAll: () => set({ bySysid: {} }),
+  uplink: {},
+  setUplink: (sysid, status) => set((state) => ({ uplink: { ...state.uplink, [sysid]: status } })),
+  clearAll: () => set({ bySysid: {}, uplink: {} }),
 }));
 
 /**

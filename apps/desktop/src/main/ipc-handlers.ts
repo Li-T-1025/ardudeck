@@ -190,6 +190,7 @@ import { ingestNamedValueFloat, getScriptHealth, resetHeartbeat, subscribeHealth
 import * as scriptRegistry from './script-installer/registry-store.js';
 import { getScriptBundle } from './script-installer/bundle.js';
 import * as installerService from './script-installer/installer-service.js';
+import { setScriptInstallAdapter } from './script-installer/install-script.js';
 import type { FcAdapter } from './script-installer/installer-service.js';
 import type { PreflightFix } from '../shared/script-installer-types.js';
 import {
@@ -459,6 +460,7 @@ const signingStore = new Store<{
 import type { ParamChange, ParamCheckpoint, BoardParamHistory } from '../shared/param-history-types.js';
 import { areasToKml, type ExportArea } from '../shared/kml-export.js';
 import { evaluateLinkLiveness, LINK_STALE_MS, LINK_DEAD_MS } from './link-liveness.js';
+import { installTerrainUplink, terrainUplink } from './terrain/terrain-uplink.js';
 const paramHistoryStore = new Store<{ boards: Record<string, BoardParamHistory> }>({
   name: 'param-history',
   defaults: { boards: {} },
@@ -2089,6 +2091,9 @@ function createBackgroundDiscoveryHandler(
                 severity, severityLabel, text: `SYS ${packet.sysid}: ${text}`,
               });
             }
+          } else if (packet.msgid === MSG_TERRAIN_REQUEST) {
+            const live = connectionRegistry.getTransport(transportId);
+            if (live?.transport?.isOpen) void terrainUplink?.handleRequest(packet, live.transport);
           } else if (packet.msgid === MSG_TERRAIN_REPORT) {
             // Same decode as the primary path: gates terrain-relative commands
             // per fleet vehicle. Zero-pad, never length-guard (v2 truncation).
@@ -2814,6 +2819,7 @@ const MSG_EXTENDED_SYS_STATE = 245;
 const MSG_POSITION_TARGET_GLOBAL_INT = 87;
 const MSG_COMMAND_ACK = 77;
 const MSG_TERRAIN_REPORT = 136;
+const MSG_TERRAIN_REQUEST = 133;
 const MSG_WIND = 168;
 const MSG_DISTANCE_SENSOR = 132;
 const MSG_EKF_STATUS_REPORT = 193;
@@ -4610,6 +4616,17 @@ function getMissionResultName(result: number): string {
 }
 
 export function setupIpcHandlers(mainWindow: BrowserWindow): void {
+  // GCS terrain uplink: answers the autopilot's TERRAIN_REQUEST from the DEM tiles (module DEMs included).
+  installTerrainUplink({
+    enabled: () => settingsStore.get('serveTerrain') !== false,
+    send: async (msgid, payload, crcExtra, link) => {
+      const transport = link as Transport;
+      const pkt = await sendMavlinkPacket(msgid, payload, crcExtra, { link: transport });
+      await transport.write(pkt);
+      connectionState.packetsSent++;
+    },
+    onStatus: (status) => safeSend(mainWindow, IPC_CHANNELS.TERRAIN_UPLINK_STATUS, status),
+  });
   // Auto-load signing key now that app is ready (safeStorage requires app.whenReady)
   autoLoadSigningKey();
 
@@ -4956,7 +4973,13 @@ export function setupIpcHandlers(mainWindow: BrowserWindow): void {
     const dataHandler = createBackgroundDiscoveryHandler(transportId, mainWindow);
     link.on('data', dataHandler);
     link.on('error', (err: Error) => connectionRegistry.recordTransportError(transportId, err.message));
-    link.on('close', () => { void removeBackgroundTransport(transportId); onClose?.(); });
+    link.on('close', () => {
+      void removeBackgroundTransport(transportId);
+      safeSend(mainWindow, IPC_CHANNELS.COMMS_ORCHESTRATION_STATUS, {
+        transportId, kind: 'closed',
+      } satisfies OrchestrationStatusIpc);
+      onClose?.();
+    });
     link.onWelcome((info) => {
       safeSend(mainWindow, IPC_CHANNELS.COMMS_ORCHESTRATION_STATUS, {
         transportId, kind: 'welcome', serverName: info.serverName, serverVersion: info.serverVersion, capabilities: info.capabilities,
@@ -5817,6 +5840,7 @@ export function setupIpcHandlers(mainWindow: BrowserWindow): void {
 
             // Parse telemetry data from known message types
             parseTelemetry(mainWindow, packet);
+            if (packet.msgid === MSG_TERRAIN_REQUEST && currentTransport) void terrainUplink?.handleRequest(packet, currentTransport);
             vehicleControl.notePacket(packet);
 
             // Broadcast raw frame to the renderer windows holding a live
@@ -9601,6 +9625,8 @@ export function setupIpcHandlers(mainWindow: BrowserWindow): void {
       return { success: false, error: msg };
     }
   });
+
+  setScriptInstallAdapter(buildFcAdapter);
 
   // ─── MAVLink-FTP file browser (read-only) ──────────────────────────
   // Both handlers share the same transient FtpClient pattern as the script

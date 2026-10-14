@@ -58,6 +58,8 @@ export interface ArduPilotSitlStore {
     alt: number;
     heading: number;
   };
+  /** Where the running SITL actually is; differs from homeLocation after the Trainer moved it. Not persisted. */
+  runningHome: { lat: number; lng: number; alt: number; heading: number } | null;
   speedup: number;
   wipeOnStart: boolean;
   simulator: ArduPilotSimulatorType;
@@ -294,6 +296,7 @@ export const useArduPilotSitlStore = create<ArduPilotSitlStore>()(
       model: 'quad',
       releaseTrack: 'stable',
       homeLocation: DEFAULT_HOME,
+      runningHome: null,
       speedup: 1,
       wipeOnStart: false,
       simulator: 'none',
@@ -422,8 +425,9 @@ export const useArduPilotSitlStore = create<ArduPilotSitlStore>()(
             simAddress: simulator !== 'none' ? simAddress : undefined,
             simBattVoltage: simBattVoltage > 0 ? simBattVoltage : undefined,
             simBattCapAh: simBattCapAh > 0 ? simBattCapAh : undefined,
-            customFramePath,
-            customFrameMotors,
+            // custom frames are copter physics, like the engine below
+            customFramePath: vehicleType === 'copter' ? customFramePath : undefined,
+            customFrameMotors: vehicleType === 'copter' ? customFrameMotors : undefined,
             // ArduDeck physics engine: only for copter in v1.
             useArduDeckSim: useArduDeckSim && vehicleType === 'copter',
             simWindIntensity,
@@ -475,7 +479,7 @@ export const useArduPilotSitlStore = create<ArduPilotSitlStore>()(
           }
 
           await window.electronAPI.ardupilotSitlStop();
-          set({ isRunning: false, isStopping: false });
+          set({ isRunning: false, isStopping: false, runningHome: null });
           appendOutput('SITL stopped.\n');
           return true;
         } catch (error) {
@@ -815,7 +819,7 @@ export const useArduPilotSitlStore = create<ArduPilotSitlStore>()(
             appendOutput('\nSITL is restarting at a new take-off point...\n');
             return;
           }
-          set({ isRunning: false, isStarting: false, isStopping: false, isRcSending: false });
+          set({ isRunning: false, isStarting: false, isStopping: false, isRcSending: false, runningHome: null });
           // FlightGear is driven purely by SITL's FGNetFDM stream; once SITL is
           // gone the viewer just freezes, so close it too.
           if (get().flightGearRunning) {
@@ -887,17 +891,16 @@ export const useArduPilotSitlStore = create<ArduPilotSitlStore>()(
           }
         });
 
-        // Authoritative "this is what SITL is running with" push, sent by main on
-        // every successful spawn. It is the only thing that keeps the store in step
-        // with a relaunch main did on its own behalf, and homeLocation is persisted,
-        // so without it the next manual Start would go back to the stale location.
+        // What SITL is running with, sent by main on every successful spawn.
         const unsubStarted = window.electronAPI.onArdupilotSitlStarted((data) => {
           set({
             isRunning: true,
             isStarting: false,
             isStopping: false,
             lastError: null,
-            homeLocation: data.homeLocation,
+            // a relaunch at another origin (the Trainer borrowing SITL) is for that session only; the pilot's own start point stays
+            ...(data.wasRelaunch ? {} : { homeLocation: data.homeLocation }),
+            runningHome: data.homeLocation,
             vehicleType: data.vehicleType,
             model: data.model,
             releaseTrack: data.releaseTrack,

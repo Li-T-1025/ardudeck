@@ -28,7 +28,7 @@ export function ObjectsPanel(): JSX.Element {
   const selectedId = useObjectsStore((s) => s.selectedId);
   const checkedIds = useObjectsStore((s) => s.checkedIds);
   const {
-    selectObject, renameObject, deleteObject, toggleVisible, reorderObject, convertSelectedToPolygon, setObjectColor, setObjectFenceType, setObjectRole, removeBranch, loadWorldRings, focusObject, toggleChecked, setChecked, clearChecked, autoConnectCorridors,
+    selectObject, renameObject, deleteObject, deleteObjects, toggleVisible, reorderObject, convertSelectedToPolygon, setObjectColor, setObjectFenceType, setObjectRole, removeBranch, loadWorldRings, focusObject, toggleChecked, setChecked, clearChecked, autoConnectCorridors,
   } = useObjectsStore.getState();
   const [editingId, setEditingId] = useState<string | null>(null);
   const [draft, setDraft] = useState('');
@@ -110,6 +110,20 @@ export function ObjectsPanel(): JSX.Element {
       <div className="flex-shrink-0 px-4 py-3 border-b border-subtle flex items-center justify-between">
         <p className="text-xs font-semibold text-content">{t('area-editor:objectsPanel.title')}</p>
         <div className="flex items-center gap-2">
+          {objects.length > 0 && (
+            // Ticked objects go first; with nothing ticked it clears the lot.
+            // No confirm: the editor has undo, and a KML can bring 300 shapes.
+            <button
+              type="button"
+              onClick={() => deleteObjects(checkedIds.length > 0 ? checkedIds : objects.map((o) => o.id))}
+              className="text-[10px] text-rose-400 hover:text-rose-300 transition-colors tabular-nums"
+              data-tip={checkedIds.length > 0 ? t('area-editor:objectsPanel.deleteCheckedTip') : t('area-editor:objectsPanel.deleteAllTip')}
+            >
+              {checkedIds.length > 0
+                ? t('area-editor:objectsPanel.deleteChecked', { count: checkedIds.length })
+                : t('area-editor:objectsPanel.deleteAll')}
+            </button>
+          )}
           {objects.length > 1 && (
             <button
               type="button"

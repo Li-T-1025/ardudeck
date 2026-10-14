@@ -52,28 +52,35 @@ function unit(dx: number, dy: number): XY {
 }
 
 /**
- * Left-hand unit normal at each vertex of an open polyline. Interior vertices
- * average the normals of their two adjacent edges; endpoints take their single
- * edge's normal. Used to offset the centerline into parallel strips.
+ * Offset vector at each vertex of an open polyline: the left-hand normal,
+ * scaled so a strip offset by it stays the full distance from BOTH legs of a
+ * bend (a mitre, 1 / cos(turn / 2)). The plain averaged normal put the corner
+ * at distance * cos(turn / 2), which packed the strips to a fraction of their
+ * spacing at sharp bends. Capped at MITER_LIMIT so a hairpin cannot throw the
+ * corner out of sight.
  */
+export const MITER_LIMIT = 4;
+
 function vertexNormals(path: XY[]): XY[] {
   const n = path.length;
   const normals: XY[] = [];
   for (let i = 0; i < n; i++) {
-    let nx = 0;
-    let ny = 0;
+    let nIn: XY | null = null;
+    let nOut: XY | null = null;
     if (i > 0) {
       const d = unit(path[i]!.x - path[i - 1]!.x, path[i]!.y - path[i - 1]!.y);
-      nx += -d.y;
-      ny += d.x;
+      nIn = { x: -d.y, y: d.x };
     }
     if (i < n - 1) {
       const d = unit(path[i + 1]!.x - path[i]!.x, path[i + 1]!.y - path[i]!.y);
-      nx += -d.y;
-      ny += d.x;
+      nOut = { x: -d.y, y: d.x };
     }
-    const len = Math.hypot(nx, ny) || 1;
-    normals.push({ x: nx / len, y: ny / len });
+    const a = nIn ?? nOut ?? { x: 0, y: 0 };
+    const b = nOut ?? nIn ?? { x: 0, y: 0 };
+    const bisector = unit(a.x + b.x, a.y + b.y);
+    const cosHalf = bisector.x * a.x + bisector.y * a.y;
+    const scale = cosHalf > 1 / MITER_LIMIT ? 1 / cosHalf : MITER_LIMIT;
+    normals.push({ x: bisector.x * scale, y: bisector.y * scale });
   }
   return normals;
 }
@@ -438,11 +445,17 @@ export function generateCorridor(config: SurveyConfig): SurveyResult {
   // Order and orient the runs before generating, so the aircraft works its way
   // along the line instead of crossing back for every spur it was drawn after.
   const stripCount = corridorLayout(config).count;
+  // Branches may fly their own strip count (2 = out and back to the junction).
+  const branchStrips = config.corridorBranchStrips ?? 0;
+  const branchConfig: SurveyConfig = branchStrips > 0 ? { ...config, corridorStrips: branchStrips } : config;
+  const branchStripCount = corridorLayout(branchConfig).count;
+  const isBranchRun = (index: number) => split !== null && index >= split.segments.length;
   const plan = orderCorridorRuns(centerlines);
   const oriented = plan.map(({ index, reversed }) => {
     const line = centerlines[index]!;
     return reversed ? [...line].reverse() : line;
   });
+  const runConfigs = plan.map(({ index }) => (isBranchRun(index) ? branchConfig : config));
 
   // Which way round to nest runs and strips, decided by parity.
   //
@@ -472,18 +485,22 @@ export function generateCorridor(config: SurveyConfig): SurveyResult {
     end: (terminalUses.get(key(line[line.length - 1]!)) ?? 0) < 2,
   });
 
-  interface Leg { line: LatLng[]; only?: { stripIdx: number; reverse: boolean } }
+  interface Leg { line: LatLng[]; cfg: SurveyConfig; only?: { stripIdx: number; reverse: boolean } }
   const legs: Leg[] = [];
-  if (stripCount % 2 === 1) {
-    for (const line of oriented) legs.push({ line });
+  // Passes across the network only make sense when every run shares the same
+  // (even) strip count. With trunk and branches at different counts each run
+  // is flown whole, in the routed order; a 2-strip spur then ends back at its
+  // junction and the trunk carries on from there.
+  if (stripCount % 2 === 1 || branchStripCount !== stripCount) {
+    oriented.forEach((line, k) => legs.push({ line, cfg: runConfigs[k]! }));
   } else {
     stripOrder.forEach((stripIdx, pass) => {
       const runs = pass % 2 === 1 ? [...oriented].reverse() : oriented;
-      for (const line of runs) legs.push({ line, only: { stripIdx, reverse: pass % 2 === 1 } });
+      for (const line of runs) legs.push({ line, cfg: config, only: { stripIdx, reverse: pass % 2 === 1 } });
     });
   }
 
-  const parts = legs.map((leg) => generateOneCorridor(config, leg.line, leg.only, freeEndsOf(leg.line)));
+  const parts = legs.map((leg) => generateOneCorridor(leg.cfg, leg.line, leg.only, freeEndsOf(leg.line)));
   if (parts.length === 1) return parts[0]!;
 
   // No arc waypoints here on purpose: ArduPlane's L1/NPFG controller starts
@@ -533,7 +550,7 @@ export function generateCorridor(config: SurveyConfig): SurveyResult {
     // Counted over the centrelines the OPERATOR drew, not the pieces the
     // router cut them into: splitting the trunk at a junction is an internal
     // routing step and must not inflate the line count they read.
-    lineCount: stripCount * ((trunk ? 1 : 0) + branches.length),
+    lineCount: stripCount * (trunk ? 1 : 0) + branchStripCount * branches.length,
     areaCovered: parts.reduce((a, p) => a + p.stats.areaCovered, 0),
     footprintWidth: first.footprintWidth,
     footprintHeight: first.footprintHeight,

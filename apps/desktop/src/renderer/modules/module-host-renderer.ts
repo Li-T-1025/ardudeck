@@ -1,4 +1,10 @@
 import type { ComponentType } from 'react';
+import { coordinateFormatRegistry } from '../utils/coordinate-format';
+import { useSettingsStore } from '../stores/settings-store';
+
+/** A cargo sees its own formats by their short id, the built-ins by name, anything else as 'other'. */
+const ownFormatId = (slug: string, id: string) => (id === 'decimal' || id === 'dms' ? id : id.startsWith(`${slug}:`) ? id.slice(slug.length + 1) : 'other');
+import { useMapFocusStore } from '../stores/map-focus-store';
 import type { RendererHostApi, MountPointName, HudProjection } from '@ardudeck/module-sdk';
 import { useTelemetryStore } from '../stores/telemetry-store';
 import { useConnectionStore } from '../stores/connection-store';
@@ -15,7 +21,10 @@ import {
 } from '../stores/fleet-repo-store';
 import { raiseModuleAlert, clearModuleAlert, clearModuleAlertsFor } from './module-alert-registry';
 import { proposeFence, cancelProposalsFor } from './module-proposal-registry';
-import { summariseFence, replaceInclusion } from './module-fence-write';
+import { summariseFence, replaceInclusion, appendExclusions } from './module-fence-write';
+import { fenceBudgetFor } from './fence-budget';
+import { getVehicleClass } from '../../shared/telemetry-types';
+import type { ProposalResult } from '@ardudeck/module-sdk';
 import {
   openModuleMissionPanel,
   registerModuleMissionPanel,
@@ -53,7 +62,7 @@ import {
 } from '../components/survey/generator-registry';
 import { t, i18n } from '../../shared/i18n/index.js';
 import {
-  boardPortRegistry, configCardRegistry, nodeProfileRegistry, detectHardware, firmwareSourceRegistry, hardwareCatalogRegistry, hardwareSetupRegistry,
+  boardPortRegistry, configCardRegistry, configTabRegistry, nodeProfileRegistry, detectHardware, firmwareSourceRegistry, hardwareCatalogRegistry, hardwareSetupRegistry,
   viewBodyRegistry,
 } from './module-extension-registries';
 import { viewOwnerSlug, CARGO_VIEWS } from './capabilities';
@@ -151,6 +160,8 @@ const cargoNamespace = (slug: string) => `cargo.${slug}`;
 export function unregisterModuleExtensionsForSlug(slug: string): void {
   for (const lang of Object.keys(i18n.store.data)) i18n.removeResourceBundle(lang, cargoNamespace(slug));
   configCardRegistry.unregisterAll(slug);
+  coordinateFormatRegistry.unregisterAll(slug);
+  configTabRegistry.unregisterAll(slug);
   hardwareCatalogRegistry.unregisterAll(slug);
   hardwareSetupRegistry.unregisterAll(slug);
   firmwareSourceRegistry.unregisterAll(slug);
@@ -271,6 +282,11 @@ export function createRendererHostApi(
         configCardRegistry.register(slug, reg.id, reg);
       },
       unregisterCard: (id) => configCardRegistry.unregister(slug, id),
+      registerTab: (reg) => {
+        if (!reg?.id || !reg.component || typeof reg.title !== 'function') throw new Error(`[module:${slug}] config tab needs an id, a title() and a component`);
+        configTabRegistry.register(slug, reg.id, reg);
+      },
+      unregisterTab: (id) => configTabRegistry.unregister(slug, id),
     },
 
     hardware: {
@@ -486,14 +502,19 @@ export function createRendererHostApi(
         if (!answer.accepted) return answer;
         // The HOST writes. The module never held this path.
         const fence = useFenceStore.getState();
-        replaceInclusion(fence, fence, proposal.inclusion);
+        const inclusion = proposal.inclusion && proposal.inclusion.length >= 3 ? proposal.inclusion : null;
+        if (inclusion) replaceInclusion(fence, fence, inclusion);
+        const exclusionsWritten = proposal.exclusions ? appendExclusions(fence, proposal.exclusions) : undefined;
         const ok = await useFenceStore.getState().uploadFence();
-        return ok
-          ? { accepted: true, pointsAccepted: proposal.inclusion.length }
-          : {
-              accepted: true,
-              error: useFenceStore.getState().error ?? t('modules:moduleHost.fenceNotConfirmed'),
-            };
+        const result: ProposalResult = { accepted: true };
+        if (inclusion) result.pointsAccepted = inclusion.length;
+        if (exclusionsWritten !== undefined) result.exclusionsAccepted = exclusionsWritten;
+        if (!ok) result.error = useFenceStore.getState().error ?? t('modules:moduleHost.fenceNotConfirmed');
+        return result;
+      },
+      fenceBudget: async () => {
+        const mavType = (useConnectionStore.getState().connectionState as { mavType?: number }).mavType;
+        return fenceBudgetFor(getVehicleClass(mavType), useFenceStore.getState());
       },
     },
 
@@ -511,6 +532,22 @@ export function createRendererHostApi(
       registerLayer: (reg) => registerModuleMapLayer(slug, reg),
       unregisterLayer: (id) => unregisterModuleMapLayer(slug, id),
       pickPolygon: (prompt) => startPolygonPick(prompt ?? t('modules:moduleHost.pickPolygonPrompt')),
+      centerOn: (point, zoom) => useMapFocusStore.getState().centerOn(point.lat, point.lng, zoom),
+    },
+
+    coordinates: {
+      registerFormat: (reg) => {
+        if (!reg?.id || typeof reg.format !== 'function' || typeof reg.parse !== 'function' || typeof reg.name !== 'function') {
+          throw new Error(`[module:${slug}] coordinate format needs an id, name(), format() and parse()`);
+        }
+        coordinateFormatRegistry.register(slug, reg.id, reg);
+      },
+      unregisterFormat: (id) => coordinateFormatRegistry.unregister(slug, id),
+      current: () => ownFormatId(slug, useSettingsStore.getState().coordinateFormat),
+      select: (id) => useSettingsStore.getState().setCoordinateFormat(id === 'decimal' || id === 'dms' ? id : `${slug}:${id}`),
+      subscribe: (listener) => useSettingsStore.subscribe((s, prev) => {
+        if (s.coordinateFormat !== prev.coordinateFormat) listener(ownFormatId(slug, s.coordinateFormat));
+      }),
     },
 
     survey: {

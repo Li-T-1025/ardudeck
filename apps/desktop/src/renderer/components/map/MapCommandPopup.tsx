@@ -33,6 +33,7 @@ import {
   UNIT_PRECISION,
   verticalSpeedValueFromMetersPerSecond,
 } from '../../../shared/user-units.js';
+import { useCoordinateFormat } from '../../utils/coordinate-format';
 
 interface MapCommandPopupProps {
   lat: number;
@@ -166,6 +167,7 @@ export const MapCommandPopup: React.FC<MapCommandPopupProps> = ({
   hasRoi,
 }) => {
   const { t } = useTranslation();
+  const { format: formatPos } = useCoordinateFormat();
   const [selected, setSelected] = useState<CommandId>('fly');
 
   // Parameter state persists while the popup is open, and defaults are sane,
@@ -449,7 +451,7 @@ export const MapCommandPopup: React.FC<MapCommandPopupProps> = ({
               {targetLabel}
             </span>
           )}
-          <span className="font-mono text-[11px] text-content truncate">{lat.toFixed(6)}, {lon.toFixed(6)}</span>
+          <span className="font-mono text-[11px] text-content truncate">{formatPos(lat, lon)}</span>
         </span>
         <span className="text-[10px] text-content-tertiary shrink-0">
           <Trans i18nKey="map:mapCommand.away" values={{ distance: formatDistanceFromMeters(distanceMeters, distanceUnit) }} components={{ d: <span className="font-mono text-content-secondary" /> }} />

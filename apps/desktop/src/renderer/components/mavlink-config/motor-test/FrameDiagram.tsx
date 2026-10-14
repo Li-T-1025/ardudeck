@@ -46,20 +46,26 @@ interface FrameDiagramProps {
   layout: FrameLayout;
   /** Motor number (1-based) currently being tested, or null */
   activeMotor: number | null;
+  /** Motors spinning right now (all at once, or the one a sequence is on). */
+  spinning?: ReadonlySet<number>;
   /** Map of motor number (1-based) → RPM */
   rpmByMotor?: Map<number, number>;
   /** Called when user clicks a motor circle */
   onMotorClick?: (motorNumber: number) => void;
   /** Canvas size in px (square) */
   size?: number;
+  /** Draw the aircraft under the lift motors, so a QuadPlane does not read as a copter. */
+  quadplane?: boolean;
 }
 
 export const FrameDiagram: React.FC<FrameDiagramProps> = ({
   layout,
   activeMotor,
+  spinning,
   rpmByMotor,
   onMotorClick,
   size = 340,
+  quadplane = false,
 }) => {
   const { t } = useTranslation();
   const positions = layoutToSvgPositions(layout, size);
@@ -71,6 +77,7 @@ export const FrameDiagram: React.FC<FrameDiagramProps> = ({
       <div className="text-center">
         <div className="text-xs uppercase tracking-wider text-content-secondary">{t('mavlink-config:frameDiagram.frame')}</div>
         <div className="text-sm text-content">
+          {quadplane && <>{t('mavlink-config:frameDiagram.quadplane')} <span className="text-content-secondary">·</span> </>}
           {layout.ClassName} <span className="text-content-secondary">·</span> {frameTypeDisplayName(layout.TypeName)}
         </div>
       </div>
@@ -81,16 +88,25 @@ export const FrameDiagram: React.FC<FrameDiagramProps> = ({
         viewBox={`0 0 ${size} ${size}`}
         className="rounded-xl bg-surface border border-subtle"
       >
-        {/* Center reference circle (vehicle body) */}
-        <circle
-          cx={center}
-          cy={center}
-          r={size / 2 - 60}
-          fill="none"
-          stroke="var(--border-default)"
-          strokeWidth={1}
-          strokeDasharray="3 4"
-        />
+        {quadplane ? (
+          <g fill="var(--border-default)" fillOpacity={0.35} stroke="var(--border-default)" strokeWidth={1}>
+            {/* fuselage, wing, tailplane and fin, nose up */}
+            <rect x={center - 8} y={44} width={16} height={size - 92} rx={8} />
+            <path d={`M ${center - 12} ${center - 16} L 16 ${center - 4} L 16 ${center + 10} L ${center - 12} ${center + 6} Z M ${center + 12} ${center - 16} L ${size - 16} ${center - 4} L ${size - 16} ${center + 10} L ${center + 12} ${center + 6} Z`} />
+            <path d={`M ${center - 8} ${size - 70} L ${center - 62} ${size - 58} L ${center - 62} ${size - 48} L ${center - 8} ${size - 52} Z M ${center + 8} ${size - 70} L ${center + 62} ${size - 58} L ${center + 62} ${size - 48} L ${center + 8} ${size - 52} Z`} />
+          </g>
+        ) : (
+          /* Center reference circle (vehicle body) */
+          <circle
+            cx={center}
+            cy={center}
+            r={size / 2 - 60}
+            fill="none"
+            stroke="var(--border-default)"
+            strokeWidth={1}
+            strokeDasharray="3 4"
+          />
+        )}
 
         {/* Forward indicator (up arrow at top) */}
         <g>
@@ -118,22 +134,23 @@ export const FrameDiagram: React.FC<FrameDiagramProps> = ({
           </text>
         </g>
 
-        {/* Motor arms — lines from center to each motor */}
+        {/* Motor arms: from the centre, or on a QuadPlane booms back to the wing */}
         {positions.map((pos) => (
           <line
             key={`arm-${pos.number}`}
-            x1={center}
+            x1={quadplane ? pos.cx : center}
             y1={center}
             x2={pos.cx}
             y2={pos.cy}
             stroke="var(--border-default)"
-            strokeWidth={2}
+            strokeWidth={quadplane ? 4 : 2}
+            strokeLinecap="round"
           />
         ))}
 
         {/* Motor circles */}
         {positions.map((pos) => {
-          const isActive = activeMotor === pos.number;
+          const isActive = activeMotor === pos.number || !!spinning?.has(pos.number);
           const rpm = rpmByMotor?.get(pos.number);
           const isCw = pos.rotation === 'CW';
           // Unknown direction (PX4 with CA_ROTORn_KM unset) must not claim a spin
@@ -194,6 +211,17 @@ export const FrameDiagram: React.FC<FrameDiagramProps> = ({
                   <g opacity={0.85} pointerEvents="none">
                     <path d={arrow.d} fill="none" stroke={color} strokeWidth={2} />
                     <polygon points={arrow.head} fill={color} />
+                    {/* while the motor runs the arrow turns its real way */}
+                    {isActive && (
+                      <animateTransform
+                        attributeName="transform"
+                        type="rotate"
+                        from={`0 ${pos.cx} ${pos.cy}`}
+                        to={`${isCw ? 360 : -360} ${pos.cx} ${pos.cy}`}
+                        dur="0.8s"
+                        repeatCount="indefinite"
+                      />
+                    )}
                   </g>
                 );
               })()}

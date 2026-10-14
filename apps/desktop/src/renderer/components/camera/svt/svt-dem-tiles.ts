@@ -9,6 +9,7 @@
  */
 
 import { decodeTerrarium } from '../../../utils/terrain-colors';
+import { tileVersionSuffix } from '../../../stores/tile-source-store';
 import {
   TILE_SIZE,
   TILE_TIMEOUT_MS,
@@ -78,7 +79,7 @@ async function loadTilePixels(z: number, x: number, y: number): Promise<Uint8Cla
       }
     };
     img.onerror = () => finish(null);
-    img.src = TILE_URL.replace('{z}', String(z)).replace('{x}', String(x)).replace('{y}', String(y));
+    img.src = TILE_URL.replace('{z}', String(z)).replace('{x}', String(x)).replace('{y}', String(y)) + tileVersionSuffix();
   });
 }
 

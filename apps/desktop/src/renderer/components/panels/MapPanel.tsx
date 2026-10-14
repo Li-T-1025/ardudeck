@@ -69,6 +69,9 @@ import { MapLayersControl } from '../map/overlays/MapLayersControl';
 import { InstrumentsLayer, SingleMapInstrument } from '../map/instruments/InstrumentsLayer';
 import { PRESET_INSTRUMENT_LAYOUTS } from '../map/instruments/preset-layouts';
 import { InstrumentsMenu } from '../map/instruments/InstrumentsMenu';
+import { useMapFocusStore, FOCUS_FRESH_MS } from '../../stores/map-focus-store';
+import { MapFocusLayer } from '../map/MapFocusLayer';
+import { useCoordinateFormat } from '../../utils/coordinate-format';
 import { useMapHomeStore } from '../map/instruments/registry';
 import { useMapInstrumentsStore, resolveInstrumentVisible } from '../../stores/map-instruments-store';
 import { WindParticleOverlay } from '../map/overlays/WindParticleOverlay';
@@ -1347,6 +1350,7 @@ function SplitLayoutPrompt({ onChoose }: { onChoose: (action: 'preset' | 'curren
 
 const TelemetryMap3D = React.memo(function TelemetryMap3D() {
   const { t } = useTranslation();
+  const { format: formatPos } = useCoordinateFormat();
   const gps = useTelemetryStore((s) => s.gps);
   const position = useTelemetryStore((s) => s.position);
   const vfrHud = useTelemetryStore((s) => s.vfrHud);
@@ -1438,6 +1442,13 @@ const TelemetryMap3D = React.memo(function TelemetryMap3D() {
   // Map-readiness flag so the command-overlay effect knows when the MapLibre
   // instance is wired up and styles are loaded.
   const [mapReady, setMapReady] = useState(false);
+
+  const focusRequest = useMapFocusStore((s) => s.request);
+  useEffect(() => {
+    if (!focusRequest || !mapReady || Date.now() - focusRequest.at > FOCUS_FRESH_MS) return;
+    setFollowVehicle(false);
+    mapInstanceRef.current?.flyTo({ center: [focusRequest.lon, focusRequest.lat], ...(focusRequest.zoom !== undefined ? { zoom: focusRequest.zoom } : {}) });
+  }, [focusRequest, mapReady]);
 
   // Handle map ready — store ref, attach drag listener, and center on vehicle
   const handleMapReady = useCallback((map: import('maplibre-gl').Map) => {
@@ -1767,7 +1778,7 @@ const TelemetryMap3D = React.memo(function TelemetryMap3D() {
           <>
             <div className="border-t border-default my-1" />
             <div className="text-[10px] text-content-secondary font-mono">
-              {gps.lat.toFixed(6)}, {gps.lon.toFixed(6)}
+              {formatPos(gps.lat, gps.lon)}
             </div>
           </>
         )}
@@ -2316,6 +2327,7 @@ const TelemetryMap2D = React.memo(function TelemetryMap2D() {
     setFollowVehicle(false);
   }, []);
 
+
   // Command popup is local UI state — only relevant while the popover is up.
   const [commandPopup, setCommandPopup] = useState<{ lat: number; lon: number } | null>(null);
   // Refusals must be visible on the map itself: the Messages panel is not part
@@ -2790,6 +2802,7 @@ const TelemetryMap2D = React.memo(function TelemetryMap2D() {
       >
         <MapRefBridge mapRef={leafletMapRef} />
         <SmoothWheelZoom />
+        <MapFocusLayer onFocus={() => setFollowVehicle(false)} />
         <TelemetryViewportSync />
         <MapBoundsTracker onBoundsChange={handleBoundsChange} />
         <TileLayer

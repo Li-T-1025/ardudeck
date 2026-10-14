@@ -16,6 +16,9 @@ export interface DrapeHandle {
       the textures of the rings it replaces. */
   setDrape: (rings: DrapeRing[] | null, renderer?: THREE.WebGLRenderer) => void;
   hasDrape: () => boolean;
+  /** Drape another material with the same imagery, only where the GLSL `when` holds (e.g. on roofs).
+      `before` patches that material's shader first; it may declare what `when` uses. */
+  share: (material: THREE.Material, when: string, before?: (shader: THREE.WebGLProgramParametersWithUniforms) => void) => void;
   dispose: () => void;
 }
 
@@ -38,8 +41,9 @@ export function attachDrape(material: THREE.MeshStandardMaterial): DrapeHandle {
     uRingTex3: { value: blank as THREE.Texture },
   };
   let rings: DrapeRing[] = [];
+  const shared: THREE.Material[] = [];
 
-  material.onBeforeCompile = (shader) => {
+  const inject = (shader: THREE.WebGLProgramParametersWithUniforms, when = 'true') => {
     Object.assign(shader.uniforms, uniforms);
     shader.vertexShader = shader.vertexShader
       .replace('#include <common>', '#include <common>\nvarying vec3 vSvtWorld;')
@@ -77,7 +81,7 @@ export function attachDrape(material: THREE.MeshStandardMaterial): DrapeHandle {
       .replace(
         '#include <color_fragment>',
         `#include <color_fragment>
-        if (uDrape > 0.5) {
+        if (uDrape > 0.5 && (${when})) {
           if (uRingCount > 0 && svtInRing(uRingRect0, vSvtWorld)) {
             diffuseColor.rgb = texture2D(uRingTex0, svtRingUv(uRingRect0, vSvtWorld)).rgb;
           } else if (uRingCount > 1 && svtInRing(uRingRect1, vSvtWorld)) {
@@ -90,8 +94,18 @@ export function attachDrape(material: THREE.MeshStandardMaterial): DrapeHandle {
         }`,
       );
   };
+  material.onBeforeCompile = (shader) => inject(shader);
 
   return {
+    share(other, when, before) {
+      other.onBeforeCompile = (shader) => {
+        before?.(shader);
+        inject(shader, when);
+      };
+      shared.push(other);
+      other.needsUpdate = true;
+    },
+
     setDrape(next, renderer) {
       for (const ring of rings) ring.texture.dispose();
       rings = next ?? [];
@@ -110,6 +124,7 @@ export function attachDrape(material: THREE.MeshStandardMaterial): DrapeHandle {
       uniforms.uRingCount.value = rings.length;
       uniforms.uDrape.value = rings.length > 0 ? 1 : 0;
       material.needsUpdate = true;
+      for (const m of shared) m.needsUpdate = true;
     },
 
     hasDrape() {

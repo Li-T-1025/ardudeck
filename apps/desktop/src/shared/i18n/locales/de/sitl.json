@@ -214,7 +214,8 @@
     "useMyLocation": "Meinen Standort verwenden",
     "vehicleType": "Fahrzeugtyp",
     "vehicleTypeDesc": "Die zu simulierende Fahrzeugklasse wählen",
-    "vtol": "VTOL"
+    "vtol": "VTOL",
+    "runningElsewhere": "SITL läuft bei {{lat}}, {{lng}}, dorthin verlegt vom Trainer. Ihr Startpunkt unten bleibt erhalten und gilt beim nächsten Start."
   },
   "view": {
     "afternoon": "Nachmittag",

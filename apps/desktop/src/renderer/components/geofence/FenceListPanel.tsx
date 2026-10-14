@@ -13,6 +13,7 @@ import { useConnectionStore } from '../../stores/connection-store';
 import { FENCE_BREACH } from '../../../shared/fence-types';
 import { useSettingsStore } from '../../stores/settings-store';
 import { formatAltitudeFromMeters } from '../../../shared/user-units.js';
+import { useCoordinateFormat } from '../../utils/coordinate-format';
 
 interface FenceListPanelProps {
   readOnly?: boolean;
@@ -38,6 +39,7 @@ export function FenceListPanel({ readOnly = false }: FenceListPanelProps) {
     clearReturnPoint,
   } = useFenceStore();
   const { t } = useTranslation();
+  const { format: formatPos } = useCoordinateFormat();
 
   // Check if connected to MSP board (iNav/Betaflight)
   const connectionState = useConnectionStore((state) => state.connectionState);
@@ -112,7 +114,7 @@ export function FenceListPanel({ readOnly = false }: FenceListPanelProps) {
               onClick={() => setSelectedFenceId(null)}
             >
               <div className="text-xs">
-                <div>{returnPoint.lat.toFixed(6)}, {returnPoint.lon.toFixed(6)}</div>
+                <div>{formatPos(returnPoint.lat, returnPoint.lon)}</div>
                 <div className="text-content-secondary">{t('geofence:fenceListPanel.alt', { value: formatAltitudeFromMeters(returnPoint.altitude, altitudeUnit) })}</div>
               </div>
               {!readOnly && (

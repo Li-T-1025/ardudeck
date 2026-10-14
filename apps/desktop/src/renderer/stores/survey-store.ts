@@ -1,8 +1,8 @@
 import { create } from 'zustand';
 import { t } from '../../shared/i18n/index.js';
 import { subscribeWithSelector } from 'zustand/middleware';
-import type { LatLng, SurveyConfig, SurveyResult, SurveyPattern, AltitudeReference, GroundPattern, CorridorMode, StripOrderMode } from '../components/survey/survey-types';
-import { DEFAULT_SURVEY_CONFIG, asOwnFlight } from '../components/survey/survey-types';
+import type { LatLng, SurveyConfig, SurveyResult, SurveyPattern, AltitudeReference, GroundPattern, CorridorMode, StripOrderMode, SurveyFleetVehicle } from '../components/survey/survey-types';
+import { DEFAULT_SURVEY_CONFIG, asOwnFlight, FLEET_SLOTS_MAX, fleetSlotKey } from '../components/survey/survey-types';
 import type { CameraPreset } from '../components/survey/survey-types';
 // Importing the generators barrel triggers self-registration of every
 // built-in generator against the registry. Survey-store then dispatches
@@ -122,6 +122,9 @@ interface SurveyStore {
   setGeneratorId: (id: string | null) => void;
   /** Set one engine parameter (declared via the generator's configFields). */
   setEngineParam: (id: string, value: unknown) => void;
+  /** Number of vehicles a fleet-capable engine plans for; 1 clears the fleet. */
+  setFleetCount: (count: number) => void;
+  updateFleetVehicle: (key: string, patch: Partial<Omit<SurveyFleetVehicle, 'key'>>) => void;
   setAltitude: (altitude: number) => void;
   setSpeed: (speed: number) => void;
   setFrontOverlap: (overlap: number) => void;
@@ -157,6 +160,7 @@ interface SurveyStore {
   /** Set (or clear with null) the dragged tangent handles of one anchor. */
   setPanoramaTangent: (index: number, tangent: { inX: number; inY: number; outX: number; outY: number } | null) => void;
   setCorridorStrips: (count: number) => void;
+  setCorridorBranchStrips: (count: number) => void;
   setCorridorMode: (mode: CorridorMode) => void;
   setCorridorSideOffset: (meters: number) => void;
   setCorridorMargin: (meters: number) => void;
@@ -563,6 +567,34 @@ export const useSurveyStore = create<SurveyStore>()(subscribeWithSelector((set, 
     get().requestRecompute();
   },
 
+  setFleetCount: (count) => {
+    const { fleet: _drop, ...rest } = get().config;
+    const n = Math.max(1, Math.min(FLEET_SLOTS_MAX, Math.round(count)));
+    if (n <= 1) {
+      set({ config: rest });
+    } else {
+      const current = get().config.fleet ?? [];
+      const fleet: SurveyFleetVehicle[] = [];
+      for (let i = 1; i <= n; i++) fleet.push(current[i - 1] ?? { key: fleetSlotKey(i) });
+      set({ config: { ...rest, fleet } });
+    }
+    get().requestRecompute();
+  },
+
+  updateFleetVehicle: (key, patch) => {
+    const { config } = get();
+    if (!config.fleet) return;
+    const fleet = config.fleet.map((v) => {
+      if (v.key !== key) return v;
+      const next = { ...v, ...patch };
+      if (!(next.enduranceMinutes && next.enduranceMinutes > 0)) delete next.enduranceMinutes;
+      if (!(next.speed && next.speed > 0)) delete next.speed;
+      return next;
+    });
+    set({ config: { ...config, fleet } });
+    get().requestRecompute();
+  },
+
   setAltitude: (altitude) => {
     set({ config: { ...get().config, altitude } });
     get().requestRecompute();
@@ -733,6 +765,13 @@ export const useSurveyStore = create<SurveyStore>()(subscribeWithSelector((set, 
     // tens of thousands of waypoints.
     const clamped = Math.max(0, Math.min(40, Math.round(count)));
     set({ config: { ...get().config, corridorStrips: clamped } });
+    get().requestRecompute();
+  },
+
+  setCorridorBranchStrips: (count) => {
+    // 0 = same as the main line.
+    const clamped = Math.max(0, Math.min(40, Math.round(count)));
+    set({ config: { ...get().config, corridorBranchStrips: clamped } });
     get().requestRecompute();
   },
 

@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
+  appendExclusions,
   summariseFence,
   replaceInclusion,
   type FenceGeometry,
@@ -97,5 +98,31 @@ describe('replaceInclusion', () => {
       { lat: 52.51, lon: 13.41 },
     ]);
     expect(got.every((p) => Number.isFinite(p.lon))).toBe(true);
+  });
+});
+
+describe('appendExclusions', () => {
+  it('adds each polygon as exclusion and leaves inclusion alone', () => {
+    const added: Array<{ type: string; n: number }> = [];
+    const removed: string[] = [];
+    const write: FenceWriter = {
+      removePolygon: (id) => { removed.push(id); },
+      removeCircle: () => {},
+      addPolygon: (type, v) => { added.push({ type, n: v.length }); },
+    };
+    const n = appendExclusions(write, [
+      { name: 'a', points: [{ lat: 0, lng: 0 }, { lat: 0, lng: 1 }, { lat: 1, lng: 1 }] },
+      { name: 'b', points: [{ lat: 2, lng: 2 }, { lat: 2, lng: 3 }, { lat: 3, lng: 3 }] },
+    ]);
+    expect(n).toBe(2);
+    expect(added).toEqual([{ type: 'exclusion', n: 3 }, { type: 'exclusion', n: 3 }]);
+    expect(removed).toEqual([]);
+  });
+
+  it('skips rings with fewer than 3 points', () => {
+    const added: unknown[] = [];
+    const write: FenceWriter = { removePolygon: () => {}, removeCircle: () => {}, addPolygon: (_t, v) => { added.push(v); } };
+    expect(appendExclusions(write, [{ name: 'x', points: [{ lat: 0, lng: 0 }] }])).toBe(0);
+    expect(added).toEqual([]);
   });
 });

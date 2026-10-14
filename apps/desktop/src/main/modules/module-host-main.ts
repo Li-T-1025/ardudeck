@@ -1,9 +1,13 @@
-import { app, ipcMain, safeStorage, BrowserWindow } from 'electron';
+import { app, dialog, ipcMain, safeStorage, BrowserWindow } from 'electron';
 import { access, mkdir, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { MainHostApi, ModuleManifest } from '@ardudeck/module-sdk';
 import { vehicleControl } from '../vehicle-control/vehicle-control.js';
 import { mediaEngine } from '../media/media-engine.js';
+import { installScript } from '../script-installer/install-script.js';
+import { t } from '../../shared/i18n/index.js';
+import { registerTileSource, unregisterTileSource } from '../terrain/tile-source-registry.js';
+import { registerSceneMesh, unregisterSceneMesh } from '../terrain/scene-mesh-registry.js';
 
 export function createMainHostApi(manifest: ModuleManifest): MainHostApi {
   const dataDir = join(app.getPath('userData'), 'modules', manifest.slug, 'data');
@@ -12,6 +16,7 @@ export function createMainHostApi(manifest: ModuleManifest): MainHostApi {
   const secretPath = (key: string) => join(dataDir, `${key}.secret`);
   const canControl = manifest.permissions?.includes('vehicleControl') ?? false;
   const noPermission = { ok: false, error: "missing the 'vehicleControl' permission" } as const;
+  const canScript = manifest.permissions?.includes('scripts') ?? false;
 
   return {
     moduleSlug: manifest.slug,
@@ -81,6 +86,28 @@ export function createMainHostApi(manifest: ModuleManifest): MainHostApi {
     },
     camera: {
       listStreams: () => mediaEngine.liveStreams(),
+    },
+    tiles: {
+      register: (reg) => { registerTileSource(manifest.slug, reg); },
+      unregister: (id) => unregisterTileSource(manifest.slug, id),
+    },
+    scene: {
+      registerMesh: (reg) => { registerSceneMesh(manifest.slug, reg); },
+      unregisterMesh: (id) => unregisterSceneMesh(manifest.slug, id),
+    },
+    scripts: {
+      install: async (req, onProgress) => (canScript
+        ? installScript(req, onProgress)
+        : { status: 'error', message: "missing the 'scripts' permission" }), // i18n-exempt
+      saveCopy: async (filename, source) => {
+        if (!canScript) return null;
+        const win = BrowserWindow.getFocusedWindow() ?? BrowserWindow.getAllWindows()[0];
+        const opts = { title: t('main:ipc.saveLuaScriptTitle'), defaultPath: filename, filters: [{ name: t('main:fileFilters.luaScript'), extensions: ['lua'] }] };
+        const res = win ? await dialog.showSaveDialog(win, opts) : await dialog.showSaveDialog(opts);
+        if (res.canceled || !res.filePath) return null;
+        await writeFile(res.filePath, source, 'utf-8');
+        return res.filePath;
+      },
     },
   };
 }

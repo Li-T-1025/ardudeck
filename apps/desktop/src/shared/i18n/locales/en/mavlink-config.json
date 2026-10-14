@@ -409,7 +409,8 @@
   },
   "frameDiagram": {
     "clickToTest": "Click a motor to test",
-    "frame": "Frame"
+    "frame": "Frame",
+    "quadplane": "QuadPlane lift motors"
   },
   "gpsDiagnosticsDialog": {
     "accuracy": "Accuracy",
@@ -931,7 +932,11 @@
     "testAllAtOnce": "Test All At Once",
     "testAllSequence": "Test All In Sequence",
     "testIndividual": "Test Individual",
-    "title": "Motor Test"
+    "title": "Motor Test",
+    "planeTitle": "No motor test on a fixed wing",
+    "planeBody": "ArduPlane can only spin motors from the ground station on a QuadPlane (VTOL), for its lift motors. A plain fixed wing's forward motor has no motor test in the firmware, in any ground station.",
+    "planeHow": "To check a forward motor: take the propeller off, arm in MANUAL and raise the throttle stick. To see which output drives it, use Servo Output.",
+    "quadplaneNote": "Tests the VTOL lift motors. A separate forward motor is not part of ArduPilot's motor test; check it with the throttle in MANUAL, propeller off."
   },
   "notifyTab": {
     "allSoundsOn": "All sounds on",

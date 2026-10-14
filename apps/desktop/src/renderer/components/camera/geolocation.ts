@@ -1,3 +1,4 @@
+import { formatPosition } from '../../utils/coordinate-format';
 /**
  * Pixel -> ground geolocation for the camera feed.
  *
@@ -105,9 +106,7 @@ export function projectFootprint(pose: CameraPose, groundElevationM = 0): GeoPoi
   return pts;
 }
 
-/** Format a lat/lon as a compact DMS-ish decimal string for the OSD. */
+/** A lat/lon for the OSD, in the pilot's coordinate format. */
 export function formatCoord(lat: number, lon: number): string {
-  const ns = lat >= 0 ? 'N' : 'S';
-  const ew = lon >= 0 ? 'E' : 'W';
-  return `${Math.abs(lat).toFixed(6)}°${ns}  ${Math.abs(lon).toFixed(6)}°${ew}`;
+  return formatPosition(lat, lon);
 }

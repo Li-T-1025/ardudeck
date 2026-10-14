@@ -115,6 +115,17 @@ const navItems: NavItem[] = [
     ),
   },
   {
+    id: 'locus',
+    labelKey: 'navigation:navigationRail.locus',
+    icon: (
+      <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round">
+        <path d="M3 17l6-3 6 3 6-3" />
+        <path d="M3 12l6-3 6 3 6-3" />
+        <circle cx="12" cy="5" r="2" />
+      </svg>
+    ),
+  },
+  {
     id: 'settings',
     labelKey: 'common:settings',
     icon: (

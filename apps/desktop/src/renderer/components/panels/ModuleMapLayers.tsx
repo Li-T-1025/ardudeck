@@ -2,10 +2,11 @@
 
 import { useTranslation } from 'react-i18next';
 import { useEffect, useState } from 'react';
-import { Polyline, Polygon, Marker, useMapEvents } from 'react-leaflet';
+import { Polyline, Polygon, Marker, TileLayer, useMap, useMapEvents } from 'react-leaflet';
 import { useMapPicking } from '../../hooks/useMapPicking';
 import L from 'leaflet';
-import type { MapFeature, MapPoint } from '@ardudeck/module-sdk';
+import { useTileSourceStore } from '../../stores/tile-source-store';
+import type { MapFeature, MapPoint, MapView } from '@ardudeck/module-sdk';
 import {
   featuresOf,
   getModuleMapLayers,
@@ -33,11 +34,39 @@ function latlngs(points: MapPoint[]): [number, number][] {
   return points.map((p) => [p.lat, p.lng]);
 }
 
+// labels and colours come from cargo: never as raw HTML
+const esc = (s: string) => s.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
+const cssColor = (c: string) => (/^[#a-z0-9(),.%\s]+$/i.test(c) ? c : '#fff');
+
+const TEXT_SHIFT: Record<string, string> = {
+  center: 'translate(-50%,-50%)', left: 'translate(0,-50%)', right: 'translate(-100%,-50%)', top: 'translate(-50%,0)', bottom: 'translate(-50%,-100%)',
+};
+
+// dark text gets a light outline, light text a dark one, so either reads on imagery
+function haloFor(color: string): string {
+  const m = /^#([0-9a-f]{6})$/i.exec(color.trim());
+  if (!m) return '#000';
+  const n = parseInt(m[1]!, 16);
+  const lum = 0.299 * (n >> 16) + 0.587 * ((n >> 8) & 255) + 0.114 * (n & 255);
+  return lum < 110 ? '#fff' : '#000';
+}
+
+function textIcon(text: string, color: string, size = 11, anchor = 'center'): L.DivIcon {
+  const px = Math.max(9, Math.min(20, size));
+  const halo = haloFor(color);
+  return L.divIcon({
+    className: '',
+    html: `<div style="position:absolute;transform:${TEXT_SHIFT[anchor] ?? TEXT_SHIFT.center};white-space:nowrap;font:700 ${px}px/1.1 ui-monospace,monospace;color:${cssColor(color)};text-shadow:0 0 3px ${halo},0 0 2px ${halo},0 0 1px ${halo};pointer-events:none">${esc(text)}</div>`,
+    iconSize: [0, 0],
+  });
+}
+
 function markerIcon(icon: string, color: string, label?: string): L.DivIcon {
   const glyph = GLYPH[icon] ?? GLYPH.dot;
+  color = cssColor(color);
   const text = label
     ? `<div style="font:600 9px/1.2 system-ui;color:${color};text-align:center;
-         max-width:74px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${label}</div>`
+         max-width:74px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(label)}</div>`
     : '';
   return L.divIcon({
     className: '',
@@ -85,6 +114,9 @@ function Feature({ f, k }: { f: MapFeature; k: string }): JSX.Element | null {
       />
     );
   }
+  if (f.kind === 'text') {
+    return <Marker key={k} position={[f.at.lat, f.at.lng]} icon={textIcon(f.text, f.color, f.size, f.anchor)} interactive={false} keyboard={false} />;
+  }
   if (f.kind === 'marker') {
     return (
       <Marker
@@ -98,8 +130,16 @@ function Feature({ f, k }: { f: MapFeature; k: string }): JSX.Element | null {
   return null;
 }
 
+function viewOf(map: L.Map): MapView {
+  const b = map.getBounds();
+  return { north: b.getNorth(), south: b.getSouth(), east: b.getEast(), west: b.getWest(), zoom: map.getZoom() };
+}
+
 export function ModuleMapLayers(): JSX.Element | null {
   const [layers, setLayers] = useState<ModuleMapLayer[]>(() => getModuleMapLayers());
+  const map = useMap();
+  const [view, setView] = useState<MapView | undefined>(() => { try { return viewOf(map); } catch { return undefined; } });
+  useMapEvents({ moveend: () => setView(viewOf(map)), zoomend: () => setView(viewOf(map)) });
   // The registry bumps this; the features live inside the module, where React
   // cannot see them change.
   const [, setTick] = useState(0);
@@ -113,14 +153,20 @@ export function ModuleMapLayers(): JSX.Element | null {
     [],
   );
 
+  const tileVersion = useTileSourceStore((s) => s.version);
   if (layers.length === 0) return null;
 
   return (
     <>
       {layers
+        .filter((l) => isLayerVisible(l.key) && l.tileUrl)
+        .map((l) => (
+          <TileLayer key={`${l.key}:tiles:${tileVersion}`} url={`${l.tileUrl!}?v=${tileVersion}`} opacity={l.reg.tiles?.opacity ?? 1} maxNativeZoom={22} maxZoom={22} />
+        ))}
+      {layers
         .filter((l) => isLayerVisible(l.key))
         .map((l) =>
-          featuresOf(l).map((f, i) => <Feature key={`${l.key}:${i}`} k={`${l.key}:${i}`} f={f} />),
+          featuresOf(l, view).map((f, i) => <Feature key={`${l.key}:${i}`} k={`${l.key}:${i}`} f={f} />),
         )}
     </>
   );

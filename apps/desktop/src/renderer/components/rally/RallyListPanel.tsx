@@ -21,6 +21,7 @@ import {
   UNIT_LABELS,
   type AltitudeUnit,
 } from '../../../shared/user-units.js';
+import { useCoordinateFormat } from '../../utils/coordinate-format';
 
 interface RallyListPanelProps {
   readOnly?: boolean;
@@ -198,6 +199,7 @@ interface RallyListItemProps {
 
 function RallyListItem({ point, isSelected, readOnly, altitudeUnit, onSelect, onRemove }: RallyListItemProps) {
   const { t } = useTranslation();
+  const { format: formatPos } = useCoordinateFormat();
   return (
     <div
       className={`flex items-center justify-between p-2 rounded cursor-pointer ${
@@ -219,7 +221,7 @@ function RallyListItem({ point, isSelected, readOnly, altitudeUnit, onSelect, on
         </div>
         <div className="text-xs">
           <div className="text-content">
-            {point.latitude.toFixed(6)}, {point.longitude.toFixed(6)}
+            {formatPos(point.latitude, point.longitude)}
           </div>
           <div className="text-content-secondary">{t('rally:rallyListPanel.alt', { value: formatAltitudeFromMeters(point.altitude, altitudeUnit) })}</div>
         </div>
@@ -271,6 +273,7 @@ function parseNumberDraft(value: string): number | null {
 
 function RallyDetailsPanel({ point, altitudeUnit, onUpdate }: RallyDetailsPanelProps) {
   const { t } = useTranslation();
+  const { format: formatPos } = useCoordinateFormat();
   const [localAlt, setLocalAlt] = useState(() => altitudeInputValue(point.altitude, altitudeUnit));
   const [localBreakAlt, setLocalBreakAlt] = useState(() => altitudeInputValue(point.breakAltitude, altitudeUnit));
   const [localDirection, setLocalDirection] = useState(String(point.landDirection));
@@ -338,7 +341,7 @@ function RallyDetailsPanel({ point, altitudeUnit, onUpdate }: RallyDetailsPanelP
         <div className="flex items-center justify-between">
           <label className="text-xs text-content-secondary">{t('common:position')}</label>
           <span className="text-xs text-content">
-            {point.latitude.toFixed(6)}, {point.longitude.toFixed(6)}
+            {formatPos(point.latitude, point.longitude)}
           </span>
         </div>
 

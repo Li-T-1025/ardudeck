@@ -654,5 +654,15 @@
     "pickParamFile": "Parameterdatei für dieses Modell",
     "paramFiles": "Parameterdateien",
     "endpointInUse": "ArduDeck ist bereits mit {{endpoint}} verbunden, und ein Simulator bedient pro Port nur einen Client. Den nächsten Port des Simulators verwenden: {{alt}}."
+  },
+  "scriptInstall": {
+    "notConnected": "Kein Flugcontroller verbunden.",
+    "busy": "Es wird bereits ein anderes Skript installiert.",
+    "badName": "{{name}} ist kein gültiger Skript-Dateiname.",
+    "armed": "Vor der Installation disarmen: Der Flugcontroller muss neu starten.",
+    "setFailed": "{{param}} konnte nicht gesetzt werden.",
+    "uploadFailed": "Hochladen fehlgeschlagen.",
+    "noReconnect": "Der Flugcontroller kam nach dem Neustart nicht zurück.",
+    "notStarted": "Das Skript ist nicht gestartet. Im Meldungsbereich nach einem Lua-Fehler sehen, etwa \"Insufficent memory\"."
   }
 }

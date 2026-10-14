@@ -16,6 +16,7 @@ import { useEditModeStore } from '../../stores/edit-mode-store';
 import { MAP_LAYERS, type LayerKey, type MapLayer } from '../../../shared/map-layers';
 import { SmoothWheelZoom } from './SmoothWheelZoom';
 import { searchLocations, type GeocodeResult } from '../../utils/weather-api';
+import { useCoordinateFormat } from '../../utils/coordinate-format';
 
 const FALLBACK_CENTER: [number, number] = [51.505, -0.09];
 const FALLBACK_ZOOM = 4;
@@ -106,8 +107,9 @@ export function MapPointPickerDialog({
   const flyToken = useRef(0);
 
   const [showManual, setShowManual] = useState(false);
-  const [manualLat, setManualLat] = useState(initial ? initial.lat.toFixed(5) : '');
-  const [manualLng, setManualLng] = useState(initial ? initial.lng.toFixed(5) : '');
+  const { format: formatPos, parse: parsePos } = useCoordinateFormat();
+  const [manualText, setManualText] = useState(initial ? formatPos(initial.lat, initial.lng) : '');
+  const [manualInvalid, setManualInvalid] = useState(false);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
@@ -136,8 +138,8 @@ export function MapPointPickerDialog({
 
   const pickOnMap = (lat: number, lng: number) => {
     setSelected({ lat, lng });
-    setManualLat(lat.toFixed(5));
-    setManualLng(lng.toFixed(5));
+    setManualText(formatPos(lat, lng));
+    setManualInvalid(false);
   };
 
   const pickResult = (r: GeocodeResult) => {
@@ -148,11 +150,11 @@ export function MapPointPickerDialog({
   };
 
   const applyManual = () => {
-    const lat = Number(manualLat);
-    const lng = Number(manualLng);
-    if (!Number.isFinite(lat) || !Number.isFinite(lng) || Math.abs(lat) > 90 || Math.abs(lng) > 180) return;
-    setSelected({ lat, lng });
-    setFlyTo({ lat, lng, token: ++flyToken.current });
+    const p = parsePos(manualText);
+    if (!p) { setManualInvalid(true); return; }
+    setManualInvalid(false);
+    setSelected({ lat: p.lat, lng: p.lon });
+    setFlyTo({ lat: p.lat, lng: p.lon, token: ++flyToken.current });
   };
 
   const confirm = () => {
@@ -268,7 +270,7 @@ export function MapPointPickerDialog({
             <div className="flex items-center gap-2 text-content-secondary min-w-0">
               <MapPin className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
               {selected ? (
-                <span className="tabular-nums truncate">{selected.lat.toFixed(5)}, {selected.lng.toFixed(5)}</span>
+                <span className="tabular-nums truncate">{formatPos(selected.lat, selected.lng)}</span>
               ) : (
                 <span className="text-content-tertiary">{t('map:mapPointPicker.noPoint')}</span>
               )}
@@ -286,18 +288,14 @@ export function MapPointPickerDialog({
           {showManual && (
             <div className="mt-2 flex items-center gap-1.5">
               <input
-                type="number"
-                value={manualLat}
-                onChange={(e) => setManualLat(e.target.value)}
-                placeholder={t('map:mapPointPicker.lat')}
-                className="w-0 flex-1 min-w-0 px-2 py-1.5 bg-surface-input border border-border rounded-md text-xs text-content tabular-nums focus:outline-none focus:border-blue-500"
-              />
-              <input
-                type="number"
-                value={manualLng}
-                onChange={(e) => setManualLng(e.target.value)}
-                placeholder={t('map:mapPointPicker.lng')}
-                className="w-0 flex-1 min-w-0 px-2 py-1.5 bg-surface-input border border-border rounded-md text-xs text-content tabular-nums focus:outline-none focus:border-blue-500"
+                type="text"
+                value={manualText}
+                spellCheck={false}
+                onChange={(e) => { setManualText(e.target.value); setManualInvalid(false); }}
+                onKeyDown={(e) => { if (e.key === 'Enter') applyManual(); }}
+                placeholder={t('map:mapPointPicker.positionPlaceholder')}
+                aria-invalid={manualInvalid}
+                className={`w-0 flex-1 min-w-0 px-2 py-1.5 bg-surface-input border rounded-md text-xs text-content font-mono tabular-nums focus:outline-none ${manualInvalid ? 'border-red-500/70' : 'border-border focus:border-blue-500'}`}
               />
               <button
                 onClick={applyManual}

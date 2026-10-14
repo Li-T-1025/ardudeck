@@ -29,6 +29,12 @@ export const useOrchestrationStore = create<OrchestrationStore>((set, get) => ({
   servers: {},
 
   applyStatus: (status) => {
+    // A relaunched engine comes back on a new transport. Keeping the dead entry would
+    // leave intents (Take off all, formations) aimed at it and silently dropped.
+    if (status.kind === 'closed') {
+      get().removeServer(status.transportId);
+      return;
+    }
     const prev = get().servers[status.transportId];
     const base: OrchestrationServerState = prev ?? {
       transportId: status.transportId,

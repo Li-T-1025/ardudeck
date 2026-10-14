@@ -18,6 +18,7 @@ import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import type { SvtQuality } from '../components/camera/svt/svt-terrain';
 import { DEFAULT_SVT_IMAGERY, validImagery, type SvtImagery } from '../components/camera/svt/svt-satellite';
+import { DEFAULT_SVT_BUILDINGS, validBuildings, type SvtBuildings } from '../components/camera/svt/svt-building-sources';
 import {
   type CameraSourceConfig,
   type CameraStreamSession,
@@ -51,6 +52,12 @@ interface CameraState {
   svtSatellite: boolean;
   /** Which map satellite layer textures the terrain */
   svtImagery: SvtImagery;
+  /** Where synthetic-vision buildings come from, or off. */
+  svtBuildings: SvtBuildings;
+  /** Roofs show the satellite imagery under them. */
+  svtRoofImagery: boolean;
+  /** Walls get a window pattern per floor. */
+  svtFacades: boolean;
   /** Synthetic-vision terrain detail (never the near-field imagery). */
   svtQuality: SvtQuality;
   /** Pin this window to one vehicle, ignoring the active selection. Null = follow. */
@@ -83,6 +90,9 @@ interface CameraState {
   setSvtSatellite: (on: boolean) => void;
   setSvtQuality: (quality: SvtQuality) => void;
   setSvtImagery: (imagery: SvtImagery) => void;
+  setSvtBuildings: (source: SvtBuildings) => void;
+  setSvtRoofImagery: (on: boolean) => void;
+  setSvtFacades: (on: boolean) => void;
   setLockedVehicle: (vehicleKey: string | null) => void;
   toggleOsd: (layer: keyof OsdLayers) => void;
   setGridCols: (cols: number) => void;
@@ -110,6 +120,9 @@ export const useCameraStore = create<CameraState>()(
       syntheticFallback: true,
       svtSatellite: false,
       svtImagery: DEFAULT_SVT_IMAGERY,
+      svtBuildings: DEFAULT_SVT_BUILDINGS,
+      svtRoofImagery: true,
+      svtFacades: true,
       svtQuality: 'medium',
       lockedVehicleKey: null,
       osd: { ...DEFAULT_OSD_LAYERS },
@@ -202,6 +215,9 @@ export const useCameraStore = create<CameraState>()(
       setSvtSatellite: (svtSatellite) => set({ svtSatellite }),
       setSvtQuality: (svtQuality) => set({ svtQuality }),
       setSvtImagery: (svtImagery) => set({ svtImagery: validImagery(svtImagery) }),
+      setSvtBuildings: (svtBuildings) => set({ svtBuildings: validBuildings(svtBuildings) }),
+      setSvtRoofImagery: (svtRoofImagery) => set({ svtRoofImagery }),
+      setSvtFacades: (svtFacades) => set({ svtFacades }),
       setLockedVehicle: (lockedVehicleKey) => set({ lockedVehicleKey }),
       toggleOsd: (layer) => set((s) => ({ osd: { ...s.osd, [layer]: !s.osd[layer] } })),
       setGridCols: (gridCols) => set({ gridCols: Math.max(1, Math.min(4, gridCols)) }),
@@ -246,6 +262,9 @@ export const useCameraStore = create<CameraState>()(
         syntheticFallback: s.syntheticFallback,
         svtSatellite: s.svtSatellite,
         svtImagery: s.svtImagery,
+        svtBuildings: s.svtBuildings,
+        svtRoofImagery: s.svtRoofImagery,
+        svtFacades: s.svtFacades,
         svtQuality: s.svtQuality,
         osd: s.osd,
         gridCols: s.gridCols,

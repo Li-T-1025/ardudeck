@@ -64,7 +64,9 @@ export function proposeFence(
   if (pending) {
     return Promise.resolve({ accepted: false, error: t('modules:moduleProposal.alreadyOpen') });
   }
-  if (!proposal?.inclusion || proposal.inclusion.length < 3) {
+  const hasInclusion = Array.isArray(proposal?.inclusion) && proposal.inclusion.length >= 3;
+  const hasExclusions = Array.isArray(proposal?.exclusions) && proposal.exclusions.some((e) => (e?.points?.length ?? 0) >= 3);
+  if (!hasInclusion && !hasExclusions) {
     return Promise.resolve({ accepted: false, error: t('modules:moduleProposal.needsThreePoints') });
   }
   return new Promise<ProposalResult>((resolve) => {

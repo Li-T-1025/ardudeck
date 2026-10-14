@@ -12,7 +12,9 @@ import { setupIpcHandlers, cleanupOnShutdown, isCleanExitSafe } from './ipc-hand
 import { setupModuleIpc } from './modules/module-ipc.js';
 import { setupAppIpc } from './apps/app-ipc.js';
 import { registerTileCacheScheme, setupTileCacheProtocol, setupTileCacheHandlers } from './tile-cache.js';
+import { setupBuildingCacheHandlers } from './building-cache.js';
 import { registerModuleSchemePrivileges, setupModuleProtocol } from './modules/module-protocol.js';
+import { registerAssetSchemePrivileges, setupAssetProtocol } from './terrain/asset-protocol.js';
 import { registerMediaSchemePrivileges, setupMediaProtocol } from './media/media-library.js';
 import { setupDeepLinks, handleStartupArgs, flushPendingDeepLink, deliverDeepLinkUrl } from './modules/deep-link.js';
 import { initWindowManager, restoreDetachedWindows, setupWindowManagerIpc, getMainFullScreen, setMainFullScreen, registerSecondaryWindow } from './window-manager.js';
@@ -161,6 +163,7 @@ graphicsPrefs.set('lastLaunchUnclean', true);
 // Register tile-cache:// scheme BEFORE app.ready (Electron requirement)
 registerTileCacheScheme();
 registerModuleSchemePrivileges();
+registerAssetSchemePrivileges();
 registerMediaSchemePrivileges();
 
 /**
@@ -412,6 +415,7 @@ app.whenReady().then(() => {
   // Setup tile cache protocol handler (must be after app.ready)
   setupTileCacheProtocol();
   setupModuleProtocol();
+  setupAssetProtocol();
   setupMediaProtocol();
 
   // Must run before the first BrowserWindow exists: creating a session is
@@ -435,6 +439,7 @@ app.whenReady().then(() => {
   setupModuleIpc(mainWindow);
   setupAppIpc(mainWindow);
   setupTileCacheHandlers(mainWindow);
+  setupBuildingCacheHandlers(mainWindow);
 
   splashSetStatus(splash, t('main:mainIndex.splashInitializing'));
 

@@ -7,10 +7,14 @@
  * - Worldwide coverage
  */
 
+import { demSourceAt, subscribeTerrainChanged } from '../stores/tile-source-store';
+import { sourceElevation } from './source-elevation';
+
 const OPEN_METEO_ELEVATION_URL = 'https://api.open-meteo.com/v1/elevation';
 
 // Cache for elevation data to avoid redundant API calls
 const elevationCache = new Map<string, number>();
+subscribeTerrainChanged(() => elevationCache.clear());
 
 function getCacheKey(lat: number, lon: number): string {
   // Round to 4 decimal places (~11m precision) for caching
@@ -21,6 +25,11 @@ function getCacheKey(lat: number, lon: number): string {
  * Fetch elevation for a single point
  */
 export async function getElevation(lat: number, lon: number): Promise<number | null> {
+  const source = demSourceAt(lat, lon);
+  if (source) {
+    const h = await sourceElevation(source, lat, lon);
+    if (h !== null) return h;
+  }
   const cacheKey = getCacheKey(lat, lon);
   if (elevationCache.has(cacheKey)) {
     return elevationCache.get(cacheKey)!;
@@ -59,12 +68,20 @@ export async function getElevations(
 ): Promise<Array<number | null>> {
   if (points.length === 0) return [];
 
-  // Check cache first
   const results: Array<number | null> = new Array(points.length).fill(null);
   const uncachedIndices: number[] = [];
   const uncachedPoints: Array<{ lat: number; lon: number }> = [];
 
+  // Points inside a module DEM footprint read that DEM; the rest go to the cache and the API.
+  await Promise.all(points.map(async (p, i) => {
+    const source = demSourceAt(p.lat, p.lon);
+    if (!source) return;
+    const h = await sourceElevation(source, p.lat, p.lon);
+    if (h !== null) results[i] = h;
+  }));
+
   points.forEach((point, index) => {
+    if (results[index] !== null) return;
     const cacheKey = getCacheKey(point.lat, point.lon);
     if (elevationCache.has(cacheKey)) {
       results[index] = elevationCache.get(cacheKey)!;

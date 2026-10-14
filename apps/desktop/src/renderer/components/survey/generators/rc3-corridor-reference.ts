@@ -54,28 +54,37 @@ function unit(dx: number, dy: number): XY {
 }
 
 /**
- * Left-hand unit normal at each vertex of an open polyline. Interior vertices
- * average the normals of their two adjacent edges; endpoints take their single
- * edge's normal. Used to offset the centerline into parallel strips.
+ * Offset vector at each vertex of an open polyline: the left-hand normal,
+ * scaled so a strip offset by it stays the full distance from BOTH legs of a
+ * bend (a mitre, 1 / cos(turn / 2)). The plain averaged normal put the corner
+ * at distance * cos(turn / 2), which packed the strips to a fraction of their
+ * spacing at sharp bends. Capped at MITER_LIMIT so a hairpin cannot throw the
+ * corner out of sight.
  */
+// Mitred like the live generator: the corner packing was a shared bug, not
+// rc3 turn geometry, so parity is pinned on the fixed offset.
+const MITER_LIMIT = 4;
+
 function vertexNormals(path: XY[]): XY[] {
   const n = path.length;
   const normals: XY[] = [];
   for (let i = 0; i < n; i++) {
-    let nx = 0;
-    let ny = 0;
+    let nIn: XY | null = null;
+    let nOut: XY | null = null;
     if (i > 0) {
       const d = unit(path[i]!.x - path[i - 1]!.x, path[i]!.y - path[i - 1]!.y);
-      nx += -d.y;
-      ny += d.x;
+      nIn = { x: -d.y, y: d.x };
     }
     if (i < n - 1) {
       const d = unit(path[i + 1]!.x - path[i]!.x, path[i + 1]!.y - path[i]!.y);
-      nx += -d.y;
-      ny += d.x;
+      nOut = { x: -d.y, y: d.x };
     }
-    const len = Math.hypot(nx, ny) || 1;
-    normals.push({ x: nx / len, y: ny / len });
+    const a = nIn ?? nOut ?? { x: 0, y: 0 };
+    const b = nOut ?? nIn ?? { x: 0, y: 0 };
+    const bisector = unit(a.x + b.x, a.y + b.y);
+    const cosHalf = bisector.x * a.x + bisector.y * a.y;
+    const scale = cosHalf > 1 / MITER_LIMIT ? 1 / cosHalf : MITER_LIMIT;
+    normals.push({ x: bisector.x * scale, y: bisector.y * scale });
   }
   return normals;
 }

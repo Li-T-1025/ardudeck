@@ -75,6 +75,8 @@ import { useCompanionStore } from './stores/companion-store';
 import { useMessagesStore } from './stores/messages-store';
 import { clearTargetsForSysid } from './stores/command-target-store';
 import { useTerrainStatusStore } from './stores/terrain-status-store';
+import { useTileSourceStore } from './stores/tile-source-store';
+import { useSceneMeshStore } from './stores/scene-mesh-store';
 import { useSigningStore } from './stores/signing-store';
 import { useBoardProfileAssociation } from './hooks/useBoardProfileAssociation';
 import { SitlAutoApplyWatcher } from './components/settings/vehicle-profile/SitlAutoApplyWatcher';
@@ -467,6 +469,10 @@ function App() {
   const activeVehicle = vehicles.find(v => v.id === activeVehicleId);
   const profileType = activeVehicle?.type || 'copter';
 
+  // Module tile sources and scene meshes live in main; mirror them for every terrain consumer.
+  useEffect(() => useTileSourceStore.getState().start(), []);
+  useEffect(() => useSceneMeshStore.getState().start(), []);
+
   useEffect(() => {
     const off = window.electronAPI?.onLegacyStreamConsentRequest?.((request) => {
       // First one wins; the rest are asked again on the next connect rather
@@ -832,6 +838,11 @@ function App() {
     });
     return () => { unsubscribe?.(); };
   }, []);
+  // Terrain uplink counters per vehicle, for the settings readout.
+  useEffect(() => {
+    const unsubscribe = window.electronAPI?.onTerrainUplinkStatus?.((s) => useTerrainStatusStore.getState().setUplink(s.sysid, s));
+    return () => { unsubscribe?.(); };
+  }, []);
 
   // FC refused a nav command (goto/orbit/land): drop that vehicle's optimistic
   // target overlay so the map never shows a destination the FC declined. A
@@ -1115,6 +1126,9 @@ function App() {
         // Local-first: history, diffs, GitHub setup and sync all work offline
         return <ModuleViewBody viewId="vault" />;
       }
+      if (currentView === 'locus') {
+        return <ModuleViewBody viewId="locus" />;
+      }
       if (currentView === 'production') {
         // Stations sit idle between boards; the run log stays usable
         return <ModuleViewBody viewId="production" />;
@@ -1238,6 +1252,8 @@ function App() {
         return <TrainerView />;
       case 'vault':
         return <ModuleViewBody viewId="vault" />;
+      case 'locus':
+        return <ModuleViewBody viewId="locus" />;
       case 'production':
         return <ModuleViewBody viewId="production" />;
       case 'telemetry':

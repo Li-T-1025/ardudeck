@@ -15,6 +15,9 @@ describe('loadModuleMain', () => {
     },
     mavlink: { subscribe: () => () => {} },
     camera: { listStreams: async () => [] },
+    scripts: { install: async () => ({ status: 'installed' as const }), saveCopy: async () => null },
+    tiles: { register: () => {}, unregister: () => {} },
+    scene: { registerMesh: () => {}, unregisterMesh: () => {} },
   };
 
   it('loads main entry and calls activate with host api', async () => {

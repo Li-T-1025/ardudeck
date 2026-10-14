@@ -7,7 +7,7 @@
  * 3. Offline + cache miss → return empty response (graceful degradation)
  */
 
-import { app, protocol, ipcMain, type BrowserWindow } from 'electron';
+import { app, protocol, ipcMain, BrowserWindow } from 'electron';
 import { join } from 'path';
 import { readFile, writeFile, mkdir, readdir, stat, unlink } from 'fs/promises';
 import { setMaxListeners } from 'events';
@@ -15,6 +15,10 @@ import Store from 'electron-store';
 import { IPC_CHANNELS, type TileCacheStats, type TileCacheDownloadProgress, type TileCacheSettings, type TileCacheDownloadRegion } from '../shared/ipc-channels.js';
 import { resolveTileUrl, MAP_LAYERS, type LayerKey } from '../shared/map-layers.js';
 import { getApiKey } from './overlays/overlay-ipc-handlers.js';
+import { demSourcesForTile, listTileSources, rasterSourceByKey, subscribeTileSources } from './terrain/tile-source-registry.js';
+import { composeDem, encodePng, readSourceTile, type Rgba } from './terrain/dem-tiles.js';
+import { listSceneMeshes, subscribeSceneMeshes } from './terrain/scene-mesh-registry.js';
+import { TILE_SOURCE_LAYER_PREFIX } from '../shared/tile-source-types.js';
 
 // ─── Settings Store ──────────────────────────────────────────────────────────
 
@@ -84,7 +88,57 @@ export function registerTileCacheScheme(): void {
  * `body` is null only for malformed/unknown requests (status 4xx/5xx); image
  * consumers receive a transparent PNG for offline/cache-miss instead of an error.
  */
-export async function resolveTileBytes(
+// Composited DEM tiles are re-requested constantly while the map pans; a source change drops them all.
+const compositeCache = new Map<string, ArrayBuffer>();
+subscribeTileSources(() => compositeCache.clear());
+
+export async function resolveTileBytes(requestUrl: string): Promise<{ status: number; body: ArrayBuffer | null }> {
+  let url: URL;
+  try {
+    url = new URL(requestUrl);
+  } catch {
+    return { status: 400, body: null };
+  }
+  const layer = url.hostname;
+  const parts = url.pathname.split('/').filter(Boolean);
+  if (parts.length < 3) return { status: 400, body: null };
+  const z = parseInt(parts[0]!, 10), x = parseInt(parts[1]!, 10), y = parseInt(parts[2]!.replace('.png', ''), 10);
+  if (isNaN(z) || isNaN(x) || isNaN(y)) return { status: 400, body: null };
+
+  if (layer.startsWith(TILE_SOURCE_LAYER_PREFIX)) {
+    const entry = rasterSourceByKey(decodeURIComponent(layer.slice(TILE_SOURCE_LAYER_PREFIX.length)));
+    if (!entry) return { status: 404, body: null };
+    const img = await readSourceTile(entry, z, x, y);
+    return { status: 200, body: toArrayBuffer(img ? encodePng(img) : TRANSPARENT_PNG) };
+  }
+
+  if (layer !== 'dem') return resolveDefaultTileBytes(requestUrl);
+
+  const sources = demSourcesForTile(z, x, y);
+  const demMax = MAP_LAYERS.dem.maxZoom;
+  if (sources.length === 0 && z <= demMax) return resolveDefaultTileBytes(requestUrl);
+
+  const cacheKey = `${z}/${x}/${y}:${sources.map((s) => `${s.key}@${s.version ?? 0}`).join(',')}`;
+  const hit = compositeCache.get(cacheKey);
+  if (hit) return { status: 200, body: hit };
+
+  const bz = Math.min(z, demMax), dz = z - bz;
+  const baseRes = await resolveDefaultTileBytes(`tile-cache://dem/${bz}/${x >> dz}/${y >> dz}.png`);
+  const overlays: Rgba[] = [];
+  for (const entry of [...sources].reverse()) {
+    const tile = await readSourceTile(entry, z, x, y);
+    if (tile) overlays.push(tile);
+  }
+  const { img, cacheable } = composeDem(baseRes.body, dz, x - ((x >> dz) << dz), y - ((y >> dz) << dz), overlays);
+  const bytes = toArrayBuffer(encodePng(img));
+  if (cacheable) {
+    if (compositeCache.size > 400) compositeCache.delete(compositeCache.keys().next().value!);
+    compositeCache.set(cacheKey, bytes);
+  }
+  return { status: 200, body: bytes };
+}
+
+async function resolveDefaultTileBytes(
   requestUrl: string,
 ): Promise<{ status: number; body: ArrayBuffer | null }> {
   try {
@@ -565,6 +619,16 @@ export function setupTileCacheHandlers(mainWindow: BrowserWindow): void {
     const { body } = await resolveTileBytes(url);
     return body; // ArrayBuffer (transferred over IPC) or null
   });
+
+  const broadcast = (channel: string, payload: unknown) => {
+    for (const w of BrowserWindow.getAllWindows()) {
+      if (!w.isDestroyed() && !w.webContents.isDestroyed()) w.webContents.send(channel, payload);
+    }
+  };
+  ipcMain.handle(IPC_CHANNELS.TILE_SOURCES_LIST, () => listTileSources());
+  subscribeTileSources(() => broadcast(IPC_CHANNELS.TILE_SOURCES_CHANGED, listTileSources()));
+  ipcMain.handle(IPC_CHANNELS.SCENE_MESHES_LIST, () => listSceneMeshes());
+  subscribeSceneMeshes(() => broadcast(IPC_CHANNELS.SCENE_MESHES_CHANGED, listSceneMeshes()));
 
   ipcMain.handle(IPC_CHANNELS.TILE_CACHE_GET_STATS, async () => {
     return getCacheStats();

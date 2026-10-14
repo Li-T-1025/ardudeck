@@ -119,7 +119,9 @@
     "replacesFence_one": "This replaces the inclusion fence already held ({{count}} shape, {{points}} points). It will no longer apply.",
     "replacesFence_other": "This replaces the inclusion fence already held ({{count}} shapes, {{points}} points). It will no longer apply.",
     "returnPoint": "the return point",
-    "writeToAircraft": "Write to aircraft"
+    "writeToAircraft": "Write to aircraft",
+    "exclusionSummary_one": "{{count}} exclusion zone, {{points}} points, added to the zones already held",
+    "exclusionSummary_other": "{{count}} exclusion zones, {{points}} points, added to the zones already held"
   },
   "production": {
     "notConnected": "Connect a vehicle first",

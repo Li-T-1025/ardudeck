@@ -15,6 +15,7 @@ import { GAUGE_COLORS } from './RoundGauge';
 import { InstrumentStrip } from './InstrumentStrip';
 import { useTelemetryFresh } from './useTelemetryFresh';
 import { useRtkStatus } from './useRtkStatus';
+import { formatPosition } from '../../../utils/coordinate-format';
 
 const POPOVER_WIDTH = 232;
 const NTRIP_STATE_KEY: Record<string, string> = {
@@ -231,7 +232,7 @@ export function RtkInstrument(): JSX.Element {
                     {status.basePosition && (
                       <Row
                         label={t('map:rtkInstrument.base')}
-                        value={`${status.basePosition.lat.toFixed(5)}, ${status.basePosition.lon.toFixed(5)}`}
+                        value={formatPosition(status.basePosition.lat, status.basePosition.lon)}
                       />
                     )}
                   </div>

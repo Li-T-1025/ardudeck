@@ -384,13 +384,14 @@
     "noPoint": "No point selected",
     "searchPlaceholder": "Search a place (city, airfield, landmark)...",
     "subtitle": "Click the map to drop a point, drag the pin to refine, or search a place.",
-    "useThisPoint": "Use this point"
+    "useThisPoint": "Use this point",
+    "positionPlaceholder": "Position in any format, e.g. 47.4769, 9.6640"
   },
   "mapSearch": {
     "aria": "Go to location",
     "failed": "Search failed",
     "noMatch": "No match found",
-    "placeholder": "Go to place or lat, lon"
+    "placeholder": "Go to a place or a position"
   },
   "messagesInstrument": {
     "none": "No messages",
@@ -412,7 +413,13 @@
     "offline": "Offline",
     "refresh": "Refresh",
     "refreshTitle": "Re-download all tiles, replacing cached data with fresh versions",
-    "saveTitle": "Save this area for offline use"
+    "saveTitle": "Save this area for offline use",
+    "buildings": "Buildings for synthetic vision",
+    "buildingsEstimate": "{{count}} building tiles for this view",
+    "buildingsTooLarge": "Area too large for buildings: zoom in (at most about 100 x 100 km).",
+    "buildingsDone": "Saved {{count}} building tiles ({{size}}).",
+    "buildingsFailed": "{{count}} could not be fetched.",
+    "saveBuildings": "Save buildings"
   },
   "offlineCache": {
     "allCached": "All {{count}} tiles already cached",
@@ -584,5 +591,11 @@
     "needCapacity": "Set the battery capacity (BATT_CAPACITY) to see endurance",
     "notDrawing": "Shown once the motors draw current",
     "atDraw": "At {{a}} A average draw"
+  },
+  "mapAreaPicker": {
+    "subtitle": "Pan and zoom until the area you want fills the frame.",
+    "hint": "Everything inside the green frame is downloaded. Zoom out for a bigger area.",
+    "vehicle": "Vehicle",
+    "useThisArea": "Use this area"
   }
 }

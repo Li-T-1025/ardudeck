@@ -14,6 +14,7 @@ import {
   type UserUnitPreferences,
 } from '../../../shared/user-units.js';
 import { useSettingsStore } from '../../stores/settings-store';
+import { allFormats, coordinateFormatRegistry, precisionFor, useCoordinateFormat } from '../../utils/coordinate-format';
 
 type UnitKind = keyof UserUnitPreferences;
 
@@ -38,6 +39,13 @@ export function UnitSelectionCard() {
   const { t } = useTranslation();
   const unitPreferences = useSettingsStore((state) => state.unitPreferences);
   const setUnitPreference = useSettingsStore((state) => state.setUnitPreference);
+
+  const coordinateFormat = useSettingsStore((state) => state.coordinateFormat);
+  const setCoordinateFormat = useSettingsStore((state) => state.setCoordinateFormat);
+  const formatEntries = coordinateFormatRegistry.useEntries();
+  const { format: formatSample, current: currentFormat } = useCoordinateFormat();
+  const coordinatePrecision = useSettingsStore((state) => state.coordinatePrecision);
+  const setCoordinatePrecision = useSettingsStore((state) => state.setCoordinatePrecision);
 
   const updateUnitPreference = <K extends UnitKind>(kind: K, value: string) => {
     setUnitPreference(kind, value as UserUnitPreferences[K]);
@@ -67,6 +75,37 @@ export function UnitSelectionCard() {
             </select>
           </label>
         ))}
+        <label className="space-y-1.5">
+          <span className="block text-xs font-medium text-content-secondary">{t('settings:coordinateFormat.title')}</span>
+          <select
+            value={coordinateFormat}
+            onChange={(event) => setCoordinateFormat(event.target.value)}
+            className="w-full bg-surface-input border border-border rounded-lg px-3 py-2 text-sm text-content focus:outline-none focus:border-blue-500/50"
+          >
+            {allFormats(formatEntries).map((f) => (
+              <option key={f.id} value={f.id}>{f.labelKey ? t(f.labelKey) : f.label}</option>
+            ))}
+            {/* a cargo format whose cargo is not loaded stays selected, shown as decimal meanwhile */}
+            {!allFormats(formatEntries).some((f) => f.id === coordinateFormat) && (
+              <option value={coordinateFormat}>{t('settings:coordinateFormat.unavailable')}</option>
+            )}
+          </select>
+          <span className="block text-[11px] text-content-tertiary tabular-nums">{formatSample(47.476857, 9.663978)}</span>
+        </label>
+        {currentFormat.precisions.length > 1 && (
+          <label className="space-y-1.5">
+            <span className="block text-xs font-medium text-content-secondary">{t('settings:coordinateFormat.precision')}</span>
+            <select
+              value={precisionFor(currentFormat, coordinatePrecision)}
+              onChange={(event) => setCoordinatePrecision(currentFormat.id, Number(event.target.value))}
+              className="w-full bg-surface-input border border-border rounded-lg px-3 py-2 text-sm text-content focus:outline-none focus:border-blue-500/50"
+            >
+              {currentFormat.precisions.map((p) => (
+                <option key={p.value} value={p.value}>{p.labelKey ? t(p.labelKey, p.vars) : p.label}</option>
+              ))}
+            </select>
+          </label>
+        )}
       </div>
     </div>
   );

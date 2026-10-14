@@ -9,6 +9,7 @@ import { useEffect, useRef } from 'react';
 import { Marker, Polygon, Polyline, Popup, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import { useGuideStore } from '../../stores/guide-store';
+import { useCoordinateFormat } from '../../utils/coordinate-format';
 
 // Numbered survey-point marker in the guide's colour, white halo for
 // legibility on any basemap.
@@ -40,6 +41,7 @@ function GuideFocusHandler() {
 
 export function GuidesOverlay() {
   const { t } = useTranslation();
+  const { format: formatPos } = useCoordinateFormat();
   const guides = useGuideStore((s) => s.guides);
   const toggleGuide = useGuideStore((s) => s.toggleGuide);
   const startSurveyFromGuide = useGuideStore((s) => s.startSurveyFromGuide);
@@ -70,7 +72,7 @@ export function GuidesOverlay() {
                   {g.name} · {g.pointLabels?.[i] ?? t('mission:guidesOverlay.pointN', { n: i + 1 })}
                 </div>
                 <div className="text-[10px] font-mono text-gray-500">
-                  {p.lat.toFixed(7)}, {p.lng.toFixed(7)}
+                  {formatPos(p.lat, p.lng)}
                 </div>
                 <button
                   onClick={() => toggleGuide(g.id)}

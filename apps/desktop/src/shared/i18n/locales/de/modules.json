@@ -119,7 +119,9 @@
     "replacesFence_one": "Dies ersetzt den bereits vorhandenen Einschluss-Geofence ({{count}} Form, {{points}} Punkte). Er gilt dann nicht mehr.",
     "replacesFence_other": "Dies ersetzt den bereits vorhandenen Einschluss-Geofence ({{count}} Formen, {{points}} Punkte). Er gilt dann nicht mehr.",
     "returnPoint": "den Rückkehrpunkt",
-    "writeToAircraft": "Auf Luftfahrzeug schreiben"
+    "writeToAircraft": "Auf Luftfahrzeug schreiben",
+    "exclusionSummary_one": "{{count}} Sperrzone, {{points}} Punkte, zusätzlich zu den vorhandenen Zonen",
+    "exclusionSummary_other": "{{count}} Sperrzonen, {{points}} Punkte, zusätzlich zu den vorhandenen Zonen"
   },
   "production": {
     "notConnected": "Zuerst ein Fahrzeug verbinden",

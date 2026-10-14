@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { generateCorridor } from './corridor-generator';
+import { generateCorridor, corridorBand, MITER_LIMIT } from './corridor-generator';
 import { DEFAULT_SURVEY_CONFIG, type SurveyConfig, type LatLng } from '../survey-types';
 
 function config(polygon: LatLng[], overrides: Partial<SurveyConfig> = {}): SurveyConfig {
@@ -109,6 +109,36 @@ describe('generateCorridor with branches', () => {
     expect(branched.stats.lineCount).toBe(main.stats.lineCount * 2);
     expect(branched.stats.photoCount).toBeGreaterThanOrEqual(main.stats.photoCount);
     expect(branched.stats.areaCovered).toBeGreaterThan(main.stats.areaCovered);
+  });
+
+  it('branches can fly their own strip count', () => {
+    const same = generateCorridor(config(STRAIGHT, { corridorStrips: 3, corridorBranches: [BRANCH] }));
+    const fewer = generateCorridor(config(STRAIGHT, { corridorStrips: 3, corridorBranches: [BRANCH], corridorBranchStrips: 2 }));
+    expect(same.stats.lineCount).toBe(6);
+    expect(fewer.stats.lineCount).toBe(5);
+    expect(fewer.waypoints.length).toBeLessThan(same.waypoints.length);
+    expect(allFinite(fewer.waypoints)).toBe(true);
+  });
+
+  it('branch strips at 0 is identical to not setting it', () => {
+    const a = generateCorridor(config(STRAIGHT, { corridorStrips: 2, corridorBranches: [BRANCH] }));
+    const b = generateCorridor(config(STRAIGHT, { corridorStrips: 2, corridorBranches: [BRANCH], corridorBranchStrips: 0 }));
+    expect(b.waypoints).toEqual(a.waypoints);
+  });
+
+  it('a 2-strip spur off a 3-strip trunk returns to its junction', () => {
+    // Copter, no overshoot: the branch's two strips are its exact out-and-back.
+    const res = generateCorridor(config(STRAIGHT, {
+      corridorStrips: 3, corridorBranches: [BRANCH], corridorBranchStrips: 2, corridorMode: 'copter',
+    }));
+    const junction = BRANCH[0]!;
+    const far = BRANCH[1]!;
+    // Every waypoint near the far end of the spur is followed, later, by one
+    // back at the junction before the trunk resumes.
+    const nearFar = res.waypoints.filter((w) => Math.abs(w.lat - far.lat) < 0.0005 && Math.abs(w.lng - far.lng) < 0.0005);
+    expect(nearFar.length).toBe(2);
+    const nearJunction = res.waypoints.filter((w) => Math.abs(w.lat - junction.lat) < 0.0005 && Math.abs(w.lng - junction.lng) < 0.0005);
+    expect(nearJunction.length).toBeGreaterThanOrEqual(2);
   });
 
   it('ignores degenerate branches (fewer than 2 points)', () => {
@@ -286,5 +316,70 @@ describe('camera on the strips only', () => {
     const copter = generateCorridor(config(bent, { ...base, corridorMode: 'copter' }));
     expect(plane.waypoints.length).toBeGreaterThan(copter.waypoints.length);
     expect(plane.stats.photoCount).toBe(copter.stats.photoCount);
+  });
+});
+
+describe('strip spacing through a bend', () => {
+  // Distance from a point to the infinite line through a and b, in degrees
+  // (the test lines sit on the equator, so degrees are isotropic enough).
+  const distToLine = (p: LatLng, a: LatLng, b: LatLng) => {
+    const dx = b.lng - a.lng;
+    const dy = b.lat - a.lat;
+    return Math.abs(dx * (a.lat - p.lat) - dy * (a.lng - p.lng)) / Math.hypot(dx, dy);
+  };
+
+  it('keeps the band the full half-width from both legs at a right angle', () => {
+    const width = 100;
+    const band = corridorBand(BENT, width);
+    const corner = BENT[1]!;
+    // The band vertex at the bend is the one farthest from the two ends.
+    const bendVertices = band.filter((p) =>
+      Math.hypot(p.lat - corner.lat, p.lng - corner.lng) < 0.001);
+    expect(bendVertices.length).toBe(2);
+    for (const v of bendVertices) {
+      const toLeg1 = distToLine(v, BENT[0]!, BENT[1]!) * 111320;
+      const toLeg2 = distToLine(v, BENT[1]!, BENT[2]!) * 111320;
+      expect(toLeg1).toBeCloseTo(width / 2, 0);
+      expect(toLeg2).toBeCloseTo(width / 2, 0);
+    }
+  });
+
+  it('keeps the strips their full gap apart through a 150 degree bend', () => {
+    // Sharp V: heading change ~150 degrees. The old averaged normal packed
+    // the outer strips to cos(75 deg) = a quarter of their spacing here.
+    const SHARP: LatLng[] = [
+      { lat: 0, lng: 0 },
+      { lat: 0, lng: 0.004 },
+      { lat: 0.002, lng: 0.000536 },
+    ];
+    const res = generateCorridor(config(SHARP, { corridorStrips: 3, corridorMode: 'copter' }));
+    const gap = res.stats.lineSpacing;
+    const corner = SHARP[1]!;
+    const nearCorner = res.waypoints.filter((w) =>
+      Math.hypot(w.lat - corner.lat, w.lng - corner.lng) < gap * 6 / 111320);
+    // Three strips pass the bend: the centre one through the corner itself,
+    // the outer two mitred a full gap off each leg.
+    const offsets = nearCorner.map((w) => Math.min(
+      distToLine(w, SHARP[0]!, SHARP[1]!),
+      distToLine(w, SHARP[1]!, SHARP[2]!),
+    ) * 111320);
+    const outer = offsets.filter((d) => d > gap / 2);
+    expect(outer.length).toBeGreaterThan(0);
+    for (const d of outer) expect(d).toBeCloseTo(gap, 0);
+  });
+
+  it('caps the mitre so a hairpin does not fly off', () => {
+    const HAIRPIN: LatLng[] = [
+      { lat: 0, lng: 0 },
+      { lat: 0, lng: 0.004 },
+      { lat: 0.00005, lng: 0 },
+    ];
+    const res = generateCorridor(config(HAIRPIN, { corridorStrips: 3, corridorMode: 'copter' }));
+    const gap = res.stats.lineSpacing;
+    const corner = HAIRPIN[1]!;
+    for (const w of res.waypoints) {
+      const d = Math.hypot(w.lat - corner.lat, w.lng - corner.lng) * 111320;
+      expect(d).toBeLessThanOrEqual(MITER_LIMIT * gap + 500);
+    }
   });
 });

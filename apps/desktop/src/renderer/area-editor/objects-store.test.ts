@@ -382,6 +382,36 @@ describe('measure + width', () => {
   });
 });
 
+describe('deleteObjects', () => {
+  it('removes every ticked object in one undo step and unticks them', () => {
+    const a = makeRectangle(CENTER, 10, 10, 'A');
+    const b = makeRectangle(CENTER, 20, 20, 'B');
+    const c = makeRectangle(CENTER, 30, 30, 'C');
+    const st = useObjectsStore.getState();
+    st.addObject(a); st.addObject(b); st.addObject(c);
+    st.setChecked([a.id, c.id]);
+    st.selectObject(a.id);
+
+    st.deleteObjects([a.id, c.id]);
+    const after = useObjectsStore.getState();
+    expect(after.objects.map((o) => o.id)).toEqual([b.id]);
+    expect(after.checkedIds).toEqual([]);
+    expect(after.selectedId).toBeNull();
+
+    st.undo();
+    expect(useObjectsStore.getState().objects).toHaveLength(3);
+  });
+
+  it('is a no-op (no history entry) when none of the ids exist', () => {
+    const st = useObjectsStore.getState();
+    st.addObject(makeRectangle(CENTER, 10, 10, 'A'));
+    const past = useObjectsStore.getState().past.length;
+    st.deleteObjects(['nope']);
+    expect(useObjectsStore.getState().past).toHaveLength(past);
+    expect(useObjectsStore.getState().objects).toHaveLength(1);
+  });
+});
+
 describe('undo / redo', () => {
   it('undo reverts a delete and redo re-applies it', () => {
     const r = makeRectangle(CENTER, 10, 10, 'R');

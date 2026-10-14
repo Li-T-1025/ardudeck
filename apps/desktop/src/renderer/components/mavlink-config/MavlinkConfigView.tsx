@@ -47,6 +47,7 @@ import {
   FolderOpen,
   Network,
   Boxes,
+  Puzzle,
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useParameterStore } from '../../stores/parameter-store';
@@ -67,6 +68,8 @@ import BatteryTab from './BatteryTab';
 import ParameterTable from './ParameterTable';
 import LoggingTab from './LoggingTab';
 import NotifyTab from './NotifyTab';
+import { configTabRegistry } from '../../modules/module-extension-registries';
+import { ErrorBoundary } from '../ui/ErrorBoundary';
 import SensorConfigTab from './SensorConfigTab';
 import ArmingTab from './ArmingTab';
 import RoverTuningTab from './RoverTuningTab';
@@ -93,7 +96,7 @@ interface Toast {
   type: ToastType;
 }
 
-type TabId = 'pid' | 'rates' | 'modes' | 'receiver' | 'serial-ports' | 'telemetry-rates' | 'safety' | 'sensors' | 'sensor-config' | 'notify' | 'tuning' | 'autotune' | 'battery' | 'parameters' | 'files' | 'logging' | 'arming' | 'rover-tuning' | 'rover-nav' | 'motor-test' | 'servo-output' | 'dronecan' | 'hardware';
+type TabId = 'pid' | 'rates' | 'modes' | 'receiver' | 'serial-ports' | 'telemetry-rates' | 'safety' | 'sensors' | 'sensor-config' | 'notify' | 'tuning' | 'autotune' | 'battery' | 'parameters' | 'files' | 'logging' | 'arming' | 'rover-tuning' | 'rover-nav' | 'motor-test' | 'servo-output' | 'dronecan' | 'hardware' | `module:${string}`;
 
 interface Tab {
   id: TabId;
@@ -102,6 +105,9 @@ interface Tab {
   color: string;
   descriptionKey: string;
   badge?: string;
+  /** Cargo tabs bring their own translated text instead of keys. */
+  label?: () => string;
+  describe?: () => string;
 }
 
 interface TabGroup {
@@ -281,12 +287,11 @@ const COPTER_TABS: TabNode[] = [
   STORAGE_GROUP,
 ];
 
-// Fixed-wing / VTOL tabs — no Motor Test, so Servo Output stays flat (single-
-// item "Outputs" group would be visual noise) and is bumped to position #2
-// since control surfaces are fundamental to plane setup.
+// Fixed-wing / VTOL tabs: outputs second, since control surfaces are fundamental to plane setup.
+// Motor test covers QuadPlane lift motors; on a plain fixed wing it explains why it cannot.
 const PLANE_TABS: TabNode[] = [
   TUNING_GROUP,
-  { kind: 'item', id: 'servo-output', nameKey: 'mavlink-config:mavlinkConfigView.tabs.servoOutput', Icon: Move, color: 'text-pink-400', descriptionKey: 'mavlink-config:mavlinkConfigView.tabs.servoOutputDesc' },
+  OUTPUTS_GROUP,
   RC_GROUP,
   SAFETY_GROUP,
   { kind: 'item', id: 'battery', nameKey: 'common:battery', Icon: Battery, color: 'text-orange-400', descriptionKey: 'mavlink-config:mavlinkConfigView.tabs.batteryDesc' },
@@ -389,10 +394,26 @@ export const MavlinkConfigView: React.FC = () => {
   const isPlane = vehicleCategory === 'plane';
   const isPx4Fw = connectionState.firmware === 'px4';
   const isInavLink = useFlightStack() === 'inav';
-  const tabs = useMemo(
-    () => filterTabsForFirmware(isRover ? ROVER_TABS : isPlane ? PLANE_TABS : COPTER_TABS, isPx4Fw, isInavLink),
-    [isRover, isPlane, isPx4Fw, isInavLink],
-  );
+  const moduleTabs = configTabRegistry.useEntries();
+  const tabs = useMemo(() => {
+    const own = filterTabsForFirmware(isRover ? ROVER_TABS : isPlane ? PLANE_TABS : COPTER_TABS, isPx4Fw, isInavLink);
+    if (isPx4Fw || isInavLink) return own;
+    const nodes = own.map((n) => (n.kind === 'group' ? { ...n, children: [...n.children] } : n));
+    const extra: TabNode[] = [];
+    for (const { slug, id, value } of [...moduleTabs].sort((a, b) => (a.value.order ?? 0) - (b.value.order ?? 0))) {
+      if (value.vehicles && !value.vehicles.includes(vehicleCategory)) continue;
+      const tab: Tab = {
+        id: `module:${slug}:${id}`, nameKey: '', descriptionKey: '', color: 'text-sky-400',
+        Icon: (value.icon ?? Puzzle) as React.FC<{ className?: string }>, label: value.title, describe: value.description,
+      };
+      const group = value.group && nodes.find((n): n is TabGroup => n.kind === 'group' && n.id === `${value.group}-group`);
+      if (group) group.children.push(tab);
+      else extra.push({ kind: 'item', ...tab });
+    }
+    // before the storage group, which stays last
+    const at = nodes.findIndex((n) => n.id === 'storage-group');
+    return at < 0 ? [...nodes, ...extra] : [...nodes.slice(0, at), ...extra, ...nodes.slice(at)];
+  }, [isRover, isPlane, isPx4Fw, isInavLink, moduleTabs, vehicleCategory]);
   const defaultTab: TabId = isInavLink ? 'receiver' : isRover ? 'rover-tuning' : 'pid';
   const [activeTab, setActiveTab] = useState<TabId>(defaultTab);
 
@@ -611,7 +632,7 @@ export const MavlinkConfigView: React.FC = () => {
       case 'notify':
         return <NotifyTab />;
       case 'motor-test':
-        return <MotorTestTab />;
+        return <MotorTestTab isPlane={isPlane} />;
       case 'servo-output':
         return <ServoOutputTab />;
       case 'battery':
@@ -626,8 +647,12 @@ export const MavlinkConfigView: React.FC = () => {
         return <ArmingTab onGoTo={(tab) => {
           if (collectTabIds(tabs).includes(tab as TabId)) setActiveTab(tab as TabId);
         }} />;
-      default:
-        return null;
+      default: {
+        const entry = moduleTabs.find((e) => `module:${e.slug}:${e.id}` === activeTab);
+        if (!entry) return null;
+        const Body = entry.value.component;
+        return <ErrorBoundary label={`${entry.slug} ${entry.id}`}><Body /></ErrorBoundary>;
+      }
     }
   };
 
@@ -760,8 +785,8 @@ export const MavlinkConfigView: React.FC = () => {
                           >
                             <child.Icon className={`w-4 h-4 ${child.color} ${childActive ? '' : 'opacity-70'}`} />
                             <div className="flex-1 min-w-0">
-                              <div className="text-sm font-medium">{t(child.nameKey)}</div>
-                              <div className="text-[11px] text-content-secondary truncate">{t(child.descriptionKey)}</div>
+                              <div className="text-sm font-medium">{child.label ? child.label() : t(child.nameKey)}</div>
+                              <div className="text-[11px] text-content-secondary truncate">{child.describe ? child.describe() : t(child.descriptionKey)}</div>
                             </div>
                           </button>
                         );
@@ -776,6 +801,7 @@ export const MavlinkConfigView: React.FC = () => {
               <button
                 key={node.id}
                 data-tour={`mavlink-tab-${node.id}`}
+                title={node.describe?.()}
                 onClick={() => setActiveTab(node.id)}
                 className={`px-3 py-2 rounded-lg flex items-center gap-2 transition-all ${
                   isActive
@@ -784,7 +810,7 @@ export const MavlinkConfigView: React.FC = () => {
                 }`}
               >
                 <node.Icon className={`w-4 h-4 ${isActive ? node.color : `${node.color} opacity-50`}`} />
-                <span className="text-sm font-medium">{t(node.nameKey)}</span>
+                <span className="text-sm font-medium">{node.label ? node.label() : t(node.nameKey)}</span>
                 {node.badge && (
                   <span className="ml-0.5 px-1.5 py-0.5 text-[10px] bg-surface-raised rounded text-content-secondary">
                     {node.badge}

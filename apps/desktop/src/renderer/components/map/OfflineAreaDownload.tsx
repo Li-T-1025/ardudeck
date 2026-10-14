@@ -8,6 +8,7 @@ import { mapLayerName, type LayerKey } from '../../../shared/map-layers';
 import type { TileCacheDownloadProgress } from '../../../shared/ipc-channels';
 import { useNetworkStore } from '../../stores/network-store';
 import { useTileCacheStore } from '../../stores/tile-cache-store';
+import { OfflineBuildingsBake } from './OfflineBuildingsBake';
 
 const api = (window as any).electronAPI;
 
@@ -246,6 +247,8 @@ export function OfflineAreaDownload({ bounds, activeLayer }: OfflineAreaDownload
                     {t('map:offlineArea.refresh')}
                   </button>
                 </div>
+
+                <OfflineBuildingsBake bounds={bounds} />
               </>
             )}
           </div>

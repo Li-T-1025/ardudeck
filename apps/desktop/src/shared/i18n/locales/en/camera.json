@@ -120,7 +120,20 @@
     "terrainDetail": "Terrain detail",
     "terrainHint": "The ground nearest the aircraft always uses the sharpest imagery.",
     "thisVehicle": "this vehicle",
-    "imagerySource": "Imagery source"
+    "imagerySource": "Imagery source",
+    "buildingsSource": "Buildings",
+    "buildings": {
+      "off": "Off",
+      "openfreemap": "OpenFreeMap",
+      "openfreemapTip": "OSM buildings with heights, pre-cut into tiles: fast, no key, no limits.",
+      "overpass": "OSM live",
+      "overpassTip": "Straight from the OSM database: the latest edits, but a shared free service, so slower.",
+      "overture": "Overture",
+      "overtureTip": "The most buildings: OSM plus Microsoft and Google footprints, some with real colours. Hosted in the US, so slow the first time; save your area under offline maps."
+    },
+    "roofImagery": "Roofs from imagery",
+    "roofImageryNeedsSatellite": "Needs satellite imagery on.",
+    "facades": "Window facades"
   },
   "presets": {
     "ardudeckSim": {
@@ -332,7 +345,10 @@
     "needsFix": "Synthetic vision needs a GPS fix from {{vehicle}}.",
     "noFix": "No position fix",
     "terrainUnavailable": "Terrain data unavailable, check the internet connection.",
-    "theVehicle": "the vehicle"
+    "theVehicle": "the vehicle",
+    "osmCredit": "© OpenStreetMap",
+    "buildingsUnavailable": "Buildings unavailable",
+    "loadingBuildings": "Loading buildings..."
   },
   "view": {
     "clickToActivate": "Click to make active",

@@ -15,6 +15,7 @@ import { Polygon, Circle, Marker, Polyline, Tooltip } from 'react-leaflet';
 import L from 'leaflet';
 import { useFenceStore, type FenceDrawMode } from '../../stores/fence-store';
 import type { PolygonFence, CircleFence } from '../../../shared/fence-types';
+import { useCoordinateFormat } from '../../utils/coordinate-format';
 
 interface FenceMapOverlayProps {
   readOnly?: boolean;
@@ -168,6 +169,7 @@ function polygonCentroid(vertices: Array<{ lat: number; lon: number }>): [number
 
 export function FenceMapOverlay({ readOnly = false }: FenceMapOverlayProps) {
   const { t } = useTranslation();
+  const { format: formatPos } = useCoordinateFormat();
   const {
     polygons,
     circles,
@@ -499,7 +501,7 @@ export function FenceMapOverlay({ readOnly = false }: FenceMapOverlayProps) {
               >
                 <Tooltip direction="top" offset={[0, -8]} opacity={0.9}>
                   <span style={{ fontSize: '10px', fontFamily: 'monospace', whiteSpace: 'pre' }}>
-                    {`P${i + 1}: ${vertex.lat.toFixed(6)}, ${vertex.lon.toFixed(6)}`}
+                    {`P${i + 1}: ${formatPos(vertex.lat, vertex.lon)}`}
                     {polygon.vertices.length > 3 ? `\n${t('geofence:fenceMapOverlay.rightClickDelete')}` : ''}
                   </span>
                 </Tooltip>

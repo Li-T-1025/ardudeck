@@ -213,3 +213,31 @@ describe('polygon picking', () => {
     await expect(first).resolves.toBeNull();
   });
 });
+
+describe('raster tile layers', () => {
+  it('keeps the tiles reference and builds the host tile url', () => {
+    registerModuleMapLayer('com.x', { id: 'ortho', name: 'Ortho', features: () => [], tiles: { sourceId: 'ortho', opacity: 0.7 } });
+    const layer = getModuleMapLayers().find((l) => l.key === 'com.x::ortho');
+    expect(layer?.reg.tiles?.sourceId).toBe('ortho');
+    expect(layer?.tileUrl).toBe('tile-cache://ts-com.x%3A%3Aortho/{z}/{x}/{y}.png');
+    unregisterModuleMapLayersFor('com.x');
+  });
+});
+
+describe('the pilot choosing a cargo layer on or off', () => {
+  it('is kept when the cargo reloads', async () => {
+    const mem = new Map<string, string>();
+    vi.stubGlobal('localStorage', { getItem: (k: string) => mem.get(k) ?? null, setItem: (k: string, v: string) => { mem.set(k, v); } });
+    const reg = await import('../module-map-registry');
+    const layer = { id: 'grid', name: 'Grid', defaultVisible: false, features: () => [] };
+    reg.registerModuleMapLayer('com.test.keep', layer);
+    const key = reg.getModuleMapLayers().find((l) => l.slug === 'com.test.keep')!.key;
+    expect(reg.isLayerVisible(key)).toBe(false);
+    reg.setLayerVisible(key, true);
+    reg.unregisterModuleMapLayersFor('com.test.keep');
+    reg.registerModuleMapLayer('com.test.keep', layer);
+    expect(reg.isLayerVisible(key)).toBe(true);
+    reg.unregisterModuleMapLayersFor('com.test.keep');
+    vi.unstubAllGlobals();
+  });
+});

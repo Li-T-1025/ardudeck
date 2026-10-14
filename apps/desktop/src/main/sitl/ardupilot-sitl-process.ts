@@ -164,7 +164,8 @@ export function simModelFor(config: ArduPilotSitlConfig): string {
   // numbers but NOT the motor layout, so the layout still comes from this
   // frame name and must stay paired with the FRAME_TYPE that
   // generateDefaultParams writes for the same name.
-  if (config.customFramePath && config.customFrameMotors) {
+  // custom frames are multirotor physics; one left selected from a copter must not take over a plane
+  if (config.vehicleType === 'copter' && config.customFramePath && config.customFrameMotors) {
     return `${sitlFrameForMotorCount(config.customFrameMotors)}:${config.customFramePath}`;
   }
   const base = config.model || DEFAULT_MODELS[config.vehicleType];
@@ -368,6 +369,10 @@ class ArduPilotSitlProcessManager {
   async start(config: ArduPilotSitlConfig): Promise<{ success: boolean; command?: string; error?: string }> {
     if (this._isRunning) {
       this.stop();
+    }
+    // custom frames are multirotor physics and battery: one left selected from a copter must not reach a plane
+    if (config.vehicleType !== 'copter' && config.customFramePath) {
+      config = { ...config, customFramePath: undefined, customFrameMotors: undefined };
     }
 
     // Use the ArduDeck physics engine only when explicitly requested AND its

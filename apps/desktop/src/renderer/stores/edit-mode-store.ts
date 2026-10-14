@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { persist, createJSONStorage } from 'zustand/middleware';
 
 /**
  * Edit mode determines which type of data the user is editing:
@@ -30,7 +31,7 @@ interface EditModeStore {
   reset: () => void;
 }
 
-export const useEditModeStore = create<EditModeStore>((set) => ({
+export const useEditModeStore = create<EditModeStore>()(persist((set) => ({
   activeMode: 'mission',
   mapMode: '2d',
   mapViewport: null,
@@ -52,7 +53,12 @@ export const useEditModeStore = create<EditModeStore>((set) => ({
     set({ mapLayer: layer });
   },
 
+  // the pilot's chosen map stays: it is a preference, not part of the session
   reset: () => {
-    set({ activeMode: 'mission', mapMode: '2d', mapViewport: null, mapLayer: 'googleSat' });
+    set({ activeMode: 'mission', mapMode: '2d', mapViewport: null });
   },
+}), {
+  name: 'ardudeck-map-layer',
+  storage: createJSONStorage(() => localStorage),
+  partialize: (s) => ({ mapLayer: s.mapLayer }),
 }));

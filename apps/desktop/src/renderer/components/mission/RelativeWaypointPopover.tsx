@@ -9,6 +9,7 @@ import {
   toMetersFromDistanceUnit,
   UNIT_LABELS,
 } from '../../../shared/user-units.js';
+import { useCoordinateFormat } from '../../utils/coordinate-format';
 
 export type InsertWhere = 'before' | 'after' | 'end';
 
@@ -43,6 +44,7 @@ export function RelativeWaypointPopover({
   onCancel,
 }: RelativeWaypointPopoverProps) {
   const { t } = useTranslation();
+  const { format: formatPos } = useCoordinateFormat();
   const [bearing, setBearing] = useState(0);
   const bearingDraft = useNumericDraft(bearing, (v) => setBearing(((v % 360) + 360) % 360));
   const [distance, setDistance] = useState(50);
@@ -346,7 +348,7 @@ export function RelativeWaypointPopover({
 
           {/* Result preview row */}
           <div className="text-[10px] text-content-secondary font-mono px-1">
-            {previewPos.lat.toFixed(7)}, {previewPos.lon.toFixed(7)}
+            {formatPos(previewPos.lat, previewPos.lon)}
           </div>
         </div>
 

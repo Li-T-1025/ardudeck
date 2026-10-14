@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { useMap } from 'react-leaflet';
 import L from 'leaflet';
+import { subscribeTerrainChanged, tileVersionSuffix } from '../../stores/tile-source-store';
 import {
   decodeTerrarium,
   getSharedLookupTable,
@@ -89,7 +90,7 @@ function createTerrainGridLayer(
       const url = TERRAIN_TILE_URL
         .replace('{z}', String(coords.z))
         .replace('{x}', String(coords.x))
-        .replace('{y}', String(coords.y));
+        .replace('{y}', String(coords.y)) + tileVersionSuffix();
 
       img.onload = () => {
         const ctx = canvas.getContext('2d');
@@ -191,6 +192,7 @@ export function TerrainOverlayLayer({
 }: TerrainOverlayLayerProps) {
   const map = useMap();
   const layerRef = useRef<L.GridLayer | null>(null);
+  useEffect(() => subscribeTerrainChanged(() => layerRef.current?.redraw()), []);
   const callbackRef = useRef(onElevationRangeChange);
   callbackRef.current = onElevationRangeChange;
 

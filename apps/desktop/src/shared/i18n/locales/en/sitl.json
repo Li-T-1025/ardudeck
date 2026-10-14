@@ -214,7 +214,8 @@
     "useMyLocation": "Use My Location",
     "vehicleType": "Vehicle Type",
     "vehicleTypeDesc": "Choose the airframe class to simulate",
-    "vtol": "VTOL"
+    "vtol": "VTOL",
+    "runningElsewhere": "SITL is running at {{lat}}, {{lng}}, moved there by the Trainer. Your start point below is kept and used on the next start."
   },
   "view": {
     "afternoon": "Afternoon",

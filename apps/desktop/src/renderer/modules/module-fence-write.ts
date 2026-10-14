@@ -42,6 +42,20 @@ export function summariseFence(g: FenceGeometry): ExistingFence {
  * the old ones shrinks the allowed area to their intersection. Exclusion zones
  * and the return point are the pilot's and are left alone.
  */
+/** Exclusion zones stack, so proposed ones are added beside the pilot's own. Returns how many were written. */
+export function appendExclusions(
+  write: FenceWriter,
+  exclusions: { name: string; points: { lat: number; lng: number }[] }[],
+): number {
+  let n = 0;
+  for (const ex of exclusions) {
+    if (!ex?.points || ex.points.length < 3) continue;
+    write.addPolygon('exclusion', ex.points.map((p) => ({ lat: p.lat, lon: p.lng })));
+    n++;
+  }
+  return n;
+}
+
 export function replaceInclusion(
   g: FenceGeometry,
   write: FenceWriter,

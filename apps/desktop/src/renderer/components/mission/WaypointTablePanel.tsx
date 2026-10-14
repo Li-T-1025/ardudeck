@@ -73,6 +73,8 @@ import { computeRenderableIndices, renderableIndexOfSeq, estimateRowHeight } fro
 import { useActiveVehicleStore } from '../../stores/active-vehicle-store';
 import { useVehicleProfileStore } from '../../stores/vehicle-profile-store';
 import { allowedMissionCommands } from '../../../shared/vehicle-profile';
+import { useCoordinateFormat } from '../../utils/coordinate-format';
+import { PositionInput } from '../ui/PositionInput';
 
 // Helper to get GPS state without subscribing (avoids re-renders)
 function getGpsState() {
@@ -2101,6 +2103,7 @@ const FLIGHT_BAND_COLORS = ['#a78bfa', '#38bdf8', '#34d399', '#fbbf24', '#f472b6
 // Extracted waypoint list content (original WaypointTablePanel content)
 function WaypointListContent({ readOnly = false }: { readOnly?: boolean }) {
   const { t } = useTranslation();
+  const { format: formatPos, parse: parsePos, current: coordFormat } = useCoordinateFormat();
   const {
     missionItems,
     groups,
@@ -2707,11 +2710,25 @@ function WaypointListContent({ readOnly = false }: { readOnly?: boolean }) {
       : missionItems;
     const lines = source
       .filter(w => commandHasLocation(w.command) && hasValidCoordinates(w.latitude, w.longitude))
-      .map(w => `${w.latitude.toFixed(7)}, ${w.longitude.toFixed(7)}`);
+      .map(w => formatPos(w.latitude, w.longitude));
     if (lines.length === 0) return;
     navigator.clipboard.writeText(lines.join('\n'));
     setCoordsCopied(true);
     window.setTimeout(() => setCoordsCopied(false), 1200);
+  };
+
+  // each line that reads as a position, in any format, becomes a waypoint
+  const handlePastePositions = async () => {
+    let text = '';
+    try { text = await navigator.clipboard.readText(); } catch { /* no clipboard access */ }
+    const points = text.split(/\r?\n/).map((l) => l.trim()).filter(Boolean).map((l) => parsePos(l)).filter((p): p is { lat: number; lon: number } => p !== null);
+    if (points.length === 0) {
+      showBulkNotice(t('mission:waypointTable.list.pasteNone'));
+      return;
+    }
+    const add = useMissionStore.getState().addWaypoint;
+    for (const p of points) add(p.lat, p.lon);
+    showBulkNotice(t('mission:waypointTable.list.pasteAdded', { count: points.length }));
   };
 
   const handleAddWaypoint = () => {
@@ -2952,6 +2969,18 @@ function WaypointListContent({ readOnly = false }: { readOnly?: boolean }) {
                 >
                   {coordsCopied ? t('mission:waypointTable.list.copied') : t('mission:waypointTable.list.copyCoords')}
                 </button>
+                {!readOnly && (
+                  <>
+                    <span className="text-content-tertiary text-[10px]">|</span>
+                    <button
+                      onClick={() => void handlePastePositions()}
+                      className="text-[10px] text-content-secondary hover:text-content transition-colors"
+                      data-tip={t('mission:waypointTable.list.pastePositionsTip')}
+                    >
+                      {t('mission:waypointTable.list.pastePositions')}
+                    </button>
+                  </>
+                )}
                 {interleaved && !readOnly && (
                   <>
                     <span className="text-content-tertiary text-[10px]">|</span>
@@ -3507,9 +3536,10 @@ function WaypointListContent({ readOnly = false }: { readOnly?: boolean }) {
                         </span>
                       )}
                     </div>
-                    {commandHasLocation(wp.command) && (
+                    {/* a takeoff at 0,0 means "where the vehicle is", not a place: formatted it reads as a real grid reference */}
+                    {commandHasLocation(wp.command) && hasValidCoordinates(wp.latitude, wp.longitude) && (
                       <div className="text-[10px] text-content-tertiary font-mono">
-                        {wp.latitude.toFixed(5)}, {wp.longitude.toFixed(5)}
+                        {formatPos(wp.latitude, wp.longitude)}
                       </div>
                     )}
                   </div>
@@ -3629,7 +3659,7 @@ function WaypointListContent({ readOnly = false }: { readOnly?: boolean }) {
               {commandHasLocation(selectedWaypoint.command) && (
                 <button
                   onClick={() => {
-                    navigator.clipboard.writeText(`${selectedWaypoint.latitude}, ${selectedWaypoint.longitude}`);
+                    navigator.clipboard.writeText(formatPos(selectedWaypoint.latitude, selectedWaypoint.longitude));
                     setWpCoordCopied(true);
                     window.setTimeout(() => setWpCoordCopied(false), 1200);
                   }}
@@ -3705,6 +3735,20 @@ function WaypointListContent({ readOnly = false }: { readOnly?: boolean }) {
             {/* Location fields for commands that have them */}
             {commandHasLocation(selectedWaypoint.command) && (
               <>
+                <div className="col-span-2">
+                  <label className="block text-[11px] text-content-secondary mb-1">{t('mission:waypointTable.list.position', { format: coordFormat.labelKey ? t(coordFormat.labelKey) : coordFormat.label })}</label>
+                  <PositionInput
+                    key={`${selectedWaypoint.seq}:${coordFormat.id}`}
+                    value={hasValidCoordinates(selectedWaypoint.latitude, selectedWaypoint.longitude) ? formatPos(selectedWaypoint.latitude, selectedWaypoint.longitude) : ''}
+                    parse={parsePos}
+                    invalidHint={t('mission:waypointTable.list.positionInvalid')}
+                    onCommit={(p) => {
+                      handleParamChange(selectedWaypoint.seq, 'latitude', p.lat);
+                      handleParamChange(selectedWaypoint.seq, 'longitude', p.lon);
+                    }}
+                  />
+                </div>
+                {coordFormat.id === 'decimal' && (<>
                 <div>
                   <label className="block text-[11px] text-content-secondary mb-1">{t('common:latitude')}</label>
                   <DraftNumberInput
@@ -3725,6 +3769,7 @@ function WaypointListContent({ readOnly = false }: { readOnly?: boolean }) {
                     text
                   />
                 </div>
+                </>)}
               </>
             )}
           </div>

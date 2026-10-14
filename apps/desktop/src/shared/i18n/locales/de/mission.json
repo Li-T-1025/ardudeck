@@ -96,6 +96,10 @@
     "pointsTip": "Vermessene RTK-Punkte als Markierungen oder Polygon einfügen",
     "pts": "{{count}} Pkt.",
     "remove": "Führung entfernen",
+    "removeAll": "Alle entfernen",
+    "removeAllConfirm_one": "{{count}} Führung entfernen?",
+    "removeAllConfirm_other": "{{count}} Führungen entfernen?",
+    "removeAllTip": "Alle Führungen von der Karte entfernen (kann nicht rückgängig gemacht werden)",
     "showAll": "Alle anzeigen",
     "showOnMap": "Auf Karte anzeigen",
     "tip": "Grenzführungen: KML / KMZ / GeoJSON / SHP-Umrisse importieren und Vermessungen daraus planen",
@@ -648,7 +652,14 @@
       "speedSet_other": "Geschwindigkeit auf {{speed}} m/s gesetzt ({{count}} Änderungen)",
       "speedZeroTip": "0 entfernt die DO_CHANGE_SPEED-Befehle der Auswahl",
       "surveyEditWarning": "Die Auswahl enthält Vermessungswegpunkte. Beim Neuerzeugen der Vermessung werden sie aus deren Konfiguration neu aufgebaut und diese Änderung wird überschrieben; nutzen Sie für dauerhafte Änderungen besser die Höheneinstellung der Vermessung selbst.",
-      "surveysConnected": "{{count}} Vermessungen verbunden, als eine geflogen"
+      "surveysConnected": "{{count}} Vermessungen verbunden, als eine geflogen",
+      "pastePositions": "Positionen einfügen",
+      "pastePositionsTip": "Fügt für jede Position in der Zwischenablage einen Wegpunkt hinzu, eine pro Zeile, in jedem Koordinatenformat",
+      "pasteNone": "Keine Positionen in der Zwischenablage gefunden",
+      "pasteAdded_one": "{{count}} Wegpunkt hinzugefügt",
+      "pasteAdded_other": "{{count}} Wegpunkte hinzugefügt",
+      "position": "Position ({{format}})",
+      "positionInvalid": "Keine Position in einem bekannten Koordinatenformat"
     },
     "noCommandsMatch": "Keine Befehle passen zu „{{search}}“",
     "param": {

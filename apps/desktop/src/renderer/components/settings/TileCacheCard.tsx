@@ -4,6 +4,8 @@ import type { TFunction } from 'i18next';
 import { MAP_LAYERS, type LayerKey } from '../../../shared/map-layers';
 import type { TileCacheStats, TileCacheDownloadProgress, TileCacheSettings, TileCacheDownloadRegion } from '../../../shared/ipc-channels';
 import { useTileCacheStore } from '../../stores/tile-cache-store';
+import { Map as MapIcon } from 'lucide-react';
+import { MapAreaPickerDialog, formatAreaSize } from '../map/MapAreaPickerDialog';
 
 const api = (window as any).electronAPI;
 
@@ -18,33 +20,6 @@ function formatBytes(bytes: number): string {
   return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`;
 }
 
-// Draft/commit input: committing on every keystroke snaps in-progress edits
-// (e.g. "51.") to 0, so hold the raw string and commit on blur/Enter.
-function BoundsInput({ label, value, placeholder, onCommit }: {
-  label: string;
-  value: number;
-  placeholder: string;
-  onCommit: (v: number) => void;
-}) {
-  const [draft, setDraft] = useState(value ? String(value) : '');
-  useEffect(() => { setDraft(value ? String(value) : ''); }, [value]);
-  const commit = () => onCommit(parseFloat(draft) || 0);
-  return (
-    <div>
-      <label className="text-[10px] text-content-secondary block mb-0.5">{label}</label>
-      <input
-        type="number"
-        step="0.001"
-        value={draft}
-        onChange={(e) => setDraft(e.target.value)}
-        onBlur={commit}
-        onKeyDown={(e) => { if (e.key === 'Enter') commit(); }}
-        className="w-full px-2 py-1 text-xs bg-surface-input border border-subtle rounded text-content focus:border-blue-500/50 focus:outline-none"
-        placeholder={placeholder}
-      />
-    </div>
-  );
-}
 
 export function TileCacheCard() {
   const { t } = useTranslation();
@@ -72,6 +47,8 @@ export function TileCacheCard() {
   // Download region state
   const [showDownload, setShowDownload] = useState(false);
   const [dlBounds, setDlBounds] = useState({ north: 0, south: 0, east: 0, west: 0 });
+  const [pickingArea, setPickingArea] = useState(false);
+  const hasArea = dlBounds.north !== 0 || dlBounds.south !== 0;
   const [dlMinZoom, setDlMinZoom] = useState(10);
   const [dlMaxZoom, setDlMaxZoom] = useState(16);
   const [dlLayers, setDlLayers] = useState<Set<LayerKey>>(new Set(['osm', 'satellite']));
@@ -319,33 +296,34 @@ export function TileCacheCard() {
         <div className="rounded-lg border border-subtle p-4 mb-4 space-y-3">
           <h4 className="text-xs font-medium text-content uppercase tracking-wider">{t('settings:tileCacheCard.downloadTitle')}</h4>
 
-          {/* Bounding box inputs */}
-          <div className="grid grid-cols-2 gap-2">
-            <BoundsInput
-              label={t('settings:tileCacheCard.northLat')}
-              value={dlBounds.north}
-              placeholder={t('settings:tileCacheCard.example', { value: '51.52' })}
-              onCommit={(v) => setDlBounds((b) => ({ ...b, north: v }))}
-            />
-            <BoundsInput
-              label={t('settings:tileCacheCard.southLat')}
-              value={dlBounds.south}
-              placeholder={t('settings:tileCacheCard.example', { value: '51.49' })}
-              onCommit={(v) => setDlBounds((b) => ({ ...b, south: v }))}
-            />
-            <BoundsInput
-              label={t('settings:tileCacheCard.westLon')}
-              value={dlBounds.west}
-              placeholder={t('settings:tileCacheCard.example', { value: '-0.12' })}
-              onCommit={(v) => setDlBounds((b) => ({ ...b, west: v }))}
-            />
-            <BoundsInput
-              label={t('settings:tileCacheCard.eastLon')}
-              value={dlBounds.east}
-              placeholder={t('settings:tileCacheCard.example', { value: '-0.07' })}
-              onCommit={(v) => setDlBounds((b) => ({ ...b, east: v }))}
-            />
+          {/* Area: framed on a map, never typed as coordinates */}
+          <div className="flex items-center justify-between gap-3 rounded-lg bg-surface-raised px-3 py-2">
+            <div className="min-w-0 text-xs">
+              {hasArea ? (
+                <>
+                  <div className="text-content">{t('settings:tileCacheCard.areaChosen', { size: formatAreaSize(dlBounds) })}</div>
+                  <div className="text-[10px] text-content-tertiary tabular-nums truncate">{formatBounds(dlBounds, t)}</div>
+                </>
+              ) : (
+                <div className="text-content-secondary">{t('settings:tileCacheCard.noArea')}</div>
+              )}
+            </div>
+            <button
+              onClick={() => setPickingArea(true)}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded bg-blue-600 text-white hover:bg-blue-500 transition-colors shrink-0"
+            >
+              <MapIcon className="w-3.5 h-3.5" />
+              {hasArea ? t('settings:tileCacheCard.changeArea') : t('settings:tileCacheCard.chooseArea')}
+            </button>
           </div>
+          {pickingArea && (
+            <MapAreaPickerDialog
+              title={t('settings:tileCacheCard.downloadTitle')}
+              initial={hasArea ? dlBounds : null}
+              onConfirm={setDlBounds}
+              onClose={() => setPickingArea(false)}
+            />
+          )}
 
           {/* Layer selection */}
           <div>

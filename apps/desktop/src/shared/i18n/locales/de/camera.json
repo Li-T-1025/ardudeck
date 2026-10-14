@@ -120,7 +120,20 @@
     "terrainDetail": "Geländedetail",
     "terrainHint": "Der Boden direkt beim Luftfahrzeug verwendet immer die schärfsten Bilder.",
     "thisVehicle": "dieses Fahrzeug",
-    "imagerySource": "Bildquelle"
+    "imagerySource": "Bildquelle",
+    "buildingsSource": "Gebäude",
+    "buildings": {
+      "off": "Aus",
+      "openfreemap": "OpenFreeMap",
+      "openfreemapTip": "OSM-Gebäude mit Höhen, als Kacheln: schnell, ohne Schlüssel, ohne Limit.",
+      "overpass": "OSM live",
+      "overpassTip": "Direkt aus der OSM-Datenbank: neueste Änderungen, aber ein geteilter kostenloser Dienst, daher langsamer.",
+      "overture": "Overture",
+      "overtureTip": "Die meisten Gebäude: OSM plus Footprints von Microsoft und Google, teils mit echten Farben. In den USA gehostet, daher beim ersten Mal langsam; das Gebiet unter Offline-Karten speichern."
+    },
+    "roofImagery": "Dächer aus Luftbild",
+    "roofImageryNeedsSatellite": "Braucht eingeschaltetes Satellitenbild.",
+    "facades": "Fensterfassaden"
   },
   "presets": {
     "ardudeckSim": {
@@ -332,7 +345,10 @@
     "needsFix": "Die synthetische Sicht benötigt einen GPS-Fix von {{vehicle}}.",
     "noFix": "Kein Positions-Fix",
     "terrainUnavailable": "Geländedaten nicht verfügbar, Internetverbindung prüfen.",
-    "theVehicle": "dem Fahrzeug"
+    "theVehicle": "dem Fahrzeug",
+    "osmCredit": "© OpenStreetMap",
+    "buildingsUnavailable": "Gebäude nicht verfügbar",
+    "loadingBuildings": "Gebäude werden geladen..."
   },
   "view": {
     "clickToActivate": "Klicken zum Aktivieren",

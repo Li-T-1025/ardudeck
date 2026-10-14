@@ -23,6 +23,7 @@ import { RallyMapOverlay } from '../rally/RallyMapOverlay';
 // Terrain elevation overlay
 import { TerrainOverlayLayer, type ElevationRange } from '../map/TerrainOverlayLayer';
 import { SmoothWheelZoom } from '../map/SmoothWheelZoom';
+import { MapFocusLayer } from '../map/MapFocusLayer';
 import { ElevationLegend } from '../map/ElevationLegend';
 import { useFenceStore } from '../../stores/fence-store';
 import { useRallyStore } from '../../stores/rally-store';
@@ -1222,6 +1223,7 @@ function MissionMapPanel2D({ readOnly = false }: MissionMapPanelProps) {
       >
         <SmoothWheelZoom />
         <ViewportSync />
+        <MapFocusLayer />
         {/* Cargo layers under the mission's own drawing, and the polygon
             picker a cargo can ask the pilot for. */}
         <MapPicking

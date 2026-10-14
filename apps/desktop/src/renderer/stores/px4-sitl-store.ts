@@ -378,7 +378,8 @@ export const usePx4SitlStore = create<Px4SitlStore>()(
             isStarting: false,
             isStopping: false,
             lastError: null,
-            homeLocation: data.homeLocation,
+            // a relaunch at another origin (the Trainer borrowing SITL) is for that session only; the pilot's own start point stays
+            ...(data.wasRelaunch ? {} : { homeLocation: data.homeLocation }),
             vehicleType: data.vehicleType,
             releaseTrack: data.releaseTrack,
             pid: data.pid ?? null,

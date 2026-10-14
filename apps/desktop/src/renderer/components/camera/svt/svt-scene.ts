@@ -12,6 +12,8 @@
 
 import * as THREE from 'three';
 import type { DrapeRing } from './svt-satellite';
+import type { SceneMeshEntry } from '../../../../shared/tile-source-types';
+import { loadGltfScene, releaseGltf } from '../../../three/gltf-cache';
 import { attachDrape } from './drape-material';
 import {
   type ElevationGrid,
@@ -62,9 +64,15 @@ export interface SvtScene {
   resize: (width: number, height: number) => void;
   /** Swap in a freshly built terrain mesh; disposes the previous one. */
   setTerrain: (geometry: THREE.BufferGeometry, grid: ElevationGrid) => void;
+  /** Module GLB meshes placed in the terrain grid's frame; entries not listed are removed. */
+  setMeshes: (entries: SceneMeshEntry[]) => void;
   /** Drape satellite imagery over the terrain; null returns to the elevation
       ramp. Disposes the textures of any previous rings. */
   setDrape: (rings: DrapeRing[] | null) => void;
+  /** Swap in a building mesh (null removes it); disposes the previous one. */
+  setBuildings: (geometry: THREE.BufferGeometry | null) => void;
+  /** Roofs from the satellite drape, and a window pattern on the walls. */
+  setBuildingStyle: (style: { roofImagery: boolean; facades: boolean }) => void;
   /** Position + orient the camera from a vehicle pose. */
   setPose: (pose: SvtPose) => void;
   /** Metres between the eye and the terrain directly below it, from the last
@@ -164,7 +172,70 @@ export function createSvtScene(canvas: HTMLCanvasElement): SvtScene {
   const drape = attachDrape(terrainMat);
 
   let terrainMesh: THREE.Mesh | null = null;
+  let buildingsMesh: THREE.Mesh | null = null;
+  // both sides lit: footprint winding varies between OSM sources
+  const buildingsMat = new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide });
+  const buildingStyle = { uRoofImagery: { value: 1 }, uFacades: { value: 1 } };
+  drape.share(buildingsMat, 'vSvtRoof > 0.5 && uRoofImagery > 0.5', (shader) => {
+    Object.assign(shader.uniforms, buildingStyle);
+    shader.vertexShader = shader.vertexShader
+      .replace('#include <common>', '#include <common>\nattribute float aRoof;\nattribute vec2 aWall;\nvarying float vSvtRoof;\nvarying vec2 vSvtWall;')
+      .replace('#include <begin_vertex>', '#include <begin_vertex>\nvSvtRoof = aRoof;\nvSvtWall = aWall;');
+    shader.fragmentShader = shader.fragmentShader
+      .replace('#include <common>', '#include <common>\nvarying float vSvtRoof;\nvarying vec2 vSvtWall;\nuniform float uRoofImagery;\nuniform float uFacades;')
+      .replace(
+        '#include <color_fragment>',
+        `#include <color_fragment>
+        // windows: one row per 3 m floor, one column per 3.5 m of wall, none in the top half metre
+        if (uFacades > 0.5 && vSvtRoof < 0.5 && vSvtWall.y > 0.8) {
+          vec2 cell = fract(vSvtWall / vec2(3.5, 3.0));
+          float win = step(0.22, cell.x) * step(cell.x, 0.78) * step(0.32, cell.y) * step(cell.y, 0.78);
+          diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.18, 0.22, 0.28), win * 0.75);
+        }`,
+      );
+  });
   let grid: ElevationGrid | null = null;
+  const meshGroups = new Map<string, THREE.Group>();
+  const meshUrls = new Map<string, { url: string; version: number }>();
+  let lastMeshes: SceneMeshEntry[] = [];
+  const placeMeshes = (entries: SceneMeshEntry[]) => {
+    lastMeshes = entries;
+    const wanted = new Set(entries.map((e) => `${e.key}@${e.version ?? 0}`));
+    for (const [k, g] of meshGroups) {
+      if (!wanted.has(k)) {
+        scene.remove(g);
+        meshGroups.delete(k);
+        const gone = meshUrls.get(k);
+        meshUrls.delete(k);
+        if (gone) void releaseGltf(gone.url, gone.version);
+      }
+    }
+    for (const e of entries) meshUrls.set(`${e.key}@${e.version ?? 0}`, { url: e.url, version: e.version ?? 0 });
+    if (!grid) return;
+    for (const e of entries) {
+      const k = `${e.key}@${e.version ?? 0}`;
+      const place = (g: THREE.Group) => {
+        const { x, z } = lonLatToLocal(grid!, e.origin.lat, e.origin.lng);
+        g.position.set(x, e.origin.altMsl, z);
+        g.rotation.y = -((e.yawDeg ?? 0) * Math.PI) / 180;
+      };
+      const existing = meshGroups.get(k);
+      if (existing) {
+        place(existing);
+        continue;
+      }
+      void loadGltfScene(e.url, e.version ?? 0)
+        .then((g) => {
+          if (!wanted.has(k) || meshGroups.has(k) || !grid) return;
+          place(g);
+          meshGroups.set(k, g);
+          scene.add(g);
+        })
+        .catch(() => {
+          // A bad file is the module's problem; the scene stays usable.
+        });
+    }
+  };
 
   // ─── Terrain-draped reference grid ────────────────────────────────────────
   // Rebuilt from each ElevationGrid in setTerrain so the grid lines ride the
@@ -202,8 +273,27 @@ export function createSvtScene(canvas: HTMLCanvasElement): SvtScene {
       terrainGrid.frustumCulled = false;
       terrainGrid.renderOrder = 1;
       scene.add(terrainGrid);
+      placeMeshes(lastMeshes);
     },
 
+    setMeshes(entries: SceneMeshEntry[]) {
+      placeMeshes(entries);
+    },
+
+    setBuildings(geometry: THREE.BufferGeometry | null) {
+      if (buildingsMesh) {
+        scene.remove(buildingsMesh);
+        buildingsMesh.geometry.dispose();
+        buildingsMesh = null;
+      }
+      if (!geometry) return;
+      buildingsMesh = new THREE.Mesh(geometry, buildingsMat);
+      scene.add(buildingsMesh);
+    },
+    setBuildingStyle(style) {
+      buildingStyle.uRoofImagery.value = style.roofImagery ? 1 : 0;
+      buildingStyle.uFacades.value = style.facades ? 1 : 0;
+    },
     setDrape(rings: DrapeRing[] | null) {
       drape.setDrape(rings, renderer);
       terrainGridMat.opacity = drape.hasDrape() ? GRID_OPACITY_DRAPED : GRID_OPACITY;
@@ -245,6 +335,8 @@ export function createSvtScene(canvas: HTMLCanvasElement): SvtScene {
         terrainMesh = null;
       }
       terrainMat.dispose();
+      buildingsMesh?.geometry.dispose();
+      buildingsMat.dispose();
       if (terrainGrid) terrainGrid.geometry.dispose();
       terrainGridMat.dispose();
       skyGeom.dispose();

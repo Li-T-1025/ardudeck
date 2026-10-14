@@ -6,13 +6,16 @@
  * Kept out of the module host API so MapPanel can import it alone.
  */
 
-import type { MapFeature, MapLayerRegistration } from '@ardudeck/module-sdk';
+import type { MapFeature, MapLayerRegistration, MapView } from '@ardudeck/module-sdk';
+import { TILE_SOURCE_LAYER_PREFIX } from '../../shared/tile-source-types';
 
 export interface ModuleMapLayer {
   /** Namespaced so two modules may both register an id of "volumes". */
   key: string;
   slug: string;
   reg: MapLayerRegistration;
+  /** Host-served raster tiles for `reg.tiles`, drawn under the features. */
+  tileUrl?: string;
 }
 
 const registry = new Map<string, ModuleMapLayer>();
@@ -47,8 +50,13 @@ export function registerModuleMapLayer(slug: string, reg: MapLayerRegistration):
   watchers.get(key)?.();
   watchers.delete(key);
 
-  registry.set(key, { key, slug, reg });
-  if (reg.defaultVisible === false && !hidden.has(key)) hidden.add(key);
+  const tileUrl = reg.tiles
+    ? `tile-cache://${TILE_SOURCE_LAYER_PREFIX}${encodeURIComponent(`${slug}::${reg.tiles.sourceId}`)}/{z}/{x}/{y}.png`
+    : undefined;
+  registry.set(key, { key, slug, reg, tileUrl });
+  const chosen = readChoices()[key];
+  if (chosen === false || (chosen === undefined && reg.defaultVisible === false)) hidden.add(key);
+  else hidden.delete(key);
   let ids = bySlug.get(slug);
   if (!ids) {
     ids = new Set();
@@ -89,6 +97,15 @@ export function unregisterModuleMapLayersFor(slug: string): void {
 /** Hidden by the pilot. Host-owned, so the control and the drawing agree. */
 const hidden = new Set<string>();
 
+// the pilot's on/off per layer, kept across restarts and cargo reloads
+const CHOICES_KEY = 'ardudeck-module-map-layers';
+function readChoices(): Record<string, boolean> {
+  try { return JSON.parse(localStorage.getItem(CHOICES_KEY) ?? '{}') as Record<string, boolean>; } catch { return {}; }
+}
+function writeChoice(key: string, visible: boolean): void {
+  try { localStorage.setItem(CHOICES_KEY, JSON.stringify({ ...readChoices(), [key]: visible })); } catch { /* storage unavailable */ }
+}
+
 export function isLayerVisible(key: string): boolean {
   return !hidden.has(key);
 }
@@ -96,6 +113,7 @@ export function isLayerVisible(key: string): boolean {
 export function setLayerVisible(key: string, visible: boolean): void {
   if (visible) hidden.delete(key);
   else hidden.add(key);
+  writeChoice(key, visible);
   emit();
 }
 
@@ -108,9 +126,9 @@ export function getModuleMapLayers(): ModuleMapLayer[] {
 }
 
 /** Features for one layer; a module that throws loses its frame, not the map. */
-export function featuresOf(layer: ModuleMapLayer): MapFeature[] {
+export function featuresOf(layer: ModuleMapLayer, view?: MapView): MapFeature[] {
   try {
-    const out = layer.reg.features();
+    const out = layer.reg.features(view);
     return Array.isArray(out) ? out : [];
   } catch (err) {
     console.warn(`[module:${layer.slug}] map layer ${layer.reg.id} features() threw`, err);

@@ -2,6 +2,7 @@
  * Fleet survey state: the per-vehicle assignments produced by splitting one
  * survey polygon across a fleet, plus per-vehicle upload status. Kept separate
  * from the single-vehicle survey-store so the existing planner is untouched.
+ * The vehicles themselves live in the survey config (`config.fleet`).
  */
 
 import { create } from 'zustand';
@@ -16,10 +17,13 @@ interface FleetSurveyStore {
   assignments: FleetSurveyAssignment[];
   /** Per-vehicleKey upload status. */
   uploadStatus: Record<string, { state: UploadState; error?: string }>;
+  /** Planned slot key -> connected vehicle key chosen for the upload. */
+  targets: Record<string, string>;
 
   setBuilding: (building: boolean) => void;
   setAssignments: (assignments: FleetSurveyAssignment[]) => void;
   setUploadStatus: (vehicleKey: string, state: UploadState, error?: string) => void;
+  setTarget: (assignmentKey: string, vehicleKey: string | null) => void;
   clear: () => void;
 }
 
@@ -27,6 +31,7 @@ export const useFleetSurveyStore = create<FleetSurveyStore>((set, get) => ({
   building: false,
   assignments: [],
   uploadStatus: {},
+  targets: {},
 
   setBuilding: (building) => set({ building }),
   setAssignments: (assignments) =>
@@ -36,5 +41,11 @@ export const useFleetSurveyStore = create<FleetSurveyStore>((set, get) => ({
     }),
   setUploadStatus: (vehicleKey, state, error) =>
     set({ uploadStatus: { ...get().uploadStatus, [vehicleKey]: { state, error } } }),
-  clear: () => set({ assignments: [], uploadStatus: {}, building: false }),
+  setTarget: (assignmentKey, vehicleKey) => {
+    const targets = { ...get().targets };
+    if (vehicleKey) targets[assignmentKey] = vehicleKey;
+    else delete targets[assignmentKey];
+    set({ targets });
+  },
+  clear: () => set({ assignments: [], uploadStatus: {}, targets: {}, building: false }),
 }));

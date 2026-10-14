@@ -100,7 +100,9 @@ describe('ArduPilot SITL store: relaunch at a new take-off point', () => {
     const s = useArduPilotSitlStore.getState();
     expect(s.isRunning).toBe(true);
     expect(s.isStarting).toBe(false);
-    expect(s.homeLocation).toEqual(GAME_REGION_HOME);
+    // the Trainer's take-off point is shown as where SITL runs, but never replaces the pilot's own
+    expect(s.runningHome).toEqual(GAME_REGION_HOME);
+    expect(s.homeLocation).toEqual(ARDUDECK_HOME);
   });
 
   it('offers no crash recovery for an intentional relaunch', () => {

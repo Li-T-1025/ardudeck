@@ -61,7 +61,7 @@ import {
   type SurveyPreset,
 } from './survey-presets';
 import type { SurveyPattern, CameraPreset, AltitudeReference, GroundPattern, CorridorMode } from './survey-types';
-import { asOwnFlight } from './survey-types';
+import { asOwnFlight, FLEET_SLOTS_MAX, fleetSlotIndex } from './survey-types';
 import { DraftNumberField } from '../ui/DraftNumberField';
 import type { PersistedSurveyPreset } from '../../../shared/ipc-channels';
 import {
@@ -140,8 +140,6 @@ export function SurveyConfigPanel() {
   const result = useSurveyStore((s) => s.result);
   const generating = useSurveyStore((s) => s.generating);
   const generatorError = useSurveyStore((s) => s.generatorError);
-  // Fleet survey: offer "split across fleet" once 2+ vehicles are connected.
-  const fleetCount = useActiveVehicleStore((s) => Object.keys(s.knownVehicles).length);
   const [showFleetSplit, setShowFleetSplit] = useState(false);
   const showFootprints = useSurveyStore((s) => s.showFootprints);
   const editingGroupId = useSurveyStore((s) => s.editingGroupId);
@@ -195,6 +193,8 @@ export function SurveyConfigPanel() {
   const setPattern = useSurveyStore((s) => s.setPattern);
   const setGeneratorId = useSurveyStore((s) => s.setGeneratorId);
   const setEngineParam = useSurveyStore((s) => s.setEngineParam);
+  const setFleetCount = useSurveyStore((s) => s.setFleetCount);
+  const updateFleetVehicle = useSurveyStore((s) => s.updateFleetVehicle);
   const requestRecompute = useSurveyStore((s) => s.requestRecompute);
   const setAltitude = useSurveyStore((s) => s.setAltitude);
   const setSpeed = useSurveyStore((s) => s.setSpeed);
@@ -220,6 +220,7 @@ export function SurveyConfigPanel() {
   const setCorridorWidth = useSurveyStore((s) => s.setCorridorWidth);
   const setCorridorSectionLength = useSurveyStore((s) => s.setCorridorSectionLength);
   const setCorridorStrips = useSurveyStore((s) => s.setCorridorStrips);
+  const setCorridorBranchStrips = useSurveyStore((s) => s.setCorridorBranchStrips);
   const setCorridorMode = useSurveyStore((s) => s.setCorridorMode);
   const setPanoramaSide = useSurveyStore((s) => s.setPanoramaSide);
   const setPanoramaStandoff = useSurveyStore((s) => s.setPanoramaStandoff);
@@ -727,18 +728,17 @@ export function SurveyConfigPanel() {
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
           </svg>
         </button>
-        {fleetCount >= 2 && (
-          <button
-            onClick={() => setShowFleetSplit(true)}
-            disabled={!polygon}
-            className="p-1.5 text-content-secondary hover:text-cyan-400 transition-colors disabled:opacity-40"
-            title={t('survey:surveyConfigPanel.splitAcrossFleetTitle')}
-          >
-            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16M12 4v16" />
-            </svg>
-          </button>
-        )}
+        {/* Fleet split is a planning step too: it works with vehicles that are not connected yet. */}
+        <button
+          onClick={() => setShowFleetSplit(true)}
+          disabled={!polygon}
+          className="p-1.5 text-content-secondary hover:text-cyan-400 transition-colors disabled:opacity-40"
+          title={t('survey:surveyConfigPanel.splitAcrossFleetTitle')}
+        >
+          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16M12 4v16" />
+          </svg>
+        </button>
       </div>
 
       {/* Inline preset naming row (Electron has no window.prompt) */}
@@ -973,6 +973,53 @@ export function SurveyConfigPanel() {
                 <p className="text-[10px] text-amber-500 leading-snug">
                   {t('survey:surveyConfigPanel.turnRadiusTooTight', { radius: String(currentTurnRadius), speed: config.speed, suggested: suggestedTurnRadius })}
                 </p>
+              )}
+              {activeGenerator?.capabilities.supportsFleet && (
+                <div className="pt-1 space-y-1.5">
+                  <label className="flex items-center justify-between gap-3 text-xs text-content">
+                    <span>{t('survey:surveyConfigPanel.fleetCount')}</span>
+                    <DraftNumberField
+                      value={config.fleet?.length ?? 1}
+                      min={1}
+                      max={FLEET_SLOTS_MAX}
+                      step={1}
+                      onCommit={(n) => setFleetCount(Math.round(n))}
+                      aria-label={t('survey:surveyConfigPanel.fleetCount')}
+                      className={NUMBER_FIELD_CLASS}
+                    />
+                  </label>
+                  <p className="text-[10px] text-content-tertiary leading-snug">{t('survey:surveyConfigPanel.fleetHint')}</p>
+                  {config.fleet && config.fleet.length > 1 && (
+                    <div className="rounded-lg border border-subtle overflow-hidden">
+                      <div className="grid grid-cols-[1fr_auto_auto] gap-x-2 px-2 py-1 text-[10px] uppercase tracking-wide text-content-tertiary bg-surface-raised">
+                        <span>{t('survey:surveyConfigPanel.fleetVehicle')}</span>
+                        <span className="w-16 text-right">{t('survey:surveyConfigPanel.fleetEndurance')}</span>
+                        <span className="w-16 text-right">{t('survey:surveyConfigPanel.fleetSpeed')}</span>
+                      </div>
+                      {config.fleet.map((v) => (
+                        <div key={v.key} className="grid grid-cols-[1fr_auto_auto] gap-x-2 items-center px-2 py-1 border-t border-subtle text-xs">
+                          <span className="font-mono text-content">{t('survey:surveyConfigPanel.fleetLabel', { n: fleetSlotIndex(v.key) })}</span>
+                          <DraftNumberField
+                            value={v.enduranceMinutes ?? config.enduranceMinutes ?? 20}
+                            min={1}
+                            step={1}
+                            onCommit={(m) => updateFleetVehicle(v.key, { enduranceMinutes: m })}
+                            aria-label={t('survey:surveyConfigPanel.fleetEndurance')}
+                            className={NUMBER_FIELD_CLASS}
+                          />
+                          <DraftNumberField
+                            value={v.speed ?? config.speed}
+                            min={0.1}
+                            step={0.1}
+                            onCommit={(s) => updateFleetVehicle(v.key, { speed: s })}
+                            aria-label={t('survey:surveyConfigPanel.fleetSpeed')}
+                            className={NUMBER_FIELD_CLASS}
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
               )}
               {smoothedOnCopter && (
                 <p className="text-[10px] text-content-tertiary leading-snug">
@@ -1293,6 +1340,29 @@ export function SurveyConfigPanel() {
                   </button>
                 )}
               </div>
+
+              {(config.corridorBranches?.length ?? 0) > 0 && (
+                <div className="flex items-center gap-2">
+                  <span
+                    className="text-xs text-content-secondary w-14 flex-shrink-0"
+                    title={t('survey:surveyConfigPanel.branchStripsTitle')}
+                  >
+                    {t('survey:surveyConfigPanel.branchStrips')}
+                  </span>
+                  <input
+                    type="range"
+                    value={config.corridorBranchStrips ?? 0}
+                    onChange={(e) => setCorridorBranchStrips(Number(e.target.value))}
+                    min={0}
+                    max={20}
+                    step={1}
+                    className="flex-1 h-1 bg-surface-inset rounded-full appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-purple-400 [&::-webkit-slider-thumb]:cursor-grab"
+                  />
+                  <span className="text-xs text-content w-14 text-right tabular-nums font-medium">
+                    {(config.corridorBranchStrips ?? 0) === 0 ? t('survey:surveyConfigPanel.branchStripsSame') : config.corridorBranchStrips}
+                  </span>
+                </div>
+              )}
 
               {!isManualCamera && (config.corridorMode ?? 'plane') === 'plane' && (
                 <>

@@ -6,17 +6,13 @@
 import { useTranslation } from 'react-i18next';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useMap } from 'react-leaflet';
+import { parsePosition } from '../../utils/coordinate-format';
 import type { GeocodeResult } from '../../../shared/overlay-types';
 
-/** Parse "lat, lon" (or "lat lon") in decimal degrees. */
+/** A position in any coordinate format the pilot has (decimal, DMS, and cargo ones such as MGRS). */
 function parseLatLng(q: string): { lat: number; lng: number } | null {
-  const m = q.trim().match(/^(-?\d{1,3}(?:\.\d+)?)\s*[,\s]\s*(-?\d{1,3}(?:\.\d+)?)$/);
-  if (!m) return null;
-  const lat = parseFloat(m[1]!);
-  const lng = parseFloat(m[2]!);
-  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
-  if (lat < -90 || lat > 90 || lng < -180 || lng > 180) return null;
-  return { lat, lng };
+  const p = parsePosition(q);
+  return p ? { lat: p.lat, lng: p.lon } : null;
 }
 
 export function MapSearchControl() {

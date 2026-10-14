@@ -195,6 +195,12 @@ function toAnchor(el: HTMLElement, pos: Pos): OverlayAnchorPos | null {
   return { ax, ay, dx, dy };
 }
 
+// Detached (inactive dockview tab) or unsized panels give garbage positions.
+function measurable(el: HTMLElement): boolean {
+  const parent = el.offsetParent as HTMLElement | null;
+  return !!parent && parent.clientWidth > 0 && parent.clientHeight > 0;
+}
+
 function fromAnchor(el: HTMLElement, a: OverlayAnchorPos, o?: OverlayOverhang): Pos | null {
   const parent = el.offsetParent as HTMLElement | null;
   if (!parent) return null;
@@ -288,7 +294,7 @@ export function useDraggableOverlay(
         writeAnchor(storageKey, anchor);
       }
     }
-    applyPos(fromAnchor(el, anchorRef.current, oh()));
+    if (measurable(el)) applyPos(fromAnchor(el, anchorRef.current, oh()));
   }, [storageKey, applyPos, oh]);
 
   useEffect(() => {
@@ -322,16 +328,23 @@ export function useDraggableOverlay(
 
   // Keep the anchored placement when the map panel resizes or the widget
   // itself changes size (e.g. instrument scaling).
+  // The parent is resolved inside the callback: a widget mounted in a hidden
+  // tab has none yet, and a detached one must keep its last good position.
   useEffect(() => {
     const el = elRef.current;
-    const parent = el?.offsetParent as HTMLElement | null;
-    if (!el || !parent) return;
+    if (!el) return;
+    let observedParent: Element | null = null;
     const ro = new ResizeObserver(() => {
       const node = elRef.current;
       if (!node || !anchorRef.current || drag.current) return;
+      const parent = node.offsetParent;
+      if (parent && parent !== observedParent) {
+        observedParent = parent;
+        ro.observe(parent);
+      }
+      if (!measurable(node)) return;
       applyPos(fromAnchor(node, anchorRef.current, oh()));
     });
-    ro.observe(parent);
     ro.observe(el);
     return () => ro.disconnect();
   }, [storageKey, applyPos, attachRev]);

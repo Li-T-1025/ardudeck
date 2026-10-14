@@ -384,13 +384,14 @@
     "noPoint": "Kein Punkt ausgewählt",
     "searchPlaceholder": "Ort suchen (Stadt, Flugplatz, Wahrzeichen)...",
     "subtitle": "Klicken Sie auf die Karte, um einen Punkt zu setzen, ziehen Sie die Nadel zum Feinjustieren oder suchen Sie einen Ort.",
-    "useThisPoint": "Diesen Punkt verwenden"
+    "useThisPoint": "Diesen Punkt verwenden",
+    "positionPlaceholder": "Position in jedem Format, z. B. 47.4769, 9.6640"
   },
   "mapSearch": {
     "aria": "Zu Ort springen",
     "failed": "Suche fehlgeschlagen",
     "noMatch": "Kein Treffer gefunden",
-    "placeholder": "Zu Ort oder Breite, Länge"
+    "placeholder": "Zu einem Ort oder einer Position"
   },
   "messagesInstrument": {
     "none": "Keine Meldungen",
@@ -412,7 +413,13 @@
     "offline": "Offline",
     "refresh": "Aktualisieren",
     "refreshTitle": "Alle Kacheln neu herunterladen und zwischengespeicherte Daten durch aktuelle ersetzen",
-    "saveTitle": "Dieses Gebiet für die Offline-Nutzung speichern"
+    "saveTitle": "Dieses Gebiet für die Offline-Nutzung speichern",
+    "buildings": "Gebäude für die synthetische Sicht",
+    "buildingsEstimate": "{{count}} Gebäudekacheln für diese Ansicht",
+    "buildingsTooLarge": "Gebiet zu groß für Gebäude: hineinzoomen (höchstens etwa 100 x 100 km).",
+    "buildingsDone": "{{count}} Gebäudekacheln gespeichert ({{size}}).",
+    "buildingsFailed": "{{count}} konnten nicht geladen werden.",
+    "saveBuildings": "Gebäude speichern"
   },
   "offlineCache": {
     "allCached": "Alle {{count}} Kacheln bereits zwischengespeichert",
@@ -584,5 +591,11 @@
     "needCapacity": "Akkukapazität (BATT_CAPACITY) setzen, um die Restflugzeit zu sehen",
     "notDrawing": "Erscheint, sobald die Motoren Strom ziehen",
     "atDraw": "Bei durchschnittlich {{a}} A"
+  },
+  "mapAreaPicker": {
+    "subtitle": "Karte verschieben und zoomen, bis das gewünschte Gebiet den Rahmen füllt.",
+    "hint": "Alles im grünen Rahmen wird heruntergeladen. Herauszoomen für ein größeres Gebiet.",
+    "vehicle": "Fahrzeug",
+    "useThisArea": "Dieses Gebiet verwenden"
   }
 }

@@ -68,6 +68,9 @@ importers:
       '@ardudeck/vehicle-core':
         specifier: workspace:*
         version: link:../../packages/vehicle-core
+      '@mapbox/vector-tile':
+        specifier: ^2
+        version: 2.0.4
       '@reactour/tour':
         specifier: ^3.8.0
         version: 3.8.0(react@18.3.1)
@@ -119,6 +122,15 @@ importers:
       node-pty:
         specifier: ^1.0.0
         version: 1.1.0
+      pbf:
+        specifier: ^4
+        version: 4.0.1
+      pmtiles:
+        specifier: ^4
+        version: 4.5.0
+      pngjs:
+        specifier: 7.0.0
+        version: 7.0.0
       polygon-clipping:
         specifier: 0.15.7
         version: 0.15.7
@@ -168,6 +180,9 @@ importers:
       '@types/node':
         specifier: ^20.10.5
         version: 20.19.27
+      '@types/pngjs':
+        specifier: 6.0.5
+        version: 6.0.5
       '@types/react':
         specifier: ^18.2.45
         version: 18.3.27
@@ -1603,6 +1618,9 @@ packages:
 
   '@types/plist@3.0.5':
     resolution: {integrity: sha512-E6OCaRmAe4WDmWNsL/9RMqdkkzDCY1etutkflWk4c+AcjDU07Pcz1fQwTX0TQz+Pxqn9i4L1TU3UFpjnrcDgxA==}
+
+  '@types/pngjs@6.0.5':
+    resolution: {integrity: sha512-0k5eKfrA83JOZPppLtS2C7OUtyNAl2wKNxfyYl9Q5g9lPkgBl/9hNyAu6HuEH2J4XmIv2znEpkDd0SaZVxW6iQ==}
 
   '@types/prop-types@15.7.15':
     resolution: {integrity: sha512-F6bEyamV9jKGAFBEmlQnesRPGOQqS2+Uwi0Em15xenOxHaf2hv6L8YCVn3rPdPJOiJfPiCnLIRyvwVaqMY3MIw==}
@@ -3828,6 +3846,9 @@ packages:
     resolution: {integrity: sha512-uysumyrvkUX0rX/dEVqt8gC3sTBzd4zoWfLeS29nb53imdaXVvLINYXTI2GNqzaMuvacNx4uJQ8+b3zXR0pkgQ==}
     engines: {node: '>=10.4.0'}
 
+  pmtiles@4.5.0:
+    resolution: {integrity: sha512-CBeD4SoUluFziGdy/8k7FOjQxQy486n+929W/tWophauvMICpkZ26vGBWhDt/6b1FZQWNaf4jFdT/5+q0Wii5w==}
+
   png2icons@2.0.1:
     resolution: {integrity: sha512-GDEQJr8OG4e6JMp7mABtXFSEpgJa1CCpbQiAR+EjhkHJHnUL9zPPtbOrjsMD8gUbikgv3j7x404b0YJsV3aVFA==}
     hasBin: true
@@ -3839,6 +3860,10 @@ packages:
   pngjs@6.0.0:
     resolution: {integrity: sha512-TRzzuFRRmEoSW/p1KVAmiOgPco2Irlah+bGFCeNfJXxxYGwSw7YwAOAcd7X28K/m5bjBWKsC29KyoMfHbypayg==}
     engines: {node: '>=12.13.0'}
+
+  pngjs@7.0.0:
+    resolution: {integrity: sha512-LKWqWJRhstyYo9pGvgor/ivk2w94eSjE3RGVuzLGlr3NmD8bf7RcYGze1mNdEHRP6TRP6rMuDHk5t44hnTRyow==}
+    engines: {node: '>=14.19.0'}
 
   polygon-clipping@0.15.7:
     resolution: {integrity: sha512-nhfdr83ECBg6xtqOAJab1tbksbBAOMUltN60bU+llHVOL0e5Onm1WpAXXWXVB39L8AJFssoIhEVuy/S90MmotA==}
@@ -6103,6 +6128,10 @@ snapshots:
       '@types/node': 22.19.3
       xmlbuilder: 15.1.1
     optional: true
+
+  '@types/pngjs@6.0.5':
+    dependencies:
+      '@types/node': 22.19.3
 
   '@types/prop-types@15.7.15': {}
 
@@ -8717,11 +8746,17 @@ snapshots:
       base64-js: 1.5.1
       xmlbuilder: 15.1.1
 
+  pmtiles@4.5.0:
+    dependencies:
+      fflate: 0.8.2
+
   png2icons@2.0.1: {}
 
   pngjs@3.4.0: {}
 
   pngjs@6.0.0: {}
+
+  pngjs@7.0.0: {}
 
   polygon-clipping@0.15.7:
     dependencies:

@@ -54,6 +54,8 @@ import type {
   TrainerLaunchInput,
   TrainerStatus,
 } from '../shared/trainer-types.js';
+import type { SceneMeshEntry, TileSourceEntry } from '../shared/tile-source-types.js';
+import type { TerrainUplinkStatus } from '../shared/tile-source-types.js';
 import type { WindField, WindFetchParams } from '../shared/wind-types.js';
 
 type TelemetryUpdate =
@@ -651,6 +653,11 @@ const api = {
     const handler = (_: unknown, msg: { sysid: number; loaded: number; pending: number; spacing: number }) => callback(msg);
     ipcRenderer.on(IPC_CHANNELS.MAVLINK_TERRAIN_STATUS, handler);
     return () => ipcRenderer.removeListener(IPC_CHANNELS.MAVLINK_TERRAIN_STATUS, handler);
+  },
+  onTerrainUplinkStatus: (callback: (s: TerrainUplinkStatus) => void) => {
+    const handler = (_: unknown, s: TerrainUplinkStatus) => callback(s);
+    ipcRenderer.on(IPC_CHANNELS.TERRAIN_UPLINK_STATUS, handler);
+    return () => ipcRenderer.removeListener(IPC_CHANNELS.TERRAIN_UPLINK_STATUS, handler);
   },
 
   // FC refused an operator nav command (goto/orbit/land): map drops the target overlay.
@@ -2519,6 +2526,19 @@ const api = {
   // MapLibre addProtocol handler, which cannot fetch the privileged scheme.
   tileCacheGetTile: (url: string): Promise<ArrayBuffer | null> =>
     ipcRenderer.invoke(IPC_CHANNELS.TILE_CACHE_GET_TILE, url),
+  buildingsGetTile: (source: 'openfreemap' | 'overture', x: number, y: number): Promise<Uint8Array | null> =>
+    ipcRenderer.invoke(IPC_CHANNELS.BUILDINGS_GET_TILE, source, x, y),
+  buildingsCountTiles: (bounds: { north: number; south: number; east: number; west: number }): Promise<number> =>
+    ipcRenderer.invoke(IPC_CHANNELS.BUILDINGS_COUNT_TILES, bounds),
+  buildingsBake: (source: 'openfreemap' | 'overture', bounds: { north: number; south: number; east: number; west: number }): Promise<import('../shared/building-cache-types').BuildingBakeProgress> =>
+    ipcRenderer.invoke(IPC_CHANNELS.BUILDINGS_BAKE, source, bounds),
+  buildingsCancelBake: (bakeId: string): Promise<void> => ipcRenderer.invoke(IPC_CHANNELS.BUILDINGS_CANCEL_BAKE, bakeId),
+  buildingsCancelView: (): Promise<void> => ipcRenderer.invoke(IPC_CHANNELS.BUILDINGS_CANCEL_VIEW),
+  onBuildingsBakeProgress: (callback: (p: import('../shared/building-cache-types').BuildingBakeProgress) => void): (() => void) => {
+    const handler = (_: unknown, p: import('../shared/building-cache-types').BuildingBakeProgress) => callback(p);
+    ipcRenderer.on(IPC_CHANNELS.BUILDINGS_BAKE_PROGRESS, handler);
+    return () => ipcRenderer.removeListener(IPC_CHANNELS.BUILDINGS_BAKE_PROGRESS, handler);
+  },
 
   tileCacheGetStats: (): Promise<TileCacheStats> =>
     ipcRenderer.invoke(IPC_CHANNELS.TILE_CACHE_GET_STATS),
@@ -2853,6 +2873,20 @@ const api = {
       callback(event);
     ipcRenderer.on(IPC_CHANNELS.INSPECTOR_BROADCAST, handler);
     return () => ipcRenderer.removeListener(IPC_CHANNELS.INSPECTOR_BROADCAST, handler);
+  },
+
+  // ─── Module tile sources and scene meshes ───
+  tileSourcesList: (): Promise<TileSourceEntry[]> => ipcRenderer.invoke(IPC_CHANNELS.TILE_SOURCES_LIST),
+  onTileSourcesChanged: (callback: (entries: TileSourceEntry[]) => void): (() => void) => {
+    const handler = (_: unknown, entries: TileSourceEntry[]) => callback(entries);
+    ipcRenderer.on(IPC_CHANNELS.TILE_SOURCES_CHANGED, handler);
+    return () => ipcRenderer.removeListener(IPC_CHANNELS.TILE_SOURCES_CHANGED, handler);
+  },
+  sceneMeshesList: (): Promise<SceneMeshEntry[]> => ipcRenderer.invoke(IPC_CHANNELS.SCENE_MESHES_LIST),
+  onSceneMeshesChanged: (callback: (entries: SceneMeshEntry[]) => void): (() => void) => {
+    const handler = (_: unknown, entries: SceneMeshEntry[]) => callback(entries);
+    ipcRenderer.on(IPC_CHANNELS.SCENE_MESHES_CHANGED, handler);
+    return () => ipcRenderer.removeListener(IPC_CHANNELS.SCENE_MESHES_CHANGED, handler);
   },
 
   // ─── ArduDeck Trainer ───

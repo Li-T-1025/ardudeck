@@ -409,7 +409,8 @@
   },
   "frameDiagram": {
     "clickToTest": "Zum Testen auf einen Motor klicken",
-    "frame": "Rahmen"
+    "frame": "Rahmen",
+    "quadplane": "QuadPlane-Hubmotoren"
   },
   "gpsDiagnosticsDialog": {
     "accuracy": "Genauigkeit",
@@ -931,7 +932,11 @@
     "testAllAtOnce": "Alle gleichzeitig testen",
     "testAllSequence": "Alle nacheinander testen",
     "testIndividual": "Einzeln testen",
-    "title": "Motortest"
+    "title": "Motortest",
+    "planeTitle": "Kein Motortest bei Flächenflugzeugen",
+    "planeBody": "ArduPlane kann Motoren nur bei einem QuadPlane (VTOL) von der Bodenstation aus drehen, und zwar die Hubmotoren. Für den Vortriebsmotor eines reinen Flächenflugzeugs hat die Firmware keinen Motortest, in keiner Bodenstation.",
+    "planeHow": "Vortriebsmotor prüfen: Propeller abnehmen, in MANUAL armen und den Gasknüppel anheben. Welcher Ausgang ihn ansteuert, zeigt Servo Output.",
+    "quadplaneNote": "Testet die VTOL-Hubmotoren. Ein eigener Vortriebsmotor gehört nicht zum Motortest von ArduPilot; ihn mit Gas in MANUAL und ohne Propeller prüfen."
   },
   "notifyTab": {
     "allSoundsOn": "Alle Töne an",

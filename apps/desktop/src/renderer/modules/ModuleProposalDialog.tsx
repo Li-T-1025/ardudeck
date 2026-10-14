@@ -77,11 +77,21 @@ export function ModuleProposalDialog(): JSX.Element | null {
         </div>
 
         <div className="px-4 pt-3">
-          <Outline points={proposal.inclusion} />
-          <div className="mt-2 text-xs text-content-secondary tabular-nums">
-            {t('modules:moduleProposalDialog.inclusionSummary', { count: proposal.inclusion.length, extent: extent(proposal.inclusion) })}
-          </div>
-          {existing.inclusionShapes > 0 && (
+          <Outline points={proposal.inclusion ?? proposal.exclusions?.[0]?.points ?? []} />
+          {proposal.inclusion && (
+            <div className="mt-2 text-xs text-content-secondary tabular-nums">
+              {t('modules:moduleProposalDialog.inclusionSummary', { count: proposal.inclusion.length, extent: extent(proposal.inclusion) })}
+            </div>
+          )}
+          {proposal.exclusions && proposal.exclusions.length > 0 && (
+            <div className="mt-2 text-xs text-content-secondary tabular-nums">
+              {t('modules:moduleProposalDialog.exclusionSummary', {
+                count: proposal.exclusions.length,
+                points: proposal.exclusions.reduce((n, e) => n + e.points.length, 0),
+              })}
+            </div>
+          )}
+          {proposal.inclusion && existing.inclusionShapes > 0 && (
             <div className="mt-2 rounded border border-amber-500/60 px-2 py-1.5 text-xs text-amber-400">
               {t('modules:moduleProposalDialog.replacesFence', { count: existing.inclusionShapes, points: existing.inclusionPoints })}
             </div>

@@ -286,7 +286,7 @@ export function DockedGroup({ gid, group }: { gid: string; group: DockGroup }): 
     }
     const el = wrapperRef.current;
     const parent = el?.offsetParent as HTMLElement | null;
-    if (!el || !parent) return;
+    if (!el || !parent || parent.clientWidth === 0 || parent.clientHeight === 0) return;
     const before = Math.round(row ? el.offsetLeft : el.offsetTop);
     const after = Math.round(row
       ? parent.clientWidth - el.offsetLeft - el.offsetWidth
@@ -303,10 +303,19 @@ export function DockedGroup({ gid, group }: { gid: string; group: DockGroup }): 
   useLayoutEffect(measurePanelExt, [stretched, row, scale, posLeft, posTop, bodySize, cellSizes]);
   useLayoutEffect(() => {
     if (!stretched) return;
-    const parent = wrapperRef.current?.offsetParent as HTMLElement | null;
-    if (!parent) return;
-    const ro = new ResizeObserver(measurePanelExt);
-    ro.observe(parent);
+    const el = wrapperRef.current;
+    if (!el) return;
+    // Parent resolved late: it is null while the tab is hidden.
+    let observedParent: Element | null = null;
+    const ro = new ResizeObserver(() => {
+      const parent = el.offsetParent;
+      if (parent && parent !== observedParent) {
+        observedParent = parent;
+        ro.observe(parent);
+      }
+      measurePanelExt();
+    });
+    ro.observe(el);
     return () => ro.disconnect();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [stretched]);

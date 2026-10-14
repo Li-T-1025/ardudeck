@@ -6,6 +6,8 @@ import { getDevModules } from './module-dev.js';
 import { loadModuleMain } from './module-loader.js';
 import { createMainHostApi } from './module-host-main.js';
 import { killAllForModule } from './module-pty-service.js';
+import { unregisterTileSourcesFor } from '../terrain/tile-source-registry.js';
+import { unregisterSceneMeshesFor } from '../terrain/scene-mesh-registry.js';
 
 interface LoadedRecord {
   slug: string;
@@ -61,6 +63,8 @@ export async function loadAllModules(): Promise<void> {
 export function unloadAllModules(): void {
   for (const { slug } of loaded.values()) {
     killAllForModule(slug);
+    unregisterTileSourcesFor(slug);
+    unregisterSceneMeshesFor(slug);
   }
   loaded.clear();
 }

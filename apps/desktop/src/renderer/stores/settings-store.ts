@@ -333,6 +333,9 @@ interface SettingsStore {
   // Console
   showDebugLogs: boolean;
   setShowDebugLogs: (enabled: boolean) => void;
+  /** Answer the autopilot's terrain requests from the map's DEM tiles. */
+  serveTerrain: boolean;
+  setServeTerrain: (enabled: boolean) => void;
 
   // MAVLink source system id of this station (1-255). Distinct ids let
   // several GCS share one vehicle without corrupting param/mission transfers.
@@ -383,6 +386,12 @@ interface SettingsStore {
   // Display unit preferences
   unitPreferences: UserUnitPreferences;
   setUnitPreference: <K extends keyof UserUnitPreferences>(kind: K, unit: UserUnitPreferences[K]) => void;
+  /** How positions are shown and typed: 'decimal', 'dms', or a cargo format as '<slug>:<id>'. */
+  coordinateFormat: string;
+  setCoordinateFormat: (id: string) => void;
+  /** Detail level per format id (decimals, MGRS digits...). */
+  coordinatePrecision: Record<string, number>;
+  setCoordinatePrecision: (formatId: string, precision: number) => void;
 
   // Theme
   theme: ThemePreference;
@@ -773,6 +782,7 @@ const DEFAULT_CONNECTION_MEMORY: ConnectionMemory = {
 };
 
 // Debounce timer for auto-save
+let saveAgain = false;
 let saveTimeout: ReturnType<typeof setTimeout> | null = null;
 
 export const useSettingsStore = create<SettingsStore>()(
@@ -814,6 +824,11 @@ export const useSettingsStore = create<SettingsStore>()(
   setShowDebugLogs: (enabled: boolean) => {
     set({ showDebugLogs: enabled });
   },
+  serveTerrain: true,
+  setServeTerrain: (enabled: boolean) => {
+    set({ serveTerrain: enabled });
+    void get()._saveSettings();
+  },
 
   gcsSysid: 255,
   setGcsSysid: (sysid: number) => {
@@ -852,6 +867,8 @@ export const useSettingsStore = create<SettingsStore>()(
   preferredFirmwareSource: 'ardupilot' as FirmwareSource,
   telemetrySpeed: 'normal' as TelemetrySpeed,
   unitPreferences: { ...DEFAULT_USER_UNIT_PREFERENCES },
+  coordinateFormat: 'decimal',
+  coordinatePrecision: {},
   theme: 'dark' as ThemePreference,
   nonDefaultHighlightColor: DEFAULT_NON_DEFAULT_COLOR,
   experienceLevel: null as ExperienceLevel | null,
@@ -976,6 +993,8 @@ export const useSettingsStore = create<SettingsStore>()(
           preferredFirmwareSource: (settingsRecord.preferredFirmwareSource as FirmwareSource) || 'ardupilot',
           telemetrySpeed: (settingsRecord.telemetrySpeed as TelemetrySpeed) || 'normal',
           unitPreferences,
+          coordinateFormat: typeof settingsRecord.coordinateFormat === 'string' ? settingsRecord.coordinateFormat : 'decimal',
+          coordinatePrecision: (settingsRecord.coordinatePrecision && typeof settingsRecord.coordinatePrecision === 'object' ? settingsRecord.coordinatePrecision : {}) as Record<string, number>,
           theme: (settingsRecord.theme as ThemePreference) || 'dark',
           nonDefaultHighlightColor: (settingsRecord.nonDefaultHighlightColor as NonDefaultColorKey) || DEFAULT_NON_DEFAULT_COLOR,
           experienceLevel: (settingsRecord.experienceLevel as ExperienceLevel) || null,
@@ -992,6 +1011,7 @@ export const useSettingsStore = create<SettingsStore>()(
           tourPromptsEnabled: settingsRecord.tourPromptsEnabled !== false,
           voiceAlertsMuted: !!settingsRecord.voiceAlertsMuted,
           showDebugLogs: !!settingsRecord.showDebugLogs,
+          serveTerrain: settingsRecord.serveTerrain !== false,
           gcsSysid: typeof settingsRecord.gcsSysid === 'number'
             ? Math.min(255, Math.max(1, Math.round(settingsRecord.gcsSysid)))
             : 255,
@@ -1016,7 +1036,9 @@ export const useSettingsStore = create<SettingsStore>()(
 
   _saveSettings: async () => {
     const state = get();
-    if (!state._isInitialized || state._isSaving) return;
+    if (!state._isInitialized) return;
+    // a change made while a save runs is saved again afterwards, never dropped
+    if (state._isSaving) { saveAgain = true; return; }
 
     set({ _isSaving: true });
     try {
@@ -1030,8 +1052,11 @@ export const useSettingsStore = create<SettingsStore>()(
         connectionMemory: state.connectionMemory,
         defaultSitlType: state.defaultSitlType,
         preferredFirmwareSource: state.preferredFirmwareSource,
+        serveTerrain: state.serveTerrain,
         telemetrySpeed: state.telemetrySpeed,
         unitPreferences: state.unitPreferences,
+        coordinateFormat: state.coordinateFormat,
+        coordinatePrecision: state.coordinatePrecision,
         theme: state.theme,
         nonDefaultHighlightColor: state.nonDefaultHighlightColor,
         ...(state.experienceLevel ? { experienceLevel: state.experienceLevel } : {}),
@@ -1059,6 +1084,10 @@ export const useSettingsStore = create<SettingsStore>()(
       console.error('[Settings] Failed to save:', error);
     } finally {
       set({ _isSaving: false });
+      if (saveAgain) {
+        saveAgain = false;
+        void get()._saveSettings();
+      }
     }
   },
 
@@ -1291,6 +1320,14 @@ export const useSettingsStore = create<SettingsStore>()(
     }));
   },
 
+  setCoordinateFormat: (coordinateFormat) => {
+    set({ coordinateFormat });
+  },
+
+  setCoordinatePrecision: (formatId, precision) => {
+    set((state) => ({ coordinatePrecision: { ...state.coordinatePrecision, [formatId]: precision } }));
+  },
+
   setTheme: (theme) => {
     set({ theme });
   },
@@ -1361,6 +1398,8 @@ useSettingsStore.subscribe(
     preferredFirmwareSource: state.preferredFirmwareSource,
     telemetrySpeed: state.telemetrySpeed,
     unitPreferences: state.unitPreferences,
+    coordinateFormat: state.coordinateFormat,
+    coordinatePrecision: state.coordinatePrecision,
     theme: state.theme,
     nonDefaultHighlightColor: state.nonDefaultHighlightColor,
     experienceLevel: state.experienceLevel,
@@ -1383,36 +1422,9 @@ useSettingsStore.subscribe(
   (curr, prev) => {
     // Only save if initialized and something changed
     if (useSettingsStore.getState()._isInitialized) {
-      // Check if anything actually changed (shallow comparison)
-      if (
-        curr.missionDefaults !== prev.missionDefaults ||
-        curr.surveyPerformance !== prev.surveyPerformance ||
-        curr.sidebarCollapsedByContext !== prev.sidebarCollapsedByContext ||
-        curr.vehicles !== prev.vehicles ||
-        curr.activeVehicleId !== prev.activeVehicleId ||
-        curr.flightStats !== prev.flightStats ||
-        curr.connectionMemory !== prev.connectionMemory ||
-        curr.defaultSitlType !== prev.defaultSitlType ||
-        curr.preferredFirmwareSource !== prev.preferredFirmwareSource ||
-        curr.telemetrySpeed !== prev.telemetrySpeed ||
-        curr.unitPreferences !== prev.unitPreferences ||
-        curr.theme !== prev.theme ||
-        curr.experienceLevel !== prev.experienceLevel ||
-        curr.experienceLevelVersion !== prev.experienceLevelVersion ||
-        curr.uiVisibility !== prev.uiVisibility ||
-        curr.companionUnlocked !== prev.companionUnlocked ||
-        curr.advancedCommandsUnlocked !== prev.advancedCommandsUnlocked ||
-        curr.defaultCommandAltFrame !== prev.defaultCommandAltFrame ||
-        curr.voiceAlertsMuted !== prev.voiceAlertsMuted ||
-        curr.showDebugLogs !== prev.showDebugLogs ||
-        curr.gcsSysid !== prev.gcsSysid ||
-        curr.aiProvider !== prev.aiProvider ||
-        curr.aiWarningDismissed !== prev.aiWarningDismissed ||
-        curr.surveyPresets !== prev.surveyPresets ||
-        curr.lastSurveyPresetId !== prev.lastSurveyPresetId ||
-        curr.surveySavedConfig !== prev.surveySavedConfig ||
-        curr.userCameraPresets !== prev.userCameraPresets
-      ) {
+      // every selected field: a hand-kept list here once left new settings unsaved
+      const changed = (Object.keys(curr) as Array<keyof typeof curr>).some((k) => curr[k] !== prev[k]);
+      if (changed) {
         debouncedSave();
       }
     }

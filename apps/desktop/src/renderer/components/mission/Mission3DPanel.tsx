@@ -24,6 +24,9 @@ import {
 } from '../../../shared/mission-types';
 import { createMissionThreeJsLayer, type MissionThreeJsLayer } from './mission-threejs-layer';
 import { createVehicleThreeJsLayer, type VehicleThreeJsLayer } from './vehicle-threejs-layer';
+import { createMeshThreeJsLayer, type MeshThreeJsLayer } from './mesh-threejs-layer';
+import { demSourceMaxZoom, useTileSourceStore } from '../../stores/tile-source-store';
+import { meshesFor, useSceneMeshStore } from '../../stores/scene-mesh-store';
 
 // Shared map layer definitions (centralized)
 import { MAP_LAYERS, mapLayerName, type LayerKey, type MapLayer } from '../../../shared/map-layers';
@@ -191,6 +194,9 @@ export function Mission3DPanel({
   const mapRef = useRef<maplibregl.Map | null>(null);
   const threeLayerRef = useRef<MissionThreeJsLayer | null>(null);
   const vehicleLayerRef = useRef<VehicleThreeJsLayer | null>(null);
+  const meshLayerRef = useRef<MeshThreeJsLayer | null>(null);
+  const terrainVersion = useTileSourceStore((s) => s.version);
+  const meshVersion = useSceneMeshStore((s) => s.version);
   const markerContainerRef = useRef<HTMLDivElement>(null);
   const isInitialFitDone = useRef(false);
 
@@ -200,6 +206,21 @@ export function Mission3DPanel({
   const activeLayer: LayerKey = (sharedMapLayer in MAP_LAYERS ? sharedMapLayer : 'googleSat') as LayerKey;
   const setActiveLayer = (layer: LayerKey) => setSharedMapLayer(layer);
   const [exaggeration, setExaggeration] = useState(1.0);
+
+  // MapLibre caches raster-dem tiles per source; a module DEM change needs the source rebuilt.
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !map.isStyleLoaded() || !map.getSource('terrain-dem')) return;
+    map.setTerrain(null);
+    map.removeSource('terrain-dem');
+    map.addSource('terrain-dem', { type: 'raster-dem', tiles: ['tile-cache://dem/{z}/{x}/{y}.png'], tileSize: 256, encoding: 'terrarium', maxzoom: demSourceMaxZoom(useTileSourceStore.getState().entries) });
+    map.setTerrain({ source: 'terrain-dem', exaggeration });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [terrainVersion]);
+
+  useEffect(() => {
+    meshLayerRef.current?.setMeshes(meshesFor('mission3d'), exaggeration);
+  }, [meshVersion, exaggeration]);
   const [mapReady, setMapReady] = useState(false);
   const [wpDisplayData, setWpDisplayData] = useState<WpDisplay[]>([]);
   const [ipLocation] = useIpLocation();
@@ -360,7 +381,8 @@ export function Mission3DPanel({
         tiles: ['tile-cache://dem/{z}/{x}/{y}.png'],
         tileSize: 256,
         encoding: 'terrarium',
-        maxzoom: 15, // Terrarium tiles only available up to zoom 15
+        // 15 is the native DEM; while a module DEM exists the host serves up to 19 and overzooms its own past 15
+        maxzoom: demSourceMaxZoom(useTileSourceStore.getState().entries),
       });
 
       map.setTerrain({ source: 'terrain-dem', exaggeration });
@@ -493,6 +515,11 @@ export function Mission3DPanel({
       threeLayerRef.current = threeLayer;
       map.addLayer(threeLayer.layer);
 
+      const meshLayer = createMeshThreeJsLayer();
+      meshLayerRef.current = meshLayer;
+      map.addLayer(meshLayer.layer);
+      meshLayer.setMeshes(meshesFor('mission3d'), exaggeration);
+
       // Vehicle 3D model layer
       const vehicleLayer = createVehicleThreeJsLayer();
       vehicleLayerRef.current = vehicleLayer;
@@ -533,6 +560,8 @@ export function Mission3DPanel({
       vehicleLayerRef.current = null;
       threeLayerRef.current?.dispose();
       threeLayerRef.current = null;
+      meshLayerRef.current?.dispose();
+      meshLayerRef.current = null;
       map.remove();
       mapRef.current = null;
       setMapReady(false);
