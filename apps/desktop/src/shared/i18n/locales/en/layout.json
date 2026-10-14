@@ -36,7 +36,8 @@
     "inspectorDesc": "Watch live messages and graphs",
     "simWorldDesc": "Fly SITL in a persistent 3D world: obstacles, fences, missions",
     "telemetryDashboard": "Telemetry Dashboard",
-    "telemetryDashboardDesc": "Live telemetry on its own screen"
+    "telemetryDashboardDesc": "Live telemetry on its own screen",
+    "locusDesc": "Open ArduDeck Locus: PPK, photogrammetry and LiDAR"
   },
   "updateBanner": {
     "available": "<b>ArduDeck {{version}}</b> is available{{name}}",

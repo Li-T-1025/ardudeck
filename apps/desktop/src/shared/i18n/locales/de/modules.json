@@ -20,7 +20,8 @@
   },
   "hangarApps": {
     "apps": "Apps",
-    "installedApps": "Installierte Apps"
+    "installedApps": "Installierte Apps",
+    "launchFailed": "Die App konnte nicht gestartet werden"
   },
   "moduleDock": {
     "backToCargo": "Zurück zum Cargo",

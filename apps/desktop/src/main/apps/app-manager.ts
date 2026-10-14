@@ -9,7 +9,8 @@
 
 import { createHash } from 'node:crypto';
 import { createWriteStream } from 'node:fs';
-import { mkdir, rm } from 'node:fs/promises';
+import { mkdir, readdir, rm, stat } from 'node:fs/promises';
+import { spawn } from 'node:child_process';
 import { join } from 'node:path';
 import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
@@ -187,4 +188,41 @@ export async function uninstallApp(slug: string): Promise<InstalledApp[]> {
   const left = store().get('apps').filter((a) => a.slug !== slug);
   store().set('apps', left);
   return left;
+}
+
+/**
+ * Start an installed app as its own process. A mac app is a bundle, so `open` starts it the way
+ * Finder would; elsewhere the install folder holds one executable at its root. The child is
+ * detached: it outlives ArduDeck and ArduDeck's dev-server variables must not reach it, or an
+ * Electron app would load ArduDeck's renderer instead of its own.
+ */
+export async function launchApp(slug: string, args: string[] = []): Promise<void> {
+  const installed = getInstalledApp(slug);
+  if (!installed) throw new Error(t('main:appManager.notInstalled', { slug }));
+  const root = installed.installPath;
+  const names = await readdir(root);
+  const env = Object.fromEntries(
+    Object.entries(process.env).filter(([k]) => !k.startsWith('ELECTRON_') && !k.startsWith('VITE_') && k !== 'NODE_OPTIONS'),
+  );
+  let command: string;
+  let argv: string[];
+  if (process.platform === 'darwin') {
+    const bundle = names.find((n) => n.endsWith('.app'));
+    if (!bundle) throw new Error(t('main:appManager.noExecutable', { slug }));
+    command = 'open';
+    argv = ['-n', join(root, bundle), ...(args.length ? ['--args', ...args] : [])];
+  } else {
+    let exe: string | undefined;
+    for (const n of names) {
+      const p = join(root, n);
+      const st = await stat(p).catch(() => null);
+      if (!st?.isFile()) continue;
+      if (process.platform === 'win32' ? n.toLowerCase().endsWith('.exe') && !/unins/i.test(n) : (st.mode & 0o111) !== 0) { exe = p; break; }
+    }
+    if (!exe) throw new Error(t('main:appManager.noExecutable', { slug }));
+    command = exe;
+    argv = args;
+  }
+  const child = spawn(command, argv, { detached: true, stdio: 'ignore', env });
+  child.unref();
 }

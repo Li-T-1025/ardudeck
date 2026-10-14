@@ -9,9 +9,13 @@
 import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { t as i18nT } from '../../../shared/i18n/index.js';
+import { useAppStore } from '../../stores/app-store';
+import { LOCUS_CARGO_SLUG } from '../../modules/capabilities';
 
 interface LaunchItem {
   id: string;
+  /** Hangar app slug: the entry shows only while that app is installed. */
+  app?: string;
   labelKey: string;
   descKey: string;
   iconColor: string;
@@ -76,10 +80,30 @@ const ITEMS: LaunchItem[] = [
   },
 ];
 
+const LOCUS_ITEM: LaunchItem = {
+  id: 'locus',
+  app: LOCUS_CARGO_SLUG,
+  labelKey: 'navigation:navigationRail.locus',
+  descKey: 'layout:quickLaunch.locusDesc',
+  iconColor: 'text-teal-400',
+  icon: (
+    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round">
+      <path d="M3 17l6-3 6 3 6-3" />
+      <path d="M3 12l6-3 6 3 6-3" />
+      <circle cx="12" cy="5" r="2" />
+    </svg>
+  ),
+  launch: () => { void useAppStore.getState().launch(LOCUS_CARGO_SLUG); },
+};
+
 export function QuickLaunchMenu() {
   const { t } = useTranslation();
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
+  const installed = useAppStore((s) => s.installed);
+  const fetchInstalled = useAppStore((s) => s.fetchInstalled);
+  useEffect(() => { void fetchInstalled(); }, [fetchInstalled]);
+  const items = installed.some((a) => a.slug === LOCUS_ITEM.app) ? [...ITEMS, LOCUS_ITEM] : ITEMS;
 
   useEffect(() => {
     if (!open) return;
@@ -109,7 +133,7 @@ export function QuickLaunchMenu() {
 
       {open && (
         <div className="absolute right-0 top-full mt-1.5 z-[60] w-72 bg-surface-solid border border-subtle rounded-lg shadow-xl py-1">
-          {ITEMS.map((item) => (
+          {items.map((item) => (
             <button
               key={item.id}
               onClick={() => { item.launch(); setOpen(false); }}

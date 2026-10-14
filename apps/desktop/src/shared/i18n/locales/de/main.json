@@ -8,7 +8,9 @@
     "installed": "{{name}} installiert.",
     "installing": "{{slug}} wird installiert...",
     "needsNewerArduDeck": "{{name}} benötigt ArduDeck {{needs}} oder neuer (installiert ist {{current}}). Aktualisieren Sie zuerst ArduDeck.",
-    "verifying": "{{slug}} wird geprüft..."
+    "verifying": "{{slug}} wird geprüft...",
+    "notInstalled": "{{slug}} ist nicht installiert",
+    "noExecutable": "Kein Programm im Installationsordner von {{slug}} gefunden"
   },
   "areaEditorWindow": {
     "title": "Flächeneditor",

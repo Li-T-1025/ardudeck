@@ -2648,6 +2648,9 @@ const api = {
   appUninstall: (slug: string): Promise<{ success: boolean; apps?: InstalledApp[]; error?: string }> =>
     ipcRenderer.invoke(IPC_CHANNELS.APP_UNINSTALL, slug),
 
+  appLaunch: (slug: string, args?: string[]): Promise<{ success: boolean; error?: string }> =>
+    ipcRenderer.invoke(IPC_CHANNELS.APP_LAUNCH, slug, args),
+
   onAppProgress: (callback: (progress: AppProgress) => void) => {
     const handler = (_: unknown, progress: AppProgress) => callback(progress);
     ipcRenderer.on(IPC_CHANNELS.APP_PROGRESS, handler);

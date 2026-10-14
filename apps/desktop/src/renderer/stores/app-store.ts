@@ -21,6 +21,7 @@ interface AppState {
   fetchInstalled: () => Promise<void>;
   install: (slug: string) => Promise<void>;
   uninstall: (slug: string) => Promise<void>;
+  launch: (slug: string) => Promise<void>;
   setProgress: (p: AppProgress | null) => void;
   clearError: () => void;
 }
@@ -77,6 +78,12 @@ export const useAppStore = create<AppState>((set, get) => ({
     } catch (err) {
       set({ error: err instanceof Error ? err.message : String(err) });
     }
+  },
+
+
+  launch: async (slug) => {
+    const res = await window.electronAPI.appLaunch(slug);
+    if (!res.success) set({ error: res.error ?? t('modules:hangarApps.launchFailed') });
   },
 
   setProgress: (progress) => set({ progress }),
