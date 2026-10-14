@@ -29,6 +29,7 @@ import {
   type BatteryChemistry,
 } from './presets/mavlink-presets';
 import { SitlBatteryCard } from './SitlBatteryCard';
+import { BatteryMeasureCalibration } from './BatteryMeasureCalibration';
 
 const BatteryTab: React.FC = () => {
   const { t } = useTranslation();
@@ -510,6 +511,8 @@ const BatteryTab: React.FC = () => {
           </div>
           <span className="px-2 py-0.5 text-[10px] bg-surface-raised text-content-secondary rounded">{t('common:advanced')}</span>
         </div>
+
+        <BatteryMeasureCalibration instance={instance} bp={bp} />
 
         <div className="space-y-4">
           <DraggableSlider

@@ -2225,5 +2225,18 @@
       "p45": "+45°"
     },
     "anglesWhy": "Ungefähr reicht. ArduPilot nutzt das, um die Kamera in Missionen auf Punkte zu richten und zu melden, wohin sie schaut."
+  },
+  "batteryCal": {
+    "title": "Aus einer Messung kalibrieren",
+    "hint": "Akku mit einem Multimeter messen (den Strom mit Zangenamperemeter oder Netzteil), den Messwert eingeben, und der Faktor wird aus dem berechnet, was der Flugcontroller anzeigt. Er wird sofort geschrieben, die Anzeige sollte danach stimmen.",
+    "noReading": "Zum Kalibrieren das Luftfahrzeug mit eingestecktem Akku verbinden.",
+    "voltage": "Gemessene Spannung",
+    "current": "Gemessener Strom",
+    "readsVolt": "Flugcontroller zeigt {{value}} V",
+    "readsAmp": "Flugcontroller zeigt {{value}} A",
+    "apply": "Berechnen",
+    "applyTo": "Auf {{value}} setzen",
+    "needLoad": "Zuerst eine gleichmäßige Last anlegen (mindestens {{min}} A, z. B. Motoren ohne Propeller laufen lassen): im Leerlauf ergibt ein kleiner Messfehler einen großen Kalibrierfehler.",
+    "written": "{{param}} von {{from}} auf {{to}} geändert. Prüfen, ob die Anzeige jetzt mit dem Messgerät übereinstimmt."
   }
 }

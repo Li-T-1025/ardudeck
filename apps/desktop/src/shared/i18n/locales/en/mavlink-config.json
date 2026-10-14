@@ -2225,5 +2225,18 @@
       "p45": "+45°"
     },
     "anglesWhy": "Rough is fine. ArduPilot uses this to aim the camera at points in missions and to report where it looks."
+  },
+  "batteryCal": {
+    "title": "Calibrate from a measurement",
+    "hint": "Measure the battery with a multimeter (and the current with a clamp meter or power supply), enter what you measured, and the multiplier is worked out from what the flight controller reads. It is written straight away, so the reading should match right after.",
+    "noReading": "Connect the aircraft with this battery plugged in to calibrate it.",
+    "voltage": "Measured voltage",
+    "current": "Measured current",
+    "readsVolt": "flight controller reads {{value}} V",
+    "readsAmp": "flight controller reads {{value}} A",
+    "apply": "Calculate",
+    "applyTo": "Set to {{value}}",
+    "needLoad": "Put a steady load on it first (at least {{min}} A, e.g. motors running with propellers off): at idle a small reading error gives a big calibration error.",
+    "written": "{{param}} changed from {{from}} to {{to}}. Check that the reading now matches your meter."
   }
 }
