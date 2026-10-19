@@ -472,7 +472,8 @@ export function attachObjectInteractions(map: maplibregl.Map): () => void {
           }
         }
       }
-      get().addDraftPoint({ lat: e.lngLat.lat, lng: e.lngLat.lng });
+      // the second click of a double click would drop the last point a second time
+      if (e.originalEvent.detail <= 1) get().addDraftPoint({ lat: e.lngLat.lat, lng: e.lngLat.lng });
     } else if (t === 'split') {
       const p: LatLng = { lat: e.lngLat.lat, lng: e.lngLat.lng };
       if (!splitStart) {

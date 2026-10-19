@@ -306,7 +306,7 @@ interface SurveyStore {
 async function runGenerator(config: SurveyConfig): Promise<SurveyResult | null> {
   // Corridors are an open centerline (>= 2 points); every other pattern is a
   // closed area (>= 3 points).
-  const minPoints = config.pattern === 'corridor' || config.pattern === 'panorama' ? 2 : 3;
+  const minPoints = minSurveyPoints(config.pattern);
   if (config.polygon.length < minPoints) return null;
 
   // Panorama is line-based; module coverage engines (TOPAS) are polygon-only
@@ -438,6 +438,22 @@ let generationSeq = 0;
 // user change, which is harmless but noisy).
 let isHydratingFromSettings = false;
 
+/** Points a survey shape needs: a corridor or panorama is a line, an area needs a triangle. */
+export function minSurveyPoints(pattern: string | undefined): number {
+  return pattern === 'corridor' || pattern === 'panorama' ? 2 : 3;
+}
+
+/** Drop a point that repeats the one before it (within 0.3 m). */
+export function dedupeConsecutive<T extends { lat: number; lng: number }>(pts: T[]): T[] {
+  const out: T[] = [];
+  for (const p of pts) {
+    const q = out[out.length - 1];
+    if (q && Math.hypot((p.lat - q.lat) * 111_320, (p.lng - q.lng) * 111_320 * Math.cos((p.lat * Math.PI) / 180)) < 0.3) continue;
+    out.push(p);
+  }
+  return out;
+}
+
 export const useSurveyStore = create<SurveyStore>()(subscribeWithSelector((set, get) => ({
   drawMode: 'none',
   drawingVertices: [],
@@ -497,10 +513,11 @@ export const useSurveyStore = create<SurveyStore>()(subscribeWithSelector((set, 
   },
 
   completePolygon: () => {
-    const { drawingVertices } = get();
-    if (drawingVertices.length < 3) return;
+    const { drawingVertices, config } = get();
+    // a point dropped twice (the two clicks of a double click) is one point
+    const polygon = dedupeConsecutive(drawingVertices);
+    if (polygon.length < minSurveyPoints(config.pattern)) return;
 
-    const polygon = [...drawingVertices];
     // A freshly drawn boundary starts clean: holes belong to the polygon they
     // were cut into. Keeping them produced no-fly rings outside the new
     // boundary, which remote engines reject (TOPAS 422).
@@ -853,7 +870,7 @@ export const useSurveyStore = create<SurveyStore>()(subscribeWithSelector((set, 
 
   removeVertex: (index) => {
     const { polygon, polygonEditMode, config, geometryLocked } = get();
-    if (!polygon || geometryLocked || polygon.length <= 3) return; // Need at least 3 vertices
+    if (!polygon || geometryLocked || polygon.length <= minSurveyPoints(config.pattern)) return;
     const newPolygon = polygon.filter((_, i) => i !== index);
     if (config.panoramaTangents) {
       const shifted: NonNullable<typeof config.panoramaTangents> = {};
@@ -972,7 +989,7 @@ export const useSurveyStore = create<SurveyStore>()(subscribeWithSelector((set, 
     const sync = opts?.sync ?? true;
     const { polygon, config, editingGroupId } = get();
     // Corridors are an open centerline (2+ points); area patterns need a ring (3+).
-    const minPoints = config.pattern === 'corridor' || config.pattern === 'panorama' ? 2 : 3;
+    const minPoints = minSurveyPoints(config.pattern);
     if (!polygon || polygon.length < minPoints) return;
 
     const fullConfig: SurveyConfig = { ...config, polygon };

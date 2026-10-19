@@ -82,6 +82,7 @@ export function PersistentSurveyOverlay() {
           pathOptions={{ color: g.color, weight: isSelected ? 4 : 3, dashArray: '10, 6' }}
           eventHandlers={{
             click: (e) => {
+              L.DomEvent.stopPropagation(e);
               e.originalEvent.stopPropagation();
               setSelectedGroupId(g.id);
               loadFromGroup({ id: g.id, polygon: g.polygon, config: g.config });
@@ -111,6 +112,7 @@ export function PersistentSurveyOverlay() {
             pathOptions={{ color: g.color, weight: isSelected ? 4 : 3, dashArray: '10, 6' }}
             eventHandlers={{
               click: (e) => {
+                L.DomEvent.stopPropagation(e);
                 e.originalEvent.stopPropagation();
                 setSelectedGroupId(g.id);
                 loadFromGroup({ id: g.id, polygon: g.polygon, config: g.config });
@@ -166,6 +168,7 @@ export function PersistentSurveyOverlay() {
           // hidden double-click required. stopPropagation so this click isn't
           // also seen as an "empty map" click that would exit edit mode.
           click: (e) => {
+            L.DomEvent.stopPropagation(e);
             e.originalEvent.stopPropagation();
             setSelectedGroupId(g.id);
             loadFromGroup({ id: g.id, polygon: g.polygon, config: g.config });

@@ -39,6 +39,11 @@ const COLOR_STOPS: { elev: number; color: [number, number, number] }[] = [
   { elev: 6000, color: [220, 220, 220] },  // White - snow caps
 ];
 
+/** The height colour scale, metres to RGB, lowest first. */
+export function terrainColorStops(): ReadonlyArray<{ elev: number; color: readonly [number, number, number] }> {
+  return COLOR_STOPS;
+}
+
 /** Interpolate between two color values */
 function lerp(a: number, b: number, t: number): number {
   return Math.round(a + (b - a) * t);

@@ -178,7 +178,7 @@ export interface SurveyPerformance {
   importSimplifyToleranceM: number;
   /** Above this many boundary vertices, per-vertex drag handles are hidden. */
   maxEditableVertices: number;
-  /** Above this many photo positions, the dots are not drawn on the map. */
+  /** Camera trigger dots drawn on the map at most; above it they are thinned evenly. */
   maxPhotoMarkers: number;
   /**
    * Cap on waypoint markers drawn on the mission/telemetry maps. Beyond this the
@@ -200,7 +200,7 @@ export interface SurveyPerformance {
 export const DEFAULT_SURVEY_PERFORMANCE: SurveyPerformance = {
   importSimplifyToleranceM: 1.0,
   maxEditableVertices: 200,
-  maxPhotoMarkers: 1500,
+  maxPhotoMarkers: 500,
   maxWaypointMarkers: 1000,
   maxInteractiveWaypoints: 200,
 };

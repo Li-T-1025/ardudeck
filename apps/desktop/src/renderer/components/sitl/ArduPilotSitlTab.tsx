@@ -28,6 +28,7 @@ import {
   UNIT_LABELS,
 } from '../../../shared/user-units.js';
 import { TrainerQuickAction } from '../trainer/TrainerQuickAction';
+import { SitlHomePosition } from './SitlHomePosition';
 
 const VEHICLE_TYPE_OPTIONS: Array<{ value: ArduPilotVehicleType; labelKey: string; icon: string }> = [
   { value: 'copter', labelKey: 'common:copter', icon: 'M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5' },
@@ -802,30 +803,12 @@ export default function ArduPilotSitlTab() {
 
           {/* Home location fields — populated by presets above */}
           <div className="grid grid-cols-2 gap-2">
-            <div>
-              <label className="block text-xs text-content-secondary mb-1">{t('common:latitude')}</label>
-              <DraftNumberInput
-                step="0.0001"
-                min={-90}
-                max={90}
-                value={homeLocation.lat}
-                onCommit={(v) => setHomeLocation({ ...homeLocation, lat: v })}
-                disabled={isRunning || isStarting}
-                className="w-full px-2 py-1.5 text-sm bg-surface-raised text-content border border rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500/50 disabled:opacity-50"
-              />
-            </div>
-            <div>
-              <label className="block text-xs text-content-secondary mb-1">{t('common:longitude')}</label>
-              <DraftNumberInput
-                step="0.0001"
-                min={-180}
-                max={180}
-                value={homeLocation.lng}
-                onCommit={(v) => setHomeLocation({ ...homeLocation, lng: v })}
-                disabled={isRunning || isStarting}
-                className="w-full px-2 py-1.5 text-sm bg-surface-raised text-content border border rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500/50 disabled:opacity-50"
-              />
-            </div>
+            <SitlHomePosition
+              lat={homeLocation.lat}
+              lng={homeLocation.lng}
+              disabled={isRunning || isStarting}
+              onChange={(p) => setHomeLocation({ ...homeLocation, ...p })}
+            />
             <div>
               <label className="block text-xs text-content-secondary mb-1">{t('common:altitude')}</label>
               <div className="relative">

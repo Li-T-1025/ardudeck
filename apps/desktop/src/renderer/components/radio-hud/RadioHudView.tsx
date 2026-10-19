@@ -258,6 +258,13 @@ const LAYOUT_PRESETS: Record<string, TileDef[]> = {
     { id: 'batt', x: 312, y: 48, w: 144, h: 96, variant: 'default' },
     { id: 'timer', x: 312, y: 152, w: 144, h: 96, variant: 'default' },
   ],
+  'Sub': [
+    { id: 'alt', x: 8, y: 48, w: 144, h: 96, variant: 'default' },
+    { id: 'compass', x: 160, y: 48, w: 144, h: 200, variant: 'default' },
+    { id: 'att', x: 312, y: 48, w: 144, h: 96, variant: 'bars' },
+    { id: 'batt', x: 8, y: 152, w: 144, h: 96, variant: 'default' },
+    { id: 'timer', x: 312, y: 152, w: 144, h: 96, variant: 'default' },
+  ],
   'FPV': [
     { id: 'att', x: 8, y: 48, w: 296, h: 200, variant: 'ball' },
     { id: 'link', x: 312, y: 48, w: 144, h: 96, variant: 'default' },
@@ -279,10 +286,22 @@ const PRESET_LABEL_KEYS: Record<string, string> = {
   'Mission flight': 'radio-hud:presets.missionFlight', // i18n-exempt
   'Long range': 'radio-hud:presets.longRange', // i18n-exempt
   'Rover': 'radio-hud:presets.rover',
+  'Sub': 'radio-hud:presets.sub',
   'FPV': 'radio-hud:presets.fpv',
   'Minimal glance': 'radio-hud:presets.minimalGlance', // i18n-exempt
 };
 const MAX_PAGES = 4;
+
+const MAV_TYPE_SURFACE_BOAT = 11;
+
+/** The preset a first-run studio starts on, for whatever is connected. */
+export function firstRunLayout(vehicleClass: ArduPilotVehicleClass): TileDef[] {
+  const name = vehicleClass === 'rover' ? 'Rover'
+    : vehicleClass === 'plane' || vehicleClass === 'vtol' ? 'Plane'
+      : vehicleClass === 'sub' ? 'Sub'
+        : null;
+  return (name && LAYOUT_PRESETS[name]) || DEFAULT_LAYOUT;
+}
 
 interface HudCfg {
   name: string;
@@ -324,6 +343,8 @@ interface PreviewData {
   voltV: number;
   currA: number;
   homeDist: number;
+  /** Trip distance; the radio integrates ground speed while armed, the preview only has the demo value. */
+  odoM?: number;
   homeBearing: number;
   altM: number;
   vspd: number;
@@ -354,7 +375,7 @@ interface PreviewData {
 
 const SAMPLE: PreviewData = {
   armed: true, mode: 'LOITER', voltV: 23.4, currA: 7.3,
-  homeDist: 229, homeBearing: 156, altM: 63, vspd: -0.4, hspd: 4.2,
+  homeDist: 229, odoM: 1840, homeBearing: 156, altM: 63, vspd: -0.4, hspd: 4.2,
   sats: 14, fix: 3, hdop: 0.8, roll: -8, pitch: 4, yaw: 244, lq: 100, mahUsed: 980,
   remainingPct: null,
   throttle: 41, imuTemp: 45, range: 1.34, lat: 42.4411, lon: 19.2632,
@@ -443,8 +464,11 @@ function NumericBody({ t, value, sub, color }: { t: TileDef; value: string; sub?
 }
 
 function TileBody({ t, data, cfg }: { t: TileDef; data: PreviewData; cfg: HudCfg }) {
-  // Mirrors the widget's isGround(): the preview has to read like the radio.
-  const groundVehicle = getVehicleClass(useConnectionStore((s) => s.connectionState.mavType)) === 'rover';
+  // Mirrors the widget's vehicleKind() and isGround(): the preview has to read like the radio.
+  const mavType = useConnectionStore((s) => s.connectionState.mavType);
+  const vehicleClass = getVehicleClass(mavType);
+  const boat = mavType === MAV_TYPE_SURFACE_BOAT;
+  const groundVehicle = vehicleClass === 'rover' || vehicleClass === 'sub';
   switch (t.id) {
     case 'batt': {
       // cells: config first, else what the radio would auto-detect from
@@ -522,13 +546,21 @@ function TileBody({ t, data, cfg }: { t: TileDef; data: PreviewData; cfg: HudCfg
       );
     }
     case 'alt': {
+      if (vehicleClass === 'rover') {
+        const dist = (m: number) => (m >= 1000 ? `${(m / 1000).toFixed(2)}km` : `${Math.round(m)}m`);
+        return (
+          <TileFrame t={t} caption="TRIP">{/* i18n-exempt: radio text */}
+            <NumericBody t={t} value={dist(data.odoM ?? 0)} sub={`home ${dist(data.homeDist)}`} />
+          </TileFrame>
+        );
+      }
       const vsColor = Math.abs(data.vspd) > 3 ? C.warnStrong : C.success;
       const barH = t.h - 34;
       const frac = Math.max(-1, Math.min(1, data.vspd / 5));
       const fill = Math.abs(frac) * (barH / 2);
       return (
-        <TileFrame t={t} caption="ALT / VSPD">{/* i18n-exempt */}
-          <NumericBody t={t} value={`${Math.round(data.altM)}m`}
+        <TileFrame t={t} caption={vehicleClass === 'sub' ? 'DEPTH / VSPD' : 'ALT / VSPD'}>{/* i18n-exempt */}
+          <NumericBody t={t} value={`${Math.round(vehicleClass === 'sub' ? Math.max(0, -data.altM) : data.altM)}m`}
             sub={`${data.vspd >= 0 ? '+' : ''}${data.vspd.toFixed(1)}  ${data.hspd >= 10 ? Math.round(data.hspd) : data.hspd.toFixed(1)} spd`} />
           <div style={{ position: 'absolute', right: 8, top: 20, width: 8, height: barH, background: C.gaugeBezel, border: `1px solid ${C.gaugeEdge}` }}>
             <div style={{
@@ -542,7 +574,7 @@ function TileBody({ t, data, cfg }: { t: TileDef; data: PreviewData; cfg: HudCfg
     }
     case 'gps': {
       const gpsColor = data.fix >= 3 ? C.success : data.fix === 2 ? C.warnStrong : C.danger;
-      const fixLabel = ['NO GPS', 'NO FIX', '2D', '3D'][data.fix] ?? '?';
+      const fixLabel = ['NO GPS', 'NO FIX', '2D', '3D', 'DGPS', 'RTK FLT', 'RTK FIX'][data.fix] ?? '?';
       const lit = Math.min(8, Math.round(data.sats / 2));
       return (
         <TileFrame t={t} caption="GPS">
@@ -788,7 +820,7 @@ function TileBody({ t, data, cfg }: { t: TileDef; data: PreviewData; cfg: HudCfg
       const near = data.range > 0 && data.range < 1;
       const frac = Math.max(0, Math.min(1, data.range / 5));
       return (
-        <TileFrame t={t} caption="RANGE">
+        <TileFrame t={t} caption={boat ? 'DEPTH' : 'RANGE'}>{/* i18n-exempt */}
           <NumericBody t={t} value={`${data.range.toFixed(2)}m`} color={near ? C.warnStrong : C.text} />
           <div style={{ position: 'absolute', right: 8, top: 18, width: 8, height: t.h - 30, background: C.gaugeBezel, border: `1px solid ${C.gaugeEdge}` }}>
             <div style={{ position: 'absolute', bottom: 0, width: '100%', height: `${frac * 100}%`, background: C.info }} />
@@ -1609,10 +1641,7 @@ export function RadioHudView() {
   // A first-run studio starts on the set that matches whatever is connected,
   // so a rover owner never has to know the copter layout was the default.
   const [pages, setPages] = useState<TileDef[][]>(
-    persisted?.pages
-      ?? [getVehicleClass(useConnectionStore.getState().connectionState.mavType) === 'rover'
-        ? (LAYOUT_PRESETS['Rover'] ?? DEFAULT_LAYOUT)
-        : DEFAULT_LAYOUT],
+    persisted?.pages ?? [firstRunLayout(getVehicleClass(useConnectionStore.getState().connectionState.mavType))],
   );
   // switching radio model rescales every page (same math as the widget);
   // B&W targets have a fixed script layout, so tiles pass through untouched
@@ -2000,10 +2029,15 @@ export function RadioHudView() {
     if (pages.length > 1) cfgOut.pageSecs = Math.max(0, Math.round(cfg.pageSecs || 0));
     cfgOut.debugInput = cfg.debugInput ? 1 : 0;
     cfgOut.theme = cfg.theme;
-    const vehicleClass = getVehicleClass(connectionState.mavType);
-    cfgOut.vehicle = vehicleClass;
-    cfgOut.modes = modeTableCfg(vehicleClass);
-    cfgOut.voice = modeVoiceCfg(vehicleClass);
+    // With no vehicle on the link the class would default to copter and the radio would
+    // read a rover's modes with copter names; left out, the widget goes by the live frame type.
+    if (connectionState.mavType !== undefined) {
+      const vehicleClass = getVehicleClass(connectionState.mavType);
+      // the radio labels a boat's rangefinder as depth; its modes are Rover's
+      cfgOut.vehicle = connectionState.mavType === MAV_TYPE_SURFACE_BOAT ? 'boat' : vehicleClass;
+      cfgOut.modes = modeTableCfg(vehicleClass);
+      cfgOut.voice = modeVoiceCfg(vehicleClass);
+    }
     // authored canvas: the widget rescales tiles if its LCD differs (e.g.
     // the SD card later moves to another radio)
     cfgOut.screen = `${screen.w}x${screen.h}`;

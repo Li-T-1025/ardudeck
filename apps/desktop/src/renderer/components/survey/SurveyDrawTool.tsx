@@ -5,7 +5,7 @@
  */
 import { useEffect } from 'react';
 import { useMapEvents } from 'react-leaflet';
-import { useSurveyStore } from '../../stores/survey-store';
+import { minSurveyPoints, useSurveyStore } from '../../stores/survey-store';
 
 export function SurveyDrawTool() {
   const drawMode = useSurveyStore((s) => s.drawMode);
@@ -20,6 +20,8 @@ export function SurveyDrawTool() {
   useMapEvents({
     click: (e) => {
       if (drawMode === 'polygon' || drawMode === 'branch') {
+        // the second click of a double click would drop the last point a second time
+        if (e.originalEvent.detail > 1) return;
         addVertex(e.latlng.lat, e.latlng.lng);
         return;
       }
@@ -29,7 +31,8 @@ export function SurveyDrawTool() {
       // empty clicks: a plain DOM stopPropagation does not stop Leaflet
       // propagating a layer click to the map. We gate on editingGroupId so an
       // un-inserted draft isn't discarded by a stray click.
-      if (editingGroupId) {
+      // polygon editing has its own Done and Cancel: a click beside the line must not throw the edits away
+      if (editingGroupId && !useSurveyStore.getState().polygonEditMode) {
         deactivateSurvey();
       }
     },
@@ -41,10 +44,8 @@ export function SurveyDrawTool() {
         if (drawingVertices.length >= 1) completeBranch(); // dbl-click adds the final point
         return;
       }
-      if (drawingVertices.length >= 2) {
-        // Double-click adds a vertex then completes (3+ total)
-        completePolygon();
-      }
+      // the double click's first click already placed its point
+      if (drawingVertices.length >= minSurveyPoints(useSurveyStore.getState().config.pattern)) completePolygon();
     },
     contextmenu: (e) => {
       if (drawMode === 'none') return;
@@ -62,7 +63,7 @@ export function SurveyDrawTool() {
         cancelDrawing();
       } else if (e.key === 'Enter') {
         if (drawMode === 'branch' && drawingVertices.length >= 2) completeBranch();
-        else if (drawMode === 'polygon' && drawingVertices.length >= 3) completePolygon();
+        else if (drawMode === 'polygon' && drawingVertices.length >= minSurveyPoints(useSurveyStore.getState().config.pattern)) completePolygon();
       }
     };
 

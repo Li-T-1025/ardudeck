@@ -11,7 +11,7 @@ import { corridorBand } from './generators/corridor-generator';
 import { bezierSpline, defaultSplineTangent, nearestEdgeIndex, type SplineTangent } from './geo-edit';
 import { latLngToLocal, localToLatLng } from './geo-math';
 import { cullPathForViewport } from './path-culling';
-import { useSurveyStore } from '../../stores/survey-store';
+import { minSurveyPoints, useSurveyStore } from '../../stores/survey-store';
 import { useSettingsStore } from '../../stores/settings-store';
 import type { LatLng } from './survey-types';
 import { formatPosition } from '../../utils/coordinate-format';
@@ -47,8 +47,13 @@ function toLf(p: LatLng): [number, number] {
  * plain DOM stopPropagation is not enough: the map handler still fires and
  * SurveyDrawTool treats it as a click on empty map, which exits edit mode.
  */
+/** Width of the invisible line that takes clicks on a centreline. */
+const LINE_HIT_PX = 16;
+
 function stopMapClick(e: L.LeafletMouseEvent): void {
-  L.DomEvent.stopPropagation(e.originalEvent);
+  // the Leaflet event, not the DOM one: only that sets the flag that stops Leaflet passing the click
+  // on to the map, where a click on "empty map" ends editing
+  L.DomEvent.stopPropagation(e);
   L.DomEvent.preventDefault(e.originalEvent);
   e.originalEvent.stopPropagation();
 }
@@ -216,6 +221,7 @@ const VertexMarker = memo(function VertexMarker({
   }, [index, canDelete, locked, onDelete]);
 
   const handleClick = useCallback((e: L.LeafletMouseEvent) => {
+    L.DomEvent.stopPropagation(e);
     e.originalEvent.stopPropagation();
     onSelect?.(index);
   }, [index, onSelect]);
@@ -375,12 +381,12 @@ export function SurveyMapOverlay() {
       .filter((b): b is { n: number; at: LatLng } => b.at !== undefined);
   }, [result]);
 
-  // Photo positions. Rendering one CircleMarker each is fine for a typical
-  // survey but melts the map for a huge area; past a threshold we drop the dots
-  // (the flight path already conveys coverage).
+  // Above the cap the dots are thinned evenly over the whole survey, so the coverage still reads.
   const photoPositions = useMemo(() => {
     const photos = result?.photoPositions ?? [];
-    return photos.length > maxPhotoMarkers ? [] : photos;
+    if (photos.length <= maxPhotoMarkers) return photos;
+    const step = Math.ceil(photos.length / maxPhotoMarkers);
+    return photos.filter((_, i) => i % step === 0);
   }, [result, maxPhotoMarkers]);
 
   // Camera footprints, capped for performance. Footprints come out strip by
@@ -509,6 +515,7 @@ export function SurveyMapOverlay() {
                 },
                 contextmenu: (e) => {
                   e.originalEvent.preventDefault();
+                  L.DomEvent.stopPropagation(e);
                   e.originalEvent.stopPropagation();
                   removeDrawingVertex(i);
                 },
@@ -555,7 +562,13 @@ export function SurveyMapOverlay() {
               />
               <Polyline
                 positions={subjectCurvePositions ?? polygonPositions}
+                interactive={false}
                 pathOptions={{ color: SURVEY_POLYGON_COLOR, weight: 4, dashArray: '10, 6' }}
+              />
+              {/* clicks on a dashed line only land on the dashes: the gaps fell through and ended editing */}
+              <Polyline
+                positions={subjectCurvePositions ?? polygonPositions}
+                pathOptions={{ color: '#000000', opacity: 0, weight: LINE_HIT_PX }}
                 eventHandlers={{
                   click: (e) => {
                     stopMapClick(e);
@@ -582,9 +595,10 @@ export function SurveyMapOverlay() {
                 return (
                   <Fragment key={`branch-${bi}`}>
                     <Polyline positions={brPos} interactive={false} pathOptions={{ color: '#ffffff', weight: 7, opacity: 0.85 }} />
+                    <Polyline positions={brPos} interactive={false} pathOptions={{ color: SURVEY_POLYGON_COLOR, weight: 4, dashArray: '10, 6' }} />
                     <Polyline
                       positions={brPos}
-                      pathOptions={{ color: SURVEY_POLYGON_COLOR, weight: 4, dashArray: '10, 6' }}
+                      pathOptions={{ color: '#000000', opacity: 0, weight: LINE_HIT_PX }}
                       eventHandlers={{
                         click: (e) => {
                           stopMapClick(e);
@@ -670,6 +684,7 @@ export function SurveyMapOverlay() {
             };
             const resetArm = (e: L.LeafletMouseEvent) => {
               e.originalEvent.preventDefault();
+              L.DomEvent.stopPropagation(e);
               e.originalEvent.stopPropagation();
               setPanoramaTangent(selectedCtrl, null);
             };
@@ -739,7 +754,7 @@ export function SurveyMapOverlay() {
               key={`vertex-${i}`}
               position={polygon[i]!}
               index={i}
-              canDelete={polygon.length > 3}
+              canDelete={polygon.length > minSurveyPoints(pattern)}
               onDragEnd={handleVertexDrag}
               onDelete={handleVertexDelete}
               selected={pattern === 'panorama' && selectedCtrl === i}

@@ -138,30 +138,46 @@ export function featuresOf(layer: ModuleMapLayer, view?: MapView): MapFeature[] 
 
 // --- polygon picking -------------------------------------------------------
 
+export type PickShape = 'polygon' | 'path' | 'point';
+
+const MIN_POINTS: Record<PickShape, number> = { polygon: 3, path: 2, point: 1 };
+
 export interface PolygonPick {
   prompt: string;
+  shape: PickShape;
+  /** Points needed before the pick can finish. */
+  min: number;
   points: { lat: number; lng: number }[];
+  /** Started from existing points: a point pick then waits for Done instead of the first click. */
+  editing: boolean;
   resolve: (ring: { lat: number; lng: number }[] | null) => void;
 }
 
 let pick: PolygonPick | null = null;
+let pickCursor: { lat: number; lng: number } | null = null;
 
 export function getPolygonPick(): PolygonPick | null {
   return pick;
 }
 
 /** Start a pick. One at a time: a second request cancels nothing and fails. */
-export function startPolygonPick(prompt: string): Promise<{ lat: number; lng: number }[] | null> {
+export function startPick(prompt: string, shape: PickShape, initial?: { lat: number; lng: number }[]): Promise<{ lat: number; lng: number }[] | null> {
   if (pick) return Promise.resolve(null);
+  const points = (initial ?? []).filter((p) => Number.isFinite(p.lat) && Number.isFinite(p.lng)).map((p) => ({ lat: p.lat, lng: p.lng }));
   return new Promise((resolve) => {
     const done = (ring: { lat: number; lng: number }[] | null): void => {
       pick = null;
+      pickCursor = null;
       emit();
       resolve(ring);
     };
-    pick = { prompt, points: [], resolve: done };
+    pick = { prompt, shape, min: MIN_POINTS[shape], points: shape === 'point' ? points.slice(0, 1) : points, editing: points.length > 0, resolve: done };
     emit();
   });
+}
+
+export function startPolygonPick(prompt: string, initial?: { lat: number; lng: number }[]): Promise<{ lat: number; lng: number }[] | null> {
+  return startPick(prompt, 'polygon', initial);
 }
 
 // Every change REPLACES the pick object. Mutating it in place left React
@@ -175,7 +191,38 @@ function update(points: { lat: number; lng: number }[]): void {
 
 export function addPickPoint(p: { lat: number; lng: number }): void {
   if (!pick) return;
+  if (pick.shape === 'point') {
+    update([p]);
+    if (!pick.editing) finishPick();
+    return;
+  }
   update([...pick.points, p]);
+}
+
+/** Put a new point in at `index` (between two placed ones). */
+export function insertPickPoint(index: number, p: { lat: number; lng: number }): void {
+  if (!pick || pick.shape === 'point') return;
+  const pts = [...pick.points];
+  pts.splice(Math.max(0, Math.min(index, pts.length)), 0, p);
+  update(pts);
+}
+
+/** Midpoints of the edges, where a new point can be put in; index is where it goes. */
+export function pickMidpoints(p: PolygonPick): Array<{ index: number; lat: number; lng: number }> {
+  if (p.shape === 'point' || p.points.length < 2) return [];
+  const n = p.shape === 'polygon' && p.points.length >= 3 ? p.points.length : p.points.length - 1;
+  const out: Array<{ index: number; lat: number; lng: number }> = [];
+  for (let i = 0; i < n; i++) {
+    const a = p.points[i]!, b = p.points[(i + 1) % p.points.length]!;
+    out.push({ index: i + 1, lat: (a.lat + b.lat) / 2, lng: (a.lng + b.lng) / 2 });
+  }
+  return out;
+}
+
+/** Drag a placed point to a new place. */
+export function movePickPoint(index: number, p: { lat: number; lng: number }): void {
+  if (!pick || index < 0 || index >= pick.points.length) return;
+  update(pick.points.map((q, i) => (i === index ? p : q)));
 }
 
 export function undoPickPoint(): void {
@@ -183,12 +230,32 @@ export function undoPickPoint(): void {
   update(pick.points.slice(0, -1));
 }
 
-/** Close the ring. Fewer than three corners is not an area, so it cancels. */
+/** Finish with the points placed. Fewer than the shape needs is not a shape, so it cancels. */
 export function finishPick(): void {
   if (!pick) return;
-  pick.resolve(pick.points.length >= 3 ? pick.points : null);
+  pick.resolve(pick.points.length >= pick.min ? pick.points : null);
 }
 
 export function cancelPick(): void {
   pick?.resolve(null);
+}
+
+const cursorListeners = new Set<() => void>();
+
+/** Where the pointer is over the map during a pick, so the pick bar can show the ground height there. */
+export function setPickCursor(p: { lat: number; lng: number } | null): void {
+  if (!pick && p) return;
+  pickCursor = p;
+  for (const l of cursorListeners) l();
+}
+
+export function getPickCursor(): { lat: number; lng: number } | null {
+  return pickCursor;
+}
+
+export function subscribePickCursor(cb: () => void): () => void {
+  cursorListeners.add(cb);
+  return () => {
+    cursorListeners.delete(cb);
+  };
 }

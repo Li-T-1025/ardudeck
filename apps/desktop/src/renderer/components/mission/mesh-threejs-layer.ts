@@ -45,7 +45,6 @@ export function createMeshThreeJsLayer(): MeshThreeJsLayer {
       camera.projectionMatrix = new THREE.Matrix4().fromArray(main).multiply(l);
       renderer.resetState();
       renderer.render(scene, camera);
-      map.triggerRepaint();
     },
   };
 

@@ -604,7 +604,12 @@ export function SurveyConfigPanel() {
     const baseName = `Survey ${existingGroups.filter((g) => g.kind === 'survey').length + 1}`;
     const entries = sorties.map((slice, i) => {
       // Each sortie is its own complete flight: takeoff -> slice -> RTL.
-      const items = surveyToMissionItems({ ...result, waypoints: slice }, fullConfig, firmware);
+      // each flight keeps only its own whole lines, renumbered from its first waypoint
+      const offset = slice.length > 0 ? result.waypoints.indexOf(slice[0]!) : -1;
+      const legStarts = offset < 0 ? undefined : (result.legStarts ?? [])
+        .filter((s) => s >= offset && s + 1 < offset + slice.length)
+        .map((s) => s - offset);
+      const items = surveyToMissionItems({ ...result, waypoints: slice, legStarts }, fullConfig, firmware);
       const group = createManualGroup({
         name: `${baseName} · ${isCorridor && mode === 'sections' ? 'Section' : 'Flight'} ${i + 1}/${sorties.length}`,
         color: GROUP_COLOR_PALETTE[i % GROUP_COLOR_PALETTE.length]!,

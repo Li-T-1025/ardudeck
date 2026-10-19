@@ -184,7 +184,7 @@ export async function installApp(
 
 export async function uninstallApp(slug: string): Promise<InstalledApp[]> {
   const dir = join(app.getPath('userData'), 'apps', slug);
-  await rm(dir, { recursive: true, force: true });
+  await rm(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 250 });
   const left = store().get('apps').filter((a) => a.slug !== slug);
   store().set('apps', left);
   return left;

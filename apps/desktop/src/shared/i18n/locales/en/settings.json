@@ -445,7 +445,7 @@
       "maxInteractive": "Max interactive waypoints",
       "maxInteractiveHint": "Draggable markers appear when this few waypoints are in view",
       "maxPhotos": "Max photo markers",
-      "maxPhotosHint": "Above this, photo dots aren't drawn",
+      "maxPhotosHint": "Above this, camera trigger dots are thinned evenly",
       "maxVertices": "Max editable vertices",
       "maxVerticesHint": "Above this, drag handles are hidden",
       "maxWaypoints": "Max waypoint markers",

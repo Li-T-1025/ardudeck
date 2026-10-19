@@ -73,6 +73,7 @@ import { useMapFocusStore, FOCUS_FRESH_MS } from '../../stores/map-focus-store';
 import { MapFocusLayer } from '../map/MapFocusLayer';
 import { useCoordinateFormat } from '../../utils/coordinate-format';
 import { useMapHomeStore } from '../map/instruments/registry';
+import { initialMapHome, seedHome } from './map-home';
 import { useMapInstrumentsStore, resolveInstrumentVisible } from '../../stores/map-instruments-store';
 import { WindParticleOverlay } from '../map/overlays/WindParticleOverlay';
 import { TrafficOverlay } from '../map/overlays/TrafficOverlay';
@@ -1371,7 +1372,7 @@ const TelemetryMap3D = React.memo(function TelemetryMap3D() {
   const [useRealVehicleSize, setUseRealVehicleSize] = useState(false);
   const [showMoreTools, setShowMoreTools] = useState(false);
   const [trail, setTrail] = useState<[number, number][]>([]);
-  const [homePosition, setHomePosition] = useState<[number, number] | null>(null);
+  const [homePosition, setHomePosition] = useState<[number, number] | null>(initialMapHome);
   const [headingLineLength] = useState(100); // meters
 
   const mapInstanceRef = useRef<import('maplibre-gl').Map | null>(null);
@@ -1433,8 +1434,8 @@ const TelemetryMap3D = React.memo(function TelemetryMap3D() {
           return newTrail;
         });
 
-        // Set home on first valid GPS fix
-        setHomePosition(prev => prev ?? gpsPosition);
+        // Set home on first valid GPS fix, on the ground only
+        setHomePosition(prev => seedHome(prev, gpsPosition));
       }
     }
   }, [gpsPosition, hasValidGps]);
@@ -1874,7 +1875,7 @@ function WindControlsWrapper({ raised }: { raised?: boolean }) {
 // ─── MapPanel entry point — delegates to 2D or 3D based on global mapMode ────
 
 export const MapPanel = React.memo(function MapPanel() {
-  const mapMode = useEditModeStore((s) => s.mapMode);
+  const mapMode = useEditModeStore((s) => s.telemetryMapMode);
 
   if (mapMode === '3d') {
     return <TelemetryMap3D />;
@@ -2081,7 +2082,7 @@ function TrailAndHomeUpdater({ setTrail, setHomePosition }: {
         const newTrail = [...prev, gpsPosition];
         return newTrail.length > 100 ? newTrail.slice(-100) : newTrail;
       });
-      setHomePosition(prev => prev ?? gpsPosition);
+      setHomePosition(prev => seedHome(prev, gpsPosition));
     }
   }, [lat, lon, hasValidGps, setTrail, setHomePosition]);
   return null;
@@ -2212,7 +2213,7 @@ const TelemetryMap2D = React.memo(function TelemetryMap2D() {
   const connectionState = useConnectionStore((s) => s.connectionState);
   const [followVehicle, setFollowVehicle] = useState(true);
   const [trail, setTrail] = useState<[number, number][]>([]);
-  const [homePosition, setHomePosition] = useState<[number, number] | null>(null);
+  const [homePosition, setHomePosition] = useState<[number, number] | null>(initialMapHome);
   const sharedMapLayer = useEditModeStore((s) => s.mapLayer);
   const setSharedMapLayer = useEditModeStore((s) => s.setMapLayer);
   // Use shared layer if it's a valid 2D key, otherwise fall back to 'googleSat'
@@ -2290,8 +2291,8 @@ const TelemetryMap2D = React.memo(function TelemetryMap2D() {
 
   // Fleet mode: the active fleet vehicle IS the map's command target (it was chosen in
   // the fleet strip or by clicking its map marker; commands route via activeFlightTarget()
-  // in the main process). Single-vehicle mode is unchanged: click the marker to select
-  // before commanding. See isFleetCommandTarget for why this is not "primary link down".
+  // in the main process). A single connected vehicle is always selected. See
+  // isFleetCommandTarget for why this is not "primary link down".
   const activeVehicleKey = useActiveVehicleStore((s) => s.activeVehicleKey);
   const formations = useActiveVehicleStore((s) => s.formations);
   const knownVehicleCount = useActiveVehicleStore((s) => Object.keys(s.knownVehicles).length);
@@ -2310,7 +2311,9 @@ const TelemetryMap2D = React.memo(function TelemetryMap2D() {
   // Tactical icon properties
   const tacticalClass = mavTypeToTacticalClass(connectionState.mavType);
 
-  const isSelected = selectedVehicleId === VEHICLE_ID || fleetActive;
+  // one connected vehicle is the only possible target, so it counts as selected
+  const loneVehicle = !fleetActive && connectionState.isConnected && knownVehicleCount <= 1;
+  const isSelected = selectedVehicleId === VEHICLE_ID || fleetActive || loneVehicle;
 
   // Marker icon, per-tick DOM pose updates and home distance/bearing all live
   // in LiveVehicleMarker / LiveHomeLine now.
@@ -2321,6 +2324,14 @@ const TelemetryMap2D = React.memo(function TelemetryMap2D() {
   useEffect(() => {
     useMapHomeStore.getState().setHome(homePosition);
   }, [homePosition]);
+
+  // a new link may be a different vehicle: its home is learned again, not carried over
+  const linkUp = connectionState.isConnected;
+  const wasLinked = useRef(linkUp);
+  useEffect(() => {
+    if (wasLinked.current && !linkUp) setHomePosition(null);
+    wasLinked.current = linkUp;
+  }, [linkUp]);
 
   // Disable follow when user manually interacts with the map
   const handleUserMapInteraction = useCallback(() => {
@@ -2386,7 +2397,7 @@ const TelemetryMap2D = React.memo(function TelemetryMap2D() {
   // Right-click handler: open go-to popup (only when vehicle selected AND armed).
   // Both refusals say WHY. Silence here reads as "the fleet ignores right-click".
   const handleMapContextMenu = useCallback((lat: number, lon: number) => {
-    if (!selectedVehicleId && !fleetActive) {
+    if (!isSelected) {
       showMapNotice(t('panels:mapPanel.noVehicleSelected'));
       return;
     }
@@ -2395,7 +2406,7 @@ const TelemetryMap2D = React.memo(function TelemetryMap2D() {
       return;
     }
     setCommandPopup({ lat, lon });
-  }, [selectedVehicleId, fleetActive, showMapNotice, t]);
+  }, [isSelected, showMapNotice, t]);
 
   // Camera ROI: point the active vehicle's gimbal at a clicked ground point.
   // This is a gimbal command (MAV_CMD_DO_SET_ROI_LOCATION), not a nav command,

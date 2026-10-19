@@ -16,6 +16,7 @@ import {
   MAV_CMD,
   MAV_FRAME,
   createTakeoffWaypoint,
+  computeGroupWaypointNumbers,
   type MissionItem,
 } from '../../../shared/mission-types';
 import { isSurveyGroup, type Group, type SurveyGroup } from '../../../shared/mission-group-types';
@@ -33,6 +34,32 @@ export function isReturnCommand(command: number): boolean {
   return command === MAV_CMD.NAV_RETURN_TO_LAUNCH
     || command === MAV_CMD.NAV_LAND
     || command === MAV_CMD.NAV_VTOL_LAND;
+}
+
+/**
+ * Whether the whole plan can go to one vehicle as one mission. ArduPilot flies one flight: so at most
+ * one return or landing, and no group meant for another vehicle. Connected surveys pass; separate ones do not.
+ */
+export function bulkUploadBlocked(items: MissionItem[], groups: Group[]): boolean {
+  if (groups.length <= 1) return false;
+  if (groups.some((g) => g.assignedVehicleKey)) return true;
+  return items.filter((it) => isReturnCommand(it.command)).length > 1;
+}
+
+/**
+ * The number ArduPilot gives each item once uploaded. A plan that goes up as one mission is numbered in
+ * upload order straight through; separate flights go up group by group, so they count per group.
+ */
+export function vehicleItemNumbers(items: MissionItem[], groups: Group[]): Map<number, number> {
+  if (bulkUploadBlocked(items, groups)) return computeGroupWaypointNumbers(items);
+  const out = new Map<number, number>();
+  let n = 0;
+  const ordered = [...groups].sort((a, b) => a.order - b.order);
+  for (const g of ordered) {
+    for (const it of items.filter((x) => x.groupId === g.id).sort((a, b) => a.seq - b.seq)) out.set(it.seq, ++n);
+  }
+  for (const it of items) if (!out.has(it.seq)) out.set(it.seq, ++n);
+  return out;
 }
 
 export function isTakeoffCommand(command: number): boolean {

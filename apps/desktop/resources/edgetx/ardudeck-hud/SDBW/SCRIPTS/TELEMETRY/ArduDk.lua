@@ -18,6 +18,32 @@ local MODES = {
   [16]='POSHOLD',[17]='BRAKE',[18]='THROW',[20]='GUIDED NOGPS',
   [21]='SMART RTL',[22]='FLOWHOLD',[24]='ZIGZAG',[27]='AUTO RTL',
 }
+-- picked by the live frame type, so a rover or plane is not read with copter numbers
+local OTHER_MODES = {
+  plane = {
+    [0]='MANUAL','CIRCLE','STABILIZE','TRAINING','ACRO','FBWA','FBWB','CRUISE','AUTOTUNE',
+    [10]='AUTO',[11]='RTL',[12]='LOITER',[13]='TAKEOFF',[14]='AVOID ADSB',[15]='GUIDED',
+    [17]='QSTABILIZE',[18]='QHOVER',[19]='QLOITER',[20]='QLAND',[21]='QRTL',
+    [22]='QAUTOTUNE',[23]='QACRO',[24]='THERMAL',[25]='LOITER QLAND',
+  },
+  rover = {
+    [0]='MANUAL','ACRO',[3]='STEERING',[4]='HOLD',[5]='LOITER',[6]='FOLLOW',
+    [7]='SIMPLE',[8]='DOCK',[9]='CIRCLE',[10]='AUTO',[11]='RTL',[12]='SMART RTL',
+    [15]='GUIDED',[16]='INITIALIZING',
+  },
+  sub = {
+    [0]='STABILIZE','ACRO','ALT HOLD','AUTO','GUIDED',[7]='CIRCLE',[9]='SURFACE',
+    [16]='POSHOLD',[19]='MANUAL',[20]='MOTOR DETECT',[21]='SURFTRAK',
+  },
+}
+
+-- MAV_TYPE as ArduDeck's getVehicleClass maps it
+local function modeTableFor(t)
+  if t == 1 or (t and t >= 19 and t <= 25) then return OTHER_MODES.plane end
+  if t == 10 or t == 11 then return OTHER_MODES.rover end
+  if t == 12 then return OTHER_MODES.sub end
+  return MODES
+end
 
 -- Everything between the strips is a slot, editable from ArduDeck via
 -- hud.cfg: bw_big (large top-left readout), bw_l1..4 (left rows),
@@ -147,8 +173,9 @@ end
 
 decoders[0x5002] = function (d)
   V.sats = band(d, 0x0F)
-  V.fix = band(rshift(d, 4), 0x03)
-  V.hdop = dec_2_1(band(rshift(d, 6), 0x1FF)) * 0.1
+  -- bits 14-15 carry the fix beyond 3D (DGPS, RTK); they are not a sign on hdop
+  V.fix = band(rshift(d, 4), 0x03) + band(rshift(d, 14), 0x03)
+  V.hdop = band(rshift(d, 7), 0x7F) * (btest(d, 0x40) and 10 or 1) * 0.1
   V.gpsAltM = dec_2_2(band(rshift(d, 22), 0x3FF)) * 0.1
   V.lastStreamT = now()
 end
@@ -183,7 +210,8 @@ end
 
 decoders[0x5007] = function (d)
   local id = band(rshift(d, 24), 0xFF)
-  if id == 4 then V.autoCapacity = band(d, 0xFFFFFF) end
+  if id == 1 then V.frameType = band(d, 0xFFFFFF)
+  elseif id == 4 then V.autoCapacity = band(d, 0xFFFFFF) end
 end
 
 decoders[0x500D] = function (d)
@@ -741,7 +769,7 @@ local BIG = {
 -- from CFG.slots/wslots.
 local function drawTopBar()
   lcd.drawFilledRectangle(0, 0, LCD_W, 8, FORCE)
-  local mode = V.modeText or MODES[V.modeNum] or (V.modeNum >= 0 and ('M' .. V.modeNum) or '---')
+  local mode = V.modeText or modeTableFor(V.frameType)[V.modeNum] or (V.modeNum >= 0 and ('M' .. V.modeNum) or '---')
   lcd.drawText(1, 1, mode, SMLSIZE + INVERS + ((V.armed and V.armedKnown) and BLINK or 0))
   lcd.drawText(LCD_W / 2 - 12, 1, fmtTimer(), SMLSIZE + INVERS)
   if V.anyFs or V.battFs then

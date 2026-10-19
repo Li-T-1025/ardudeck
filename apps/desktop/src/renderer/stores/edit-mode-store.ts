@@ -21,11 +21,14 @@ export interface MapViewport {
 interface EditModeStore {
   activeMode: EditMode;
   mapMode: MapMode;
+  /** The telemetry map's own 2D/3D, apart from mission planning's. */
+  telemetryMapMode: MapMode;
   mapViewport: MapViewport | null;
   /** Shared map layer key — synced between 2D and 3D panels */
   mapLayer: string;
   setActiveMode: (mode: EditMode) => void;
   setMapMode: (mode: MapMode) => void;
+  setTelemetryMapMode: (mode: MapMode) => void;
   setMapViewport: (viewport: MapViewport) => void;
   setMapLayer: (layer: string) => void;
   reset: () => void;
@@ -34,6 +37,7 @@ interface EditModeStore {
 export const useEditModeStore = create<EditModeStore>()(persist((set) => ({
   activeMode: 'mission',
   mapMode: '2d',
+  telemetryMapMode: '2d',
   mapViewport: null,
   mapLayer: 'googleSat',
 
@@ -43,6 +47,10 @@ export const useEditModeStore = create<EditModeStore>()(persist((set) => ({
 
   setMapMode: (mode) => {
     set({ mapMode: mode });
+  },
+
+  setTelemetryMapMode: (mode) => {
+    set({ telemetryMapMode: mode });
   },
 
   setMapViewport: (viewport) => {

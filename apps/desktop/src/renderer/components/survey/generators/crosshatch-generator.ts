@@ -47,7 +47,10 @@ export function generateCrosshatch(config: SurveyConfig): SurveyResult {
 
   const stats = computeSurveyStats(config, waypoints, photoPositions, lineCount);
 
-  const result: SurveyResult = { waypoints, photoPositions, footprints, stats };
+  // both passes' line starts, pass 2 moved past pass 1 and the junction
+  const shift2 = pass1.waypoints.length + junction.length;
+  const legStarts = [...(pass1.legStarts ?? []), ...(pass2.legStarts ?? []).map((i) => i + shift2)];
+  const result: SurveyResult = { waypoints, photoPositions, footprints, stats, ...(legStarts.length > 0 ? { legStarts } : {}) };
 
   // Only carry explicit per-waypoint altitudes when the two passes actually
   // differ; the common case stays on the uniform config.altitude path.

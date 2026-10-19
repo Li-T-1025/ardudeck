@@ -229,6 +229,7 @@ export function FenceMapOverlay({ readOnly = false }: FenceMapOverlayProps) {
       // where the user clicked. (issue #57)
       if (drawMode === 'return-point') return;
       // Stop propagation so FenceDrawTool doesn't add a vertex
+      L.DomEvent.stopPropagation(e);
       e.originalEvent.stopPropagation();
       // Exit draw mode if active
       if (drawMode !== 'none') {
@@ -248,6 +249,7 @@ export function FenceMapOverlay({ readOnly = false }: FenceMapOverlayProps) {
       // (issue #57)
       if (drawMode === 'return-point') return;
       // Stop propagation so FenceDrawTool doesn't add a vertex
+      L.DomEvent.stopPropagation(e);
       e.originalEvent.stopPropagation();
       // Exit draw mode if active
       if (drawMode !== 'none') {
@@ -585,6 +587,7 @@ export function FenceMapOverlay({ readOnly = false }: FenceMapOverlayProps) {
               interactive
               eventHandlers={{
                 click: (e: L.LeafletMouseEvent) => {
+                  L.DomEvent.stopPropagation(e);
                   e.originalEvent.stopPropagation();
                   e.originalEvent.preventDefault();
                   deleteSelectedFence();
@@ -607,6 +610,7 @@ export function FenceMapOverlay({ readOnly = false }: FenceMapOverlayProps) {
               interactive
               eventHandlers={{
                 click: (e: L.LeafletMouseEvent) => {
+                  L.DomEvent.stopPropagation(e);
                   e.originalEvent.stopPropagation();
                   e.originalEvent.preventDefault();
                   deleteSelectedFence();

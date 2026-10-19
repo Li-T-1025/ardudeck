@@ -15,10 +15,10 @@ import { useFlightPreviewStore } from '../../stores/flight-preview-store';
 import { buildFlightTimeline, sampleTimeline, type FlightTimeline } from './flight-preview';
 import { shouldRecenter, FollowState } from './preview-follow';
 
-const CAM_FOV_DEG = 62;
-const CAM_RANGE_M = 28;
+export const CAM_FOV_DEG = 62;
+export const CAM_RANGE_M = 28;
 
-function offsetLatLng(lat: number, lng: number, headingDeg: number, distM: number): [number, number] {
+export function offsetLatLng(lat: number, lng: number, headingDeg: number, distM: number): [number, number] {
   const rad = (headingDeg * Math.PI) / 180;
   const dLat = (Math.cos(rad) * distM) / 111320;
   const dLng = (Math.sin(rad) * distM) / (111320 * Math.cos((lat * Math.PI) / 180));

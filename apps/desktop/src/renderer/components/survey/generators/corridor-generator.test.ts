@@ -383,3 +383,11 @@ describe('strip spacing through a bend', () => {
     }
   });
 });
+
+describe('a point dropped twice', () => {
+  it('flies the same corridor as the clean line (double click to finish)', () => {
+    const clean = generateCorridor(config(STRAIGHT, { corridorStrips: 3 }));
+    const doubled = generateCorridor(config([...STRAIGHT, STRAIGHT[1]!], { corridorStrips: 3 }));
+    expect(doubled.waypoints).toEqual(clean.waypoints);
+  });
+});

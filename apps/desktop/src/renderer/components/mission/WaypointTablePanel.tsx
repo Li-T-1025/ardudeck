@@ -33,7 +33,6 @@ import {
   commandHasLocation,
   hasValidCoordinates,
   isNavigationCommand,
-  computeGroupWaypointNumbers,
   type MissionItem
 } from '../../../shared/mission-types';
 import { FenceListPanel } from '../geofence/FenceListPanel';
@@ -47,7 +46,7 @@ import { useVehicleAppearanceStore, resolveVehicleColor } from '../../stores/veh
 import { computeItemColors, SEGMENT_COLORS } from '../../utils/mission-segment-colors';
 import { validateMission } from '../../../shared/mission-validation';
 import { MissionValidationBadge } from './MissionValidationBadge';
-import { midMissionReturns, flownSeparately, flightBoundaries } from './mission-end';
+import { midMissionReturns, flownSeparately, flightBoundaries, vehicleItemNumbers } from './mission-end';
 import { predictFlownPath, turnRadiusFor, coverageGaps, type CornerCut } from './flown-path';
 import { planSpeed } from '../survey/generators/turn-radius';
 import { useVirtualizer } from '@tanstack/react-virtual';
@@ -776,7 +775,8 @@ function getWaypointSummary(
     case MAV_CMD.DO_SET_HOME:
       return wp.param1 === 1 ? t('mission:waypointTable.summary.setHomeCurrent') : t('mission:waypointTable.summary.setHomeLocation');
     case MAV_CMD.DO_JUMP:
-      return wp.param2 > 0 ? t('mission:waypointTable.summary.jumpToWpTimes', { wp: wp.param1, n: wp.param2 }) : t('mission:waypointTable.summary.jumpToWpForever', { wp: wp.param1 });
+      // the target is stored as an internal index; shown as the row number ArduPilot uses
+      return wp.param2 > 0 ? t('mission:waypointTable.summary.jumpToWpTimes', { wp: wp.param1 + 1, n: wp.param2 }) : t('mission:waypointTable.summary.jumpToWpForever', { wp: wp.param1 + 1 });
     case MAV_CMD.DO_SET_SERVO:
       return t('mission:waypointTable.summary.servo', { n: wp.param1, v: wp.param2 });
     case MAV_CMD.DO_REPEAT_SERVO:
@@ -845,6 +845,8 @@ type CommandParamConfig = {
   max?: number;
   step?: number;
   show: boolean;
+  /** Added for display and taken off on edit: a jump target shows as the row number, stored 0-based. */
+  displayOffset?: number;
 };
 
 // Get the parameters config for each command type
@@ -941,7 +943,7 @@ export function getCommandParams(cmd: number): CommandParamConfig[] {
       ];
     case MAV_CMD.DO_JUMP:
       return [
-        { key: 'param1' as const, labelKey: 'mission:waypointTable.param.waypointNumber', unit: '', min: 1, max: 999, step: 1, show: true },
+        { key: 'param1' as const, labelKey: 'mission:waypointTable.param.waypointNumber', unit: '', min: 1, max: 999, step: 1, show: true, displayOffset: 1 },
         { key: 'param2' as const, labelKey: 'mission:waypointTable.param.repeatCount', unit: '', min: -1, max: 100, step: 1, show: true },
       ];
     case MAV_CMD.DO_SET_CAM_TRIGG_DIST:
@@ -2200,8 +2202,8 @@ function WaypointListContent({ readOnly = false }: { readOnly?: boolean }) {
 
   // Per-group waypoint numbers (1-based within each group), matching the map.
   const groupWaypointNumbers = useMemo(
-    () => computeGroupWaypointNumbers(missionItems),
-    [missionItems],
+    () => vehicleItemNumbers(missionItems, groups),
+    [missionItems, groups],
   );
 
   // Per-group flight stats (distance, time, GSD) shown in each group header,
@@ -3720,8 +3722,8 @@ function WaypointListContent({ readOnly = false }: { readOnly?: boolean }) {
                       />
                     ) : (
                       <DraftNumberInput
-                        value={selectedWaypoint[param.key] as number}
-                        onCommit={(v) => handleParamChange(selectedWaypoint.seq, param.key, v)}
+                        value={(selectedWaypoint[param.key] as number) + (param.displayOffset ?? 0)}
+                        onCommit={(v) => handleParamChange(selectedWaypoint.seq, param.key, v - (param.displayOffset ?? 0))}
                         min={param.min}
                         max={param.max}
                         step={param.step}

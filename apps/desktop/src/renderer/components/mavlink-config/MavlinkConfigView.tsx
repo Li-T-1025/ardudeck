@@ -48,6 +48,7 @@ import {
   Network,
   Boxes,
   Puzzle,
+  Wand2,
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useParameterStore } from '../../stores/parameter-store';
@@ -61,6 +62,7 @@ import PidTuningTab from './PidTuningTab';
 import RatesTab from './RatesTab';
 import FlightModesTab from './FlightModesTab';
 import SafetyTab from './SafetyTab';
+import { QuickSetupTab } from './QuickSetupTab';
 import SensorsTab from './SensorsTab';
 import TuningTab from './TuningTab';
 import AutotuneTab from './AutotuneTab';
@@ -96,7 +98,7 @@ interface Toast {
   type: ToastType;
 }
 
-type TabId = 'pid' | 'rates' | 'modes' | 'receiver' | 'serial-ports' | 'telemetry-rates' | 'safety' | 'sensors' | 'sensor-config' | 'notify' | 'tuning' | 'autotune' | 'battery' | 'parameters' | 'files' | 'logging' | 'arming' | 'rover-tuning' | 'rover-nav' | 'motor-test' | 'servo-output' | 'dronecan' | 'hardware' | `module:${string}`;
+type TabId = 'quick-setup' | 'pid' | 'rates' | 'modes' | 'receiver' | 'serial-ports' | 'telemetry-rates' | 'safety' | 'sensors' | 'sensor-config' | 'notify' | 'tuning' | 'autotune' | 'battery' | 'parameters' | 'files' | 'logging' | 'arming' | 'rover-tuning' | 'rover-nav' | 'motor-test' | 'servo-output' | 'dronecan' | 'hardware' | `module:${string}`;
 
 interface Tab {
   id: TabId;
@@ -285,6 +287,7 @@ const COPTER_TABS: TabNode[] = [
   HARDWARE_GROUP,
   LINKS_GROUP,
   STORAGE_GROUP,
+  { kind: 'item', id: 'quick-setup', nameKey: 'mavlink-config:mavlinkConfigView.tabs.quickSetup', Icon: Wand2, color: 'text-sky-400', descriptionKey: 'mavlink-config:mavlinkConfigView.tabs.quickSetupDesc' },
 ];
 
 // Fixed-wing / VTOL tabs: outputs second, since control surfaces are fundamental to plane setup.
@@ -298,6 +301,7 @@ const PLANE_TABS: TabNode[] = [
   HARDWARE_GROUP,
   LINKS_GROUP,
   STORAGE_GROUP,
+  { kind: 'item', id: 'quick-setup', nameKey: 'mavlink-config:mavlinkConfigView.tabs.quickSetup', Icon: Wand2, color: 'text-sky-400', descriptionKey: 'mavlink-config:mavlinkConfigView.tabs.quickSetupDesc' },
 ];
 
 // Rover/Boat tabs — same Servo-Output-flat treatment as plane (no Motor Test
@@ -334,7 +338,7 @@ const ROVER_TABS: TabNode[] = [
 // shown hunting for parameters that do not exist; the parameter table still
 // exposes everything with PX4's own metadata.
 const PX4_UNSUPPORTED_TABS: ReadonlySet<TabId> = new Set([
-  'rates', 'tuning', 'autotune', 'rover-tuning', 'rover-nav', 'dronecan',
+  'rates', 'tuning', 'autotune', 'rover-tuning', 'rover-nav', 'dronecan', 'quick-setup',
 ]);
 
 function filterTabs(nodes: TabNode[], keep: (id: TabId) => boolean): TabNode[] {
@@ -410,12 +414,15 @@ export const MavlinkConfigView: React.FC = () => {
       if (group) group.children.push(tab);
       else extra.push({ kind: 'item', ...tab });
     }
-    // before the storage group, which stays last
+    // before the storage group; only Quick setup comes after it
     const at = nodes.findIndex((n) => n.id === 'storage-group');
     return at < 0 ? [...nodes, ...extra] : [...nodes.slice(0, at), ...extra, ...nodes.slice(at)];
   }, [isRover, isPlane, isPx4Fw, isInavLink, moduleTabs, vehicleCategory]);
   const defaultTab: TabId = isInavLink ? 'receiver' : isRover ? 'rover-tuning' : 'pid';
   const [activeTab, setActiveTab] = useState<TabId>(defaultTab);
+  // which Quick setup card another tab jumped to
+  const [quickFocus, setQuickFocus] = useState<string | null>(null);
+  useEffect(() => { if (activeTab !== 'quick-setup') setQuickFocus(null); }, [activeTab]);
 
   // Reset active tab when vehicle type changes
   useEffect(() => {
@@ -612,7 +619,7 @@ export const MavlinkConfigView: React.FC = () => {
       case 'modes':
         return <FlightModesTab vehicleCategory={vehicleCategory} />;
       case 'receiver':
-        return <ReceiverTab />;
+        return <ReceiverTab onSetUpElrs={() => { setQuickFocus('elrs'); setActiveTab('quick-setup'); }} />;
       case 'serial-ports':
         return <SerialPortsTab />;
       case 'telemetry-rates':
@@ -621,6 +628,10 @@ export const MavlinkConfigView: React.FC = () => {
         return <DroneCanTab />;
       case 'hardware':
         return <HardwareTab />;
+      case 'quick-setup':
+        return <QuickSetupTab focus={quickFocus} onGoTo={(tab) => {
+          if (collectTabIds(tabs).includes(tab as TabId)) setActiveTab(tab as TabId);
+        }} />;
       case 'safety':
         return <SafetyTab onGoTo={(tab) => {
           if (collectTabIds(tabs).includes(tab as TabId)) setActiveTab(tab as TabId);

@@ -133,7 +133,10 @@
     "saveTitle": "Projekt speichern",
     "tags": "Tags",
     "tagsPlaceholder": "vermessung, nordfeld, hohe-alt",
-    "waypointCount": "{{count}} Wegpunkte"
+    "waypointCount": "{{count}} Wegpunkte",
+    "exists": "Ein Projekt namens „{{name}}“ gibt es hier schon.",
+    "replace": "Ersetzen",
+    "saveCopy": "Als Kopie speichern"
   },
   "surveyAreaBrowser": {
     "alreadyLocal": " · bereits auf diesem Computer",

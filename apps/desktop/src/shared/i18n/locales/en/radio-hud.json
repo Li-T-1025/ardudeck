@@ -46,7 +46,8 @@
     "plane": "Plane",
     "rangefinderWork": "Rangefinder work",
     "rover": "Rover",
-    "systems": "Systems"
+    "systems": "Systems",
+    "sub": "Sub"
   },
   "radioHudView": {
     "addPageTip": "Add a layout page (swipe left/right on the radio to switch)",

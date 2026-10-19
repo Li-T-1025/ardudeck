@@ -36,6 +36,7 @@ import { useModuleStore } from '../stores/module-store';
 import { getElevation, getElevations } from '../utils/elevation-api';
 import {
   registerModuleMapLayer,
+  startPick,
   startPolygonPick,
   unregisterModuleMapLayer,
   unregisterModuleMapLayersFor,
@@ -472,8 +473,20 @@ export function createRendererHostApi(
 
     mission: {
       getWaypoints: () => useMissionStore.getState().missionItems as unknown[],
-      subscribe: (listener) =>
-        useMissionStore.subscribe((s) => listener(s.missionItems as unknown[])),
+      getHome: () => {
+        const h = useMissionStore.getState().homePosition;
+        return h ? { lat: h.lat, lng: h.lon, altMsl: h.alt !== 0 && Number.isFinite(h.alt) ? h.alt : null } : null;
+      },
+      subscribe: (listener) => {
+        let items = useMissionStore.getState().missionItems;
+        let home = useMissionStore.getState().homePosition;
+        return useMissionStore.subscribe((s) => {
+          if (s.missionItems === items && s.homePosition === home) return;
+          items = s.missionItems;
+          home = s.homePosition;
+          listener(s.missionItems as unknown[]);
+        });
+      },
     },
 
     commandTarget: {
@@ -531,7 +544,9 @@ export function createRendererHostApi(
     map: {
       registerLayer: (reg) => registerModuleMapLayer(slug, reg),
       unregisterLayer: (id) => unregisterModuleMapLayer(slug, id),
-      pickPolygon: (prompt) => startPolygonPick(prompt ?? t('modules:moduleHost.pickPolygonPrompt')),
+      pickPolygon: (prompt, initial) => startPolygonPick(prompt ?? t('modules:moduleHost.pickPolygonPrompt'), initial),
+      pickPath: (prompt, initial) => startPick(prompt ?? t('modules:moduleHost.pickPathPrompt'), 'path', initial),
+      pickPoint: (prompt, initial) => startPick(prompt ?? t('modules:moduleHost.pickPointPrompt'), 'point', initial ? [initial] : undefined).then((pts) => pts?.[0] ?? null),
       centerOn: (point, zoom) => useMapFocusStore.getState().centerOn(point.lat, point.lng, zoom),
     },
 

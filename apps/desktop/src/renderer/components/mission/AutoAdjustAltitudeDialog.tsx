@@ -1,11 +1,13 @@
 import { useTranslation } from 'react-i18next';
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { DraftNumberInput } from '../../hooks/useNumericDraft';
-import { Mountain, AlertTriangle, Check, ChevronDown, ChevronRight } from 'lucide-react';
+import { Mountain, AlertTriangle, Check, ChevronDown, ChevronRight, Sparkles, ExternalLink } from 'lucide-react';
 import { getElevations } from '../../utils/elevation-api';
 import { useSettingsStore } from '../../stores/settings-store';
 import { formatAltitudeFromMeters } from '../../../shared/user-units.js';
+import { openLocusListing, useLocusListed, useLocusTerrain } from './locus-terrain';
 import {
+  planTerrainFollow,
   planTerrainSafeAltitudes,
   haversine,
   type PlannerWaypoint,
@@ -49,22 +51,34 @@ function sampleSegment(
   return out;
 }
 
+const BUCKET_DEG = 2e-4;
+
+/** Nearest sample, looked up in a grid of buckets so dense terrain-follow sampling stays fast. */
 function buildTerrainLookup(samples: TerrainSample[]): TerrainLookup {
   if (samples.length === 0) return { elevationAt: () => null };
+  const grid = new Map<string, TerrainSample[]>();
+  const key = (bx: number, by: number) => `${bx},${by}`;
+  for (const s of samples) {
+    const k = key(Math.floor(s.lon / BUCKET_DEG), Math.floor(s.lat / BUCKET_DEG));
+    const list = grid.get(k);
+    if (list) list.push(s);
+    else grid.set(k, [s]);
+  }
+  const scan = (lat: number, lon: number, list: TerrainSample[]) => {
+    let best: TerrainSample | null = null;
+    let bestDist = Infinity;
+    for (const s of list) {
+      const d = (lat - s.lat) ** 2 + (lon - s.lon) ** 2;
+      if (d < bestDist) { bestDist = d; best = s; }
+    }
+    return best;
+  };
   return {
     elevationAt: (lat: number, lon: number) => {
-      let best: TerrainSample | null = null;
-      let bestDist = Infinity;
-      for (const s of samples) {
-        const dLat = lat - s.lat;
-        const dLon = lon - s.lon;
-        const d = dLat * dLat + dLon * dLon;
-        if (d < bestDist) {
-          bestDist = d;
-          best = s;
-        }
-      }
-      return best ? best.elev : null;
+      const bx = Math.floor(lon / BUCKET_DEG), by = Math.floor(lat / BUCKET_DEG);
+      const near: TerrainSample[] = [];
+      for (let dx = -1; dx <= 1; dx++) for (let dy = -1; dy <= 1; dy++) near.push(...(grid.get(key(bx + dx, by + dy)) ?? []));
+      return (scan(lat, lon, near.length > 0 ? near : samples))?.elev ?? null;
     },
   };
 }
@@ -83,6 +97,23 @@ export function AutoAdjustAltitudeDialog({
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const altitudeUnit = useSettingsStore((s) => s.unitPreferences.altitude);
 
+  // a Locus survey under the whole route unlocks terrain following, offered first
+  const locus = useLocusTerrain(waypoints);
+  // the invitation only while Locus can be found in the Hangar: a private listing would be a dead link
+  const locusListed = useLocusListed();
+  const [mode, setMode] = useState<'clear' | 'follow'>(locus.status === 'covered' ? 'follow' : 'clear');
+  const modeChosen = useRef(false);
+  useEffect(() => {
+    if (!modeChosen.current) setMode(locus.status === 'covered' ? 'follow' : 'clear');
+  }, [locus.status]);
+  const choose = (m: 'clear' | 'follow') => { modeChosen.current = true; setMode(m); };
+  const following = mode === 'follow' && locus.status === 'covered';
+  const [heightAgl, setHeightAgl] = useState(Math.max(10, Math.round(safeBuffer)));
+  const [maxClimbDeg, setMaxClimbDeg] = useState(15);
+  const [followStep, setFollowStep] = useState(5);
+  const [tolerance, setTolerance] = useState(1);
+  const step = following ? followStep : sampleStep;
+
   const [terrainSamples, setTerrainSamples] = useState<TerrainSample[] | null>(null);
   const [terrainError, setTerrainError] = useState<string | null>(null);
   const [loadingTerrain, setLoadingTerrain] = useState(false);
@@ -99,7 +130,7 @@ export function AutoAdjustAltitudeDialog({
       lon: wp.longitude,
     }));
 
-    const denseStep = Math.max(5, sampleStep / 2);
+    const denseStep = following ? Math.max(2, step) : Math.max(5, step / 2);
     for (let i = 0; i < waypoints.length - 1; i++) {
       const segSamples = sampleSegment(waypoints[i]!, waypoints[i + 1]!, denseStep);
       samplePoints.push(...segSamples);
@@ -126,7 +157,7 @@ export function AutoAdjustAltitudeDialog({
     return () => {
       cancelled = true;
     };
-  }, [waypoints, sampleStep]);
+  }, [waypoints, step, following]);
 
   const terrainLookup = useMemo(
     () => (terrainSamples ? buildTerrainLookup(terrainSamples) : null),
@@ -144,6 +175,11 @@ export function AutoAdjustAltitudeDialog({
 
   const preview: PlanResult | null = useMemo(() => {
     if (!terrainLookup) return null;
+    if (following) {
+      return planTerrainFollow(waypoints, terrainLookup, {
+        heightAgl, maxClimbDeg, sampleStepMeters: followStep, toleranceMeters: tolerance, homeElevationMeters: homeElevation,
+      });
+    }
     return planTerrainSafeAltitudes(waypoints, terrainLookup, {
       safeBuffer,
       raiseEndpoints: true,
@@ -152,7 +188,7 @@ export function AutoAdjustAltitudeDialog({
       minSpacingMeters: minSpacing,
       homeElevationMeters: homeElevation,
     });
-  }, [terrainLookup, waypoints, safeBuffer, insertIntermediates, sampleStep, minSpacing, homeElevation]);
+  }, [terrainLookup, waypoints, safeBuffer, insertIntermediates, sampleStep, minSpacing, homeElevation, following, heightAgl, maxClimbDeg, followStep, tolerance]);
 
   const raiseCount = preview?.raisedAltitudes.size ?? 0;
   const insertCount = preview?.inserts.length ?? 0;
@@ -184,13 +220,59 @@ export function AutoAdjustAltitudeDialog({
           <div className="min-w-0">
             <h2 className="text-base font-semibold text-content leading-tight">{t('mission:autoAdjustAltitudeDialog.title')}</h2>
             <p className="text-xs text-content-secondary mt-0.5">
-              {t('mission:autoAdjustAltitudeDialog.subtitle', { value: formatAltitudeFromMeters(safeBuffer, altitudeUnit) })}
+              {following
+                ? t('mission:autoAdjustAltitudeDialog.followSubtitle', { value: formatAltitudeFromMeters(heightAgl, altitudeUnit) })
+                : t('mission:autoAdjustAltitudeDialog.subtitle', { value: formatAltitudeFromMeters(safeBuffer, altitudeUnit) })}
             </p>
           </div>
         </div>
 
         {/* Content */}
         <div className="px-5 py-4 space-y-3">
+          {locus.status === 'covered' && (
+            <div className="space-y-2">
+              <button
+                type="button"
+                onClick={() => choose('follow')}
+                aria-pressed={following}
+                className={`w-full text-left p-3 rounded-lg border transition-colors ${following ? 'border-sky-500/60 bg-sky-500/10 ring-1 ring-sky-500/30' : 'border-subtle hover:bg-surface'}`}
+              >
+                <div className="flex items-center gap-2">
+                  <Sparkles className="w-4 h-4 text-sky-500 dark:text-sky-400 shrink-0" />
+                  <span className="text-sm font-semibold text-content">{t('mission:autoAdjustAltitudeDialog.followTitle')}</span>
+                  <span className="ml-auto px-1.5 py-px text-[9px] font-semibold uppercase tracking-wide rounded border border-sky-500/40 bg-sky-500/15 text-sky-700 dark:text-sky-300">{t('mission:autoAdjustAltitudeDialog.recommended')}</span>
+                </div>
+                <p className="text-xs text-content-secondary mt-1">{t('mission:autoAdjustAltitudeDialog.followHint')}</p>
+                <p className="text-[11px] text-sky-700 dark:text-sky-300 mt-1.5">{t('mission:autoAdjustAltitudeDialog.followSource', { name: locus.source.name })}</p>
+              </button>
+              <button
+                type="button"
+                onClick={() => choose('clear')}
+                aria-pressed={!following}
+                className={`w-full text-left px-3 py-2 rounded-lg border transition-colors ${!following ? 'border-amber-500/50 bg-amber-500/10' : 'border-subtle hover:bg-surface'}`}
+              >
+                <span className="text-sm font-medium text-content">{t('mission:autoAdjustAltitudeDialog.clearTitle')}</span>
+                <p className="text-xs text-content-secondary mt-0.5">{t('mission:autoAdjustAltitudeDialog.clearHint')}</p>
+              </button>
+            </div>
+          )}
+
+          {following && (
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-[11px] uppercase tracking-wide text-content-tertiary mb-1">{t('mission:autoAdjustAltitudeDialog.heightAgl')}</label>
+                <DraftNumberInput min={1} max={500} value={heightAgl} onCommit={setHeightAgl}
+                  className="w-full px-2.5 py-1.5 bg-surface-input border border-default rounded-md text-content text-sm font-mono focus:outline-none focus:border-sky-500" />
+              </div>
+              <div>
+                <label className="block text-[11px] uppercase tracking-wide text-content-tertiary mb-1">{t('mission:autoAdjustAltitudeDialog.maxClimb')}</label>
+                <DraftNumberInput min={1} max={60} value={maxClimbDeg} onCommit={setMaxClimbDeg}
+                  className="w-full px-2.5 py-1.5 bg-surface-input border border-default rounded-md text-content text-sm font-mono focus:outline-none focus:border-sky-500" />
+              </div>
+            </div>
+          )}
+
+          {!following && (<>
           {/* Single option: insert intermediates */}
           <label className="flex items-start gap-3 p-3 rounded-lg border border-subtle hover:bg-surface cursor-pointer transition-colors">
             <input
@@ -217,7 +299,31 @@ export function AutoAdjustAltitudeDialog({
             {t('common:advanced')}
           </button>
 
-          {advancedOpen && (
+          </>)}
+
+          {following && (
+            <button type="button" onClick={() => setAdvancedOpen(v => !v)} className="flex items-center gap-1.5 text-xs text-content-secondary hover:text-content transition-colors">
+              {advancedOpen ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
+              {t('common:advanced')}
+            </button>
+          )}
+
+          {following && advancedOpen && (
+            <div className="grid grid-cols-2 gap-3 pl-5">
+              <div>
+                <label className="block text-[11px] uppercase tracking-wide text-content-tertiary mb-1">{t('mission:autoAdjustAltitudeDialog.sampleStep')}</label>
+                <DraftNumberInput min={1} max={50} value={followStep} onCommit={setFollowStep}
+                  className="w-full px-2.5 py-1.5 bg-surface-input border border-subtle rounded-md text-content text-sm focus:outline-none focus:border-sky-500/50" />
+              </div>
+              <div>
+                <label className="block text-[11px] uppercase tracking-wide text-content-tertiary mb-1">{t('mission:autoAdjustAltitudeDialog.smoothing')}</label>
+                <DraftNumberInput min={0.2} max={20} step={0.1} value={tolerance} onCommit={setTolerance}
+                  className="w-full px-2.5 py-1.5 bg-surface-input border border-subtle rounded-md text-content text-sm focus:outline-none focus:border-sky-500/50" />
+              </div>
+            </div>
+          )}
+
+          {!following && advancedOpen && (
             <div className="grid grid-cols-2 gap-3 pl-5">
               <div>
                 <label className="block text-[11px] uppercase tracking-wide text-content-tertiary mb-1">
@@ -249,6 +355,30 @@ export function AutoAdjustAltitudeDialog({
             </div>
           )}
 
+          {locus.status === 'absent' && locusListed && (
+            <div className="p-3 rounded-lg border border-sky-500/30 bg-gradient-to-br from-sky-500/10 to-transparent">
+              <div className="flex items-center gap-2">
+                <Sparkles className="w-4 h-4 text-sky-500 dark:text-sky-400 shrink-0" />
+                <span className="text-sm font-semibold text-content">{t('mission:autoAdjustAltitudeDialog.teaserTitle')}</span>
+              </div>
+              <p className="text-xs text-content-secondary mt-1">{t('mission:autoAdjustAltitudeDialog.teaserHint')}</p>
+              <button
+                type="button"
+                onClick={() => { onClose(); openLocusListing(); }}
+                className="mt-2 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium bg-sky-600 text-white hover:bg-sky-500 transition-colors"
+              >
+                <ExternalLink className="w-3.5 h-3.5" />
+                {t('mission:autoAdjustAltitudeDialog.teaserButton')}
+              </button>
+            </div>
+          )}
+          {locus.status === 'installed' && (
+            <p className="flex items-start gap-2 text-[11px] text-content-secondary">
+              <Sparkles className="w-3.5 h-3.5 text-sky-500 dark:text-sky-400 shrink-0 mt-px" />
+              {t('mission:autoAdjustAltitudeDialog.noSurveyHint')}
+            </p>
+          )}
+
           {/* Preview */}
           <div className="min-h-[72px]">
             {loadingTerrain ? (
@@ -272,7 +402,7 @@ export function AutoAdjustAltitudeDialog({
                 <div className="grid grid-cols-3 divide-x divide-subtle border-b border-subtle">
                   <div className="px-3 py-2 text-center">
                     <div className="text-base font-semibold text-amber-500">{raiseCount}</div>
-                    <div className="text-[10px] text-content-tertiary uppercase tracking-wide">{t('mission:autoAdjustAltitudeDialog.raise')}</div>
+                    <div className="text-[10px] text-content-tertiary uppercase tracking-wide">{following ? t('mission:autoAdjustAltitudeDialog.adjusted') : t('mission:autoAdjustAltitudeDialog.raise')}</div>
                   </div>
                   <div className="px-3 py-2 text-center">
                     <div className="text-base font-semibold text-amber-500">{insertCount}</div>
@@ -329,7 +459,7 @@ export function AutoAdjustAltitudeDialog({
             className={`flex-1 px-4 py-2 rounded-lg font-medium text-sm transition-colors ${
               !canApply
                 ? 'bg-amber-600/20 text-amber-400/40 cursor-not-allowed'
-                : 'bg-amber-500 hover:bg-amber-400 text-black shadow-sm'
+                : following ? 'bg-sky-600 hover:bg-sky-500 text-white shadow-sm' : 'bg-amber-500 hover:bg-amber-400 text-black shadow-sm'
             }`}
           >
             {t('common:apply')}

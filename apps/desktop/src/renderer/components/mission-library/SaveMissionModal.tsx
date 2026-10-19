@@ -62,6 +62,18 @@ export function SaveMissionModal({ onClose, onSaved, importedItems, importedHome
   const [backup, setBackup] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // a project with this name in this folder already: replace it, or keep both
+  const missions = useMissionLibraryStore((s) => s.missions);
+  useEffect(() => {
+    if (missions.length === 0) void useMissionLibraryStore.getState().loadMissions();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  const existing = name.trim()
+    ? missions.find((m) => m.name.trim().toLowerCase() === name.trim().toLowerCase() && (m.site ?? '').trim() === site.trim()) ?? null
+    : null;
+  const [keepBoth, setKeepBoth] = useState(false);
+  const replacing = !!existing && !keepBoth;
+
   const handleSave = async () => {
     if (!name.trim()) {
       setError(t('mission-library:saveMissionModal.nameRequired'));
@@ -80,6 +92,7 @@ export function SaveMissionModal({ onClose, onSaved, importedItems, importedHome
       groups,
       items,
       homePosition,
+      ...(replacing && existing ? { existingId: existing.id } : {}),
     });
 
     const project = site.trim();
@@ -235,6 +248,25 @@ export function SaveMissionModal({ onClose, onSaved, importedItems, importedHome
             {homePosition && <span>{t('mission-library:saveMissionModal.homeSet')}</span>}
           </div>
 
+          {existing && (
+            <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm">
+              <p className="text-amber-700 dark:text-amber-300">{t('mission-library:saveMissionModal.exists', { name: existing.name })}</p>
+              <div className="mt-2 flex gap-2">
+                {[false, true].map((both) => (
+                  <button
+                    key={String(both)}
+                    type="button"
+                    onClick={() => setKeepBoth(both)}
+                    aria-pressed={keepBoth === both}
+                    className={`rounded-md border px-2.5 py-1 text-xs font-medium transition-colors ${keepBoth === both ? 'border-amber-500/60 bg-amber-500/20 text-content' : 'border-subtle text-content-secondary hover:text-content'}`}
+                  >
+                    {both ? t('mission-library:saveMissionModal.saveCopy') : t('mission-library:saveMissionModal.replace')}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* Error */}
           {error && (
             <div className="text-sm text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">
@@ -260,7 +292,7 @@ export function SaveMissionModal({ onClose, onSaved, importedItems, importedHome
                 : 'bg-blue-600 hover:bg-blue-500 text-white'
             }`}
           >
-            {saving ? t('common:saving') : isImport ? t('mission-library:saveMissionModal.import') : t('common:save')}
+            {saving ? t('common:saving') : replacing ? t('mission-library:saveMissionModal.replace') : isImport ? t('mission-library:saveMissionModal.import') : t('common:save')}
           </button>
         </div>
       </div>

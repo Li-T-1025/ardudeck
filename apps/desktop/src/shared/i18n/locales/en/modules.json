@@ -30,6 +30,8 @@
   },
   "moduleHost": {
     "fenceNotConfirmed": "The vehicle did not confirm the fence",
+    "pickPathPrompt": "Draw a line on the map",
+    "pickPointPrompt": "Pick a point on the map",
     "pickPolygonPrompt": "Click the corners of the area",
     "snapshotFailed": "Snapshot failed",
     "viewNeedsUpdate": "Update this cargo in the Hangar to open its view here."

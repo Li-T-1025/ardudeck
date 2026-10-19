@@ -32,6 +32,11 @@ const PORT_LABELS: Record<number, string> = {
 /** Highest SERIALn index ArduPilot exposes. */
 const MAX_SERIAL = 8;
 
+/** The usual name of a serial port, when the board has none of its own. */
+export function serialPortLabel(serial: number): string {
+  return PORT_LABELS[serial] ?? `SERIAL${serial}`;
+}
+
 export interface MavlinkLink {
   /** SERIALn port index. */
   serial: number;

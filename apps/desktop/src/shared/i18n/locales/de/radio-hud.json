@@ -46,7 +46,8 @@
     "plane": "Flächenflugzeug",
     "rangefinderWork": "Rangefinder-Einsatz",
     "rover": "Rover",
-    "systems": "Systeme"
+    "systems": "Systeme",
+    "sub": "U-Boot"
   },
   "radioHudView": {
     "addPageTip": "Layoutseite hinzufügen (an der Fernsteuerung links/rechts wischen zum Wechseln)",

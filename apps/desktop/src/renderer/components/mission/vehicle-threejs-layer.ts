@@ -474,7 +474,6 @@ export function createVehicleThreeJsLayer(): VehicleThreeJsLayer {
 
       renderer.resetState();
       renderer.render(scene, camera);
-      map.triggerRepaint();
     },
 
     onRemove() {

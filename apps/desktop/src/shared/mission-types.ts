@@ -521,20 +521,15 @@ export function hasValidCoordinates(lat: number, lng: number): boolean {
 }
 
 /**
- * Number the located waypoints within each group, starting at 1 per group.
- * Returns a map from item `seq` to its group-relative number. Only items with
- * a real location are counted (the ones that get a numbered marker). Numbering
- * runs over the full mission so a group's numbers don't shift when another
- * group is hidden, and it matches what a single-group upload renumbers to on
- * the vehicle. Items without a number (no location, or no group) are absent
- * from the map; callers fall back to the global `seq + 1`.
+ * Number every item within each group from 1, commands included, as ArduPilot numbers the items of the
+ * mission that group uploads as. Runs over the full mission so a group's numbers don't shift when another
+ * group is hidden. Items without a group are absent; callers fall back to `seq + 1`.
  */
 export function computeGroupWaypointNumbers(items: MissionItem[]): Map<number, number> {
   const out = new Map<number, number>();
   const perGroup = new Map<string, number>();
   for (const it of items) {
     if (!it.groupId) continue;
-    if (!commandHasLocation(it.command) || !hasValidCoordinates(it.latitude, it.longitude)) continue;
     const next = (perGroup.get(it.groupId) ?? 0) + 1;
     perGroup.set(it.groupId, next);
     out.set(it.seq, next);

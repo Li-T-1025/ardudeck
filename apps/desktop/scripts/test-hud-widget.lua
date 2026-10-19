@@ -212,6 +212,80 @@ check('range', V.rangeM, 1.34, 0.01)
 check('lat', V.lat, 42.4411, 0.0001)
 check('lon', V.lon, 19.2632, 0.0001)
 
+-- DGPS: ArduPilot puts the status beyond 3D in bits 14-15; it is not a sign on hdop
+feed(0x5002, 12 | (3 << 4) | (prep_number(5, 2, 1) << 6) | (1 << 14) | (prep_number(5874, 2, 2) << 22))
+check('dgps fix', V.fix, 4)
+check('dgps hdop stays positive', V.hdop, 0.5, 0.05)
+feed(0x5002, 12 | (3 << 4) | (prep_number(150, 2, 1) << 6) | (3 << 14))
+check('rtk fixed', V.fix, 6)
+check('hdop over 10 (x10 flag)', V.hdop, 15, 0.5)
+
+-- rover: the frame type picks the rover names even with a copter hud.cfg
+local function findUp(fn, want, depth, seen)
+  seen = seen or {}
+  if depth == 0 or seen[fn] then return nil end
+  seen[fn] = true
+  for i = 1, 255 do
+    local n, v = debug.getupvalue(fn, i)
+    if not n then break end
+    if n == want then return v end
+    if type(v) == 'function' then
+      local r = findUp(v, want, depth - 1, seen)
+      if r then return r end
+    end
+  end
+end
+local modeNameOf
+for _, f in pairs(M) do
+  if type(f) == 'function' then modeNameOf = modeNameOf or findUp(f, 'modeNameOf', 6) end
+end
+assert(modeNameOf, 'could not locate modeNameOf')
+check('copter mode 11 before frame type', modeNameOf(11) == 'DRIFT' and 1 or 0, 1)
+feed(0x5007, (1 << 24) | 10)
+check('rover mode 0', modeNameOf(0) == 'MANUAL' and 1 or 0, 1)
+check('rover mode 9', modeNameOf(9) == 'CIRCLE' and 1 or 0, 1)
+check('rover mode 11', modeNameOf(11) == 'RTL' and 1 or 0, 1)
+-- trip distance: speed over time while armed; a gap over 1s is a dropout
+do
+  feed(0x5001, (1 << 8))           -- armed
+  V.odoM, V.tOdo = 0, -1
+  local function vel(ms) return prep_number(math.floor(ms * 10), 2, 1) << 9 end
+  feed(0x5005, vel(5))             -- starts the clock
+  for _ = 1, 10 do stubTime = stubTime + 10; feed(0x5005, vel(5)) end
+  check('trip 1s at 5 m/s', V.odoM, 5, 0.01)
+  stubTime = stubTime + 500; feed(0x5005, vel(5))
+  check('5s dropout adds nothing', V.odoM, 5, 0.01)
+  feed(0x5001, 0)                  -- disarmed
+  for _ = 1, 10 do stubTime = stubTime + 10; feed(0x5005, vel(5)) end
+  check('no trip while disarmed', V.odoM, 5, 0.01)
+end
+
+-- tile captions follow the vehicle on the link
+local TILE = findUp(M.refresh, 'TILE', 6)
+assert(TILE, 'could not locate TILE')
+local function caption(id)
+  local seen = {}
+  local real = lcd.drawText
+  lcd.drawText = function (x, y, text) seen[#seen + 1] = tostring(text) end
+  TILE[id](8, 48, 144, 96, 'default')
+  lcd.drawText = real
+  return table.concat(seen, '|')
+end
+feed(0x5007, (1 << 24) | 10)
+check('rover alt tile is TRIP', caption('alt'):find('TRIP') and 1 or 0, 1)
+check('rover range stays RANGE', caption('rng'):find('RANGE') and 1 or 0, 1)
+feed(0x5007, (1 << 24) | 11)
+check('boat range tile is DEPTH', caption('rng'):find('DEPTH') and 1 or 0, 1)
+check('boat mode 11 is RTL', modeNameOf(11) == 'RTL' and 1 or 0, 1)
+feed(0x5007, (1 << 24) | 12)
+check('sub alt tile is DEPTH', caption('alt'):find('DEPTH') and 1 or 0, 1)
+feed(0x5007, (1 << 24) | 2)
+check('copter alt tile is ALT', caption('alt'):find('ALT / VSPD') and 1 or 0, 1)
+feed(0x5007, (1 << 24) | 2)
+check('copter frame type back to copter names', modeNameOf(11) == 'DRIFT' and 1 or 0, 1)
+-- frame type unknown again, so the cfg tests below read the table they write
+feed(0x5007, (1 << 24) | 0)
+
 -- ELRS MAVLink mode: position arrives as the EdgeTX "GPS" sensor (native
 -- CRSF GPS frame), not passthrough 0x800. The widget must poll it.
 function getValue(name)
@@ -539,6 +613,53 @@ end
 check('shared keys survive', cfgTable and cfgTable.cells or 0, 6)
 check('model keys win', (cfgTable and cfgTable.theme == 'light') and 1 or 0, 1)
 check('model pages replace shared ones', cfgTable and #(cfgTable.pages or {}) or 0, 2)
+
+-- top bar on a 480-wide colour radio: the arm word and TX battery survive every
+-- mode name; the brand and the mode's font size give way first
+do
+  io = { open = function () return nil end, read = function () return '' end, close = function () end }
+  SMLSIZE, MIDSIZE = 0x100, 0x200
+  local per = { [0x100] = 7, [0] = 10, [0x200] = 14 }
+  local realSize = lcd.sizeText
+  lcd.sizeText = function (text, flags)
+    local f = (flags or 0) & 0x300
+    return #tostring(text) * per[f]
+  end
+  local realGet = getValue
+  getValue = function (name)
+    if name == 'tx-voltage' then return 7.4 end
+    if name == 'RQly' then return 100 end
+    return nil
+  end
+  local worst = { arm = 1, tx = 1, overlap = 0 }
+  for _, num in ipairs({ 0, 2, 6, 20, 21, 27 }) do
+    local texts = {}
+    local realDraw, realRect = lcd.drawText, lcd.drawFilledRectangle
+    local pill
+    lcd.drawText = function (x, y, text) texts[#texts + 1] = tostring(text) end
+    lcd.drawFilledRectangle = function (x, y, w2, h2) if y >= 5 and y <= 8 and h2 >= 22 and h2 <= 28 then pill = { x, w2 } end end
+    stubTime = stubTime + 400
+    feed(0x5006, att)
+    feed(0x5005, vy)
+    feed(0x5001, ((num + 1) & 0x1F))
+    M.refresh(w, nil, nil)
+    lcd.drawText, lcd.drawFilledRectangle = realDraw, realRect
+    local sawArm, sawTx = 0, 0
+    for _, t in ipairs(texts) do
+      if t == 'DISARMED' then sawArm = 1 end
+      if t == '7.4' then sawTx = 1 end
+    end
+    worst.arm = math.min(worst.arm, sawArm)
+    worst.tx = math.min(worst.tx, sawTx)
+    -- pill must start right of the arm word: 64 + 8 chars * 11 + 10
+    if not pill or pill[1] < 64 + 8 * 14 + 10 then worst.overlap = 1 end
+  end
+  check('DISARMED shown for every mode name', worst.arm, 1)
+  check('TX battery shown for every mode name', worst.tx, 1)
+  check('mode pill clear of the arm word', worst.overlap, 0)
+  lcd.sizeText, getValue = realSize, realGet
+  SMLSIZE, MIDSIZE = 0, 0
+end
 
 print(failures == 0 and 'ALL PASS' or (failures .. ' FAILURES'))
 os.exit(failures == 0 and 0 or 1)

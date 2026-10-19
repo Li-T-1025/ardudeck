@@ -133,7 +133,10 @@
     "saveTitle": "Save project",
     "tags": "Tags",
     "tagsPlaceholder": "survey, north-field, high-alt",
-    "waypointCount": "{{count}} waypoints"
+    "waypointCount": "{{count}} waypoints",
+    "exists": "A project named “{{name}}” already exists here.",
+    "replace": "Replace",
+    "saveCopy": "Save as a copy"
   },
   "surveyAreaBrowser": {
     "alreadyLocal": " · already on this computer",

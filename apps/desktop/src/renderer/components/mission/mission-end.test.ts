@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { midMissionReturns, connectSurveys, disconnectSurveys, setFlightBreak, flightBoundaries, isReturnCommand, isTakeoffCommand } from './mission-end';
+import { bulkUploadBlocked, vehicleItemNumbers, midMissionReturns, connectSurveys, disconnectSurveys, setFlightBreak, flightBoundaries, isReturnCommand, isTakeoffCommand } from './mission-end';
 import { createSurveyGroup, createManualGroup, type Group } from '../../../shared/mission-group-types';
 import { MAV_CMD, MAV_FRAME, type MissionItem } from '../../../shared/mission-types';
 
@@ -343,5 +343,53 @@ describe('flight order follows the waypoints, not group.order', () => {
     const b = survey('B', 2);
     const items = [...leg(a, 0, -0.1), ...leg(b, 2, -0.2), item(4, MAV_CMD.NAV_RETURN_TO_LAUNCH, b.id)];
     expect(flightBoundaries(items, [a, empty, b]).map((r) => r.name)).toEqual(['A', 'B', 'Empty']);
+  });
+});
+
+describe('bulkUploadBlocked', () => {
+  it('lets connected surveys go up as one mission', () => {
+    const a = survey('A', 0), b = survey('B', 1);
+    const items = [...legWithReturn(a, 0, -0.1), ...legWithReturn(b, 3, -0.2)];
+    expect(bulkUploadBlocked(items, [a, b])).toBe(true);
+    expect(bulkUploadBlocked(connectSurveys(items, [a, b]), [a, b])).toBe(false);
+  });
+
+  it('keeps a plan for another vehicle out of the bulk upload', () => {
+    const a = survey('A', 0), b = { ...survey('B', 1), assignedVehicleKey: 'tcp:2' };
+    expect(bulkUploadBlocked([item(0, MAV_CMD.NAV_WAYPOINT, a.id)], [a, b])).toBe(true);
+  });
+
+  it('a single group is never blocked', () => {
+    const a = createManualGroup();
+    expect(bulkUploadBlocked(legWithReturn(a, 0, -0.1), [a])).toBe(false);
+  });
+});
+
+describe('vehicleItemNumbers', () => {
+  it('counts commands like ArduPilot does', () => {
+    const g = createManualGroup();
+    const items = [
+      item(0, MAV_CMD.NAV_TAKEOFF, g.id),
+      item(1, MAV_CMD.NAV_WAYPOINT, g.id),
+      item(2, MAV_CMD.DO_CHANGE_SPEED, g.id),
+      item(3, MAV_CMD.NAV_WAYPOINT, g.id),
+    ];
+    expect([...vehicleItemNumbers(items, [g]).entries()]).toEqual([[0, 1], [1, 2], [2, 3], [3, 4]]);
+  });
+
+  it('numbers connected surveys straight through, as they upload together', () => {
+    const a = survey('A', 0), b = survey('B', 1);
+    const items = connectSurveys([...legWithReturn(a, 0, -0.1), ...legWithReturn(b, 3, -0.2)], [a, b]);
+    const n = vehicleItemNumbers(items, [a, b]);
+    expect(Math.max(...n.values())).toBe(items.length);
+    expect(new Set(n.values()).size).toBe(items.length);
+  });
+
+  it('restarts per group for separate flights, which upload one by one', () => {
+    const a = survey('A', 0), b = survey('B', 1);
+    const items = [...legWithReturn(a, 0, -0.1), ...legWithReturn(b, 3, -0.2)];
+    const n = vehicleItemNumbers(items, [a, b]);
+    expect(n.get(0)).toBe(1);
+    expect(n.get(3)).toBe(1);
   });
 });

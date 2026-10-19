@@ -1,5 +1,5 @@
 import { spawn } from 'node:child_process';
-import { mkdir, rm } from 'node:fs/promises';
+import { access, mkdir, rename, rm } from 'node:fs/promises';
 import { resolve } from 'node:path';
 
 /**
@@ -19,9 +19,22 @@ import { resolve } from 'node:path';
  */
 export async function extractAppArchive(zipPath: string, targetDir: string): Promise<void> {
   const abs = resolve(targetDir);
-  await rm(abs, { recursive: true, force: true });
-  await mkdir(abs, { recursive: true });
+  // Unpack beside the current install and swap afterwards: a delete-then-unpack on a bundle
+  // this size races on macOS (ENOTEMPTY mid-rmdir) and, worse, leaves no app at all when the
+  // unpack fails. Deletes retry for the same reason.
+  const wipe = (dir: string) => rm(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 250 });
+  const fresh = `${abs}.new`;
+  const old = `${abs}.old`;
+  await wipe(fresh);
+  await mkdir(fresh, { recursive: true });
+  await unpack(zipPath, fresh);
+  await wipe(old);
+  if (await access(abs).then(() => true, () => false)) await rename(abs, old);
+  await rename(fresh, abs);
+  await wipe(old).catch(() => undefined);
+}
 
+async function unpack(zipPath: string, abs: string): Promise<void> {
   const [cmd, args] =
     process.platform === 'darwin'
       // ditto, not unzip: it is the only one that also carries an app bundle's extended

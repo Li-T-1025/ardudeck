@@ -13,7 +13,9 @@
     "noWaypoints": "No waypoints to display",
     "resetZoom": "Reset zoom",
     "safe": "Safe +{{value}}",
-    "wpAltitude": "WP {{n}}: {{value}}"
+    "wpAltitude": "WP {{n}}: {{value}}",
+    "followTerrain": "Follow terrain",
+    "followTerrainTip": "A Locus survey covers this route: hold a constant height above it"
   },
   "autoAdjustAltitudeDialog": {
     "analyzing": "Analyzing terrain...",
@@ -28,7 +30,22 @@
     "subtitle": "Keep the flight path {{value}} above terrain",
     "terrainFailed": "Failed to load terrain: {{error}}",
     "title": "Auto Adjust Altitude",
-    "wp": "WP {{n}}"
+    "wp": "WP {{n}}",
+    "followSubtitle": "Holds {{value}} above the surface along the whole route",
+    "followTitle": "Follow terrain with Locus",
+    "recommended": "Recommended",
+    "followHint": "Keeps a constant height above the real surface along the whole route, not only at the waypoints, and never climbs or sinks steeper than you set. Adds waypoints where the ground changes.",
+    "followSource": "Heights from your Locus survey: {{name}}",
+    "clearTitle": "Only fix collisions",
+    "clearHint": "Raises waypoints that are too low and adds one where a leg would hit the ground. Nothing is lowered.",
+    "heightAgl": "Height above surface (m)",
+    "maxClimb": "Max climb angle (°)",
+    "smoothing": "Smoothing (m)",
+    "adjusted": "Adjusted",
+    "teaserTitle": "Fly at a constant height over the real ground",
+    "teaserHint": "With Locus, your own drone survey becomes terrain at full detail, and this tool can then follow it along the whole route: for magnetic surveys, inspections and other low flights.",
+    "teaserButton": "Check out Locus",
+    "noSurveyHint": "No Locus survey covers this route. Use a survey of this area in Locus to follow the terrain here."
   },
   "flightInfoPanel": {
     "aerialOnly": "Aerial vehicles only",
@@ -120,7 +137,9 @@
     "fit": "Fit",
     "fitTip": "Fit map to show all waypoints",
     "noWaypoints": "No waypoints yet",
-    "noWaypointsHint": "Add waypoints in 2D view to see them in 3D"
+    "noWaypointsHint": "Add waypoints in 2D view to see them in 3D",
+    "altitudeHandleTip": "Drag up or down to change the height (or Shift-drag the waypoint)",
+    "surveyIn2dTip": "Plan a survey: drawing the area opens on the 2D map"
   },
   "missionMapPanel": {
     "addRally": "Add Rally",

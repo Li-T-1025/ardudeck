@@ -58,15 +58,16 @@ export function surveyToMissionItems(
   const isReverseAlt = isManual && config.groundPattern === 'reverse-alternating';
   const isPx4 = firmware === 'px4';
 
-  // Camera-off-outside: trigger only along the scan lines and switch the camera
-  // off during the turn-arounds. Grid/crosshatch emit waypoints as line
-  // start/end PAIRS, so an even index is a line entry (camera on) and the
-  // following odd index is the exit (camera off). Only meaningful for camera
-  // flights on those patterns.
+  // Camera-off-outside: trigger only along the scan lines, off in the turns. A line is its start waypoint
+  // and the next one; the starts come from the generator, because a lead-in, a hole detour or a sortie
+  // split shifts every index and an even/odd guess then flips the camera. No starts: trigger throughout.
+  const lineStarts = new Set(result.legStarts ?? []);
+  const lineEnds = new Set([...lineStarts].map((i) => i + 1));
   const bracketCamera =
     !isManual &&
     !!config.cameraOffOutside &&
-    (config.pattern === 'grid' || config.pattern === 'crosshatch');
+    (config.pattern === 'grid' || config.pattern === 'crosshatch') &&
+    lineStarts.size > 0;
   const triggerDist = result.stats.photoSpacing > 0 ? result.stats.photoSpacing : 10;
   const camTrigg = (dist: number): MissionItem => ({
     seq: 0, // re-stamped below via seq++
@@ -260,10 +261,11 @@ export function surveyToMissionItems(
       }
     }
 
-    // Per-line camera bracketing: arm at each line entry (even index), disarm
-    // at each line exit (odd index), so no photos fire during the turns.
+    // Per-line camera bracketing: on after each line start, off after each line end. Lead-in and
+    // detour waypoints get neither, so the camera stays off on them.
     if (bracketCamera) {
-      items.push({ ...camTrigg(i % 2 === 0 ? triggerDist : 0), seq: seq++ });
+      if (lineStarts.has(i)) items.push({ ...camTrigg(triggerDist), seq: seq++ });
+      else if (lineEnds.has(i)) items.push({ ...camTrigg(0), seq: seq++ });
     }
   }
 

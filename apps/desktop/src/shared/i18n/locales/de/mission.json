@@ -13,7 +13,9 @@
     "noWaypoints": "Keine Wegpunkte zum Anzeigen",
     "resetZoom": "Zoom zurücksetzen",
     "safe": "Sicher +{{value}}",
-    "wpAltitude": "WP {{n}}: {{value}}"
+    "wpAltitude": "WP {{n}}: {{value}}",
+    "followTerrain": "Gelände folgen",
+    "followTerrainTip": "Eine Locus-Vermessung deckt diese Route ab: gleichbleibende Höhe darüber halten"
   },
   "autoAdjustAltitudeDialog": {
     "analyzing": "Gelände wird analysiert...",
@@ -28,7 +30,22 @@
     "subtitle": "Flugweg {{value}} über Gelände halten",
     "terrainFailed": "Gelände konnte nicht geladen werden: {{error}}",
     "title": "Höhe automatisch anpassen",
-    "wp": "WP {{n}}"
+    "wp": "WP {{n}}",
+    "followSubtitle": "Hält {{value}} über der Oberfläche entlang der ganzen Route",
+    "followTitle": "Gelände folgen mit Locus",
+    "recommended": "Empfohlen",
+    "followHint": "Hält eine gleichbleibende Höhe über der echten Oberfläche entlang der ganzen Route, nicht nur an den Wegpunkten, und steigt oder sinkt nie steiler als eingestellt. Fügt Wegpunkte ein, wo sich der Boden ändert.",
+    "followSource": "Höhen aus deiner Locus-Vermessung: {{name}}",
+    "clearTitle": "Nur Kollisionen beheben",
+    "clearHint": "Hebt zu tiefe Wegpunkte an und fügt einen ein, wo eine Strecke den Boden treffen würde. Nichts wird abgesenkt.",
+    "heightAgl": "Höhe über der Oberfläche (m)",
+    "maxClimb": "Max. Steigwinkel (°)",
+    "smoothing": "Glättung (m)",
+    "adjusted": "Angepasst",
+    "teaserTitle": "In gleichbleibender Höhe über dem echten Boden fliegen",
+    "teaserHint": "Mit Locus wird deine eigene Drohnenvermessung zu Gelände in voller Detailtiefe, und dieses Werkzeug kann ihr dann entlang der ganzen Route folgen: für Magnetik-Vermessungen, Inspektionen und andere tiefe Flüge.",
+    "teaserButton": "Locus ansehen",
+    "noSurveyHint": "Keine Locus-Vermessung deckt diese Route ab. Nutze eine Vermessung dieses Gebiets in Locus, um hier dem Gelände zu folgen."
   },
   "flightInfoPanel": {
     "aerialOnly": "Nur Luftfahrzeuge",
@@ -120,7 +137,9 @@
     "fit": "Einpassen",
     "fitTip": "Karte so einpassen, dass alle Wegpunkte sichtbar sind",
     "noWaypoints": "Noch keine Wegpunkte",
-    "noWaypointsHint": "Fügen Sie Wegpunkte in der 2D-Ansicht hinzu, um sie in 3D zu sehen"
+    "noWaypointsHint": "Fügen Sie Wegpunkte in der 2D-Ansicht hinzu, um sie in 3D zu sehen",
+    "altitudeHandleTip": "Nach oben oder unten ziehen, um die Höhe zu ändern (oder den Wegpunkt mit gedrückter Umschalttaste ziehen)",
+    "surveyIn2dTip": "Vermessung planen: das Zeichnen der Fläche öffnet sich auf der 2D-Karte"
   },
   "missionMapPanel": {
     "addRally": "Rally hinzufügen",

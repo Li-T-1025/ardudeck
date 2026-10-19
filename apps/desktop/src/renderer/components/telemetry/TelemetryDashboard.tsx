@@ -567,8 +567,8 @@ function panelIcon(id: string): ReactNode {
 function WorkspaceDialog(props: WorkspaceProps & { onClose: () => void }): JSX.Element {
   const { t } = useTranslation();
   const { onSave, onLoad, onReset, onEdit, onDelete, onShare, onImport, onAddPanel, layouts, layoutDescriptions, activeLayout, supportsMissionPlanning, isMavlink, isSitlRunning, hasMapPanel, onClose } = props;
-  const mapMode = useEditModeStore((s) => s.mapMode);
-  const setMapMode = useEditModeStore((s) => s.setMapMode);
+  const mapMode = useEditModeStore((s) => s.telemetryMapMode);
+  const setMapMode = useEditModeStore((s) => s.setTelemetryMapMode);
   const cacheActive = useTileCacheAreaStore((s) => s.active);
   const setCacheActive = useTileCacheAreaStore((s) => s.setActive);
   const telemetrySpeed = useSettingsStore((s) => s.telemetrySpeed);

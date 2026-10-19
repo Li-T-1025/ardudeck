@@ -140,7 +140,7 @@ function InfoBanner({ children, color = 'teal' }: { children: React.ReactNode; c
 // Main Component
 // =============================================================================
 
-const ReceiverTab: React.FC = () => {
+const ReceiverTab: React.FC<{ onSetUpElrs?: () => void }> = ({ onSetUpElrs }) => {
   const { t } = useTranslation();
   const { parameters, setParameter } = useParameterStore();
   const fcRc = useTelemetryStore((s) => s.rcChannels);
@@ -297,6 +297,20 @@ const ReceiverTab: React.FC = () => {
 
   return (
     <div className="p-6 space-y-6">
+      {!isInav && onSetUpElrs && (
+        <div className="flex items-center gap-3 rounded-xl border border-teal-500/30 bg-teal-500/10 p-4">
+          <div className="w-10 h-10 rounded-lg bg-teal-500/20 flex items-center justify-center">
+            <Radio className="w-5 h-5 text-teal-500 dark:text-teal-400" />
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-medium text-content">{t('mavlink-config:receiverTab.elrsTitle')}</p>
+            <p className="text-xs text-content-secondary">{t('mavlink-config:receiverTab.elrsHint')}</p>
+          </div>
+          <button type="button" onClick={onSetUpElrs} className="shrink-0 rounded-lg bg-teal-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-teal-500">
+            {t('mavlink-config:receiverTab.elrsButton')}
+          </button>
+        </div>
+      )}
       {isInav && (
         <div className="p-4 rounded-xl bg-blue-500/10 border border-blue-500/30 text-sm text-content-secondary">
           {t('mavlink-config:receiverTab.inavReadOnly')}

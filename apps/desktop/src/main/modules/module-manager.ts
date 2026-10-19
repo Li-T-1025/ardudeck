@@ -462,10 +462,15 @@ export async function removeLicense(key: string): Promise<{ success: boolean; er
   for (const mod of toRemove) {
     try {
       const moduleDir = join(app.getPath('userData'), 'modules', mod.slug);
-      await rm(moduleDir, { recursive: true, force: true });
-      if (mod.app) await uninstallApp(mod.app);
+      await rm(moduleDir, { recursive: true, force: true, maxRetries: 5, retryDelay: 250 });
     } catch {
       // Ignore cleanup errors
+    }
+    if (!mod.app) continue;
+    try {
+      await uninstallApp(mod.app);
+    } catch (err) {
+      console.warn(`[ModuleManager] App ${mod.app} could not be removed with its cargo:`, err);
     }
   }
 

@@ -1,4 +1,4 @@
-import { useTranslation } from 'react-i18next';
+import { Trans, useTranslation } from 'react-i18next';
 import { useEffect, useRef, useState, useMemo, useCallback, type ReactNode } from 'react';
 import maplibregl from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
@@ -12,17 +12,60 @@ import { useTelemetryStore } from '../../stores/telemetry-store';
 import { useConnectionStore } from '../../stores/connection-store';
 import { useEditModeStore } from '../../stores/edit-mode-store';
 import { useSettingsStore } from '../../stores/settings-store';
-import { getElevations } from '../../utils/elevation-api';
 import { useIpLocation } from '../../utils/ip-geolocation';
-import { computeItemColors } from '../../utils/mission-segment-colors';
+import { computeItemColors, SEGMENT_COLORS } from '../../utils/mission-segment-colors';
 import {
   isNavigationCommand,
   commandHasLocation,
   hasValidCoordinates,
-  MAV_FRAME,
+  mavFrameToAltFrame,
   MAV_CMD,
 } from '../../../shared/mission-types';
-import { createMissionThreeJsLayer, type MissionThreeJsLayer } from './mission-threejs-layer';
+import { isSurveyGroup } from '../../../shared/mission-group-types';
+import { createMissionThreeJsLayer, type MissionThreeJsLayer, type MissionLayerWaypoint } from './mission-threejs-layer';
+import { buildPathLegs } from './mission-path';
+import { vehicleItemNumbers } from './mission-end';
+import { altitudeForMsl, buildMission3D, homeAltitudeMsl, type GroundAt } from './mission-3d-geometry';
+import { loadHeightfield, pickZoom, sampleHeightfield, type Heightfield } from '../camera/svt/svt-dem-tiles';
+import { formatAltitudeFromMeters } from '../../../shared/user-units.js';
+import { MapLayersControl } from '../map/overlays/MapLayersControl';
+import { ElevationLegend } from '../map/ElevationLegend';
+import type { ElevationRange } from '../map/TerrainOverlayLayer';
+import { terrainColorStops, WATER_THRESHOLD } from '../../utils/terrain-colors';
+import { attachModuleLayers3D, attachPick3D } from './module-layers-3d';
+import { ModulePolygonPickBar } from '../panels/ModuleMapLayers';
+import { getPolygonPick, subscribeModuleMapLayers } from '../../modules/module-map-registry';
+import { useSurveyStore } from '../../stores/survey-store';
+import { useSurveyMenuStore } from '../../stores/survey-menu-store';
+import { useFlightPreviewStore } from '../../stores/flight-preview-store';
+import { CAM_FOV_DEG, CAM_RANGE_M, offsetLatLng, useFlightPreviewTimeline } from './FlightPreviewOverlay';
+import { FollowState, shouldRecenter } from './preview-follow';
+import { sampleTimeline } from './flight-preview';
+import type { Line3D } from './mission-3d-geometry';
+
+/** The point of the drawn route nearest to a position, so the preview aircraft flies the line as drawn. */
+function onRoute(lines: Line3D[], lat: number, lon: number): { lat: number; lon: number; alt: number } | null {
+  const k = Math.cos((lat * Math.PI) / 180);
+  let best: { lat: number; lon: number; alt: number } | null = null;
+  let bestD = Infinity;
+  for (const line of lines) {
+    if (line.dashed) continue;
+    for (let i = 0; i < line.points.length - 1; i++) {
+      const a = line.points[i]!, b = line.points[i + 1]!;
+      const ax = (a.lon - lon) * k, ay = a.lat - lat, bx = (b.lon - lon) * k, by = b.lat - lat;
+      const dx = bx - ax, dy = by - ay;
+      const len = dx * dx + dy * dy;
+      const t = len > 0 ? Math.max(0, Math.min(1, -(ax * dx + ay * dy) / len)) : 0;
+      const px = ax + dx * t, py = ay + dy * t;
+      const d = px * px + py * py;
+      if (d < bestD) {
+        bestD = d;
+        best = { lat: a.lat + (b.lat - a.lat) * t, lon: a.lon + (b.lon - a.lon) * t, alt: a.alt + (b.alt - a.alt) * t };
+      }
+    }
+  }
+  return best;
+}
 import { createVehicleThreeJsLayer, type VehicleThreeJsLayer } from './vehicle-threejs-layer';
 import { createMeshThreeJsLayer, type MeshThreeJsLayer } from './mesh-threejs-layer';
 import { demSourceMaxZoom, useTileSourceStore } from '../../stores/tile-source-store';
@@ -30,24 +73,38 @@ import { meshesFor, useSceneMeshStore } from '../../stores/scene-mesh-store';
 
 // Shared map layer definitions (centralized)
 import { MAP_LAYERS, mapLayerName, type LayerKey, type MapLayer } from '../../../shared/map-layers';
-import { LayerIcon } from '../map/LayerIcon';
 
 // Exclude 'dem' from the layer picker (it's a data layer, not a base map)
 type BaseLayerKey = Exclude<LayerKey, 'dem'>;
 
-/** Waypoint with computed display altitude (AGL at its location) */
-interface WpDisplay {
-  seq: number;
-  lon: number;
-  lat: number;
-  frame: number;
-  command: number;
-  /** Original altitude from mission item (relative to home or terrain depending on frame) */
-  missionAlt: number;
-  /** Computed AGL at this waypoint's location */
-  displayAgl: number;
-  /** Terrain elevation MSL at this waypoint */
-  groundElev: number;
+const BASE_LAYERS = (Object.keys(MAP_LAYERS) as LayerKey[]).filter((k) => k !== 'dem' && k !== 'openaip' && k !== 'radar');
+
+/** MapLibre colour-relief stops for the 2D height scale, over `range` (else absolute), shifted by `ref`. */
+function heightColorExpression(range: ElevationRange | null, ref: number): maplibregl.ExpressionSpecification {
+  const stops = terrainColorStops();
+  const top = stops[stops.length - 1]!.elev;
+  const at = (e: number) => (range && range.max > range.min ? range.min + (e / top) * (range.max - range.min) : e) + ref;
+  const expr: unknown[] = ['interpolate', ['linear'], ['elevation']];
+  let last = -Infinity;
+  for (const s of stops) {
+    const e = Math.max(at(s.elev), last + 0.01);
+    expr.push(e, `rgb(${s.color[0]},${s.color[1]},${s.color[2]})`);
+    last = e;
+  }
+  return expr as maplibregl.ExpressionSpecification;
+}
+
+/** Sun shading on the relief, SVT's lit terrain on top of the draped imagery. */
+function addRelief(map: maplibregl.Map, beforeId?: string) {
+  map.addLayer({
+    id: 'terrain-relief', type: 'hillshade', source: 'terrain-dem',
+    paint: { 'hillshade-exaggeration': 0.35, 'hillshade-shadow-color': 'rgba(20,30,20,0.55)', 'hillshade-highlight-color': 'rgba(255,246,230,0.25)', 'hillshade-illumination-direction': 315 },
+  }, beforeId);
+}
+
+/** Below the cargo and mission layers, so it only tints the ground. */
+function addHeightLayer(map: maplibregl.Map, beforeId?: string) {
+  map.addLayer({ id: 'height-colors', type: 'color-relief', source: 'terrain-dem', layout: { visibility: 'none' }, paint: { 'color-relief-opacity': 0.6, 'color-relief-color': heightColorExpression(null, 0) } }, beforeId);
 }
 
 /** Command-type color — matches 2D map markers */
@@ -206,15 +263,37 @@ export function Mission3DPanel({
   const activeLayer: LayerKey = (sharedMapLayer in MAP_LAYERS ? sharedMapLayer : 'googleSat') as LayerKey;
   const setActiveLayer = (layer: LayerKey) => setSharedMapLayer(layer);
   const [exaggeration, setExaggeration] = useState(1.0);
+  const exaggerationRef = useRef(1);
+  exaggerationRef.current = exaggeration;
+  const [showHeight, setShowHeight] = useState(false);
+  const [heightAuto, setHeightAuto] = useState(true);
+  const [heightFixed, setHeightFixed] = useState<ElevationRange>({ min: 0, max: 1500 });
+  const [heightRelative, setHeightRelative] = useState(false);
+  const [heightTick, setHeightTick] = useState(0);
+  const [addMode, setAddMode] = useState(false);
+  const [homeMode, setHomeMode] = useState(false);
+  const activeMode = useEditModeStore((s) => s.activeMode);
+  const surveyActive = useSurveyStore((s) => s.isActive);
+  const [pickActive, setPickActive] = useState(() => getPolygonPick() !== null);
+  useEffect(() => subscribeModuleMapLayers(() => setPickActive(getPolygonPick() !== null)), []);
+  const detachRef = useRef<Array<() => void>>([]);
+  const mapClickRef = useRef<(e: maplibregl.MapMouseEvent) => void>(() => {});
 
   // MapLibre caches raster-dem tiles per source; a module DEM change needs the source rebuilt.
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !map.isStyleLoaded() || !map.getSource('terrain-dem')) return;
     map.setTerrain(null);
+    // a layer on the source blocks its removal
+    if (map.getLayer('height-colors')) map.removeLayer('height-colors');
+    if (map.getLayer('terrain-relief')) map.removeLayer('terrain-relief');
     map.removeSource('terrain-dem');
     map.addSource('terrain-dem', { type: 'raster-dem', tiles: ['tile-cache://dem/{z}/{x}/{y}.png'], tileSize: 256, encoding: 'terrarium', maxzoom: demSourceMaxZoom(useTileSourceStore.getState().entries) });
     map.setTerrain({ source: 'terrain-dem', exaggeration });
+    const below = map.getLayer('module-fill') ? 'module-fill' : undefined;
+    addRelief(map, below);
+    addHeightLayer(map, below);
+    setHeightTick((n) => n + 1);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [terrainVersion]);
 
@@ -222,7 +301,6 @@ export function Mission3DPanel({
     meshLayerRef.current?.setMeshes(meshesFor('mission3d'), exaggeration);
   }, [meshVersion, exaggeration]);
   const [mapReady, setMapReady] = useState(false);
-  const [wpDisplayData, setWpDisplayData] = useState<WpDisplay[]>([]);
   const [ipLocation] = useIpLocation();
 
   // Store data
@@ -248,72 +326,196 @@ export function Mission3DPanel({
   // Segment colors per item (for marker tinting + path coloring, matches 2D map)
   const itemColors = useMemo(() => computeItemColors(missionItems), [missionItems]);
 
-  // ─── Compute display AGL for each waypoint ─────────────────────────────────
+  const groups = useMissionStore((s) => s.groups);
+  const updateWaypoint = useMissionStore((s) => s.updateWaypoint);
+  const showSegmentColors = useSettingsStore((s) => s.missionDefaults.showSegmentColors);
+  const maxPins = useSettingsStore((s) => s.surveyPerformance.maxInteractiveWaypoints);
+  const altitudeUnit = useSettingsStore((s) => s.unitPreferences.altitude);
+
+  // same visibility and colouring rules as the 2D map
+  const visibleItems = useMemo(() => {
+    const hidden = new Set(groups.filter((g) => !g.visible).map((g) => g.id));
+    return hidden.size === 0 ? missionItems : missionItems.filter((it) => !it.groupId || !hidden.has(it.groupId));
+  }, [missionItems, groups]);
+  const colorByGroup = groups.length > 1;
+  const groupColorOf = useMemo(() => {
+    const byId = new Map(groups.map((g) => [g.id, g.color]));
+    return (id: string | undefined) => (id ? byId.get(id) : undefined);
+  }, [groups]);
+  const surveyGroupIds = useMemo(() => new Set(groups.filter(isSurveyGroup).map((g) => g.id)), [groups]);
+  const groupNumbers = useMemo(() => vehicleItemNumbers(missionItems, groups), [missionItems, groups]);
+
+  // ground under the mission, from the same DEM tiles the 3D terrain is drawn from
+  const boundsKey = useMemo(() => {
+    let minLat = Infinity, minLon = Infinity, maxLat = -Infinity, maxLon = -Infinity;
+    const add = (lat: number, lon: number) => {
+      minLat = Math.min(minLat, lat); maxLat = Math.max(maxLat, lat);
+      minLon = Math.min(minLon, lon); maxLon = Math.max(maxLon, lon);
+    };
+    for (const it of visibleItems) if (hasValidCoordinates(it.latitude, it.longitude)) add(it.latitude, it.longitude);
+    if (homePosition && hasValidCoordinates(homePosition.lat, homePosition.lon)) add(homePosition.lat, homePosition.lon);
+    if (minLat === Infinity) return null;
+    const r = (v: number) => Math.round(v * 200) / 200;
+    return `${r(minLat - 0.005)},${r(minLon - 0.005)},${r(maxLat + 0.005)},${r(maxLon + 0.005)}`;
+  }, [visibleItems, homePosition]);
+  const [heightfield, setHeightfield] = useState<Heightfield | null>(null);
   useEffect(() => {
-    if (navWaypoints.length === 0) {
-      setWpDisplayData([]);
+    if (!boundsKey) { setHeightfield(null); return; }
+    const [s0, w0, n0, e0] = boundsKey.split(',').map(Number) as [number, number, number, number];
+    const lat = (s0 + n0) / 2;
+    const halfM = Math.max((n0 - s0) * 111_320, (e0 - w0) * 111_320 * Math.cos((lat * Math.PI) / 180)) / 2;
+    let cancelled = false;
+    void loadHeightfield(s0, w0, n0, e0, pickZoom(halfM, lat, 14)).then((hf) => {
+      if (!cancelled) setHeightfield(hf.loadedTiles > 0 ? hf : null);
+    });
+    return () => { cancelled = true; };
+  }, [boundsKey, terrainVersion]);
+  const ground: GroundAt = useMemo(() => {
+    if (heightfield) return (lat: number, lon: number) => sampleHeightfield(heightfield, lat, lon);
+    const flat = homePosition?.alt ?? 0;
+    return () => flat;
+  }, [heightfield, homePosition]);
+  const homeAlt = useMemo(() => homeAltitudeMsl(homePosition, ground), [homePosition, ground]);
+
+  // a waypoint being dragged is drawn where it is now, saved only on release
+  const [preview, setPreview] = useState<{ seq: number; lat: number; lon: number; alt: number } | null>(null);
+  const drawItems = useMemo(() => {
+    if (!preview) return visibleItems;
+    return visibleItems.map((it) => {
+      if (it.seq !== preview.seq) return it;
+      const placed = hasValidCoordinates(it.latitude, it.longitude);
+      const lat = placed ? preview.lat : it.latitude;
+      const lon = placed ? preview.lon : it.longitude;
+      const g = placed ? ground(lat, lon) : ground(homePosition?.lat ?? 0, homePosition?.lon ?? 0);
+      return { ...it, latitude: lat, longitude: lon, altitude: altitudeForMsl(it, preview.alt, g, homeAlt) };
+    });
+  }, [visibleItems, preview, ground, homeAlt, homePosition]);
+
+  const geometry = useMemo(() => {
+    const g = buildMission3D(drawItems, buildPathLegs(drawItems, colorByGroup ? groupColorOf : undefined), homePosition, ground);
+    if (!colorByGroup && !showSegmentColors) for (const l of g.lines) if (!l.dashed) l.color = SEGMENT_COLORS.default;
+    return g;
+  }, [drawItems, colorByGroup, groupColorOf, homePosition, ground, showSegmentColors]);
+
+  const layerWaypoints = useMemo((): MissionLayerWaypoint[] => geometry.waypoints.map((w) => {
+    const commandColor = getCommandColor(w.item.command);
+    const special = commandColor !== '#3b82f6';
+    const color = special
+      ? commandColor
+      : (colorByGroup ? groupColorOf(w.item.groupId) : undefined) ?? (showSegmentColors ? itemColors.get(w.seq) : undefined) ?? '#3b82f6';
+    return {
+      seq: w.seq, lat: w.lat, lon: w.lon, alt: w.alt, ground: w.ground, color,
+      label: getCommandShape(w.item.command) || String(groupNumbers.get(w.seq) ?? w.seq + 1),
+      kind: w.item.groupId && surveyGroupIds.has(w.item.groupId) ? 'dot' : 'pin',
+    };
+  }), [geometry, colorByGroup, groupColorOf, showSegmentColors, itemColors, groupNumbers, surveyGroupIds]);
+
+  // the layer's callbacks are made once, so they read the latest values from here
+  const live = useRef({ geometry, ground, homeAlt, altitudeUnit, readOnly: !!isTelemetryMode });
+  live.current = { geometry, ground, homeAlt, altitudeUnit, readOnly: !!isTelemetryMode };
+  const frameTag = useCallback((frame: number) => {
+    const f = mavFrameToAltFrame(frame);
+    return f === 'asl' ? t('panels:altitudePanel.msl') : f === 'terrain' ? t('panels:altitudePanel.agl') : t('map:elevationLegend.rel');
+  }, [t]);
+  const frameTagRef = useRef(frameTag);
+  frameTagRef.current = frameTag;
+
+  const addWaypoint = useMissionStore((s) => s.addWaypoint);
+  const setHomePosition = useMissionStore((s) => s.setHomePosition);
+  const editingTools = !isTelemetryMode && activeMode === 'mission' && !surveyActive;
+  mapClickRef.current = (e) => {
+    if (!editingTools || getPolygonPick()) return;
+    if (threeLayerRef.current?.hitAt(e.point.x, e.point.y)) return;
+    const { lat, lng } = e.lngLat;
+    if (homeMode) {
+      setHomePosition(lat, lng, 0);
+      setHomeMode(false);
       return;
     }
-
-    let cancelled = false;
-
-    const compute = async () => {
-      const queryPoints: { lat: number; lon: number }[] = [];
-
-      if (homePosition) {
-        queryPoints.push({ lat: homePosition.lat, lon: homePosition.lon });
-      }
-
-      for (const wp of navWaypoints) {
-        queryPoints.push({ lat: wp.latitude, lon: wp.longitude });
-      }
-
-      let elevations: (number | null)[];
-      try {
-        elevations = await getElevations(queryPoints);
-      } catch {
-        elevations = queryPoints.map(() => 0);
-      }
-
-      if (cancelled) return;
-
-      const homeIdx = homePosition ? 0 : -1;
-      const homeGroundElev = homeIdx >= 0 ? (elevations[homeIdx] ?? 0) : 0;
-      const wpOffset = homePosition ? 1 : 0;
-
-      const result: WpDisplay[] = navWaypoints.map((wp, i) => {
-        const wpGroundElev = elevations[i + wpOffset] ?? 0;
-        let displayAgl: number;
-
-        if (wp.frame === MAV_FRAME.GLOBAL_TERRAIN_ALT) {
-          displayAgl = wp.altitude;
-        } else if (wp.frame === MAV_FRAME.GLOBAL || wp.frame === MAV_FRAME.GLOBAL_INT) {
-          displayAgl = wp.altitude - wpGroundElev;
-        } else {
-          // GLOBAL_RELATIVE_ALT (default)
-          displayAgl = homeGroundElev + wp.altitude - wpGroundElev;
-        }
-
-        displayAgl = Math.max(displayAgl, 2);
-
-        return {
-          seq: wp.seq,
-          lon: wp.longitude,
-          lat: wp.latitude,
-          frame: wp.frame,
-          command: wp.command,
-          missionAlt: wp.altitude,
-          displayAgl,
-          groundElev: wpGroundElev,
-        };
-      });
-
-      setWpDisplayData(result);
+    if (!addMode && !e.originalEvent.shiftKey) return;
+    // same rules as 2D: home follows the first waypoint, the height follows the last one
+    if (!homePosition) setHomePosition(lat, lng, 0);
+    const last = missionItems[missionItems.length - 1];
+    addWaypoint(lat, lng, last?.altitude ?? 100);
+  };
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !mapReady) return;
+    map.getCanvas().style.cursor = addMode || homeMode ? 'crosshair' : '';
+    if (!addMode && !homeMode) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return;
+      setAddMode(false);
+      setHomeMode(false);
     };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [addMode, homeMode, mapReady]);
+  useEffect(() => {
+    if (!editingTools) { setAddMode(false); setHomeMode(false); }
+  }, [editingTools]);
 
-    compute();
-    return () => { cancelled = true; };
-  }, [navWaypoints, homePosition]);
+  // flight preview: this map runs the clock while it is open (the 2D map is unmounted then)
+  const previewActive = useFlightPreviewStore((s) => s.isActive);
+  const previewPlaying = useFlightPreviewStore((s) => s.playing);
+  const previewTime = useFlightPreviewStore((s) => s.timeMs);
+  const advancePreview = useFlightPreviewStore((s) => s.advance);
+  const timeline = useFlightPreviewTimeline();
+  useEffect(() => {
+    if (!previewActive || !previewPlaying) return;
+    let last = performance.now();
+    let raf = 0;
+    const tick = (now: number) => {
+      advancePreview(now - last, timeline.durationMs);
+      last = now;
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [previewActive, previewPlaying, advancePreview, timeline.durationMs]);
+  const follow = useRef(new FollowState());
+  useEffect(() => {
+    if (previewPlaying) follow.current.restart();
+  }, [previewPlaying]);
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !mapReady) return;
+    // a pan or zoom by the pilot hands the view back until play is pressed again
+    const off = (e: { originalEvent?: unknown }) => { if (e.originalEvent) follow.current.userMoved(); };
+    map.on('dragstart', off);
+    map.on('zoomstart', off);
+    map.on('rotatestart', off);
+    return () => { map.off('dragstart', off); map.off('zoomstart', off); map.off('rotatestart', off); };
+  }, [mapReady]);
+  useEffect(() => {
+    const layer = threeLayerRef.current;
+    const map = mapRef.current;
+    if (!layer || !map || !mapReady) return;
+    const sample = previewActive ? sampleTimeline(timeline, previewTime) : null;
+    const at = sample ? onRoute(geometry.lines, sample.lat, sample.lng) : null;
+    if (!sample || !at) { layer.setPreviewPose(null); return; }
+    // the camera looks forward and down; the patch it sees grows with the height over the ground
+    const agl = Math.max(1, at.alt - ground(sample.lat, sample.lng));
+    const range = Math.max(CAM_RANGE_M, agl * 1.2);
+    const half = CAM_FOV_DEG / 2;
+    const cone = [sample.camHeading - half, sample.camHeading, sample.camHeading + half].map((h, i) => {
+      const [lat, lon] = offsetLatLng(sample.lat, sample.lng, h, i === 1 ? range * 1.12 : range);
+      return { lat, lon, alt: ground(lat, lon) + 0.3 };
+    });
+    cone.unshift({ lat: sample.lat, lon: sample.lng, alt: ground(sample.lat, sample.lng) + 0.3 });
+    layer.setPreviewPose({ lat: sample.lat, lon: sample.lng, alt: at.alt, heading: sample.trackHeading, cone });
+    if (previewPlaying && follow.current.active && !map.isMoving()) {
+      const pt = map.project([sample.lng, sample.lat]);
+      const c = map.getCanvas();
+      if (shouldRecenter(pt, { width: c.clientWidth, height: c.clientHeight }).recenter) map.easeTo({ center: [sample.lng, sample.lat], duration: 400 });
+    }
+  }, [previewActive, previewPlaying, previewTime, timeline, geometry, ground, mapReady]);
+
+  // survey drawing lives on the 2D map, so that button hands over to it
+  const openIn2d = useCallback((then: () => void) => {
+    useEditModeStore.getState().setMapMode('2d');
+    then();
+  }, []);
 
   // Inject dark theme CSS
   useEffect(() => {
@@ -386,15 +588,18 @@ export function Mission3DPanel({
       });
 
       map.setTerrain({ source: 'terrain-dem', exaggeration });
+      addRelief(map);
+      addHeightLayer(map);
 
+      // SVT's daylight sky (svt-scene.ts): deep blue overhead into a pale horizon haze
       map.setSky({
-        'sky-color': '#1a1d2e',
-        'horizon-color': '#2d3148',
-        'fog-color': '#1a1d2e',
-        'fog-ground-blend': 0.5,
-        'horizon-fog-blend': 0.8,
-        'sky-horizon-blend': 0.9,
-        'atmosphere-blend': 0.7,
+        'sky-color': '#3b74c4',
+        'horizon-color': '#bcd4ec',
+        'fog-color': '#bcd4ec',
+        'fog-ground-blend': 0.75,
+        'horizon-fog-blend': 0.6,
+        'sky-horizon-blend': 0.7,
+        'atmosphere-blend': 0.8,
       });
 
       // 3D buildings
@@ -445,6 +650,8 @@ export function Mission3DPanel({
           'line-dasharray': [4, 4],
         },
       });
+
+      detachRef.current.push(attachModuleLayers3D(map, 'ground-shadow', () => exaggerationRef.current), attachPick3D(map, 'ground-shadow'));
 
       // Home marker
       map.addLayer({
@@ -508,8 +715,28 @@ export function Mission3DPanel({
 
       // Three.js custom layer — renders flight path + drop lines at altitude
       // Waypoint markers are DOM overlays projected to screen space each frame
-      const threeLayer = createMissionThreeJsLayer((seq) => {
-        setSelectedSeq(seq);
+      const threeLayer = createMissionThreeJsLayer({
+        onSelect: (seq) => setSelectedSeq(seq),
+        onPreview: (p) => setPreview(live.current.readOnly ? null : p),
+        onCommit: ({ seq, lat, lon, alt, mode }) => {
+          const { geometry: g, ground: groundAt, homeAlt: home, readOnly } = live.current;
+          const wp = g.waypoints.find((w) => w.seq === seq);
+          if (!wp || readOnly) return;
+          if (mode === 'move') {
+            // a takeoff drawn at home has no position of its own to move
+            if (!wp.atHome) updateWaypoint(seq, { latitude: lat, longitude: lon });
+            return;
+          }
+          const altitude = altitudeForMsl(wp.item, alt, groundAt(wp.lat, wp.lon), home);
+          updateWaypoint(seq, { altitude: Math.round(altitude * 10) / 10 });
+        },
+        altitudeLabel: (seq, altMsl) => {
+          const { geometry: g, ground: groundAt, homeAlt: home, altitudeUnit: unit } = live.current;
+          const wp = g.waypoints.find((w) => w.seq === seq);
+          if (!wp) return '';
+          return `${formatAltitudeFromMeters(altitudeForMsl(wp.item, altMsl, groundAt(wp.lat, wp.lon), home), unit)} ${frameTagRef.current(wp.item.frame)}`;
+        },
+        handleTip: t('mission:mission3DPanel.altitudeHandleTip'),
       });
       threeLayer.setMarkerContainer(markerContainerRef.current);
       threeLayerRef.current = threeLayer;
@@ -519,6 +746,9 @@ export function Mission3DPanel({
       meshLayerRef.current = meshLayer;
       map.addLayer(meshLayer.layer);
       meshLayer.setMeshes(meshesFor('mission3d'), exaggeration);
+
+      // plain map clicks: add a waypoint or set home, as on the 2D map
+      map.on('click', (e) => mapClickRef.current(e));
 
       // Vehicle 3D model layer
       const vehicleLayer = createVehicleThreeJsLayer();
@@ -556,6 +786,8 @@ export function Mission3DPanel({
     mapRef.current = map;
 
     return () => {
+      for (const d of detachRef.current) d();
+      detachRef.current = [];
       vehicleLayerRef.current?.dispose();
       vehicleLayerRef.current = null;
       threeLayerRef.current?.dispose();
@@ -591,7 +823,8 @@ export function Mission3DPanel({
   // Update terrain exaggeration (only when terrain is enabled)
   useEffect(() => {
     const map = mapRef.current;
-    if (!map || !mapReady || !showTerrain) return;
+    // a map rebuilt under a still-ready flag has no style yet; its load sets the terrain itself
+    if (!map || !mapReady || !showTerrain || !map.isStyleLoaded()) return;
     map.setTerrain({ source: 'terrain-dem', exaggeration });
   }, [exaggeration, mapReady, showTerrain]);
 
@@ -600,48 +833,22 @@ export function Mission3DPanel({
     const map = mapRef.current;
     if (!map || !mapReady) return;
 
-    // Update Three.js layer with waypoint data
     threeLayerRef.current?.updateData({
-      waypoints: wpDisplayData.map(wp => {
-        // Same logic as 2D: special commands keep their color, regular WPs use segment color
-        const commandColor = getCommandColor(wp.command);
-        const hasSpecialColor = commandColor !== '#3b82f6';
-        const segColor = itemColors.get(wp.seq) ?? '#3b82f6';
-        const markerColor = hasSpecialColor ? commandColor : segColor;
-        const shape = getCommandShape(wp.command);
-
-        return {
-          seq: wp.seq,
-          lon: wp.lon,
-          lat: wp.lat,
-          displayAgl: wp.displayAgl,
-          groundElev: wp.groundElev,
-          color: markerColor,
-          displayText: shape || String(wp.seq + 1),
-        };
-      }),
+      lines: geometry.lines,
+      waypoints: layerWaypoints,
       selectedSeq,
-      terrainExaggeration: exaggeration,
-      segmentColors: wpDisplayData.length >= 2
-        ? wpDisplayData.slice(1).map(wp => itemColors.get(wp.seq) ?? '#3b82f6')
-        : [],
+      exaggeration,
+      editable: !isTelemetryMode,
+      interactive: !pickActive,
+      maxPins,
     });
 
-    // Ground shadow — dashed line on terrain
-    const groundFeatures: GeoJSON.Feature[] = [];
-    if (wpDisplayData.length >= 2) {
-      groundFeatures.push({
-        type: 'Feature',
-        properties: {},
-        geometry: {
-          type: 'LineString',
-          coordinates: wpDisplayData.map(wp => [wp.lon, wp.lat]),
-        },
-      });
-    }
-    setSourceData(map, 'ground-shadow', groundFeatures);
+    setSourceData(map, 'ground-shadow', geometry.lines.filter((l) => !l.dashed && l.points.length >= 2).map((l) => ({
+      type: 'Feature' as const,
+      properties: {},
+      geometry: { type: 'LineString' as const, coordinates: l.points.map((p) => [p.lon, p.lat]) },
+    })));
 
-    // Home position
     const homeFeatures: GeoJSON.Feature[] = [];
     if (homePosition && hasValidCoordinates(homePosition.lat, homePosition.lon)) {
       homeFeatures.push({
@@ -651,17 +858,38 @@ export function Mission3DPanel({
       });
     }
     setSourceData(map, 'home', homeFeatures);
+  }, [geometry, layerWaypoints, selectedSeq, homePosition, mapReady, exaggeration, isTelemetryMode, maxPins, pickActive]);
 
-  }, [wpDisplayData, selectedSeq, homePosition, mapReady, exaggeration, itemColors]);
+  // height colours: the 2D scale, over the mission area's own range unless one is fixed
+  const heightRange = useMemo((): ElevationRange => {
+    if (!heightfield) return { min: 0, max: 0 };
+    let min = Infinity, max = -Infinity;
+    for (const e of heightfield.elev) {
+      if (e < WATER_THRESHOLD) continue;
+      if (e < min) min = e;
+      if (e > max) max = e;
+    }
+    return min === Infinity ? { min: 0, max: 0 } : { min, max };
+  }, [heightfield]);
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !mapReady || !map.getLayer('height-colors')) return;
+    map.setLayoutProperty('height-colors', 'visibility', showHeight ? 'visible' : 'none');
+    if (!showHeight) return;
+    const range = heightAuto
+      ? heightRange.max > heightRange.min ? { min: Math.floor(heightRange.min / 25) * 25, max: Math.ceil(heightRange.max / 25) * 25 } : null
+      : heightFixed;
+    map.setPaintProperty('height-colors', 'color-relief-color', heightColorExpression(range, heightRelative ? vfrHud.alt : 0));
+  }, [showHeight, heightAuto, heightFixed, heightRelative, heightRange, vfrHud.alt, mapReady, heightTick]);
 
   // Fit bounds on first load
   useEffect(() => {
     const map = mapRef.current;
-    if (!map || !mapReady || wpDisplayData.length === 0) return;
+    if (!map || !mapReady || geometry.waypoints.length === 0) return;
     if (isInitialFitDone.current) return;
     isInitialFitDone.current = true;
-    fitToWaypoints(map, wpDisplayData);
-  }, [wpDisplayData, mapReady, loadCounter]);
+    fitToWaypoints(map, geometry.waypoints);
+  }, [geometry, mapReady, loadCounter]);
 
   // Re-fit on loadCounter change
   const prevLoadCounterRef = useRef(loadCounter);
@@ -669,20 +897,21 @@ export function Mission3DPanel({
     if (loadCounter !== prevLoadCounterRef.current) {
       prevLoadCounterRef.current = loadCounter;
       const map = mapRef.current;
-      if (map && mapReady && wpDisplayData.length > 0) {
-        fitToWaypoints(map, wpDisplayData);
+      if (map && mapReady && geometry.waypoints.length > 0) {
+        fitToWaypoints(map, geometry.waypoints);
       }
     }
-  }, [loadCounter, mapReady, wpDisplayData]);
+  }, [loadCounter, mapReady, geometry]);
 
   // Fly to selected waypoint
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !mapReady || selectedSeq === null) return;
-    const wp = wpDisplayData.find(w => w.seq === selectedSeq);
-    if (!wp) return;
+    const wp = live.current.geometry.waypoints.find(w => w.seq === selectedSeq);
+    // only when it is out of view: a waypoint picked on this map is already where the pilot looks
+    if (!wp || map.getBounds().contains([wp.lon, wp.lat])) return;
     map.flyTo({ center: [wp.lon, wp.lat], zoom: Math.max(map.getZoom(), 15), duration: 800 });
-  }, [selectedSeq, mapReady, wpDisplayData]);
+  }, [selectedSeq, mapReady]);
 
   // Compute real-world vehicle size from active profile (mm → meters)
   const vehicleSizeMeters = useMemo(() => {
@@ -786,7 +1015,7 @@ export function Mission3DPanel({
   // Toggle terrain DEM
   useEffect(() => {
     const map = mapRef.current;
-    if (!map || !mapReady) return;
+    if (!map || !mapReady || !map.isStyleLoaded()) return;
 
     if (showTerrain) {
       map.setTerrain({ source: 'terrain-dem', exaggeration });
@@ -806,8 +1035,8 @@ export function Mission3DPanel({
 
   const handleFitWaypoints = useCallback(() => {
     const map = mapRef.current;
-    if (map && wpDisplayData.length > 0) fitToWaypoints(map, wpDisplayData);
-  }, [wpDisplayData]);
+    if (map && geometry.waypoints.length > 0) fitToWaypoints(map, geometry.waypoints);
+  }, [geometry]);
 
   const handleExaggerationChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     setExaggeration(parseFloat(e.target.value));
@@ -824,7 +1053,7 @@ export function Mission3DPanel({
         {showMapModeToggle && (
           <div className="flex rounded-lg overflow-hidden shadow-lg border border-subtle mb-0.5">
             <button
-              onClick={() => useEditModeStore.getState().setMapMode('2d')}
+              onClick={() => useEditModeStore.getState().setTelemetryMapMode('2d')}
               className="px-2 py-1 text-xs font-medium transition-colors bg-surface-raised text-content-secondary hover:text-content"
             >2D</button>
             <button
@@ -832,31 +1061,56 @@ export function Mission3DPanel({
             >3D</button>
           </div>
         )}
-        {(Object.keys(MAP_LAYERS) as LayerKey[]).filter((k) => k !== 'dem' && k !== 'openaip' && k !== 'radar').map((key) => (
-          <button
-            key={key}
-            onClick={() => setActiveLayer(key)}
-            className={`px-2 py-1 text-xs rounded transition-colors flex items-center gap-1.5 ${
-              activeLayer === key
-                ? 'bg-blue-600 text-white'
-                : 'bg-surface-raised text-content hover:bg-surface-raised'
-            }`}
-          >
-            <LayerIcon layerKey={key} />
-            {mapLayerName(key)}
-          </button>
-        ))}
+        <MapLayersControl
+          baseLayers={BASE_LAYERS}
+          activeLayer={activeLayer}
+          onSelectLayer={setActiveLayer}
+          showTerrain={showHeight}
+          onToggleTerrain={() => setShowHeight((v) => !v)}
+          showOverlays={false}
+        />
         {toolbarContent}
       </div>
 
-      {/* Bottom-left controls */}
+      {showHeight && heightRange.max > 0 && (
+        <div className="absolute top-3 left-3 z-[1000]">
+          <ElevationLegend
+            minElevation={heightRange.min}
+            maxElevation={heightRange.max}
+            autoRange={heightAuto}
+            onAutoRangeChange={setHeightAuto}
+            fixedRange={heightFixed}
+            onFixedRangeChange={setHeightFixed}
+            relativeMode={heightRelative}
+            onRelativeModeChange={setHeightRelative}
+            hasCraftPosition={vfrHud.alt !== 0}
+          />
+        </div>
+      )}
+      <ModulePolygonPickBar />
+
+      {/* Bottom-left controls: the 2D map's row */}
       <div className="absolute bottom-3 left-3 z-[1000] flex items-center gap-2">
-        {navWaypoints.length > 0 && (
+        {editingTools && (
           <button
-            onClick={handleFitWaypoints}
-            className="px-2.5 py-1.5 rounded text-xs font-medium bg-surface-raised text-content hover:bg-surface-raised transition-colors flex items-center gap-1.5"
-            title={t('mission:mission3DPanel.fitTip')}
+            onClick={() => { setAddMode((v) => !v); setHomeMode(false); }}
+            className={`px-2.5 py-1.5 rounded text-xs font-medium transition-colors flex items-center gap-1.5 ${addMode ? 'bg-blue-600 text-white' : 'bg-surface border border-subtle text-content hover:bg-surface-raised shadow-sm'}`}
+            title={addMode ? t('mission:missionMapPanel.addWpActiveTip') : t('mission:missionMapPanel.addWpTip')}
           >
+            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+            </svg>
+            {addMode ? t('mission:missionMapPanel.clickMap') : t('mission:missionMapPanel.addWp')}
+          </button>
+        )}
+        {editingTools && !addMode && !homeMode && (
+          <span className="text-xs text-content-secondary bg-surface-solid border border-subtle shadow-sm px-2.5 py-1.5 rounded">
+            <Trans i18nKey="mission:missionMapPanel.shiftClickHint" components={{ kbd: <kbd className="bg-surface-raised px-1 rounded text-content-secondary" /> }} />
+          </span>
+        )}
+
+        {navWaypoints.length > 0 && (
+          <button onClick={handleFitWaypoints} className="px-2.5 py-1.5 rounded text-xs font-medium bg-surface border border-subtle text-content hover:bg-surface-raised shadow-sm transition-colors flex items-center gap-1.5" title={t('mission:mission3DPanel.fitTip')}>
             <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
             </svg>
@@ -864,11 +1118,7 @@ export function Mission3DPanel({
           </button>
         )}
 
-        <button
-          onClick={handleCenterOnGps}
-          className="px-2.5 py-1.5 rounded text-xs font-medium bg-surface-raised text-content hover:bg-surface-raised transition-colors flex items-center gap-1.5"
-          title={t('mission:mission3DPanel.centerTip')}
-        >
+        <button onClick={handleCenterOnGps} className="px-2.5 py-1.5 rounded text-xs font-medium bg-surface border border-subtle text-content hover:bg-surface-raised shadow-sm transition-colors flex items-center gap-1.5" title={t('mission:mission3DPanel.centerTip')}>
           <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
@@ -876,6 +1126,53 @@ export function Mission3DPanel({
           {t('common:vehicle')}
         </button>
 
+        {editingTools && (
+          <button
+            onClick={() => { setHomeMode((v) => !v); setAddMode(false); }}
+            className={`px-2.5 py-1.5 rounded text-xs font-medium transition-colors flex items-center gap-1.5 ${homeMode ? 'bg-emerald-600 text-white' : homePosition ? 'bg-emerald-600/80 text-white' : 'bg-surface border border-subtle text-content hover:bg-surface-raised shadow-sm'}`}
+            title={homeMode ? t('mission:missionMapPanel.setHomeActiveTip') : homePosition ? t('mission:missionMapPanel.changeHomeTip') : t('mission:missionMapPanel.setHomeTip')}
+          >
+            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
+            </svg>
+            {homeMode ? t('mission:missionMapPanel.clickMap') : homePosition ? t('mission:missionMapPanel.homeSet') : t('common:setHome')}
+          </button>
+        )}
+
+        {!isTelemetryMode && activeMode === 'mission' && (
+          <button
+            onClick={() => { const fp = useFlightPreviewStore.getState(); if (fp.isActive) fp.close(); else fp.open(); }}
+            className="px-2.5 py-1.5 rounded text-xs font-medium bg-surface border border-subtle text-content hover:bg-surface-raised shadow-sm transition-colors flex items-center gap-1.5"
+            data-tip={t('mission:missionMapPanel.previewTip')}
+          >
+            <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 5v14l11-7z" />
+            </svg>
+            {t('mission:missionMapPanel.preview')}
+          </button>
+        )}
+
+        {homeMode && (
+          <span className="text-xs text-emerald-400 bg-surface-solid border border-subtle shadow-sm px-2.5 py-1.5 rounded">
+            {t('mission:missionMapPanel.setHomeHint')}
+          </span>
+        )}
+
+        {!isTelemetryMode && activeMode === 'mission' && (
+          <>
+            <div className="w-px h-5 bg-subtle" />
+            <button
+              onClick={() => openIn2d(() => { if (!surveyActive) useSurveyMenuStore.getState().setOpen(true); })}
+              className="px-2.5 py-1.5 rounded text-xs font-medium bg-surface-solid border border-purple-400 shadow-sm text-purple-400 hover:text-purple-300 transition-colors flex items-center gap-1.5"
+              data-tip={t('mission:mission3DPanel.surveyIn2dTip')}
+            >
+              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 5a1 1 0 011-1h14a1 1 0 011 1v2a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM4 13a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H5a1 1 0 01-1-1v-6zM16 13a1 1 0 011-1h2a1 1 0 011 1v6a1 1 0 01-1 1h-2a1 1 0 01-1-1v-6z" />
+              </svg>
+              {t('common:survey')}
+            </button>
+          </>
+        )}
       </div>
 
       {/* Placeholder — hidden in telemetry mode */}
@@ -914,7 +1211,7 @@ function buildStyle(layerKey: LayerKey): maplibregl.StyleSpecification {
   };
 }
 
-function fitToWaypoints(map: maplibregl.Map, waypoints: WpDisplay[]) {
+function fitToWaypoints(map: maplibregl.Map, waypoints: Array<{ lat: number; lon: number }>) {
   if (waypoints.length === 0) return;
 
   if (waypoints.length === 1) {

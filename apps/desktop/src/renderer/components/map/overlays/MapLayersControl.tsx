@@ -31,12 +31,14 @@ interface MapLayersControlProps {
   onToggleTerrain?: () => void;
   /** Extra rows at the bottom of the dropdown (e.g. offline download). */
   extra?: ReactNode;
+  /** False on a map that does not draw the data overlays (the 3D view). */
+  showOverlays?: boolean;
 }
 
 const MENU_WIDTH = 208;
 
 export function MapLayersControl({
-  baseLayers, activeLayer, onSelectLayer, showTerrain, onToggleTerrain, extra,
+  baseLayers, activeLayer, onSelectLayer, showTerrain, onToggleTerrain, extra, showOverlays = true,
 }: MapLayersControlProps): JSX.Element {
   const { t } = useTranslation();
   const [open, setOpen] = useState(false);
@@ -46,7 +48,7 @@ export function MapLayersControl({
   const toggleOverlay = useOverlayStore((s) => s.toggleOverlay);
   const dipulAvailable = useOverlayStore((s) => s.dipulAvailable);
 
-  const overlayCount = activeOverlays.size + (showTerrain ? 1 : 0);
+  const overlayCount = (showOverlays ? activeOverlays.size : 0) + (showTerrain ? 1 : 0);
 
   useLayoutEffect(() => {
     if (!open) { setPos(null); return; }
@@ -105,7 +107,7 @@ export function MapLayersControl({
 
                 <div className="px-3 py-2 text-[11px] uppercase tracking-wide text-content-tertiary border-y border-subtle">{t('map:mapLayers.overlays')}</div>
                 <div className="p-1 space-y-0.5">
-                  {OVERLAYS.map(({ id, labelKey, icon }) => {
+                  {showOverlays && OVERLAYS.map(({ id, labelKey, icon }) => {
                     if (id === 'dipul' && !dipulAvailable) return null;
                     return (
                       <button key={id} type="button" onClick={() => toggleOverlay(id)} className={row(activeOverlays.has(id))}>

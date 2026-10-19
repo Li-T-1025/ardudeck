@@ -429,11 +429,23 @@ function generateOneCorridor(
  * flown in sequence, and merges their waypoints/photos/stats into one result.
  * With no branches this is byte-for-byte the old single-corridor behavior.
  */
+function dedupePoints(pts: LatLng[]): LatLng[] {
+  const out: LatLng[] = [];
+  for (const p of pts) {
+    const q = out[out.length - 1];
+    if (q && Math.hypot((p.lat - q.lat) * 111_320, (p.lng - q.lng) * 111_320 * Math.cos((p.lat * Math.PI) / 180)) < 0.3) continue;
+    out.push(p);
+  }
+  return out;
+}
+
 export function generateCorridor(config: SurveyConfig): SurveyResult {
-  const branches = (config.corridorBranches ?? []).filter(
-    (c): c is LatLng[] => Array.isArray(c) && c.length >= 2,
-  );
-  const trunk = Array.isArray(config.polygon) && config.polygon.length >= 2 ? config.polygon : null;
+  const branches = (config.corridorBranches ?? [])
+    .map((c) => (Array.isArray(c) ? dedupePoints(c) : c))
+    .filter((c): c is LatLng[] => Array.isArray(c) && c.length >= 2);
+  // a repeated point has no direction and folds the strips back onto the line (saved lines may carry one)
+  const line = Array.isArray(config.polygon) ? dedupePoints(config.polygon) : [];
+  const trunk = line.length >= 2 ? line : null;
   // Cut the trunk where the spurs meet it, so a spur can be flown on the way
   // past rather than after the whole line. Coverage is identical either way.
   const split = trunk ? splitTrunkAtJunctions(trunk, branches) : null;

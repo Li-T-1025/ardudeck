@@ -257,13 +257,38 @@ export interface MapTextFeature {
   size?: number;
   /** Which side of the text sits on `at`. Default 'center'. */
   anchor?: 'center' | 'left' | 'right' | 'top' | 'bottom';
+  /** Draw on a small solid card instead of with an outline, for measurement readouts. */
+  chip?: boolean;
+}
+
+/**
+ * Material measured against a base, drawn by the host the way the Locus app shows a volume: the surface
+ * inside the outline tinted (stockpile above the base, pit below, stronger with depth), contour lines of
+ * the height above the base and a band sweeping up through it in 3D, the base as a translucent floor.
+ */
+export interface MapVolumeFeature {
+  kind: 'volume';
+  outline: MapPoint[];
+  /** Surface height (m MSL) at each outline point. */
+  top: number[];
+  /** Base height (m MSL) under each outline point. */
+  floor: number[];
+  /** Regular grid inside the outline: cell centre, surface height (m MSL), height above the base (m). */
+  cells: Array<{ lat: number; lng: number; h: number; d: number }>;
+  /** Cell edge (m). */
+  cellM: number;
+  stockpileColor?: string;
+  pitColor?: string;
+  /** The sweeping band. Off anyway when the system asks for reduced motion. Default true. */
+  animate?: boolean;
 }
 
 export type MapFeature =
   | MapPolygonFeature
   | MapPolylineFeature
   | MapMarkerFeature
-  | MapTextFeature;
+  | MapTextFeature
+  | MapVolumeFeature;
 
 /** A way to write positions, offered in the host's coordinate format setting next to Decimal and DMS. */
 export interface CoordinateFormatRegistration {
@@ -1160,6 +1185,13 @@ export interface RendererHostApi {
    */
   mission: {
     getWaypoints(): unknown[];
+    /**
+     * The planned home, which relative altitudes count from. ArduDeck keeps it apart from the
+     * waypoints (item 0 is the first mission item, not home). `altMsl` is null when home has no
+     * altitude of its own; it then sits on the ground at that point.
+     */
+    getHome?(): { lat: number; lng: number; altMsl: number | null } | null;
+    /** Fires on mission edits, uploads and home changes. */
     subscribe(listener: (waypoints: unknown[]) => void): () => void;
   };
   /**
@@ -1217,9 +1249,17 @@ export interface RendererHostApi {
     /**
      * Ask the pilot to draw an area. The host owns the interaction: clicks
      * place corners, a double click closes the ring, Escape cancels.
-     * Resolves with the ring, or null if they backed out.
+     * Resolves with the ring, or null if they backed out. With `initial` it
+     * starts from those points, which the pilot can drag, so a shape can be edited.
      */
-    pickPolygon(prompt?: string): Promise<MapPoint[] | null>;
+    pickPolygon(prompt?: string, initial?: MapPoint[]): Promise<MapPoint[] | null>;
+    /** Ask the pilot for a line of two or more points. Same gestures as `pickPolygon`; the ring is not closed. */
+    pickPath(prompt?: string, initial?: MapPoint[]): Promise<MapPoint[] | null>;
+    /**
+     * Ask the pilot for one point: the first click resolves, Escape cancels.
+     * With `initial`, it starts there and waits for Done, so an existing point can be moved.
+     */
+    pickPoint(prompt?: string, initial?: MapPoint): Promise<MapPoint | null>;
     /** Centre the telemetry map on a point (the pilot's follow mode is turned off). */
     centerOn(point: MapPoint, zoom?: number): void;
   };

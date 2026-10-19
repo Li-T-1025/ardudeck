@@ -445,7 +445,7 @@
       "maxInteractive": "Max. interaktive Wegpunkte",
       "maxInteractiveHint": "Ziehbare Markierungen erscheinen, wenn höchstens so viele Wegpunkte sichtbar sind",
       "maxPhotos": "Max. Fotomarkierungen",
-      "maxPhotosHint": "Darüber werden keine Fotopunkte gezeichnet",
+      "maxPhotosHint": "Darüber werden die Auslösepunkte gleichmäßig ausgedünnt",
       "maxVertices": "Max. bearbeitbare Eckpunkte",
       "maxVerticesHint": "Darüber werden Ziehpunkte ausgeblendet",
       "maxWaypoints": "Max. Wegpunktmarkierungen",

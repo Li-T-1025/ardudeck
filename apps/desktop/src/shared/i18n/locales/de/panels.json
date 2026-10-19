@@ -256,7 +256,13 @@
     "cornersPlaced": "{{n}} Ecken gesetzt",
     "cornersProgress": "{{n}} von 3 Ecken - weiter klicken",
     "doneTip": "Doppelklick auf die Karte oder Enter",
-    "undoTip": "Rücktaste"
+    "pointHint": "Auf die Karte klicken",
+    "pointsPlaced": "{{n}} Punkte gesetzt",
+    "pointsProgress": "{{n}} von {{min}} Punkten - weiter klicken",
+    "undoTip": "Rücktaste",
+    "pointEditHint": "Punkt ziehen oder an eine neue Stelle klicken, dann Fertig.",
+    "dragHint": "Punkt ziehen, um ihn zu verschieben, + auf einer Kante klicken, um einen hinzuzufügen.",
+    "groundHere": "Boden hier"
   },
   "ntripPanel": {
     "baseHint": "Der Empfänger muss als Basis konfiguriert sein (eingemessene oder feste Position) und RTCM3 auf diesem Port ausgeben.",

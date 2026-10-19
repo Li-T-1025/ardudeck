@@ -19,6 +19,7 @@ import { effectiveMissionFirmware } from '../../utils/mission-firmware';
 import { SaveMissionModal } from '../mission-library/SaveMissionModal';
 import { UploadPreviewModal } from './UploadPreviewModal';
 import { AutoAdjustAltitudeDialog } from './AutoAdjustAltitudeDialog';
+import { bulkUploadBlocked } from './mission-end';
 import type { PlanResult, PlannerWaypoint } from './terrain-altitude-planner';
 import { hasValidCoordinates, mavFrameToAltFrame } from '../../../shared/mission-types';
 import { formatAltitudeFromMeters } from '../../../shared/user-units.js';
@@ -404,10 +405,9 @@ export function MissionToolbar({ onResetLayout, showToast }: MissionToolbarProps
   // MSP boards (iNav/Betaflight) don't support geofence or rally via protocol
   const fcOpsDisabledForMsp = isMspProtocol && (activeMode === 'geofence' || activeMode === 'rally');
 
-  // ArduPilot holds a single flat mission, so "upload everything" is ambiguous
-  // once the plan has more than one group. Disable the bulk upload and steer
-  // the user to the per-group Upload button in the waypoint table.
-  const multipleGroups = activeMode === 'mission' && missionStore.groups.length > 1;
+  // ArduPilot holds one flight: a plan of several flights or vehicles goes up group by group from the
+  // waypoint table. Connected surveys are one flight and upload together.
+  const multipleGroups = activeMode === 'mission' && bulkUploadBlocked(missionStore.missionItems, missionStore.groups);
 
   // Collision warning dialog state (mission only)
   const [showCollisionWarning, setShowCollisionWarning] = useState(false);

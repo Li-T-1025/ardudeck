@@ -256,7 +256,13 @@
     "cornersPlaced": "{{n}} corners placed",
     "cornersProgress": "{{n}} of 3 corners - keep clicking",
     "doneTip": "Double click the map, or Enter",
-    "undoTip": "Backspace"
+    "pointHint": "Click the map",
+    "pointsPlaced": "{{n}} points placed",
+    "pointsProgress": "{{n}} of {{min}} points - keep clicking",
+    "undoTip": "Backspace",
+    "pointEditHint": "Drag the point or click a new spot, then Done.",
+    "dragHint": "Drag a point to move it, click + on an edge to add one.",
+    "groundHere": "Ground here"
   },
   "ntripPanel": {
     "baseHint": "The receiver must be configured as a base (surveyed-in or fixed position) and output RTCM3 on this port.",

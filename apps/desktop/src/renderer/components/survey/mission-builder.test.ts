@@ -136,8 +136,34 @@ describe('surveyToMissionItems', () => {
           { lat: -35.360, lng: 149.160 }, { lat: -35.360, lng: 149.170 }, // line 0
           { lat: -35.361, lng: 149.170 }, { lat: -35.361, lng: 149.160 }, // line 1
         ],
+        legStarts: [0, 2],
       };
     }
+
+    // camera state on the leg toward each waypoint, as ArduPilot applies DO_ items after the waypoint before
+    function cameraOnLegTo(items: ReturnType<typeof surveyToMissionItems>): boolean[] {
+      let on = false;
+      const out: boolean[] = [];
+      for (const it of items) {
+        if (it.command === MAV_CMD.NAV_WAYPOINT) out.push(on);
+        if (it.command === MAV_CMD.DO_SET_CAM_TRIGG_DIST) on = it.param1 > 0;
+      }
+      return out;
+    }
+
+    it('on, with a lead-in in front: photos along both lines only, none on the lead-in or the turn', () => {
+      const r = twoLineResult();
+      const withLeadIn: SurveyResult = { ...r, waypoints: [{ lat: -35.3595, lng: 149.155 }, ...r.waypoints], legStarts: [1, 3] };
+      const items = surveyToMissionItems(withLeadIn, { ...makeConfig('relative'), pattern: 'grid', cameraOffOutside: true });
+      // legs: to lead-in, lead-in->line0 start, line0, turn, line1
+      expect(cameraOnLegTo(items)).toEqual([false, false, true, false, true]);
+    });
+
+    it('on without known line starts: falls back to one continuous trigger, never an inverted pattern', () => {
+      const r = { ...twoLineResult(), legStarts: undefined };
+      const items = surveyToMissionItems(r, { ...makeConfig('relative'), pattern: 'grid', cameraOffOutside: true });
+      expect(items.filter((i) => i.command === MAV_CMD.DO_SET_CAM_TRIGG_DIST && i.param1 > 0)).toHaveLength(1);
+    });
 
     it('off (default): one continuous trigger + final disable', () => {
       const items = surveyToMissionItems(twoLineResult(), makeConfig('relative'));

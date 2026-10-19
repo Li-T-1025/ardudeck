@@ -4,7 +4,10 @@ import { useMissionStore } from '../../stores/mission-store';
 import { useSettingsStore } from '../../stores/settings-store';
 import { commandHasLocation, hasValidCoordinates, mavFrameToAltFrame, MAV_CMD, type MissionItem } from '../../../shared/mission-types';
 import { getElevations, interpolatePathPoints } from '../../utils/elevation-api';
+import { demSourceAt, subscribeTerrainChanged } from '../../stores/tile-source-store';
 import { AutoAdjustAltitudeDialog } from './AutoAdjustAltitudeDialog';
+import { useLocusTerrain } from './locus-terrain';
+import { vehicleItemNumbers } from './mission-end';
 import { AllHeightsPopover } from './AllHeightsPopover';
 import type { PlanResult, PlannerWaypoint } from './terrain-altitude-planner';
 import {
@@ -21,6 +24,10 @@ import {
   nearestIndexByX,
   shouldShowInteractiveDots,
 } from './altitude-profile-density';
+
+const TERRAIN_SAMPLES = 40;
+// A survey DEM resolves to the metre; the elevation API does not, and 40 samples over it hides everything it has.
+const SURVEY_TERRAIN_SAMPLES = 400;
 
 // Terrain data point
 interface TerrainPoint {
@@ -107,6 +114,9 @@ export function AltitudeProfilePanel({ readOnly = false }: AltitudeProfilePanelP
   // Terrain state
   const [terrainData, setTerrainData] = useState<TerrainPoint[]>([]);
   const [terrainLoading, setTerrainLoading] = useState(false);
+  // A cargo DEM arriving, leaving or switching surface changes the ground under an unchanged mission.
+  const [terrainVersion, setTerrainVersion] = useState(0);
+  useEffect(() => subscribeTerrainChanged(() => setTerrainVersion((v) => v + 1)), []);
   const [waypointElevations, setWaypointElevations] = useState<Map<number, number>>(new Map());
   // Ground elevation (ASL m) at the home/launch point. Anchors relative-frame
   // waypoints in the chart's ASL space; null until terrain has been fetched.
@@ -114,6 +124,10 @@ export function AltitudeProfilePanel({ readOnly = false }: AltitudeProfilePanelP
 
   const { missionItems, selectedSeq, currentSeq, setSelectedSeq, updateWaypoint, setHasTerrainCollisions, applyTerrainPlan, homePosition } = useMissionStore();
   const [autoAdjustOpen, setAutoAdjustOpen] = useState(false);
+  const groups = useMissionStore((s) => s.groups);
+  const itemNumbers = useMemo(() => vehicleItemNumbers(missionItems, groups), [missionItems, groups]);
+  const locusPoints = useMemo(() => missionItems.filter((it) => hasValidCoordinates(it.latitude, it.longitude)), [missionItems]);
+  const locusTerrain = useLocusTerrain(locusPoints);
   const [allHeightsOpen, setAllHeightsOpen] = useState(false);
   const { missionDefaults } = useSettingsStore();
   const safeAltitudeBuffer = missionDefaults.safeAltitudeBuffer;
@@ -201,9 +215,10 @@ export function AltitudeProfilePanel({ readOnly = false }: AltitudeProfilePanelP
 
       try {
         // Interpolate points along the path for terrain sampling
+        const surveyed = waypoints.some(wp => demSourceAt(wp.latitude, wp.longitude) !== null);
         const pathPoints = interpolatePathPoints(
           waypoints.map(wp => ({ lat: wp.latitude, lon: wp.longitude })),
-          40 // Number of terrain samples
+          surveyed ? SURVEY_TERRAIN_SAMPLES : TERRAIN_SAMPLES
         );
 
         // Also get elevation at each displayed waypoint (decimated set — fetching
@@ -257,7 +272,7 @@ export function AltitudeProfilePanel({ readOnly = false }: AltitudeProfilePanelP
     // Debounce terrain fetch
     const timeoutId = setTimeout(fetchTerrain, 500);
     return () => clearTimeout(timeoutId);
-  }, [waypoints, displayProfile, homePosition]);
+  }, [waypoints, displayProfile, homePosition, terrainVersion]);
 
   // Handle resize
   useEffect(() => {
@@ -792,7 +807,16 @@ export function AltitudeProfilePanel({ readOnly = false }: AltitudeProfilePanelP
               {t('mission:altitudeProfilePanel.collision')}
             </span>
           )}
-          {!readOnly && terrainData.length > 0 && !terrainLoading && collisionSegments.length > 0 && (
+          {!readOnly && locusTerrain.status === 'covered' && (
+            <button
+              onClick={() => setAutoAdjustOpen(true)}
+              className="px-2 py-0.5 text-[10px] font-semibold text-sky-700 dark:text-sky-300 bg-sky-500/15 hover:bg-sky-500/25 border border-sky-500/40 rounded transition-colors"
+              title={t('mission:altitudeProfilePanel.followTerrainTip')}
+            >
+              {t('mission:altitudeProfilePanel.followTerrain')}
+            </button>
+          )}
+          {!readOnly && terrainData.length > 0 && !terrainLoading && collisionSegments.length > 0 && locusTerrain.status !== 'covered' && (
             <button
               onClick={() => setAutoAdjustOpen(true)}
               className="px-2 py-0.5 text-[10px] font-medium text-amber-300 bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/30 rounded transition-colors"
@@ -978,7 +1002,7 @@ export function AltitudeProfilePanel({ readOnly = false }: AltitudeProfilePanelP
                       fontSize={isDragging ? 11 : isCurrent ? 11 : 10}
                       fontWeight={isDragging || isCurrent || isSelected ? 'bold' : 'normal'}
                     >
-                      {i + 1}
+                      {itemNumbers.get(p.wp.seq) ?? p.wp.seq + 1}
                     </text>
                   )}
 
@@ -1066,7 +1090,7 @@ export function AltitudeProfilePanel({ readOnly = false }: AltitudeProfilePanelP
                     fontSize={10}
                     fontWeight="bold"
                   >
-                    {t('mission:altitudeProfilePanel.wpAltitude', { n: p.wp.seq, value: formatAltitudeFromMeters(p.altitude, altitudeUnit) })}
+                    {t('mission:altitudeProfilePanel.wpAltitude', { n: itemNumbers.get(p.wp.seq) ?? p.wp.seq + 1, value: formatAltitudeFromMeters(p.altitude, altitudeUnit) })}
                     {agl !== null && (
                       <tspan fill={isBelowSafe ? '#ef4444' : '#22c55e'} fontSize={8}>
                         {' '}{t('mission:altitudeProfilePanel.agl', { value: formatAltitudeFromMeters(agl, altitudeUnit) })}

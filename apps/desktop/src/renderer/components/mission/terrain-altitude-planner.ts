@@ -330,3 +330,115 @@ export function planTerrainSafeAltitudes(
     inserts,
   };
 }
+
+export interface FollowOptions {
+  /** Height to hold above the ground (m). */
+  heightAgl: number;
+  /** Steepest climb or descent the route may have (degrees). */
+  maxClimbDeg: number;
+  /** Ground sample spacing along each leg (m). */
+  sampleStepMeters: number;
+  /** How far the flown line may sag below the smoothed profile between inserts (m). */
+  toleranceMeters: number;
+  homeElevationMeters?: number;
+  /** Cap per leg, against a pathological surface. Default 200. */
+  maxInsertsPerSegment?: number;
+}
+
+interface ProfilePoint { lat: number; lon: number; d: number; ground: number }
+
+/**
+ * Terrain following: hold `heightAgl` over the ground along the whole route, never steeper than
+ * `maxClimbDeg`. The profile is the lowest one that stays at or above ground + height everywhere
+ * with that slope limit, so it climbs early before a rise instead of hugging every bump. It is
+ * then reduced to as few inserted waypoints as `toleranceMeters` allows, and every leg is checked
+ * again so the flown straight lines never come below ground + height.
+ */
+export function planTerrainFollow(
+  waypoints: PlannerWaypoint[],
+  terrain: TerrainLookup,
+  options: FollowOptions,
+): PlanResult {
+  const homeElev = options.homeElevationMeters ?? 0;
+  const step = Math.max(1, options.sampleStepMeters);
+  const slope = Math.tan((Math.max(1, Math.min(60, options.maxClimbDeg)) * Math.PI) / 180);
+  const maxInserts = options.maxInsertsPerSegment ?? 200;
+  const out: PlanResult = { raisedAltitudes: new Map(), inserts: [] };
+  if (waypoints.length === 0) return out;
+
+  // one profile over the whole route; wpIndex[i] is where waypoint i sits in it
+  const profile: ProfilePoint[] = [];
+  const wpIndex: number[] = [];
+  let last = 0;
+  let total = 0;
+  for (let i = 0; i < waypoints.length; i++) {
+    const w = waypoints[i]!;
+    if (i > 0) {
+      const p = waypoints[i - 1]!;
+      const len = haversine(p.latitude, p.longitude, w.latitude, w.longitude);
+      const n = Math.max(1, Math.ceil(len / step));
+      for (let k = 1; k < n; k++) {
+        const pt = interp(p.latitude, p.longitude, w.latitude, w.longitude, k / n);
+        const g = terrain.elevationAt(pt.lat, pt.lon);
+        if (g !== null) last = g;
+        profile.push({ lat: pt.lat, lon: pt.lon, d: total + (len * k) / n, ground: g ?? last });
+      }
+      total += len;
+    }
+    const g = terrain.elevationAt(w.latitude, w.longitude);
+    if (g !== null) last = g;
+    wpIndex.push(profile.length);
+    profile.push({ lat: w.latitude, lon: w.longitude, d: total, ground: g ?? last });
+  }
+  if (profile.every((p) => p.ground === 0)) return out;
+
+  // lowest slope-limited envelope over ground + height: forward then backward pass
+  const alt = profile.map((p) => p.ground + options.heightAgl);
+  for (let i = 1; i < alt.length; i++) alt[i] = Math.max(alt[i]!, alt[i - 1]! - slope * (profile[i]!.d - profile[i - 1]!.d));
+  for (let i = alt.length - 2; i >= 0; i--) alt[i] = Math.max(alt[i]!, alt[i + 1]! - slope * (profile[i + 1]!.d - profile[i]!.d));
+
+  waypoints.forEach((w, i) => {
+    const p = profile[wpIndex[i]!]!;
+    const value = Math.round(fromAsl(alt[wpIndex[i]!]!, w.frame ?? 'asl', p.ground, homeElev) * 10) / 10;
+    if (Math.abs(value - w.altitude) >= 0.1) out.raisedAltitudes.set(w.seq, value);
+  });
+
+  const floor = (i: number) => profile[i]!.ground + options.heightAgl;
+  for (let s = 0; s < waypoints.length - 1; s++) {
+    const a = wpIndex[s]!, b = wpIndex[s + 1]!;
+    const keep = new Set<number>([a, b]);
+    // split where the straight line strays furthest from the profile, or dips under the floor
+    const worst = (i0: number, i1: number): number => {
+      let at = -1, err = options.toleranceMeters;
+      for (let i = i0 + 1; i < i1; i++) {
+        const t = (profile[i]!.d - profile[i0]!.d) / (profile[i1]!.d - profile[i0]!.d || 1);
+        const line = alt[i0]! + (alt[i1]! - alt[i0]!) * t;
+        const e = Math.max(Math.abs(line - alt[i]!), line < floor(i) ? Infinity : 0);
+        if (e > err) { err = e; at = i; }
+      }
+      return at;
+    };
+    const stack: Array<[number, number]> = [[a, b]];
+    while (stack.length > 0 && keep.size - 2 < maxInserts) {
+      const [i0, i1] = stack.pop()!;
+      const m = worst(i0, i1);
+      if (m < 0) continue;
+      keep.add(m);
+      stack.push([i0, m], [m, i1]);
+    }
+    const frame = waypoints[s]!.frame ?? 'asl';
+    for (const i of [...keep].sort((x, y) => x - y)) {
+      if (i === a || i === b) continue;
+      const p = profile[i]!;
+      out.inserts.push({
+        afterSeq: waypoints[s]!.seq,
+        latitude: p.lat,
+        longitude: p.lon,
+        altitude: Math.round(fromAsl(alt[i]!, frame, p.ground, homeElev) * 10) / 10,
+        frame,
+        distanceAlong: p.d - profile[a]!.d,
+      });
+    }
+  }
+  return out;
+}

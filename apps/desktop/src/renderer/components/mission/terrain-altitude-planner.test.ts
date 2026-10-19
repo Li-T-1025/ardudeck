@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   planTerrainSafeAltitudes,
+  planTerrainFollow,
   haversine,
   type PlannerWaypoint,
   type TerrainLookup,
@@ -310,5 +311,58 @@ describe('haversine', () => {
     const d = haversine(0, 0, 1, 0);
     expect(d).toBeGreaterThan(110000);
     expect(d).toBeLessThan(112000);
+  });
+});
+
+describe('planTerrainFollow', () => {
+  // a 1 km leg east along the equator over a 50 m ridge in the middle
+  const ridge = (_lat: number, lon: number) => {
+    const x = lon * 111_320;
+    return 100 + Math.max(0, 50 - Math.abs(x - 500) * 0.5);
+  };
+  const wp = (seq: number, lon: number, alt: number, frame: 'asl' | 'relative' = 'asl') => ({ seq, latitude: 0, longitude: lon, altitude: alt, frame });
+  const opts = { heightAgl: 20, maxClimbDeg: 15, sampleStepMeters: 5, toleranceMeters: 1 };
+
+  it('puts both ends at the height above their own ground, and lowers a waypoint flown too high', () => {
+    const r = planTerrainFollow([wp(0, 0, 200), wp(1, 1000 / 111_320, 200)], { elevationAt: ridge }, opts);
+    expect(r.raisedAltitudes.get(0)).toBeCloseTo(120, 0);
+    expect(r.raisedAltitudes.get(1)).toBeCloseTo(120, 0);
+  });
+
+  it('keeps every flown point at least the height above the ground, ridge included', () => {
+    const wps = [wp(0, 0, 120), wp(1, 1000 / 111_320, 120)];
+    const r = planTerrainFollow(wps, { elevationAt: ridge }, opts);
+    expect(r.inserts.length).toBeGreaterThan(0);
+    const pts = [
+      { d: 0, alt: r.raisedAltitudes.get(0) ?? 120 },
+      ...r.inserts.map((i) => ({ d: i.distanceAlong, alt: i.altitude })),
+      { d: 1000, alt: r.raisedAltitudes.get(1) ?? 120 },
+    ].sort((a, b) => a.d - b.d);
+    for (let x = 0; x <= 1000; x += 2) {
+      const k = pts.findIndex((p, i) => i < pts.length - 1 && x >= p.d && x <= pts[i + 1]!.d);
+      const p = pts[k]!, q = pts[k + 1]!;
+      const flown = p.alt + ((q.alt - p.alt) * (x - p.d)) / (q.d - p.d || 1);
+      expect(flown).toBeGreaterThanOrEqual(ridge(0, x / 111_320) + 20 - 0.6);
+    }
+  });
+
+  it('never climbs steeper than allowed', () => {
+    const r = planTerrainFollow([wp(0, 0, 120), wp(1, 1000 / 111_320, 120)], { elevationAt: ridge }, { ...opts, maxClimbDeg: 10 });
+    const pts = [{ d: 0, alt: r.raisedAltitudes.get(0) ?? 120 }, ...r.inserts.map((i) => ({ d: i.distanceAlong, alt: i.altitude })), { d: 1000, alt: r.raisedAltitudes.get(1) ?? 120 }].sort((a, b) => a.d - b.d);
+    for (let i = 1; i < pts.length; i++) {
+      const grade = Math.abs(pts[i]!.alt - pts[i - 1]!.alt) / (pts[i]!.d - pts[i - 1]!.d);
+      expect(grade).toBeLessThanOrEqual(Math.tan((10 * Math.PI) / 180) + 0.02);
+    }
+  });
+
+  it('writes relative waypoints in their own frame', () => {
+    const r = planTerrainFollow([wp(0, 0, 50, 'relative'), wp(1, 0.0001, 50, 'relative')], { elevationAt: () => 100 }, { ...opts, homeElevationMeters: 90 });
+    expect(r.raisedAltitudes.get(0)).toBeCloseTo(30, 1);
+  });
+
+  it('is flat ground at the height: no inserts', () => {
+    const r = planTerrainFollow([wp(0, 0, 100), wp(1, 1000 / 111_320, 100)], { elevationAt: () => 80 }, opts);
+    expect(r.inserts).toHaveLength(0);
+    expect(r.raisedAltitudes.size).toBe(0);
   });
 });

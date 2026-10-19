@@ -61,15 +61,33 @@ local function playAlert(name, muted)
   playFile('/WIDGETS/ardudeck/snd/' .. name .. '.wav')
 end
 
--- Copter numbers, used until ArduDeck writes this vehicle's own table into
--- hud.cfg (modes=num:NAME,...). A rover in HOLD is mode 4, which reads as
--- GUIDED here, so the cfg table is what makes the bar truthful off-copter.
-local MODES = {
+-- Built-in tables per vehicle class (from ArduDeck's vehicle-core modes). The
+-- live frame type picks one, so a rover reads right even when hud.cfg was
+-- written with no vehicle connected.
+local COPTER_MODES = {
   [0]='STABILIZE','ACRO','ALT HOLD','AUTO','GUIDED','LOITER','RTL','CIRCLE',
   [9]='LAND',[11]='DRIFT',[13]='SPORT',[14]='FLIP',[15]='AUTOTUNE',
   [16]='POSHOLD',[17]='BRAKE',[18]='THROW',[20]='GUIDED NOGPS',
   [21]='SMART RTL',[22]='FLOWHOLD',[24]='ZIGZAG',[27]='AUTO RTL',
 }
+local PLANE_MODES = {
+  [0]='MANUAL','CIRCLE','STABILIZE','TRAINING','ACRO','FBWA','FBWB','CRUISE','AUTOTUNE',
+  [10]='AUTO',[11]='RTL',[12]='LOITER',[13]='TAKEOFF',[14]='AVOID ADSB',[15]='GUIDED',
+  [17]='QSTABILIZE',[18]='QHOVER',[19]='QLOITER',[20]='QLAND',[21]='QRTL',
+  [22]='QAUTOTUNE',[23]='QACRO',[24]='THERMAL',[25]='LOITER QLAND',
+}
+local ROVER_MODES = {
+  [0]='MANUAL','ACRO',[3]='STEERING',[4]='HOLD',[5]='LOITER',[6]='FOLLOW',
+  [7]='SIMPLE',[8]='DOCK',[9]='CIRCLE',[10]='AUTO',[11]='RTL',[12]='SMART RTL',
+  [15]='GUIDED',[16]='INITIALIZING',
+}
+local SUB_MODES = {
+  [0]='STABILIZE','ACRO','ALT HOLD','AUTO','GUIDED',[7]='CIRCLE',[9]='SURFACE',
+  [16]='POSHOLD',[19]='MANUAL',[20]='MOTOR DETECT',[21]='SURFTRAK',
+}
+local BUILTIN_MODES = { copter = COPTER_MODES, plane = PLANE_MODES, vtol = PLANE_MODES, rover = ROVER_MODES, boat = ROVER_MODES, sub = SUB_MODES }
+-- the table ArduDeck wrote into hud.cfg (modes=num:NAME,...), for CFG.vehicle
+local CFG_MODES = nil
 
 -- Clip per mode number, written by ArduDeck for this vehicle (voice=num:clip,...).
 -- Without it the mode_<n> clips speak the copter numbering.
@@ -97,8 +115,11 @@ local CFG = {
 
 -- A rover does not fly: the widget follows the vehicle ArduDeck wrote into
 -- the config rather than calling everything a flight.
+local liveClass -- defined with the vehicle state below
+
 local function isGround()
-  return CFG.vehicle == 'rover' or CFG.vehicle == 'boat'
+  local c = liveClass() or CFG.vehicle
+  return c == 'rover' or c == 'boat' or c == 'sub'
 end
 
 -- Layouts are authored on a reference canvas (hud.cfg screen=WxH, 480x320
@@ -289,7 +310,7 @@ local function loadConfig()
     elseif k == 'modes' then
       local t = {}
       for num, label in string.gmatch(v, '(%d+):([^,]+)') do t[tonumber(num)] = label end
-      if next(t) then MODES = t end
+      if next(t) then CFG_MODES = t end
     elseif k == 'voice' then
       local t = {}
       for num, clip in string.gmatch(v, '(%d+):([%w_]+)') do t[tonumber(num)] = clip end
@@ -332,10 +353,44 @@ local V = {
   windDirDeg = 0, windMs = 0,
   autoCapacity = 0, maxVolt = 0, frameType = 0,
   wpNum = 0, wpDistM = 0, wpBearingDeg = 0, tWp = 0,
+  odoM = 0, tOdo = -1,
   tAp = 0, tGps = 0, tBatt = 0, tHome = 0, tVel = 0, tAtt = 0, tWind = 0,
   armedAtT = nil, armedAccum = 0,
   msgs = {}, msgHead = 0, msgBuf = '', lastToneT = 0, muted = false,
 }
+
+-- MAV_TYPE from the passthrough frame-type param, mapped as ArduDeck's getVehicleClass does
+function liveClass()
+  local t = V.frameType
+  if not t or t == 0 then return nil end
+  if t == 1 then return 'plane' end
+  if t >= 19 and t <= 25 then return 'vtol' end
+  if t == 10 then return 'rover' end
+  if t == 11 then return 'boat' end
+  if t == 12 then return 'sub' end
+  return 'copter'
+end
+
+local function sameFirmware(a, b)
+  local fw = { vtol = 'plane', boat = 'rover' }
+  return (fw[a] or a) == (fw[b] or b)
+end
+
+-- The vehicle on the link wins over a cfg written for another one.
+local function modeTable()
+  local live = liveClass()
+  if live and not sameFirmware(live, CFG.vehicle) then return BUILTIN_MODES[live], false end
+  return CFG_MODES or BUILTIN_MODES[CFG.vehicle] or COPTER_MODES, true
+end
+
+-- what is on the link, else what ArduDeck wrote into hud.cfg
+local function vehicleKind()
+  return liveClass() or CFG.vehicle
+end
+
+local function modeNameOf(num)
+  return modeTable()[num] or ('MODE ' .. tostring(num))
+end
 
 -- ======================= prep_number decoders ==========================
 local function dec_2_1(v)
@@ -386,8 +441,9 @@ end
 
 decoders[0x5002] = function (d)
   V.sats = band(d, 0x0F)
-  V.fix = band(rshift(d, 4), 0x03)
-  V.hdop = dec_2_1(band(rshift(d, 6), 0x1FF)) * 0.1
+  -- bits 14-15 carry the fix beyond 3D (DGPS, RTK); they are not a sign on hdop
+  V.fix = band(rshift(d, 4), 0x03) + band(rshift(d, 14), 0x03)
+  V.hdop = band(rshift(d, 7), 0x7F) * (btest(d, 0x40) and 10 or 1) * 0.1
   V.gpsAltM = dec_2_2(band(rshift(d, 22), 0x3FF)) * 0.1
   V.tGps = now(); V.lastStreamT = V.tGps
 end
@@ -420,7 +476,11 @@ decoders[0x5005] = function (d)
   V.vspdMs = dec_2_1(band(d, 0x1FF)) * 0.1
   V.hspdMs = dec_2_1(band(rshift(d, 9), 0x1FF)) * 0.1
   V.yawDeg = band(rshift(d, 17), 0x7FF) * 0.2
-  V.tVel = now(); V.lastStreamT = V.tVel
+  local t = now()
+  -- trip distance: ground speed over time while armed; a gap over 1s is a dropout, not travel
+  if V.armed and V.tOdo >= 0 and t - V.tOdo <= 100 then V.odoM = V.odoM + V.hspdMs * (t - V.tOdo) / 100 end
+  V.tOdo = t
+  V.tVel = t; V.lastStreamT = V.tVel
 end
 
 decoders[0x5006] = function (d)
@@ -863,10 +923,27 @@ TILE.home = function (x, y, w, h)
   end
 end
 
+local function fmtDist(m)
+  if m >= 1000 then return string.format('%.2fkm', m / 1000) end
+  return string.format('%dm', math.floor(m + 0.5))
+end
+
 TILE.alt = function (x, y, w, h)
-  tileFrame(x, y, w, h, 'ALT / VSPD')
+  local kind = vehicleKind()
+  -- height means nothing to a rover or boat: the tile shows how far it has gone
+  if kind == 'rover' or kind == 'boat' then
+    tileFrame(x, y, w, h, 'TRIP')
+    local vy, vf, sy, sf = stack(y, h, true)
+    lcd.drawText(x + 8, vy, fmtDist(V.odoM), vf + staleColor(V.tVel, T.TEXT))
+    if sy then
+      lcd.drawText(x + 8, sy, string.format('home %s', fmtDist(V.homeDistM)), sf + staleColor(V.tHome, T.TEXT_2))
+    end
+    return
+  end
+  local sub = kind == 'sub'
+  tileFrame(x, y, w, h, sub and 'DEPTH / VSPD' or 'ALT / VSPD')
   local vy, vf, sy, sf = stack(y, h, true)
-  lcd.drawText(x + 8, vy, string.format('%.0fm', V.homeAltM),
+  lcd.drawText(x + 8, vy, string.format('%.0fm', sub and math.max(0, -V.homeAltM) or V.homeAltM),
     vf + staleColor(V.tHome, T.TEXT))
   local vsColor = math.abs(V.vspdMs) > 3 and T.WARN_STRONG or T.SUCCESS
   if sy then
@@ -893,7 +970,7 @@ end
 
 TILE.gps = function (x, y, w, h)
   tileFrame(x, y, w, h, 'GPS')
-  local FIX_LABEL = { [0] = 'NO GPS', 'NO FIX', '2D', '3D' }
+  local FIX_LABEL = { [0] = 'NO GPS', 'NO FIX', '2D', '3D', 'DGPS', 'RTK FLT', 'RTK FIX' }
   local gpsColor = V.fix >= 3 and T.SUCCESS or (V.fix == 2 and T.WARN_STRONG or T.DANGER)
   local vy, vf, sy, sf = stack(y, h, true)
   lcd.drawText(x + 8, vy, string.format('%d', V.sats),
@@ -1164,7 +1241,8 @@ TILE.imu = function (x, y, w, h)
 end
 
 TILE.rng = function (x, y, w, h)
-  tileFrame(x, y, w, h, 'RANGE')
+  -- on a boat the rangefinder points down at the bottom
+  tileFrame(x, y, w, h, vehicleKind() == 'boat' and 'DEPTH' or 'RANGE')
   -- near-ground is what a rangefinder is for: amber inside 1m
   local c = (V.rangeM > 0 and V.rangeM < 1) and T.WARN_STRONG or T.TEXT
   local vy, vf, sy, sf = stack(y, h, false)
@@ -1461,9 +1539,10 @@ local function drawLive()
 
   -- top bar (brand invariant)
   lcd.drawFilledRectangle(0, 0, LCD_W, 38, T.SURFACE)
-  -- left margin clears the EdgeTX fullscreen corner affordance on touch UIs
-  -- narrow screens (320 portrait): the word ARMED and the wordmark don't
-  -- fit next to the mode pill - the dot alone carries arm state
+  -- left margin clears the EdgeTX fullscreen corner affordance on touch UIs.
+  -- What gives way when a long mode name needs room, in order: the wordmark,
+  -- the logo, the mode's font size, LQ, then the word ARMED (the dot stays).
+  -- The arm word and TX battery are what a pilot reads, so they go last.
   local narrow = LCD_W < 400
   local armColor = V.armed and T.DANGER or T.TEXT_2
   if V.armed then
@@ -1471,44 +1550,77 @@ local function drawLive()
   else
     lcd.drawCircle(52, 19, narrow and 7 or 5, T.TEXT_3)
   end
-  local modeName = MODES[V.modeNum] or ('MODE ' .. tostring(V.modeNum))
-  local mw = lcd.sizeText(modeName, MIDSIZE) + 20
-  local mx = (LCD_W - mw) / 2
+  local modeName = modeNameOf(V.modeNum)
   local armWord = V.armed and 'ARMED' or 'DISARMED'
-  -- the word goes when it would reach the mode pill; the dot still carries arm state
-  if not narrow and 64 + lcd.sizeText(armWord, MIDSIZE) + 6 <= mx then
-    lcd.drawText(64, 7, armWord, MIDSIZE + armColor)
-  end
-  lcd.drawFilledRectangle(mx, 5, mw, 28, T.PILL_ON)
-  lcd.drawText(LCD_W / 2, 7, modeName, MIDSIZE + CENTER + staleColor(V.tAp, T.SUCCESS))
-  -- brand cluster, right-aligned: [LQ]  [logo] [ArduDeck]. Everything
-  -- centers on the bar's midline (y=19): text via VCENTER, logo by its
-  -- height. Light mode uses the dark-tile logo (brand direction); wordmark
-  -- follows the asset (white on dark, near-black on light). The corner is
-  -- the theme tap target.
-  local pillR = mx + mw + 8
-  local logoX
-  local tw = lcd.sizeText('ArduDeck', SMLSIZE)
-  if narrow or LCD_W - 8 - tw - 28 < pillR then
-    logoX = LCD_W - 8 - 20 -- logo only; no room for the wordmark
-  else
-    lcd.drawText(LCD_W - 8, 19, 'ArduDeck', SMLSIZE + RIGHT + VCENTER + T.TEXT)
-    logoX = LCD_W - 8 - tw - 28
-  end
-  local bmp = currentTheme == 'light' and logoBmpLight or logoBmp
-  if bmp then
-    lcd.drawBitmap(bmp, logoX, 9)
-  end
+
   local lq = getValue('RQly')
-  local lqX = logoX - 10
-  if lq and lq > 0 and lqX - lcd.sizeText('LQ ' .. lq, SMLSIZE) >= pillR then
-    lcd.drawText(lqX, 19, 'LQ ' .. lq, SMLSIZE + RIGHT + VCENTER + (lq > 70 and T.TEXT_2 or T.WARN))
-    lqX = lqX - lcd.sizeText('LQ ' .. lq, SMLSIZE) - 14
-  end
-  -- TX battery chip: always-visible handset vitals (glyph + voltage);
-  -- dropped on narrow screens (would run into the mode pill)
+  if not (lq and lq > 0) then lq = nil end
+  local lqText = lq and ('LQ ' .. lq) or nil
   local txv = narrow and 0 or (getValue('tx-voltage') or 0)
-  if txv > 0 and lqX - lcd.sizeText(string.format('%.1f', txv), SMLSIZE) - 20 >= pillR then
+  local txText = txv > 0 and string.format('%.1f', txv) or nil
+  local tw = lcd.sizeText('ArduDeck', SMLSIZE)
+  local bmp = currentTheme == 'light' and logoBmpLight or logoBmp
+
+  local show = { mark = not narrow, logo = bmp ~= nil, lq = lqText ~= nil, tx = txText ~= nil, arm = not narrow }
+  local fonts = { MIDSIZE, 0, SMLSIZE }
+  local fontIx = 1
+  local function rightStart()
+    local x = LCD_W - 8
+    if show.mark then x = x - tw - 8 end
+    if show.logo then x = x - 20 - 10 end
+    if show.lq then x = x - lcd.sizeText(lqText, SMLSIZE) - 14 end
+    if show.tx then x = x - lcd.sizeText(txText, SMLSIZE) - 20 - 10 end
+    return x
+  end
+  local function leftEnd()
+    return show.arm and (64 + lcd.sizeText(armWord, MIDSIZE) + 10) or 64
+  end
+  local function pillW() return lcd.sizeText(modeName, fonts[fontIx]) + 20 end
+  local function fits() return leftEnd() + pillW() <= rightStart() end
+  local steps = {
+    function () show.mark = false end,
+    function () show.logo = false end,
+    function () fontIx = 2 end,
+    function () fontIx = 3 end,
+    function () show.lq = false end,
+    function () show.arm = false end,
+    function () show.tx = false end,
+  }
+  for _, step in ipairs(steps) do
+    if fits() then break end
+    step()
+  end
+
+  if show.arm then lcd.drawText(64, 7, armWord, MIDSIZE + armColor) end
+  -- the pill centres on the screen when there is room, else in the gap it has
+  local mw, l, r = pillW(), leftEnd(), rightStart()
+  local mx = math.floor((LCD_W - mw) / 2)
+  if mx < l or mx + mw > r then mx = math.floor(l + math.max(0, (r - l - mw) / 2)) end
+  local font = fonts[fontIx]
+  lcd.drawFilledRectangle(mx, font == MIDSIZE and 5 or 8, mw, font == MIDSIZE and 28 or 22, T.PILL_ON)
+  if font == MIDSIZE then
+    lcd.drawText(mx + mw / 2, 7, modeName, MIDSIZE + CENTER + staleColor(V.tAp, T.SUCCESS))
+  else
+    lcd.drawText(mx + mw / 2, 19, modeName, font + CENTER + VCENTER + staleColor(V.tAp, T.SUCCESS))
+  end
+
+  -- right cluster, right to left: [TX batt] [LQ] [logo] [ArduDeck]. Everything
+  -- centres on the bar's midline (y=19). Light mode uses the dark-tile logo;
+  -- the corner is the theme tap target.
+  local x = LCD_W - 8
+  if show.mark then
+    lcd.drawText(x, 19, 'ArduDeck', SMLSIZE + RIGHT + VCENTER + T.TEXT)
+    x = x - tw - 8
+  end
+  if show.logo then
+    lcd.drawBitmap(bmp, x - 20, 9)
+    x = x - 20 - 10
+  end
+  if show.lq then
+    lcd.drawText(x, 19, lqText, SMLSIZE + RIGHT + VCENTER + (lq > 70 and T.TEXT_2 or T.WARN))
+    x = x - lcd.sizeText(lqText, SMLSIZE) - 14
+  end
+  if show.tx then
     local vMin, vMax = 6.6, 8.4
     local ok, gs = pcall(getGeneralSettings)
     if ok and gs then
@@ -1517,8 +1629,8 @@ local function drawLive()
     end
     local pct = vMax > vMin and math.max(0, math.min(100, (txv - vMin) / (vMax - vMin) * 100)) or 0
     local c = pct > 30 and T.TEXT_2 or (pct > 15 and T.WARN or T.DANGER)
-    lcd.drawText(lqX, 19, string.format('%.1f', txv), SMLSIZE + RIGHT + VCENTER + c)
-    local gx = lqX - lcd.sizeText(string.format('%.1f', txv), SMLSIZE) - 20
+    lcd.drawText(x, 19, txText, SMLSIZE + RIGHT + VCENTER + c)
+    local gx = x - lcd.sizeText(txText, SMLSIZE) - 20
     lcd.drawRectangle(gx, 14, 14, 10, c)
     lcd.drawFilledRectangle(gx + 14, 17, 2, 4, c)
     local fill = math.floor(12 * pct / 100 + 0.5)
@@ -1709,7 +1821,10 @@ local function announceTransitions(live)
 
   -- flight mode callouts: this vehicle's clip, else the copter-numbered one
   if prevMode ~= nil and V.modeNum ~= prevMode and V.modeNum >= 0 then
-    local clip = VOICE and (VOICE[V.modeNum] or 'mode_changed') or ('mode_' .. V.modeNum)
+    local _, cfgVehicle = modeTable()
+    local clip
+    if not cfgVehicle then clip = 'mode_changed' -- the cfg clips name another vehicle's modes
+    else clip = VOICE and (VOICE[V.modeNum] or 'mode_changed') or ('mode_' .. V.modeNum) end
     playAlert(clip, V.muted)
   end
   prevMode = V.modeNum
