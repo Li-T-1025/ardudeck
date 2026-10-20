@@ -4,7 +4,9 @@
  * Two actions are handled:
  *   ardudeck://install?slug=<slug>&name=<name>&key=<license-key>
  *     - validate the key's signature offline, then hand to the renderer to
- *       confirm with the user before installing.
+ *       confirm with the user before installing. Without a key the renderer
+ *       offers the free install for that slug (how a companion app asks for
+ *       its cargo).
  *   ardudeck://open?view=<viewId>
  *     - navigate the renderer to a built-in view (no validation needed; the
  *       renderer rejects unknown/unavailable views).
@@ -108,16 +110,18 @@ function handleInstall(parsed: URL): void {
   const name = parsed.searchParams.get('name') ?? slug;
   const key = parsed.searchParams.get('key') ?? '';
 
-  if (!slug || !key) {
-    console.warn('[DeepLink] Missing slug or key');
+  if (!slug) {
+    console.warn('[DeepLink] Missing slug');
     return;
   }
 
   // Validate the license signature offline before surfacing anything.
-  const verification = verifyLicenseKey(key);
-  if (!verification.valid) {
-    console.warn('[DeepLink] Rejected key:', verification.error);
-    return;
+  if (key) {
+    const verification = verifyLicenseKey(key);
+    if (!verification.valid) {
+      console.warn('[DeepLink] Rejected key:', verification.error);
+      return;
+    }
   }
 
   deliver(IPC_CHANNELS.MODULE_DEEP_LINK_INSTALL, { slug, name, key });

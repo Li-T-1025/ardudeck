@@ -2655,8 +2655,12 @@ const api = {
 
   appList: (): Promise<InstalledApp[]> => ipcRenderer.invoke(IPC_CHANNELS.APP_LIST),
 
-  appInstall: (slug: string): Promise<{ success: boolean; app?: InstalledApp; error?: string }> =>
+  appInstall: (slug: string): Promise<{ success: boolean; app?: InstalledApp; error?: string; cargoError?: string; cargoLoaded?: boolean }> =>
     ipcRenderer.invoke(IPC_CHANNELS.APP_INSTALL, slug),
+
+  /** Name of the installed cargo that goes with this app, or null. */
+  appCompanion: (slug: string): Promise<string | null> =>
+    ipcRenderer.invoke(IPC_CHANNELS.APP_COMPANION, slug),
 
   appUninstall: (slug: string): Promise<{ success: boolean; apps?: InstalledApp[]; error?: string }> =>
     ipcRenderer.invoke(IPC_CHANNELS.APP_UNINSTALL, slug),

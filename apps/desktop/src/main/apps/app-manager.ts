@@ -176,6 +176,7 @@ export async function installApp(
     installPath,
     installedAt: new Date().toISOString(),
     bundleHash: localHash,
+    ...(detail?.companionCargo?.slug ? { companionCargo: detail.companionCargo.slug } : {}),
   };
   store().set('apps', [...store().get('apps').filter((a) => a.slug !== slug), record]);
   onProgress({ stage: 'done', message: t('main:appManager.installed', { name: record.name }), percent: 100 });

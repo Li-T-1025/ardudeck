@@ -10,7 +10,10 @@
     "needsNewerArduDeck": "{{name}} benötigt ArduDeck {{needs}} oder neuer (installiert ist {{current}}). Aktualisieren Sie zuerst ArduDeck.",
     "verifying": "{{slug}} wird geprüft...",
     "notInstalled": "{{slug}} ist nicht installiert",
-    "noExecutable": "Kein Programm im Installationsordner von {{slug}} gefunden"
+    "noExecutable": "Kein Programm im Installationsordner von {{slug}} gefunden",
+    "installingCompanion": "Das zugehörige Cargo {{slug}} wird geladen...",
+    "installedWithCargo": "{{name}} installiert. Das Cargo lädt beim nächsten Start von ArduDeck.",
+    "companionFailed": "{{name}} ist installiert, aber das zugehörige Cargo {{slug}} konnte nicht geladen werden: {{msg}}"
   },
   "areaEditorWindow": {
     "title": "Flächeneditor",

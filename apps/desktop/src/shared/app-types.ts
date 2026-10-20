@@ -41,6 +41,8 @@ export interface HangarApp {
   insideArduDeck: boolean;
   /** Badge only. Absent on a Hangar older than the flag. */
   earlyAccess?: boolean;
+  /** The cargo that drives this app inside ArduDeck; installs and uninstalls with it. */
+  companionCargo?: { slug: string; name: string } | null;
   /**
    * The listing's own media and copy, the same blocks the Hangar website renders. Carried here
    * so the Cargo Bay can show a program the way a storefront does rather than as a line of text.
@@ -69,6 +71,8 @@ export interface InstalledApp {
   installPath: string;
   installedAt: string;
   bundleHash: string;
+  /** Slug of the cargo the Hangar paired with this app at install time. */
+  companionCargo?: string;
 }
 
 export interface AppProgress {

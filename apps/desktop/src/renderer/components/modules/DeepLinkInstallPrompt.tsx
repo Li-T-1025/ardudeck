@@ -27,12 +27,16 @@ export function DeepLinkInstallPrompt() {
     return () => { cleanup(); };
   }, []);
 
+  const alreadyLoaded = useModuleStore((s) => !!pending && s.modules.some((m) => m.slug === pending.slug));
+
   if (!pending) return null;
 
   const handleInstall = async () => {
     setInstalling(true);
     setError(null);
-    const result = await useModuleStore.getState().activateLicense(pending.key);
+    // No key means a free cargo asked for by slug, e.g. by the app it drives.
+    const store = useModuleStore.getState();
+    const result = pending.key ? await store.activateLicense(pending.key) : await store.installFree(pending.slug);
     if (result.success) {
       // Module loads at startup only, so restart to surface it.
       await window.electronAPI.relaunchApp();
@@ -51,17 +55,22 @@ export function DeepLinkInstallPrompt() {
         <div className="px-6 py-5">
           <p className="text-sm text-content">
             <Trans
-              i18nKey="modules:deepLinkInstallPrompt.question"
+              i18nKey={alreadyLoaded ? 'modules:deepLinkInstallPrompt.alreadyLoaded' : 'modules:deepLinkInstallPrompt.question'}
               values={{ name: pending.name }}
               components={{ b: <span className="font-semibold" /> }}
             />
           </p>
-          <p className="text-sm text-content-secondary mt-2">
-            {t('modules:deepLinkInstallPrompt.restartNote')}
-          </p>
+          {!alreadyLoaded && (
+            <p className="text-sm text-content-secondary mt-2">
+              {t('modules:deepLinkInstallPrompt.restartNote')}
+            </p>
+          )}
           {error && (
             <div className="mt-3 p-3 bg-red-500/10 border border-red-500/20 rounded-lg">
               <p className="text-sm text-red-400">{error}</p>
+              {!pending.key && (
+                <p className="text-xs text-content-secondary mt-1">{t('modules:deepLinkInstallPrompt.needsKeyHint')}</p>
+              )}
             </div>
           )}
         </div>
@@ -71,8 +80,9 @@ export function DeepLinkInstallPrompt() {
             disabled={installing}
             className="px-4 py-2 text-sm text-content-secondary hover:text-content transition-colors disabled:opacity-50"
           >
-            {t('common:cancel')}
+            {alreadyLoaded ? t('common:close') : t('common:cancel')}
           </button>
+          {!alreadyLoaded && (
           <button
             onClick={handleInstall}
             disabled={installing}
@@ -80,6 +90,7 @@ export function DeepLinkInstallPrompt() {
           >
             {installing ? t('common:loading') : t('modules:deepLinkInstallPrompt.loadAndRestart')}
           </button>
+          )}
         </div>
       </div>
     </div>

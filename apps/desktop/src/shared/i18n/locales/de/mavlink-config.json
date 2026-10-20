@@ -373,7 +373,11 @@
       "vtolRateControlledAerobatics": "Ratengeregelter VTOL-Kunstflug",
       "vtolReturnToLaunch": "VTOL-Rückkehr zum Startpunkt",
       "vtolStabilizeMode": "VTOL-Stabilize-Modus",
-      "zigzagSurveyPattern": "Zickzack-Vermessungsmuster"
+      "zigzagSurveyPattern": "Zickzack-Vermessungsmuster",
+      "noDescription": "Noch keine Beschreibung für diesen Modus",
+      "heliAutorotationLanding": "Autorotationslandung des Helikopters nach Antriebsverlust",
+      "returnViaMissionLanding": "Rückkehr und Landung entlang der Landesequenz der Mission",
+      "driveToAndDock": "Zu einem Ziel fahren und dort andocken"
     },
     "modeReference": "Modus-Referenz",
     "modeSwitch": "Modusschalter",

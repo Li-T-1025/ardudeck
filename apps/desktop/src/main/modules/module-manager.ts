@@ -96,6 +96,8 @@ export async function activateLicense(
      * fetches latest); only manual entry in the Add form should be rejected.
      */
     reactivate?: boolean;
+    /** The app this cargo drives is already on disk (it is what pulled the cargo in). */
+    skipApp?: boolean;
   },
 ): Promise<{ success: boolean; error?: string }> {
   // 1. Offline signature validation
@@ -286,7 +288,7 @@ export async function activateLicense(
   // A cargo that drives a separate program installs it now, with the same key. Re-activation
   // is the update path, so the app follows the cargo to its latest release as well.
   for (const mod of newModules) {
-    if (!mod.app) continue;
+    if (!mod.app || opts?.skipApp) continue;
     onProgress({ stage: 'activating', message: t('main:moduleManager.installingApp', { slug: mod.app }) });
     try {
       await installApp(
@@ -328,6 +330,7 @@ export async function getCargoDetail(slug: string): Promise<CargoDetail> {
 export async function installFreeCargo(
   slug: string,
   onProgress: (p: ModuleProgress) => void,
+  opts?: { skipApp?: boolean },
 ): Promise<{ success: boolean; error?: string }> {
   onProgress({ stage: 'activating', message: t('main:moduleManager.requesting', { slug }) });
 
@@ -346,7 +349,7 @@ export async function installFreeCargo(
 
   // reactivate: the free key may already be on record from a prior install, and
   // re-running is how a reinstall/update works.
-  return activateLicense(key, onProgress, { reactivate: true });
+  return activateLicense(key, onProgress, { reactivate: true, skipApp: opts?.skipApp });
 }
 
 // --------------------------------------------------------------------------

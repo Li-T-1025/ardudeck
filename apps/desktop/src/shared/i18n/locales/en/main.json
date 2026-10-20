@@ -10,7 +10,10 @@
     "needsNewerArduDeck": "{{name}} needs ArduDeck {{needs}} or newer (this is {{current}}). Update ArduDeck first.",
     "verifying": "Verifying {{slug}}...",
     "notInstalled": "{{slug}} is not installed",
-    "noExecutable": "No program found in the {{slug}} install folder"
+    "noExecutable": "No program found in the {{slug}} install folder",
+    "installingCompanion": "Loading the {{slug}} cargo that goes with it...",
+    "installedWithCargo": "{{name}} installed. Its cargo loads when ArduDeck restarts.",
+    "companionFailed": "{{name}} is installed, but its cargo {{slug}} could not be loaded: {{msg}}"
   },
   "areaEditorWindow": {
     "title": "Area Editor",

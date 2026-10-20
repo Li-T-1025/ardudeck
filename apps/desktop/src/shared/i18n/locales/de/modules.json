@@ -4,6 +4,8 @@
     "loadAndRestart": "Laden & neu starten",
     "question": "<b>{{name}}</b> aus dem ArduDeck Hangar laden?",
     "restartNote": "ArduDeck wird zum Laden neu gestartet.",
+    "alreadyLoaded": "<b>{{name}}</b> ist in ArduDeck bereits geladen.",
+    "needsKeyHint": "Braucht dieses Cargo einen Lizenzschlüssel, tragen Sie ihn in der Cargo Bay ein.",
     "title": "Cargo laden"
   },
   "hangarAppCard": {
@@ -22,7 +24,9 @@
   "hangarApps": {
     "apps": "Apps",
     "installedApps": "Installierte Apps",
-    "launchFailed": "Die App konnte nicht gestartet werden"
+    "launchFailed": "Die App konnte nicht gestartet werden",
+    "removeQuestion": "{{name}} entfernen?",
+    "removeWithCargo": "{{name}} und das zugehörige Cargo {{cargo}} entfernen? Beide gehören zusammen."
   },
   "moduleDock": {
     "backToCargo": "Zurück zum Cargo",
@@ -79,6 +83,7 @@
     "preview": "Vorschau",
     "previous": "Zurück",
     "removeCargo": "Cargo entfernen",
+    "removesApp": "Entfernt auch {{name}}",
     "restartBody": "Cargo wurde geändert. ArduDeck muss neu gestartet werden, damit die Änderung wirksam wird.",
     "restartNow": "Jetzt neu starten",
     "restartRequired": "Neustart erforderlich",

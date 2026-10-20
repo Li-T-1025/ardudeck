@@ -8,36 +8,7 @@
 import React, { useMemo, useEffect, useState, useCallback, useRef } from 'react';
 import { useTranslation, Trans } from 'react-i18next';
 import {
-  Map,
-  Hand,
-  Gamepad2,
-  Ruler,
-  Navigation,
-  MapPin,
-  Lock,
-  Home,
-  Circle,
-  PlaneLanding,
-  Wind,
-  Dumbbell,
-  RotateCcw,
-  Wrench,
-  Pin,
-  Octagon,
-  Rocket,
-  Plane,
-  Users,
-  Zap,
-  Move,
-  AlertTriangle,
-  HelpCircle,
-  Activity,
-  ToggleLeft,
-  ToggleRight,
-  Search,
-  X,
-  Check,
-  Radio,
+  AlertTriangle, ToggleLeft, ToggleRight, Search, X, Check,
 } from 'lucide-react';
 import { useParameterStore } from '../../stores/parameter-store';
 import { useSettingsStore } from '../../stores/settings-store';
@@ -75,91 +46,7 @@ const AUX_START = 4;
 const AUX_END = 12;
 const DETECT_THRESHOLD = 150; // PWM movement to trigger detection
 
-// ArduCopter flight modes with proper icons
-const COPTER_MODES: Record<number, { name: string; descriptionKey: string; icon: React.ElementType; safe: boolean }> = {
-  0: { name: 'Stabilize', descriptionKey: 'mavlink-config:flightModesTab.modeDesc.manualFlightWithSelfLeveling', icon: Hand, safe: true },
-  1: { name: 'Acro', descriptionKey: 'mavlink-config:flightModesTab.modeDesc.fullManualControlNoSelf', icon: Gamepad2, safe: false },
-  2: { name: 'AltHold', descriptionKey: 'mavlink-config:flightModesTab.modeDesc.altitudeHoldWithManualPosition', icon: Ruler, safe: true },
-  3: { name: 'Auto', descriptionKey: 'mavlink-config:flightModesTab.modeDesc.followMissionWaypoints', icon: Map, safe: true },
-  4: { name: 'Guided', descriptionKey: 'mavlink-config:flightModesTab.modeDesc.flyToGcsCommandedPoints', icon: Navigation, safe: true },
-  5: { name: 'Loiter', descriptionKey: 'mavlink-config:flightModesTab.modeDesc.holdPositionAndAltitude', icon: Lock, safe: true },
-  6: { name: 'RTL', descriptionKey: 'mavlink-config:flightModesTab.modeDesc.returnToLaunchPoint', icon: Home, safe: true },
-  7: { name: 'Circle', descriptionKey: 'mavlink-config:flightModesTab.modeDesc.circleAroundAPoint', icon: Circle, safe: true },
-  9: { name: 'Land', descriptionKey: 'mavlink-config:flightModesTab.modeDesc.automaticLanding', icon: PlaneLanding, safe: true },
-  11: { name: 'Drift', descriptionKey: 'mavlink-config:flightModesTab.modeDesc.likeStabilizeButWithDrift', icon: Wind, safe: false },
-  13: { name: 'Sport', descriptionKey: 'mavlink-config:flightModesTab.modeDesc.stabilizeWithHigherRates', icon: Dumbbell, safe: false },
-  14: { name: 'Flip', descriptionKey: 'mavlink-config:flightModesTab.modeDesc.automaticFlipManeuver', icon: RotateCcw, safe: false },
-  15: { name: 'AutoTune', descriptionKey: 'mavlink-config:flightModesTab.modeDesc.automaticPidTuning', icon: Wrench, safe: true },
-  16: { name: 'PosHold', descriptionKey: 'mavlink-config:flightModesTab.modeDesc.positionHoldLikeLoiter', icon: Pin, safe: true },
-  17: { name: 'Brake', descriptionKey: 'mavlink-config:flightModesTab.modeDesc.stopImmediately', icon: Octagon, safe: true },
-  18: { name: 'Throw', descriptionKey: 'mavlink-config:flightModesTab.modeDesc.throwToStart', icon: Rocket, safe: false },
-  19: { name: 'Avoid_ADSB', descriptionKey: 'mavlink-config:flightModesTab.modeDesc.avoidOtherAircraft', icon: Plane, safe: true },
-  20: { name: 'Guided_NoGPS', descriptionKey: 'mavlink-config:flightModesTab.modeDesc.guidedWithoutGps', icon: Navigation, safe: false },
-  21: { name: 'Smart_RTL', descriptionKey: 'mavlink-config:flightModesTab.modeDesc.returnViaOriginalPath', icon: Home, safe: true },
-  22: { name: 'FlowHold', descriptionKey: 'mavlink-config:flightModesTab.modeDesc.positionHoldWithOpticalFlow', icon: Move, safe: true },
-  23: { name: 'Follow', descriptionKey: 'mavlink-config:flightModesTab.modeDesc.followAnotherVehicle', icon: Users, safe: true },
-  24: { name: 'ZigZag', descriptionKey: 'mavlink-config:flightModesTab.modeDesc.zigzagSurveyPattern', icon: Zap, safe: true },
-  25: { name: 'SystemID', descriptionKey: 'mavlink-config:flightModesTab.modeDesc.systemIdentification', icon: Activity, safe: false },
-};
-
-// ArduPlane flight modes with proper icons
-const PLANE_MODES: Record<number, { name: string; descriptionKey: string; icon: React.ElementType; safe: boolean }> = {
-  0: { name: 'Manual', descriptionKey: 'mavlink-config:flightModesTab.modeDesc.fullManualControl', icon: Hand, safe: false },
-  1: { name: 'Circle', descriptionKey: 'mavlink-config:flightModesTab.modeDesc.circleAroundAPoint', icon: Circle, safe: true },
-  2: { name: 'Stabilize', descriptionKey: 'mavlink-config:flightModesTab.modeDesc.levelFlightWithManualThrottle', icon: Hand, safe: true },
-  3: { name: 'Training', descriptionKey: 'mavlink-config:flightModesTab.modeDesc.limitsRollPitchButAllows', icon: Dumbbell, safe: true },
-  4: { name: 'Acro', descriptionKey: 'mavlink-config:flightModesTab.modeDesc.rateControlledAerobatics', icon: Gamepad2, safe: false },
-  5: { name: 'FBWA', descriptionKey: 'mavlink-config:flightModesTab.modeDesc.flyByWireAStabilized', icon: Plane, safe: true },
-  6: { name: 'FBWB', descriptionKey: 'mavlink-config:flightModesTab.modeDesc.flyByWireBSpeed', icon: Plane, safe: true },
-  7: { name: 'Cruise', descriptionKey: 'mavlink-config:flightModesTab.modeDesc.throttleAndRollHoldHeading', icon: Navigation, safe: true },
-  8: { name: 'AutoTune', descriptionKey: 'mavlink-config:flightModesTab.modeDesc.automaticPidTuning', icon: Wrench, safe: true },
-  10: { name: 'Auto', descriptionKey: 'mavlink-config:flightModesTab.modeDesc.followMissionWaypoints', icon: Map, safe: true },
-  11: { name: 'RTL', descriptionKey: 'mavlink-config:flightModesTab.modeDesc.returnToLaunchPoint', icon: Home, safe: true },
-  12: { name: 'Loiter', descriptionKey: 'mavlink-config:flightModesTab.modeDesc.circleAndHoldPosition', icon: Lock, safe: true },
-  13: { name: 'Takeoff', descriptionKey: 'mavlink-config:flightModesTab.modeDesc.automaticTakeoff', icon: Rocket, safe: true },
-  14: { name: 'Avoid_ADSB', descriptionKey: 'mavlink-config:flightModesTab.modeDesc.avoidOtherAircraft', icon: AlertTriangle, safe: true },
-  15: { name: 'Guided', descriptionKey: 'mavlink-config:flightModesTab.modeDesc.flyToGcsCommandedPoints', icon: Navigation, safe: true },
-  17: { name: 'QStabilize', descriptionKey: 'mavlink-config:flightModesTab.modeDesc.vtolStabilizeMode', icon: Hand, safe: true },
-  18: { name: 'QHover', descriptionKey: 'mavlink-config:flightModesTab.modeDesc.vtolHoverInPlace', icon: Pin, safe: true },
-  19: { name: 'QLoiter', descriptionKey: 'mavlink-config:flightModesTab.modeDesc.vtolPositionHold', icon: Lock, safe: true },
-  20: { name: 'QLand', descriptionKey: 'mavlink-config:flightModesTab.modeDesc.vtolAutomaticLanding', icon: PlaneLanding, safe: true },
-  21: { name: 'QRTL', descriptionKey: 'mavlink-config:flightModesTab.modeDesc.vtolReturnToLaunch', icon: Home, safe: true },
-  22: { name: 'QAutotune', descriptionKey: 'mavlink-config:flightModesTab.modeDesc.vtolAutomaticPidTuning', icon: Wrench, safe: true },
-  23: { name: 'QAcro', descriptionKey: 'mavlink-config:flightModesTab.modeDesc.vtolRateControlledAerobatics', icon: Gamepad2, safe: false },
-  24: { name: 'Thermal', descriptionKey: 'mavlink-config:flightModesTab.modeDesc.soaringThermalDetection', icon: Wind, safe: true },
-  25: { name: 'Loiter to QLand', descriptionKey: 'mavlink-config:flightModesTab.modeDesc.loiterThenVtolLand', icon: PlaneLanding, safe: true }, // i18n-exempt
-};
-
-// ArduRover drive modes
-const ROVER_MODES: Record<number, { name: string; descriptionKey: string; icon: React.ElementType; safe: boolean }> = {
-  0: { name: 'Manual', descriptionKey: 'mavlink-config:flightModesTab.modeDesc.fullManualThrottleAndSteering', icon: Hand, safe: true },
-  1: { name: 'Acro', descriptionKey: 'mavlink-config:flightModesTab.modeDesc.manualWithTurnRateControl', icon: Gamepad2, safe: false },
-  3: { name: 'Steering', descriptionKey: 'mavlink-config:flightModesTab.modeDesc.manualSteeringSpeedControlled', icon: Navigation, safe: true },
-  4: { name: 'Hold', descriptionKey: 'mavlink-config:flightModesTab.modeDesc.stopAndHoldPosition', icon: Lock, safe: true },
-  5: { name: 'Loiter', descriptionKey: 'mavlink-config:flightModesTab.modeDesc.holdPositionUsingGps', icon: Pin, safe: true },
-  6: { name: 'Follow', descriptionKey: 'mavlink-config:flightModesTab.modeDesc.followAnotherVehicle', icon: Users, safe: true },
-  7: { name: 'Simple', descriptionKey: 'mavlink-config:flightModesTab.modeDesc.simplifiedControlRelativeToHome', icon: Home, safe: true },
-  10: { name: 'Auto', descriptionKey: 'mavlink-config:flightModesTab.modeDesc.followMissionWaypoints', icon: Map, safe: true },
-  11: { name: 'RTL', descriptionKey: 'mavlink-config:flightModesTab.modeDesc.returnToLaunchPoint', icon: Home, safe: true },
-  12: { name: 'Smart RTL', descriptionKey: 'mavlink-config:flightModesTab.modeDesc.returnViaOriginalPath', icon: Home, safe: true }, // i18n-exempt
-  15: { name: 'Guided', descriptionKey: 'mavlink-config:flightModesTab.modeDesc.driveToGcsCommandedPoints', icon: Navigation, safe: true },
-  16: { name: 'Initialising', descriptionKey: 'mavlink-config:flightModesTab.modeDesc.systemInitializing', icon: Activity, safe: false },
-};
-
-type VehicleCategory = 'copter' | 'plane' | 'rover';
-
-function getModesForCategory(category: VehicleCategory) {
-  switch (category) {
-    case 'plane': return PLANE_MODES;
-    case 'rover': return ROVER_MODES;
-    default: return COPTER_MODES;
-  }
-}
-
-function getModeInfo(modeNum: number, category: VehicleCategory = 'copter') {
-  const modes = getModesForCategory(category);
-  return modes[modeNum] ?? { name: 'Unknown', descriptionKey: 'common:unknownMode', icon: HelpCircle, safe: false };
-}
+import { getModeInfo, getModesForCategory, type VehicleCategory } from './flight-mode-meta';
 
 interface FlightModesTabProps {
   vehicleCategory?: VehicleCategory;

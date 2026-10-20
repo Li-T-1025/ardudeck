@@ -4,6 +4,8 @@
     "loadAndRestart": "Load & Restart",
     "question": "Load <b>{{name}}</b> from the ArduDeck Hangar?",
     "restartNote": "ArduDeck will restart to load it.",
+    "alreadyLoaded": "<b>{{name}}</b> is already loaded in ArduDeck.",
+    "needsKeyHint": "If this cargo needs a licence key, add it in the Cargo Bay.",
     "title": "Load cargo"
   },
   "hangarAppCard": {
@@ -22,7 +24,9 @@
   "hangarApps": {
     "apps": "Apps",
     "installedApps": "Installed apps",
-    "launchFailed": "The app could not be started"
+    "launchFailed": "The app could not be started",
+    "removeQuestion": "Remove {{name}}?",
+    "removeWithCargo": "Remove {{name}} and its {{cargo}} cargo? They go together."
   },
   "moduleDock": {
     "backToCargo": "Back to cargo",
@@ -79,6 +83,7 @@
     "preview": "Preview",
     "previous": "Previous",
     "removeCargo": "Remove cargo",
+    "removesApp": "Also removes {{name}}",
     "restartBody": "Cargo changed. ArduDeck must restart for it to take effect.",
     "restartNow": "Restart now",
     "restartRequired": "Restart required",

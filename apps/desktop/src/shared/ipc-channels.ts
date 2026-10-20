@@ -776,6 +776,7 @@ export const IPC_CHANNELS = {
   APP_LIST: 'app:list',
   APP_INSTALL: 'app:install',
   APP_UNINSTALL: 'app:uninstall',
+  APP_COMPANION: 'app:companion',
   APP_LAUNCH: 'app:launch',
   APP_PROGRESS: 'app:progress',
   // ardudeck://open?view=<id> -> navigate the renderer to a built-in view

@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { t } from '../../shared/i18n/index.js';
 import type { AppProgress, HangarApp, InstalledApp } from '../../shared/app-types';
+import { useModuleStore } from './module-store';
 
 /**
  * Hangar APPS, kept out of `module-store` on purpose.
@@ -62,7 +63,10 @@ export const useAppStore = create<AppState>((set, get) => ({
     try {
       const res = await window.electronAPI.appInstall(slug);
       if (!res.success) set({ error: res.error ?? t('stores:appStore.installFailed') });
+      else if (res.cargoError) set({ error: res.cargoError });
       await get().fetchInstalled();
+      // The companion cargo, when one loaded, belongs to the cargo list.
+      if (res.cargoLoaded) await useModuleStore.getState().loadModules();
     } catch (err) {
       set({ error: err instanceof Error ? err.message : String(err) });
     } finally {
@@ -75,6 +79,8 @@ export const useAppStore = create<AppState>((set, get) => ({
       const res = await window.electronAPI.appUninstall(slug);
       if (!res.success) set({ error: res.error ?? t('stores:appStore.uninstallFailed') });
       set({ installed: res.apps ?? get().installed.filter((a) => a.slug !== slug) });
+      // The paired cargo went with it.
+      await useModuleStore.getState().loadModules();
     } catch (err) {
       set({ error: err instanceof Error ? err.message : String(err) });
     }

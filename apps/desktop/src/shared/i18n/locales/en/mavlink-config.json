@@ -373,7 +373,11 @@
       "vtolRateControlledAerobatics": "VTOL rate-controlled aerobatics",
       "vtolReturnToLaunch": "VTOL return to launch",
       "vtolStabilizeMode": "VTOL stabilize mode",
-      "zigzagSurveyPattern": "Zigzag survey pattern"
+      "zigzagSurveyPattern": "Zigzag survey pattern",
+      "noDescription": "No description for this mode yet",
+      "heliAutorotationLanding": "Helicopter autorotation landing after a power loss",
+      "returnViaMissionLanding": "Return and land along the mission's landing sequence",
+      "driveToAndDock": "Drive to a target and dock with it"
     },
     "modeReference": "Mode Reference",
     "modeSwitch": "Mode Switch",

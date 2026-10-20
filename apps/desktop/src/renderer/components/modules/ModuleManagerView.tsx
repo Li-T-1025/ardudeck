@@ -3,6 +3,7 @@ import { useEffect, useState, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { Download, Boxes, Package, KeyRound, X, User, ChevronDown, ChevronLeft, ChevronRight, BookOpen, type LucideIcon } from 'lucide-react';
 import { useModuleStore } from '../../stores/module-store';
+import { useAppStore } from '../../stores/app-store';
 import { HangarApps } from './HangarApps';
 import type {
   ModuleProgress,
@@ -184,13 +185,17 @@ function InstalledControls({
   isEnabled,
   onRemove,
   onToggle,
+  pairedApp,
 }: {
   isEnabled: boolean;
   onRemove: () => void;
   onToggle: (enabled: boolean) => void;
+  /** Slug of the app this cargo drives; removal takes it along, so the confirm says so. */
+  pairedApp?: string;
 }) {
   const { t } = useTranslation();
   const [confirmRemove, setConfirmRemove] = useState(false);
+  const pairedName = useAppStore((s) => (pairedApp ? s.installed.find((a) => a.slug === pairedApp)?.name ?? null : null));
 
   return (
     <div className="shrink-0 flex items-center gap-1">
@@ -211,6 +216,9 @@ function InstalledControls({
       </button>
       {confirmRemove ? (
         <div className="flex items-center gap-1 ml-1">
+          {pairedName && (
+            <span className="text-xs text-content-secondary">{t('modules:moduleManager.removesApp', { name: pairedName })}</span>
+          )}
           <button
             onClick={() => {
               onRemove();
@@ -435,7 +443,7 @@ function BrowseCard({
               </span>
               {hasUpdate && <UpdatePill isUpdating={isUpdating} onUpdate={onUpdate} />}
             </div>
-            <InstalledControls isEnabled={isEnabled} onRemove={onRemove} onToggle={onToggle} />
+            <InstalledControls isEnabled={isEnabled} onRemove={onRemove} onToggle={onToggle} pairedApp={installed?.app} />
           </>
         ) : (
           <>
@@ -879,7 +887,7 @@ function CargoDetailModal({
             {installed ? (
               <>
                 {hasUpdate && <UpdatePill isUpdating={isUpdating} onUpdate={onUpdate} />}
-                <InstalledControls isEnabled={isEnabled} onRemove={onRemove} onToggle={onToggle} />
+                <InstalledControls isEnabled={isEnabled} onRemove={onRemove} onToggle={onToggle} pairedApp={installed?.app} />
               </>
             ) : (
               <InstallButton
@@ -985,7 +993,7 @@ function ModuleCard({
         <LicenseTypeBadge type={module.licenseType} />
       </div>
       <div className="shrink-0 pl-2 border-l border-subtle">
-        <InstalledControls isEnabled={isEnabled} onRemove={onRemove} onToggle={onToggle} />
+        <InstalledControls isEnabled={isEnabled} onRemove={onRemove} onToggle={onToggle} pairedApp={module.app} />
       </div>
     </div>
   );

@@ -1,7 +1,8 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Download, Loader2, MonitorDown, RefreshCw, Trash2 } from 'lucide-react';
 import { useAppStore } from '../../stores/app-store';
+import { useModuleStore } from '../../stores/module-store';
 import { HangarAppCard } from './HangarAppCard';
 
 /**
@@ -16,6 +17,9 @@ export function HangarApps({ mode }: { mode: 'browse' | 'installed' }) {
   const { t } = useTranslation();
   const { catalog, installed, loading, installing, progress, fetchCatalog, fetchInstalled, install, uninstall } =
     useAppStore();
+  const modules = useModuleStore((s) => s.modules);
+  // Slug awaiting the removal confirmation, which names the cargo that goes with it.
+  const [confirming, setConfirming] = useState<string | null>(null);
 
   useEffect(() => {
     fetchInstalled();
@@ -48,13 +52,38 @@ export function HangarApps({ mode }: { mode: 'browse' | 'installed' }) {
                   {a.version} · {a.platform}
                 </p>
               </div>
-              <button
-                onClick={() => uninstall(a.slug)}
-                className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-content-secondary hover:text-red-400 bg-surface-raised border border-subtle rounded-lg transition-colors shrink-0"
-              >
-                <Trash2 className="w-3.5 h-3.5" />
-                {t('common:remove')}
-              </button>
+              {confirming === a.slug ? (
+                <div className="flex items-center gap-2 shrink-0">
+                  <span className="text-xs text-content-secondary">
+                    {(() => {
+                      const cargo = modules.find((m) => m.app === a.slug)?.name;
+                      return cargo
+                        ? t('modules:hangarApps.removeWithCargo', { name: a.name, cargo })
+                        : t('modules:hangarApps.removeQuestion', { name: a.name });
+                    })()}
+                  </span>
+                  <button
+                    onClick={() => { setConfirming(null); void uninstall(a.slug); }}
+                    className="px-2 py-1 text-xs bg-red-500/20 text-red-400 rounded hover:bg-red-500/30 transition-colors"
+                  >
+                    {t('common:confirm')}
+                  </button>
+                  <button
+                    onClick={() => setConfirming(null)}
+                    className="px-2 py-1 text-xs bg-surface-raised text-content-secondary rounded transition-colors"
+                  >
+                    {t('common:cancel')}
+                  </button>
+                </div>
+              ) : (
+                <button
+                  onClick={() => setConfirming(a.slug)}
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-content-secondary hover:text-red-400 bg-surface-raised border border-subtle rounded-lg transition-colors shrink-0"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  {t('common:remove')}
+                </button>
+              )}
             </div>
           </div>
         ))}
