@@ -81,6 +81,8 @@ export interface PublicCargo {
   deliveryType: 'installable' | 'activatable';
   version: string | null;
   downloads: number;
+  /** Badge only. Absent on a Hangar older than the flag. */
+  earlyAccess?: boolean;
 }
 
 /**
@@ -136,6 +138,7 @@ export interface CargoDetail {
   latestVersion: string | null;
   createdAt: string; // ISO 8601
   updatedAt: string; // ISO 8601
+  earlyAccess?: boolean;
   preview: CargoPreview | null;
   versions: CargoVersionSummary[];
 }

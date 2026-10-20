@@ -16,7 +16,8 @@
     "previous": "Previous",
     "runsStandalone": "Runs standalone",
     "unreleased": "unreleased",
-    "worksInside": "Works inside ArduDeck"
+    "worksInside": "Works inside ArduDeck",
+    "earlyAccess": "Early access"
   },
   "hangarApps": {
     "apps": "Apps",
@@ -107,7 +108,8 @@
     "viewDetails": "View details",
     "viewFullSize": "View full size",
     "whatIsCargo": "What is cargo?",
-    "whatIsCargoBody": "Cargo keeps optional features out of the core app, so the base stays small, fast, and stable. Every pilot flies differently, so instead of one heavy app that ships everything, you load only the cargo that fits how you fly and leave the rest on the ground. Add it, remove it, switch it on or off. Your deck, your way."
+    "whatIsCargoBody": "Cargo keeps optional features out of the core app, so the base stays small, fast, and stable. Every pilot flies differently, so instead of one heavy app that ships everything, you load only the cargo that fits how you fly and leave the rest on the ground. Add it, remove it, switch it on or off. Your deck, your way.",
+    "earlyAccess": "Early access"
   },
   "modulePanelWindow": {
     "maximize": "Maximize",

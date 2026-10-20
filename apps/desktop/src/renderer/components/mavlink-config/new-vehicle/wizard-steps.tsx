@@ -12,6 +12,7 @@ import { useParameterStore } from '../../../stores/parameter-store';
 import { useTelemetryStore } from '../../../stores/telemetry-store';
 import { FrameDiagram } from '../motor-test/FrameDiagram';
 import { PreArmParamFix } from '../../prearm/PreArmParamFix';
+import { OPTION_TAGS, Pictogram } from './pictograms';
 
 export interface StepProps {
   step: SetupStepId;
@@ -22,14 +23,26 @@ export interface StepProps {
 }
 
 const K = 'vehicle-setup:wizard';
-const pickOn = 'border-blue-500/60 bg-blue-500/10 text-content';
+const pickOn = 'border-sky-500/70 bg-sky-500/10 text-content';
 const pickOff = 'border-subtle bg-surface text-content-secondary hover:text-content hover:border-blue-500/40';
 
-export function Pick({ label, hint, on, onClick }: { label: string; hint?: string; on: boolean; onClick: () => void }) {
+export function Pick({ label, hint, on, onClick, picto }: { label: string; hint?: string; on: boolean; onClick: () => void; picto?: string }) {
+  const { t } = useTranslation();
+  const tag = picto ? OPTION_TAGS[picto] : undefined;
   return (
-    <button type="button" aria-pressed={on} onClick={onClick} className={`rounded-lg border p-3 text-left transition-colors ${on ? pickOn : pickOff}`}>
+    <button type="button" aria-pressed={on} onClick={onClick} className={`flex h-full flex-col rounded-lg border p-3 text-left transition-colors ${on ? pickOn : pickOff}`}>
+      {picto && (
+        <div className="mb-2 flex items-start justify-between gap-2">
+          <div className={on ? 'text-content' : 'text-content-tertiary'}><Pictogram id={picto} /></div>
+          {tag && (
+            <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-medium ${tag === 'recommended' ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300' : 'bg-amber-500/15 text-amber-700 dark:text-amber-300'}`}>
+              {t(`${K}.tag.${tag}`)}
+            </span>
+          )}
+        </div>
+      )}
       <div className="flex items-center gap-1.5 text-sm font-medium text-content">
-        {on && <Check className="h-3.5 w-3.5 shrink-0 text-blue-500" />}
+        {on && <Check className="h-3.5 w-3.5 shrink-0 text-sky-500" />}
         {label}
       </div>
       {hint && <div className="mt-0.5 text-xs leading-snug text-content-secondary">{hint}</div>}
@@ -129,6 +142,7 @@ export function ChoiceStep({ step, vehicle, answers, setAnswers, read }: StepPro
             label={t(`vehicle-setup:choice.${ns}.${id}.label`)}
             hint={t(`vehicle-setup:choice.${ns}.${id}.hint`, { defaultValue: '' }) || undefined}
             on={isOn(id)}
+            picto={`${ns}.${id}`}
             onClick={() => setAnswers(applyChoice(step, id, answers))}
           />
         ))}
@@ -237,7 +251,7 @@ export function FrameStep({ step, vehicle, answers, setAnswers, read }: StepProp
       {tail && (
         <div className="grid grid-cols-3 gap-2">
           {(['dual', 'single', 'copter'] as const).map((k) => (
-            <Pick key={k} label={t(`${K}.tailsitter.${k}.label`)} hint={t(`${K}.tailsitter.${k}.hint`)} on={tsKind === k}
+            <Pick key={k} picto={`tailsitter.${k}`} label={t(`${K}.tailsitter.${k}.label`)} hint={t(`${K}.tailsitter.${k}.hint`)} on={tsKind === k}
               onClick={() => setAnswers({ ...answers, tailsitter: k, copterClass: k === 'copter' ? 'quad' : answers.copterClass })} />
           ))}
         </div>
@@ -327,8 +341,8 @@ export function OutputsStep({ vehicle, answers, setAnswers, read }: StepProps) {
     <div className="space-y-4">
       {ailerons && (
         <div className="grid grid-cols-2 gap-2">
-          <Pick label={t(`${K}.aileron.y.label`)} hint={t(`${K}.aileron.y.hint`)} on={yLead} onClick={() => setAnswers({ ...answers, aileronY: true })} />
-          <Pick label={t(`${K}.aileron.two.label`)} hint={t(`${K}.aileron.two.hint`)} on={!yLead} onClick={() => setAnswers({ ...answers, aileronY: false })} />
+          <Pick picto="aileron.y" label={t(`${K}.aileron.y.label`)} hint={t(`${K}.aileron.y.hint`)} on={yLead} onClick={() => setAnswers({ ...answers, aileronY: true })} />
+          <Pick picto="aileron.two" label={t(`${K}.aileron.two.label`)} hint={t(`${K}.aileron.two.hint`)} on={!yLead} onClick={() => setAnswers({ ...answers, aileronY: false })} />
         </div>
       )}
       <OutputsTable rows={rows} read={read} />
@@ -468,7 +482,7 @@ export function BatteryStep({ vehicle, answers, setAnswers, read }: StepProps) {
             {CAPS.map((n) => <Chip key={n} label={n >= 10000 ? `${n / 1000} Ah` : `${n} mAh`} on={cap === n} onClick={() => setAnswers({ ...answers, capacity: n })} />)}
           </div>
           <div className="grid grid-cols-2 gap-2">
-            {MONITORS.map((m) => <Pick key={m} label={t(`${K}.battery.monitor.${m}.label`)} hint={t(`${K}.battery.monitor.${m}.hint`)} on={monitor === m} onClick={() => setChoice('monitor', m)} />)}
+            {MONITORS.map((m) => <Pick key={m} picto={`monitor.${m}`} label={t(`${K}.battery.monitor.${m}.label`)} hint={t(`${K}.battery.monitor.${m}.hint`)} on={monitor === m} onClick={() => setChoice('monitor', m)} />)}
           </div>
         </div>
         <div className="space-y-3">

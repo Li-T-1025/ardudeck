@@ -16,7 +16,8 @@
     "previous": "Zurück",
     "runsStandalone": "Läuft eigenständig",
     "unreleased": "unveröffentlicht",
-    "worksInside": "Läuft innerhalb von ArduDeck"
+    "worksInside": "Läuft innerhalb von ArduDeck",
+    "earlyAccess": "Early Access"
   },
   "hangarApps": {
     "apps": "Apps",
@@ -107,7 +108,8 @@
     "viewDetails": "Details anzeigen",
     "viewFullSize": "In voller Größe anzeigen",
     "whatIsCargo": "Was ist Cargo?",
-    "whatIsCargoBody": "Cargo hält optionale Funktionen aus der Kern-App heraus, damit die Basis klein, schnell und stabil bleibt. Jeder Pilot fliegt anders. Statt einer schweren App, die alles mitbringt, laden Sie nur das Cargo, das zu Ihrer Art zu fliegen passt, und lassen den Rest am Boden. Hinzufügen, entfernen, ein- oder ausschalten. Ihr Deck, Ihre Regeln."
+    "whatIsCargoBody": "Cargo hält optionale Funktionen aus der Kern-App heraus, damit die Basis klein, schnell und stabil bleibt. Jeder Pilot fliegt anders. Statt einer schweren App, die alles mitbringt, laden Sie nur das Cargo, das zu Ihrer Art zu fliegen passt, und lassen den Rest am Boden. Hinzufügen, entfernen, ein- oder ausschalten. Ihr Deck, Ihre Regeln.",
+    "earlyAccess": "Early Access"
   },
   "modulePanelWindow": {
     "maximize": "Maximieren",

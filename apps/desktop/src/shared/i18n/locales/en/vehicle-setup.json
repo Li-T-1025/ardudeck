@@ -909,6 +909,11 @@
     "omniType": "Wheel layout",
     "leakPin": "Leak pin",
     "subModes": "Subs change modes with gamepad buttons, not a switch. ArduSub defaults: 1 Manual, 2 Depth Hold, 3 Stabilize. Change them in Cockpit or in the joystick setup.",
-    "alreadySet": "Already set on the board"
+    "alreadySet": "Already set on the board",
+    "tag": {
+      "recommended": "recommended",
+      "unverified": "unverified",
+      "caution": "caution"
+    }
   }
 }

@@ -909,6 +909,11 @@
     "omniType": "Radanordnung",
     "leakPin": "Leck-Pin",
     "subModes": "Subs wechseln Modi über Gamepad-Tasten, nicht über einen Schalter. ArduSub-Vorgaben: 1 Manual, 2 Depth Hold, 3 Stabilize. Ändern Sie sie in Cockpit oder im Joystick-Setup.",
-    "alreadySet": "Bereits auf dem Board eingestellt"
+    "alreadySet": "Bereits auf dem Board eingestellt",
+    "tag": {
+      "recommended": "empfohlen",
+      "unverified": "ungeprüft",
+      "caution": "Vorsicht"
+    }
   }
 }

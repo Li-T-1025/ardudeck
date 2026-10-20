@@ -39,6 +39,8 @@ export interface HangarApp {
   /** Derived from the release kinds: an installer means standalone, an archive means we host it. */
   standalone: boolean;
   insideArduDeck: boolean;
+  /** Badge only. Absent on a Hangar older than the flag. */
+  earlyAccess?: boolean;
   /**
    * The listing's own media and copy, the same blocks the Hangar website renders. Carried here
    * so the Cargo Bay can show a program the way a storefront does rather than as a line of text.

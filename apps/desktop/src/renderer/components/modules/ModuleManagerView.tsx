@@ -386,6 +386,11 @@ function BrowseCard({
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2">
               <h3 className="text-sm font-medium text-content truncate">{toDisplayName(cargo.name)}</h3>
+              {cargo.earlyAccess && (
+                <span className="shrink-0 px-2 py-0.5 text-[10px] rounded-full border bg-violet-500/10 text-violet-400 border-violet-500/20">
+                  {t('modules:moduleManager.earlyAccess')}
+                </span>
+              )}
               {installed && (
                 <span className="shrink-0 px-2 py-0.5 text-[10px] rounded-full border bg-emerald-500/10 text-emerald-400 border-emerald-500/20">
                   {t('modules:moduleManager.installed')}
@@ -816,6 +821,7 @@ function CargoDetailModal({
   const version = detail?.latestVersion ?? cargo?.version ?? installed?.version ?? '';
   const downloads = detail?.downloads ?? cargo?.downloads ?? null;
   const description = detail?.description ?? cargo?.description ?? null;
+  const earlyAccess = detail?.earlyAccess ?? cargo?.earlyAccess ?? false;
   const blocks = detail?.preview?.blocks ?? [];
   const isEnabled = installed ? installed.enabled !== false : false;
 
@@ -834,6 +840,11 @@ function CargoDetailModal({
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
               <h2 className="text-lg font-semibold text-content truncate">{displayName}</h2>
+              {earlyAccess && (
+                <span className="shrink-0 px-2 py-0.5 text-[10px] rounded-full border bg-violet-500/10 text-violet-400 border-violet-500/20">
+                  {t('modules:moduleManager.earlyAccess')}
+                </span>
+              )}
               {installed && (
                 <span className="shrink-0 px-2 py-0.5 text-[10px] rounded-full border bg-emerald-500/10 text-emerald-400 border-emerald-500/20">
                   {t('modules:moduleManager.installed')}

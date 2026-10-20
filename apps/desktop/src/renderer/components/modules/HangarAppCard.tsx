@@ -126,6 +126,11 @@ export function HangarAppCard({
                 <span className="shrink-0 rounded-full bg-sky-500/15 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider text-sky-400">
                   {t('modules:hangarAppCard.appBadge')}
                 </span>
+                {app.earlyAccess && (
+                  <span className="shrink-0 rounded-full bg-violet-500/15 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider text-violet-400">
+                    {t('modules:hangarAppCard.earlyAccess')}
+                  </span>
+                )}
               </div>
               <p className="text-xs text-content-tertiary">
                 {app.latestVersion ? `v${app.latestVersion}` : t('modules:hangarAppCard.unreleased')} · {app.authorName}
