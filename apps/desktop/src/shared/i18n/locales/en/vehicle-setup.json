@@ -1,0 +1,914 @@
+{
+  "steps": {
+    "size": {
+      "name": "Your vehicle",
+      "title": "How big is it?",
+      "why": "Two numbers, and most of the setup fills itself in from them."
+    },
+    "frame": {
+      "name": "Motor layout",
+      "title": "How do the motors sit?",
+      "why": "Wrong here is the most common reason a new multirotor flips on its first take-off."
+    },
+    "frameHeli": {
+      "name": "Helicopter",
+      "title": "Your helicopter",
+      "why": "Heli firmware already knows it is a helicopter. This sets up what is shared with every vehicle; rotor setup is in Heli setup."
+    },
+    "orient": {
+      "name": "Board orientation",
+      "title": "Which way is the board mounted?",
+      "why": "So the board knows which way is forward."
+    },
+    "radio": {
+      "name": "Receiver",
+      "title": "Connect your receiver",
+      "why": "A receiver on a serial port is not found on its own. Tell ArduDeck where it is plugged in."
+    },
+    "compass": {
+      "name": "Compass",
+      "title": "Which compass should it use?",
+      "why": "The one on the GPS mast is away from motor currents and usually the better one."
+    },
+    "modes": {
+      "name": "Flight modes",
+      "title": "What does the mode switch do?",
+      "why": "Three positions, three modes. Pick one per position."
+    },
+    "motors": {
+      "name": "Motors",
+      "title": "Check the motors",
+      "why": "One motor at a time. Answer what you see."
+    },
+    "battery": {
+      "name": "Battery and failsafes",
+      "title": "Battery and what happens when things go wrong",
+      "why": "Warnings at the right voltage, and a plan for low battery and a lost signal."
+    },
+    "ready": {
+      "name": "Ready to arm",
+      "title": "Ready to arm?",
+      "why": "What the flight controller itself says is still in the way."
+    },
+    "psize": {
+      "name": "Your plane",
+      "title": "Measure the wing",
+      "why": "A ruler and a kitchen scale are enough. ArduDeck works out the stall speed, and the airspeed limits come from that."
+    },
+    "power": {
+      "name": "Power",
+      "title": "What makes it go?",
+      "why": "Decides the throttle outputs and whether there is a motor check at all."
+    },
+    "extras": {
+      "name": "Extras",
+      "title": "Anything else on the plane?",
+      "why": "Flaps, airbrakes, steerable wheel, retracts: each needs an output."
+    },
+    "launch": {
+      "name": "Take-off",
+      "title": "How does it take off?",
+      "why": "Decides when the motor is allowed to start."
+    },
+    "soar": {
+      "name": "Soaring",
+      "title": "Should it use thermals?",
+      "why": "ArduPilot can circle in rising air to stay up longer."
+    },
+    "airframe": {
+      "name": "Airframe",
+      "title": "What kind of plane is it?",
+      "why": "Decides which outputs drive which surfaces."
+    },
+    "wingTail": {
+      "name": "Wing and tail",
+      "title": "What do the wing and tail look like?",
+      "why": "The plane half of the VTOL: decides which outputs drive which surfaces."
+    },
+    "wingTailsitter": {
+      "title": "How does it steer in plane flight?",
+      "why": "A tailsitter flies on its wing; the question is what moves the air."
+    },
+    "outputs": {
+      "name": "Outputs",
+      "title": "What is plugged into each output?",
+      "why": "Servos and ESC on the outputs ArduPilot expects for this airframe."
+    },
+    "surfaces": {
+      "name": "Control surfaces",
+      "title": "Do the surfaces move the right way?",
+      "why": "Checked in FBWA, where the board stabilises. A surface fighting the wrong way crashes on launch."
+    },
+    "thrcheck": {
+      "name": "Motor",
+      "title": "Check the motor",
+      "why": "Prop off. Throttle up a little: it must spin, and stop at zero."
+    },
+    "airspeed": {
+      "name": "Airspeed sensor",
+      "title": "Is there an airspeed sensor?",
+      "why": "Optional. Without one ArduPilot estimates airspeed from GPS and throttle."
+    },
+    "vtype": {
+      "name": "VTOL type",
+      "title": "How does it hover?",
+      "why": "The firmware says plane; this tells it how the lift motors work."
+    },
+    "vframe": {
+      "name": "Lift motor layout",
+      "title": "How do the lift motors sit?",
+      "why": "Same layouts as a copter: 3, 4, 6 or 8 motors. Only the outputs differ."
+    },
+    "assist": {
+      "name": "VTOL assist",
+      "title": "Should the lift motors help in plane flight?",
+      "why": "Q_ASSIST_SPEED. A wrong value is a common pre-arm failure."
+    },
+    "drive": {
+      "name": "Steering",
+      "title": "How does it steer?",
+      "why": "Decides what output 1 and output 3 do."
+    },
+    "drivetest": {
+      "name": "Motor and steering test",
+      "title": "Check the wheels",
+      "why": "Wheels off the ground. Answer what you see."
+    },
+    "drivetestBoat": {
+      "title": "Check the motor and rudder",
+      "why": "On a stand or in shallow water. Answer what you see."
+    },
+    "motordrv": {
+      "name": "Motor driver",
+      "title": "What drives the motor?",
+      "why": "ESC, or a brushed motor driver. Decides the output type and the dead zone."
+    },
+    "windvane": {
+      "name": "Wind vane",
+      "title": "How does it sense the wind?",
+      "why": "A sailboat needs wind direction to sail on its own."
+    },
+    "water": {
+      "name": "Depth sensor",
+      "title": "Fresh or salt water?",
+      "why": "Depth is worked out from pressure, which depends on the water."
+    },
+    "leak": {
+      "name": "Leak sensor",
+      "title": "Where is the leak sensor?",
+      "why": "So it surfaces before the electronics drown."
+    },
+    "subframe": {
+      "name": "Thruster layout",
+      "title": "Which frame is it?",
+      "why": "Picks how the thrusters are mixed."
+    },
+    "thrusters": {
+      "name": "Thruster directions",
+      "title": "Do the thrusters push the right way?",
+      "why": "Props and wiring decide it; ArduSub can detect and fix it in the water."
+    },
+    "joystick": {
+      "name": "Control",
+      "title": "How will you drive it?",
+      "why": "Subs are usually driven with a gamepad through the tether, not a radio."
+    }
+  },
+  "reason": {
+    "acroYaw": "Yaw rate in Acro, from the yaw acceleration limit for {{prop}} in props",
+    "accel": "Roll and pitch acceleration limit for {{prop}} in props",
+    "accelYaw": "Yaw acceleration limit for {{prop}} in props",
+    "rateFilter": "Rate controller filter, half the gyro filter ({{hz}} Hz)",
+    "rateFilterOff": "Filter off, as Mission Planner sets it",
+    "yawErrorFilter": "Yaw error filter 2 Hz",
+    "thrMixMan": "Throttle mix in manual modes",
+    "accelFilter": "Accelerometer filter 10 Hz",
+    "gyroFilter": "Gyro filter {{hz}} Hz for {{prop}} in props",
+    "thrustExpo": "Thrust curve for {{prop}} in props",
+    "hover": "Starting hover throttle; learned in flight",
+    "motVoltMax": "Full battery voltage for motor scaling, {{cells}} cells",
+    "motVoltMin": "Empty battery voltage for motor scaling, {{cells}} cells",
+    "battLow": "Low battery warning at {{volts}} V ({{cells}} cells)",
+    "battCritical": "Critical battery at {{volts}} V ({{cells}} cells)",
+    "battArm": "No arming below {{volts}} V ({{cells}} cells)",
+    "battCapacity": "Battery capacity {{capacity}} mAh",
+    "stall": "Stall speed {{speed}} m/s",
+    "airspeedMin": "Minimum airspeed {{speed}} m/s, 25% above stall",
+    "airspeedCruise": "Cruise airspeed {{speed}} m/s, 1.5x stall",
+    "airspeedMax": "Maximum airspeed {{speed}} m/s, about 2x cruise"
+  },
+  "outputs": {
+    "role": {
+      "aileronsY": "Ailerons (Y-cable)",
+      "aileronLeft": "Aileron, left wing",
+      "aileronRight": "Aileron, right wing",
+      "elevator": "Elevator",
+      "rudder": "Rudder",
+      "vtailLeft": "V-tail left",
+      "vtailRight": "V-tail right",
+      "elevonLeft": "Elevon left",
+      "elevonRight": "Elevon right",
+      "throttle": "Throttle",
+      "throttleEngine": "Throttle (engine)",
+      "motor": "Motor",
+      "motorLeft": "Motor left",
+      "motorRight": "Motor right",
+      "ignition": "Ignition",
+      "starter": "Starter",
+      "flaperonLeft": "Flaperon left",
+      "flaperonRight": "Flaperon right",
+      "flaps": "Flaps",
+      "airbrake": "Airbrake",
+      "spoilerLeft": "Spoiler left",
+      "spoilerRight": "Spoiler right",
+      "groundSteering": "Nose / tail wheel",
+      "landingGear": "Landing gear",
+      "liftMotor": "Lift motor {{n}}",
+      "triYawServo": "Yaw tilt servo of the rear motor",
+      "steering": "Steering",
+      "throttleLeft": "Throttle left",
+      "throttleRight": "Throttle right",
+      "omniMotor": "Motor {{n}}"
+    },
+    "test": {
+      "aileron": "Stick right: right aileron goes up, left goes down",
+      "aileronLeft": "Stick right: left aileron goes down",
+      "aileronRight": "Stick right: right aileron goes up",
+      "elevator": "Stick back: elevator goes up",
+      "rudder": "Yaw right: rudder goes right",
+      "vtailPitch": "Stick back: both surfaces go up",
+      "vtailYaw": "Yaw right: both swing right",
+      "elevonRoll": "Stick right: left elevon goes down",
+      "elevonPitch": "Stick back: both go up",
+      "flaperonLeft": "Stick right: left goes down; flap switch: both go down",
+      "flaperonRight": "Stick right: right goes up",
+      "flaps": "Flap switch down: flaps go down",
+      "airbrake": "Airbrake switch: brakes come out",
+      "spoilerLeft": "Stick right: left spoiler moves",
+      "spoilerRight": "Stick right: right spoiler moves",
+      "groundSteering": "Yaw right: wheel steers right",
+      "landingGear": "Gear switch: gear moves"
+    }
+  },
+  "vehicle": {
+    "copter": "Copter",
+    "heli": "Helicopter",
+    "plane": "Plane",
+    "vtol": "VTOL",
+    "rover": "Rover",
+    "boat": "Boat",
+    "sub": "Sub"
+  },
+  "choice": {
+    "airframe": {
+      "normal": {
+        "label": "Normal plane",
+        "hint": "aileron, elevator, rudder"
+      },
+      "three": {
+        "label": "3-channel",
+        "hint": "no ailerons: rudder steers"
+      },
+      "wing": {
+        "label": "Flying wing or delta",
+        "hint": "two elevons, no tail"
+      },
+      "vtail": {
+        "label": "V-tail",
+        "hint": "ailerons and a V-shaped tail"
+      },
+      "invv": {
+        "label": "Inverted V",
+        "hint": "A-tail, often on twin booms"
+      }
+    },
+    "airframeTail": {
+      "wing": {
+        "label": "Flying wing with elevons",
+        "hint": "the usual tailsitter: elevons do pitch and roll in plane flight"
+      },
+      "none": {
+        "label": "No control surfaces",
+        "hint": "steered by the motors alone"
+      }
+    },
+    "power": {
+      "electric": {
+        "label": "One electric motor",
+        "hint": "the usual"
+      },
+      "twin": {
+        "label": "Two motors",
+        "hint": "one per wing, steers with thrust too"
+      },
+      "ic": {
+        "label": "Petrol / gas engine",
+        "hint": "ignition, starter, kill switch"
+      },
+      "glider": {
+        "label": "No motor",
+        "hint": "pure glider"
+      }
+    },
+    "extras": {
+      "flaps": {
+        "label": "Flaps",
+        "hint": "separate flap servos"
+      },
+      "flaperon": {
+        "label": "Flaperons",
+        "hint": "ailerons that also act as flaps"
+      },
+      "airbrake": {
+        "label": "Airbrake",
+        "hint": "one airbrake output"
+      },
+      "spoiler": {
+        "label": "Spoilers / crow",
+        "hint": "glider-style split spoilers"
+      },
+      "steer": {
+        "label": "Steerable wheel",
+        "hint": "nose or tail wheel"
+      },
+      "gear": {
+        "label": "Retracts",
+        "hint": "landing gear"
+      }
+    },
+    "launch": {
+      "hand": {
+        "label": "Hand launch",
+        "hint": "motor starts after the throw"
+      },
+      "bungee": {
+        "label": "Bungee",
+        "hint": "long delay so the prop clears the cord"
+      },
+      "cat": {
+        "label": "Catapult"
+      },
+      "runway": {
+        "label": "Runway, nose wheel",
+        "hint": "takes off from the ground"
+      },
+      "tdrag": {
+        "label": "Runway, tail-dragger",
+        "hint": "holds the tail down at first"
+      },
+      "belly": {
+        "label": "Hand launch, belly landing",
+        "hint": "no wheels at all"
+      }
+    },
+    "soar": {
+      "yes": {
+        "label": "Yes, thermal soaring",
+        "hint": "SOAR_ENABLE = 1, then restart"
+      },
+      "no": {
+        "label": "Not now",
+        "hint": "just glide"
+      }
+    },
+    "airspeed": {
+      "none": {
+        "label": "No sensor",
+        "hint": "airspeed estimated from GPS and throttle"
+      },
+      "i2c": {
+        "label": "Digital, on I2C",
+        "hint": "e.g. MS4525"
+      },
+      "can": {
+        "label": "DroneCAN",
+        "hint": "on the CAN port"
+      }
+    },
+    "vtype": {
+      "quad": {
+        "label": "Quadplane",
+        "hint": "separate lift motors, the most common"
+      },
+      "tilt": {
+        "label": "Tilt-rotor",
+        "hint": "motors tilt forward for plane flight"
+      },
+      "tail": {
+        "label": "Tailsitter",
+        "hint": "takes off standing on its tail"
+      }
+    },
+    "assist": {
+      "off": {
+        "label": "Not yet",
+        "hint": "Q_ASSIST_SPEED = -1, for the first flights"
+      },
+      "on": {
+        "label": "Yes, below a speed",
+        "hint": "25% above stall"
+      }
+    },
+    "driveRover": {
+      "steer": {
+        "label": "Steering servo + motor",
+        "hint": "like an RC car: front wheels turn"
+      },
+      "skid": {
+        "label": "Skid steering",
+        "hint": "left and right side driven, like a tank"
+      },
+      "omni": {
+        "label": "Omni or mecanum",
+        "hint": "3 or 4 wheels that drive sideways too"
+      },
+      "balance": {
+        "label": "Balance bot",
+        "hint": "two wheels, balances itself"
+      }
+    },
+    "driveBoat": {
+      "rudder": {
+        "label": "Rudder + motor",
+        "hint": "a rudder servo steers"
+      },
+      "diff": {
+        "label": "Two motors",
+        "hint": "steers by speed difference"
+      },
+      "vector": {
+        "label": "Outboard / vectored",
+        "hint": "the motor itself turns"
+      },
+      "sail": {
+        "label": "Sailboat",
+        "hint": "sail winch, wing sail or rotating mast"
+      }
+    },
+    "motordrv": {
+      "esc": {
+        "label": "ESC with forward and reverse",
+        "hint": "set the ESC to forward and reverse, idle at 1500"
+      },
+      "relay": {
+        "label": "Brushed, with a direction pin",
+        "hint": "L298N and similar: PWM plus a relay pin"
+      },
+      "bipolar": {
+        "label": "Brushed, bipolar driver",
+        "hint": "50% = stop, below = reverse, above = forward"
+      }
+    },
+    "windvane": {
+      "nmea": {
+        "label": "NMEA wind instrument",
+        "hint": "speed and direction in one"
+      },
+      "analog": {
+        "label": "Analog vane",
+        "hint": "on an analog pin"
+      },
+      "none": {
+        "label": "No vane yet",
+        "hint": "cannot sail on its own without one"
+      }
+    },
+    "subframe": {
+      "1": {
+        "label": "BlueROV2",
+        "hint": "vectored, 6 thrusters"
+      },
+      "2": {
+        "label": "BlueROV2 Heavy",
+        "hint": "vectored 6DOF, 8 thrusters"
+      },
+      "3": {
+        "label": "Vectored 6DOF 90°",
+        "hint": "8 thrusters"
+      },
+      "0": {
+        "label": "BlueROV1",
+        "hint": "6 thrusters"
+      },
+      "4": {
+        "label": "SimpleROV-3",
+        "hint": "3 thrusters"
+      },
+      "5": {
+        "label": "SimpleROV-4",
+        "hint": "4 thrusters"
+      },
+      "6": {
+        "label": "SimpleROV-5",
+        "hint": "5 thrusters"
+      },
+      "7": {
+        "label": "Custom",
+        "hint": "your own thruster layout"
+      }
+    },
+    "thrusters": {
+      "auto": {
+        "label": "Detect for me",
+        "hint": "ArduSub motor detect, about a minute in the water"
+      },
+      "manual": {
+        "label": "One by one",
+        "hint": "spin each thruster and reverse the ones that push the wrong way"
+      }
+    },
+    "water": {
+      "fresh": {
+        "label": "Fresh water",
+        "hint": "lakes, rivers, pools"
+      },
+      "salt": {
+        "label": "Salt water",
+        "hint": "the sea"
+      }
+    },
+    "leak": {
+      "nav": {
+        "label": "Navigator built-in",
+        "hint": "LEAK1_PIN = 27"
+      },
+      "aux": {
+        "label": "On an AUX pin",
+        "hint": "AUX1..6 = pins 50..55"
+      },
+      "none": {
+        "label": "No leak sensor",
+        "hint": "not recommended"
+      }
+    },
+    "joystick": {
+      "pad": {
+        "label": "Gamepad through the tether",
+        "hint": "the usual way: buttons for modes, arm, lights"
+      },
+      "rc": {
+        "label": "RC radio",
+        "hint": "needs a tethered buoy for the antenna"
+      }
+    },
+    "omniType": {
+      "1": "Omni3",
+      "2": "OmniX",
+      "3": "OmniPlus",
+      "4": "Omni3 Mecanum"
+    }
+  },
+  "note": {
+    "airframe": {
+      "three": "Writes RUDDER_ONLY = 1: the roll stick steers with the rudder. Automatic ground steering is off on these.",
+      "invv": "Same outputs as a V-tail; the directions are usually the other way round, which the surface check catches."
+    },
+    "airframeTail": {
+      "none": "Q_TAILSIT_ENABLE = 2: the motors do all the steering, in hover and in plane flight."
+    },
+    "power": {
+      "twin": "The two motors also help yaw by differential thrust (RUDD_DT_GAIN).",
+      "icWarn": "A kill switch on the radio is required before the engine can be started. ArduDeck writes ICE_ENABLE = 1; the engine settings appear after a restart.",
+      "gliderWarn": "No motor: the motor check is skipped and thermal soaring is offered. ArduPilot has no dedicated pure-glider page, so treat this path as unverified."
+    },
+    "extras": {
+      "all": "Pick everything this plane has, or nothing. Each one gets its own output and shows up in the surface check."
+    },
+    "launch": {
+      "hand": "The motor will not start in a hand launch while the nose is above 40° or the wings past 30°. A pusher prop with no delay can start in your hand: the delay prevents it.",
+      "bungee": "The motor will not start in a hand launch while the nose is above 40° or the wings past 30°. A pusher prop with no delay can start in your hand: the delay prevents it.",
+      "belly": "The motor will not start in a hand launch while the nose is above 40° or the wings past 30°. A pusher prop with no delay can start in your hand: the delay prevents it."
+    },
+    "soar": {
+      "yes": "Soaring needs an airspeed sensor. TECS_SPDWEIGHT = 2 is written with it; the altitude limits (SOAR_ALT_MIN, SOAR_ALT_CUTOFF, SOAR_ALT_MAX) appear after the restart."
+    },
+    "airspeed": {
+      "i2c": "Written for an MS4525. A DLVR or another sensor needs its own ARSPD_TYPE. Calibrate the zero offset on the ground with the tube covered.",
+      "can": "Calibrate the zero offset on the ground with the tube covered."
+    },
+    "vtype": {
+      "quad": "Q_ENABLE = 1 needs a restart: the Q_ parameters only exist after it.",
+      "tilt": "Q_ENABLE = 1 needs a restart: the Q_ parameters only exist after it. Q_TILT_ENABLE is written after the restart.",
+      "tail": "Q_ENABLE = 1 needs a restart: the Q_ parameters only exist after it. The tailsitter settings are written after the restart."
+    },
+    "assist": {
+      "offWarn": "Since Plane 4.2, 0 no longer turns it off: it means assist during transitions only and fails pre-arm checks. Off is -1.",
+      "onWarn": "Since Plane 4.2, 0 no longer turns it off: it means assist during transitions only and fails pre-arm checks. Off is -1."
+    },
+    "driveRover": {
+      "balance": "Balance bots also need wheel encoders. Learn the cruise speed and throttle on the first drive."
+    },
+    "driveBoat": {
+      "vector": "Set MOT_VEC_ANGLEMAX to the motor deflection at full steering in Parameters.",
+      "sail": "SAIL_ENABLE = 1 needs a restart. Then put the sail on a free output: function 89 main sail, 128 wing sail or 137 mast rotation. The wind vane is the next step."
+    },
+    "motordrv": {
+      "esc": "Servos must not share an output group with brushed motor outputs. Restart after changing the motor type. Raise the throttle slowly on the first drive and store where the wheels start as MOT_THR_MIN.",
+      "relay": "Servos must not share an output group with brushed motor outputs. Restart after changing the motor type. Raise the throttle slowly on the first drive and store where the wheels start as MOT_THR_MIN.",
+      "bipolar": "Servos must not share an output group with brushed motor outputs. Restart after changing the motor type. Raise the throttle slowly on the first drive and store where the wheels start as MOT_THR_MIN."
+    },
+    "windvane": {
+      "nmea": "Mount it high, clear of the sail. Calibrate its direction once it reads.",
+      "analog": "Mount it high, clear of the sail. Calibrate its direction once it reads.",
+      "noneWarn": "Without a wind vane a sailboat cannot sail on its own."
+    },
+    "subframe": {
+      "4": "Frames missing an axis rely on weight and buoyancy to stay stable in that axis.",
+      "5": "Frames missing an axis rely on weight and buoyancy to stay stable in that axis.",
+      "6": "Frames missing an axis rely on weight and buoyancy to stay stable in that axis.",
+      "7Warn": "Custom needs firmware that knows your layout: the thruster mix is compiled in, not set by parameters. With such a build flashed, carry on from the thruster check."
+    },
+    "leak": {
+      "nav": "Touch the probe with a wet finger: the leak alarm must fire.",
+      "aux": "Touch the probe with a wet finger: the leak alarm must fire.",
+      "noneWarn": "Without a leak sensor the sub cannot surface on its own when water gets in."
+    },
+    "joystick": {
+      "pad": "The gamepad buttons use the ArduSub defaults: 1 Manual, 2 Depth Hold, 3 Stabilize, 4 disarm, 6 arm. Change them in Cockpit or in the joystick setup.",
+      "rcWarn": "RC does not reach through water: the receiver needs a tethered buoy."
+    },
+    "check": {
+      "surfaces": "Put it in FBWA, props off. Never swap plugs or reverse on the transmitter: flip Reversed here.",
+      "surfacesMixed": "Mixed surfaces: if only one axis is wrong, the left and right functions are swapped (swap them in Outputs). If both axes are wrong, flip Reversed.",
+      "thrcheck": "Prop off. A plain PWM ESC may need the one-time throttle range calibration first.",
+      "thrcheckIc": "Never reach near the prop between automatic restart attempts.",
+      "drivetest": "Wheels off the ground, throttle 20%. Wrong way: flip Reversed on that output in Outputs, do not swap plugs. If the motor test says the command was rejected, the receiver step is not done yet.",
+      "drivetestBoat": "On a stand or in shallow water, prop clear of hands. Wrong way: flip Reversed on that output.",
+      "thrusters": "Auto detect only fixes thrusters that roll, pitch or yaw the sub. Never run thrusters in air longer than 30 s. Sets MOT_n_DIRECTION.",
+      "water": "Zero the depth at the surface before every dive: Calibration, Barometer."
+    }
+  },
+  "wizard": {
+    "title": "Set up a new vehicle",
+    "stepOf": "Step {{n}} of {{total}}",
+    "back": "Back",
+    "next": "Next",
+    "finish": "Finish",
+    "reviewNote": "Changes are shown for review before they are written",
+    "reviewing": "Waiting for your review...",
+    "restarting": "Restarting the flight controller...",
+    "reason": "New vehicle setup: {{step}}",
+    "cancelled": "Nothing was written: the review was cancelled.",
+    "writeFailed": "Some parameters could not be written.",
+    "restartNeeded": "This only takes effect after the flight controller restarts.",
+    "restartFor": "These settings appear after a restart: {{params}}",
+    "restartNow": "Restart now",
+    "later": "Later",
+    "restartFailed": "The flight controller did not accept the restart.",
+    "notBack": "The flight controller did not come back after the restart.",
+    "stillMissing": "Still missing after the restart: {{params}}. This firmware may not have them.",
+    "noVehicle": "Connect an ArduPilot vehicle and load its parameters to start.",
+    "blocker": "The flight controller reports: {{text}}",
+    "state": {
+      "found": "found",
+      "needsPilot": "check"
+    },
+    "writes": "Writes",
+    "afterRestart": "after restart",
+    "source": "Values from {{source}}",
+    "size": {
+      "preset": "{{prop}} in, {{mm}} mm",
+      "frame": "Motor to motor, diagonal",
+      "frameNote": "the size printed on most frames",
+      "prop": "Propeller",
+      "propNote": "first number on the prop, 10x4.5 is 10",
+      "cells": "Battery",
+      "cellsNote": "read from the battery voltage, change it if wrong",
+      "overlap": "{{prop}} in props are too big for a {{mm}} mm frame: they would hit each other.",
+      "toScale": "To scale: {{mm}} mm motor to motor, {{prop}} in props.",
+      "fills": "This fills in for you",
+      "skip": "Skip, keep the defaults"
+    },
+    "heli": {
+      "firmware": {
+        "title": "Heli firmware",
+        "text": "Helicopters run the separate heli firmware; FRAME_CLASS comes preset."
+      },
+      "wizard": {
+        "title": "This wizard",
+        "text": "Board orientation, receiver, compass, modes and battery: the steps every vehicle shares."
+      },
+      "heliSetup": {
+        "title": "Rotor setup",
+        "text": "Swashplate, collective, rotor speed (RSC) and tail type stay in the Heli setup."
+      },
+      "interlock": {
+        "title": "Motor interlock",
+        "text": "A motor interlock switch is required to arm (RC8_OPTION 32 by default)."
+      }
+    },
+    "tailsitter": {
+      "dual": {
+        "label": "Two motors",
+        "hint": "one each side of the wing, steered by speed difference"
+      },
+      "single": {
+        "label": "One motor",
+        "hint": "in the nose, elevons steer"
+      },
+      "copter": {
+        "label": "Copter-style",
+        "hint": "3 or more motors, like a quad on its tail"
+      }
+    },
+    "frameClass": {
+      "quad": "Quad",
+      "hexa": "Hexa",
+      "octa": "Octa",
+      "x8": "X8 (coax quad)",
+      "y6": "Y6 (coax tri)",
+      "dodeca": "Coax hexa",
+      "tri": "Tri",
+      "deca": "Deca",
+      "single": "Single copter",
+      "coax": "Coax copter",
+      "bi": "Bicopter"
+    },
+    "noPicture": "No motor picture for this frame.",
+    "frameNote": {
+      "single": "Outputs 1 to 4 drive the flaps (front, right, back, left), output 5 the motor. There is no motor order test: check the flaps armed in Stabilize, props off.",
+      "coax": "Outputs 1 to 4 drive the flaps, 5 and 6 the upper (CCW) and lower (CW) motor. There is no motor order test: check the flaps armed in Stabilize, props off.",
+      "bi": "Motors on functions 73 / 74, tilt servos on 75 / 76. ArduPilot does not document default outputs: check them in Outputs.",
+      "tri": "The rear motor sits on a yaw servo on output 7. Set SERVO7_TRIM where the tail does not turn; MOT_YAW_SV_ANGLE limits the tilt.",
+      "stacked": "Coaxial pairs sit on top of each other. The motor test spins the top motor before the bottom one: watch which one turns."
+    },
+    "tiltMask": "Which motors tilt?",
+    "tiltMaskOpt": {
+      "3": "Front two",
+      "15": "All four"
+    },
+    "tiltMaskOther": "Set Q_TILT_MASK to the tilting motors in Parameters.",
+    "vframeNote": "The motor test after this uses this picture, same as for a copter. Plane surfaces keep outputs 1 to 4.",
+    "vframeNoteTail": "No motor picture for one or two motors: the left and right motors are checked here.",
+    "output": "Output {{n}}",
+    "autoByFirmware": "set by Q_ENABLE",
+    "noSuchOutput": "not on this board",
+    "already": "already set",
+    "willChange": "now {{from}}",
+    "aileron": {
+      "y": {
+        "label": "One output, Y-cable",
+        "hint": "the most common way"
+      },
+      "two": {
+        "label": "Two outputs",
+        "hint": "one per servo: each can be trimmed and reversed alone"
+      }
+    },
+    "outputsNote": "ArduPilot defaults first, extras on the next free outputs. Change one only if your wiring differs; the surface check catches mistakes.",
+    "outputsNoteVtol": "Lift motors use 4 + motor number and are set by Q_ENABLE. Extras skip those outputs.",
+    "check": {
+      "button": "Check",
+      "stab": {
+        "title": "Stabilise check",
+        "text": "Tilt the plane right: the ailerons fight it"
+      },
+      "motorL": {
+        "title": "Left motor",
+        "text": "Throttle up a little: the left motor spins"
+      },
+      "motorR": {
+        "title": "Right motor",
+        "text": "The right motor spins"
+      },
+      "kill": {
+        "title": "Kill switch",
+        "text": "Flip it: the ignition cuts"
+      },
+      "start": {
+        "title": "Start",
+        "text": "Starter runs, then the engine idles"
+      },
+      "spin": {
+        "title": "Spin",
+        "text": "Throttle up a little: the motor spins"
+      },
+      "stop": {
+        "title": "Stop",
+        "text": "Throttle at zero: it stops"
+      },
+      "balance": {
+        "title": "Balance",
+        "text": "Wheels off, pitch it forward by hand in Manual: the wheels drive forward"
+      },
+      "motorA": {
+        "title": "Motor test A",
+        "text": "It drives forward"
+      },
+      "motorB": {
+        "title": "Motor test B",
+        "text": "It steers right"
+      },
+      "motorC": {
+        "title": "Motor test C",
+        "text": "The left side drives forward"
+      },
+      "motorD": {
+        "title": "Motor test D",
+        "text": "The right side drives forward"
+      },
+      "omni": {
+        "title": "Each motor",
+        "text": "Spins the wheel shown in the layout, forward"
+      },
+      "sail": {
+        "title": "Sail",
+        "text": "Throttle stick down sheets the sail in"
+      },
+      "rudder": {
+        "title": "Rudder",
+        "text": "Stick right: the boat would turn right"
+      },
+      "inWater": {
+        "title": "In the water",
+        "text": "Neutral or slightly positive buoyancy, calm water"
+      },
+      "room": {
+        "title": "Room to move",
+        "text": "Tether slack, nothing around it"
+      },
+      "zeroDepth": {
+        "title": "Zero depth",
+        "text": "At the surface, before diving"
+      }
+    },
+    "reversed": "Reversed",
+    "normal": "Normal",
+    "yes": "Yes",
+    "psize": {
+      "span": "Wingspan",
+      "spanNote": "tip to tip",
+      "root": "Chord at the middle",
+      "rootNote": "front to back edge",
+      "tip": "Chord at the tip",
+      "tipNote": "0 for a pointed delta",
+      "mass": "Weight, ready to fly",
+      "massNote": "with battery, on a kitchen scale",
+      "stall": "Stall speed",
+      "own": "Your own value. The estimate would be {{estimate}} m/s.",
+      "from": "From {{area}} dm² of wing carrying {{mass}} g.",
+      "useEstimate": "Use the estimate",
+      "knowIt": "Know it from flying?",
+      "fills": "This fills in for you",
+      "note": "Plane 4.5 renamed these: older firmware gets ARSPD_FBW_MIN, TRIM_ARSPD_CM and ARSPD_FBW_MAX instead. ArduDeck writes whichever names the board has."
+    },
+    "battery": {
+      "chemistry": "Chemistry",
+      "chem": {
+        "lipo": "LiPo",
+        "lipohv": "LiPo HV",
+        "liion": "Li-ion"
+      },
+      "cells": "Cells",
+      "capacity": "Capacity",
+      "monitor": {
+        "4": {
+          "label": "Power module",
+          "hint": "voltage and current"
+        },
+        "3": {
+          "label": "Voltage only",
+          "hint": "no current sensor"
+        },
+        "8": {
+          "label": "Smart battery",
+          "hint": "DroneCAN"
+        },
+        "9": {
+          "label": "From the ESCs",
+          "hint": "ESC telemetry"
+        }
+      },
+      "mark": {
+        "critical": "critical",
+        "low": "low",
+        "arm": "arm",
+        "full": "full"
+      },
+      "note": "Voltages from Mission Planner initial parameters. Calibrate the voltage and current readings in the Battery tab with a multimeter."
+    },
+    "failsafe": {
+      "low": "Battery low",
+      "crit": "Battery critical",
+      "radio": "Radio signal lost",
+      "tether": "Tether / GCS lost",
+      "leak": "Leak detected"
+    },
+    "ready": {
+      "none": "Nothing in the way. It will arm.",
+      "noneSub": "Put the props on, stand back, and arm.",
+      "count_one": "{{count}} thing still in the way",
+      "count_other": "{{count}} things still in the way",
+      "sub": "Fix them in any order. This list updates as soon as the flight controller agrees.",
+      "fix": "Fix in {{step}}"
+    },
+    "rx": {
+      "live": "Receiver connected: {{count}} channels",
+      "waiting": "No receiver signal yet. Switch the radio on."
+    },
+    "omniType": "Wheel layout",
+    "leakPin": "Leak pin",
+    "subModes": "Subs change modes with gamepad buttons, not a switch. ArduSub defaults: 1 Manual, 2 Depth Hold, 3 Stabilize. Change them in Cockpit or in the joystick setup.",
+    "alreadySet": "Already set on the board"
+  }
+}

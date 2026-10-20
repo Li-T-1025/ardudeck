@@ -186,6 +186,257 @@
     "imu": "IMU-Temp.",
     "timer": "Flugtimer",
     "txbat": "Senderakku",
-    "wp": "Missions-WP"
+    "wp": "Missions-WP",
+    "speedo": "Tacho",
+    "heading": "Kursband",
+    "depth": "Tiefe",
+    "roll": "Rollen",
+    "pitch": "Nicken",
+    "echo": "Echogramm",
+    "bottom": "Bodenprofil"
+  },
+  "studio": {
+    "tab": {
+      "editor": "Editor",
+      "guide": "Anleitung"
+    },
+    "screens": "Bildschirme",
+    "screensHint": "Was der Sender zeigt. Kachel anklicken, um sie zu ändern.",
+    "bwScreen": "Senderbildschirm",
+    "bwScreenHint": "Feste Aufteilung; für jedes Feld wählen, was es zeigt.",
+    "templates": "Vorlagen",
+    "templatesHint": "Eine Vorlage ist ein ganzer Satz Bildschirme. Wählen, dann jede Kachel anpassen.",
+    "vehicle": "Fahrzeug",
+    "kind": {
+      "copter": "Copter",
+      "plane": "Flugzeug und VTOL",
+      "rover": "Rover",
+      "boat": "Boot",
+      "sub": "U-Boot"
+    },
+    "connectedSuffix": "(verbunden)",
+    "fromVehicleChip": "vom Fahrzeug",
+    "screenN": "Bildschirm {{n}}",
+    "screenTiles_one": "{{count}} Kachel",
+    "screenTiles_other": "{{count}} Kacheln",
+    "removeScreen": "Bildschirm {{n}} entfernen",
+    "addScreen": "Bildschirm hinzufügen",
+    "addFromTemplate": "Aus einer Vorlage",
+    "duplicateScreen": "Kopie dieses Bildschirms",
+    "emptyScreen": "Leerer Bildschirm",
+    "switching": "Bildschirme wechseln",
+    "switchingWhy": "Ein Widget auf einem normalen Senderbildschirm bekommt keine Berührung, deshalb wechselt es selbst:",
+    "everySeconds_one": "alle {{count}} Sekunde",
+    "everySeconds_other": "alle {{count}} Sekunden",
+    "onlySwipe": "nur durch Wischen im Vollbild",
+    "previewWith": "Vorschau mit",
+    "useAllScreens": "Alle Bildschirme verwenden",
+    "screenCount_one": "{{count}} Bildschirm",
+    "screenCount_other": "{{count}} Bildschirme",
+    "yourTemplates": "Eigene Vorlagen",
+    "deleteTemplate": "{{name}} löschen",
+    "saveCurrent": "Aktuelle Bildschirme speichern",
+    "templateNamePlaceholder": "Name",
+    "templateFallbackName": "Vorlage",
+    "template": {
+      "copter": {
+        "name": "Copter",
+        "desc": "Akku, Höhe, Home, GPS und Horizont. Danach die Missionskarte."
+      },
+      "fpv": {
+        "name": "FPV",
+        "desc": "Großer Horizont mit Verbindung und Akku daneben."
+      },
+      "rangefinder": {
+        "name": "Arbeit mit Entfernungsmesser",
+        "desc": "Zuerst der Abstand zum Boden, für niedriges und nahes Fliegen. Danach Systeme."
+      },
+      "plane": {
+        "name": "Flugzeug",
+        "desc": "Geschwindigkeit, Höhe, Horizont, GPS und Wind. Danach ein Navigationsbildschirm."
+      },
+      "longRange": {
+        "name": "Langstrecke",
+        "desc": "Verbindung und Entfernung nach Home neben der Karte. Danach Systeme."
+      },
+      "rover": {
+        "name": "Rover",
+        "desc": "Kursband, Tacho, Rollen und Nicken, Akku und Gas mit Rückwärts. Danach Missionskarte und Systeme."
+      },
+      "sub": {
+        "name": "U-Boot",
+        "desc": "Kursband, Tiefe mit dem Grund darunter, künstlicher Horizont, Akku und Verbindung. Danach Systeme."
+      },
+      "bigPicture": {
+        "name": "Überblick",
+        "desc": "Horizont und Karte nebeneinander."
+      },
+      "minimal": {
+        "name": "Minimal",
+        "desc": "Akku, Entfernung nach Home, Verbindung und Zeit als vier gleich große Anzeigen, auf Armlänge lesbar."
+      },
+      "survey": {
+        "name": "Vermessung",
+        "desc": "Karte mit nächstem Wegpunkt, Akku und Zeit, für Kartierflüge. Danach Systeme."
+      },
+      "cinematic": {
+        "name": "Filmen",
+        "desc": "Ruhige Horizontlinie mit Home und Akku, zum Filmen."
+      },
+      "cruise": {
+        "name": "Reiseflug",
+        "desc": "Geschwindigkeit, Höhe und Home über einer Horizontlinie. Danach Navigation."
+      },
+      "thermal": {
+        "name": "Thermik",
+        "desc": "Höhe mit Steigrate und der Wind neben der Karte, zum Segeln. Danach Systeme."
+      },
+      "missionDrive": {
+        "name": "Missionsfahrt",
+        "desc": "Karte mit Tacho und nächstem Wegpunkt, für eine Missionsfahrt. Danach Systeme."
+      },
+      "fieldWork": {
+        "name": "Feldarbeit",
+        "desc": "Karte mit Laufzeit und Akku, für Mähen und Feldrunden. Danach Fahren."
+      },
+      "boat": {
+        "name": "Boot",
+        "desc": "Kursband, Tacho, Tiefe unter dem Rumpf, Akku und Verbindung. Danach Peilung und Systeme."
+      },
+      "sounding": {
+        "name": "Peilung",
+        "desc": "Das Echogramm neben Bodenprofil und Geschwindigkeit, für Vermessungsfahrten. Braucht ein Skript auf dem Boot, mit einem Klick eingerichtet. Danach der Bootsbildschirm."
+      }
+    },
+    "style": "Darstellung",
+    "variant": {
+      "default": "Standard",
+      "icon": "Symbol",
+      "ball": "Kugel",
+      "line": "Linie",
+      "bars": "Zahlen"
+    },
+    "dragHint": "Auf dem Bildschirm ziehen zum Verschieben, an der Ecke ziehen für die Größe.",
+    "pickATile": "Kachel auf dem Bildschirm anklicken, um sie zu ändern oder zu entfernen.",
+    "addTile": "Kachel hinzufügen",
+    "moreTiles": "Weitere",
+    "tileHelp": {
+      "batt": "Restladung, Spannung pro Zelle und Strom. Der Balken nutzt Zellen und Kapazität rechts.",
+      "home": "Entfernung und Richtung nach Home, mit Pfeil dorthin.",
+      "alt": "Höhe über Home und Steigrate. Ein Rover oder Boot zeigt stattdessen die gefahrene Strecke, ein U-Boot die Tiefe.",
+      "gps": "Satelliten, Fix-Art und HDOP.",
+      "att": "Rollen und Nicken, als Horizont oder als Zahlen.",
+      "compass": "Kurs.",
+      "spd": "Geschwindigkeit über Grund.",
+      "timer": "Zeit scharf in dieser Sitzung.",
+      "wind": "Windgeschwindigkeit und Richtung, wie der Flugcontroller sie schätzt.",
+      "link": "Verbindungsqualität und Signalstärke vom Empfänger.",
+      "txbat": "Der Akku des Senders selbst.",
+      "thr": "Gasausgabe.",
+      "imu": "Temperatur der IMU des Flugcontrollers.",
+      "rng": "Abstand des Entfernungsmessers. Auf einem Boot als Tiefe.",
+      "pos": "Koordinaten des Fahrzeugs.",
+      "map": "Satellitenkarte mit Fahrzeug, Home und Missionsroute. Braucht die Feldkarten unten.",
+      "wp": "Nächster Wegpunkt: Nummer, Entfernung und Richtung.",
+      "speedo": "Geschwindigkeit über Grund in km/h als Bogenanzeige. Die Skala wächst mit der höchsten gesehenen Geschwindigkeit.",
+      "heading": "Kompassband mit dem Kurs in der Mitte und dem nächsten Wegpunkt blau markiert.",
+      "depth": "Wassersäule: oben die Oberfläche, ein U-Boot in seiner Tiefe, der Grund vom nach unten gerichteten Entfernungsmesser oder Sonar. Beim Boot die Tiefe unter dem Rumpf.",
+      "roll": "Seitliche Neigung als Neigungsmesser: das Fahrzeug bleibt aufrecht, der Boden kippt. Gelb ab 20 Grad, rot ab 30.",
+      "pitch": "Bug hoch oder runter als Neigungsmesser: das Fahrzeug bleibt aufrecht, der Boden kippt. Gelb ab 20 Grad, rot ab 30.",
+      "echo": "Echolot-Wasserfall von einem Blue Robotics Ping: Echostärke über die Wassersäule, das Neueste rechts. Braucht ein Skript auf dem Boot; ArduDeck richtet es mit einem Klick ein.",
+      "bottom": "Tiefe der letzten Minuten als Bodenlinie, von jedem Tiefenmesser. Kein Skript nötig."
+    },
+    "radio": "Sender",
+    "noRadio": "Nicht verbunden",
+    "radioModel": "Sendermodell",
+    "goesTo": "Diese Bildschirme gehen an",
+    "shared": "gemeinsam",
+    "onRadioNow": "jetzt auf dem Sender",
+    "ownScreens": "hat eigene Bildschirme",
+    "sharedScreens": "nutzt die gemeinsamen Bildschirme",
+    "openFromRadio": "Öffnen, was auf dem Sender ist",
+    "removeWidget": "Widget entfernen",
+    "lookingTitle": "Suche nach einem Sender",
+    "lookingStep1": "Sender per USB verbinden",
+    "lookingStep2": "Auf seinem Bildschirm USB-Speicher (SD) wählen",
+    "lookingStep3": "Er erscheint hier nach wenigen Sekunden",
+    "batteryHint": "Für den Balken und die Warnungen",
+    "fromVehicle": "Vom Fahrzeug",
+    "cells": "Zellen",
+    "capacity": "Kapazität",
+    "lowWarning": "Warnung niedrig",
+    "critical": "Kritisch",
+    "perCell": "V/Zelle",
+    "autoCells": "Auto: {{cells}}S aus {{volts}} V",
+    "autoCellsIdle": "Auto: aus der Akkuspannung",
+    "autoCapacity": "Auto: vom Fahrzeug",
+    "advanced": "Erweitert",
+    "fieldMapsHint": "Satellitenbilder für die Kartenkachel. Auf die Karte klicken setzt die Mitte; die Ringe sind die Zoomstufen.",
+    "generateMaps": "Karten erzeugen",
+    "readyToPut": "Bereit, diese Bildschirme auf den Sender zu bringen.",
+    "connectToPut": "Sender verbinden, um diese Bildschirme aufzuspielen. Sie bleiben bis dahin erhalten.",
+    "vehicleBattery": "Fahrzeug und Akku",
+    "pickVehicle": "wählen",
+    "pickVehicleTip": "Offline: das Fahrzeug wählen, für das diese Bildschirme sind. Davon hängen die angebotenen Vorlagen und die Modusnamen am Sender ab. Ein verbundenes Fahrzeug hat immer Vorrang.",
+    "showAllScreens": "Alle Bildschirme zeigen",
+    "screensOfTemplate": "Bildschirme dieser Vorlage",
+    "screenWord": "Bildschirm",
+    "noSavedTemplates": "Hier gespeicherte Bildschirme erscheinen in diesem Abschnitt.",
+    "previousScreen": "Vorheriger Bildschirm",
+    "nextScreen": "Nächster Bildschirm",
+    "singleScreen": "Ein Bildschirm",
+    "addScreenN": "Bildschirm {{n}} hinzufügen",
+    "addThisScreen": "Diesen Bildschirm hinzufügen",
+    "useAllTip": "Ersetzt deine Bildschirme durch die dieser Vorlage.",
+    "addScreenTip": "Behält deine Bildschirme und hängt diesen dahinter an.",
+    "screensFull": "Du hast {{max}} von {{max}} Bildschirmen. Einen entfernen, um einen weiteren hinzuzufügen.",
+    "experimental": "Experimentell",
+    "experimentalTip": "Noch nicht auf echten Booten erprobt. Mit Ecken und Kanten rechnen, und gern Rückmeldung geben.",
+    "sonar": {
+      "needsScriptTitle": "Das Echogramm braucht ein Skript auf dem Boot",
+      "connectFirst": "ArduDeck installiert ein kleines Lua-Skript auf dem Autopiloten, das den Ping liest und das Echogramm an den Sender schickt. Das Boot einmal verbinden, um es einzurichten.",
+      "readyBody": "ArduDeck installiert das ArduDeck-Sonarskript auf dem Autopiloten, übergibt ihm den seriellen Port des Ping (die Tiefe läuft über das Skript weiter) und startet den Autopiloten neu. Diese Einstellungen ändern sich:",
+      "plusScripting": "dazu SCR_ENABLE und SCR_HEAP_SIZE, falls Skripte aus sind",
+      "setUp": "Einrichten",
+      "disarmed": "Das Boot muss entschärft sein.",
+      "runningTitle": "Sonarskript wird eingerichtet",
+      "phase": {
+        "checking": "Autopilot wird geprüft",
+        "uploading": "Skript wird auf den Autopiloten kopiert",
+        "configuring": "{{param}} wird auf {{value}} gesetzt",
+        "rebooting": "Autopilot startet neu",
+        "verifying": "Warten, bis das Skript läuft"
+      },
+      "installedTitle": "Sonarskript ist eingerichtet",
+      "installedBody": "Der Autopilot liest den Ping und schickt das Echogramm. Diese Bildschirme auf den Sender bringen, um es zu sehen.",
+      "companionTitle": "Der Begleitrechner verwaltet das Sonar",
+      "companionBody": "Die Tiefe kommt über MAVLink, also betreibt ein Begleitrechner wie BlueOS den Ping. So bekommt der Sender kein Echogramm; das Sonar-Cargo zeigt es in ArduDeck.",
+      "noneTitle": "Kein Ping auf diesem Boot",
+      "noneBody": "Das Echogramm braucht einen Blue Robotics Ping am Autopiloten, eingerichtet als Entfernungsmesser. Die Hardware-Einrichtung hat dafür eine Vorlage.",
+      "manualTitle": "Skript von Hand kopieren",
+      "manualBody": "Der Autopilot hat die Datei über die Verbindung nicht angenommen. ardudeck_sonar.lua nach {{path}} auf seine SD-Karte kopieren und die Einrichtung erneut starten; sonst wurde nichts geändert.",
+      "errorTitle": "Einrichtung nicht abgeschlossen",
+      "tryAgain": "Erneut versuchen",
+      "setUpSounder": "Echolot einrichten",
+      "nmeaTitle": "NMEA-Echolot",
+      "nmeaBody": "Ein NMEA-Echolot sendet nur die Tiefe, also zeigt der Sender Tiefe und Bodenprofil, aber kein Echogramm. Das Echogramm braucht einen Blue Robotics Ping."
+    },
+    "snap": "Einrasten",
+    "snapTip": "Kacheln beim Ziehen am 8-px-Raster und an Nachbarn einrasten lassen."
+  },
+  "guide": {
+    "installTitle": "Auf den Sender bringen",
+    "installBody": "Sender per USB verbinden und auf seinem Bildschirm <b>USB-Speicher (SD)</b> wählen. ArduDeck findet ihn, und der Knopf unten kopiert Widget und Bildschirme auf die SD-Karte. Vor dem Abziehen auswerfen.",
+    "placeTitle": "Widget platzieren",
+    "placeBody": "Einmal pro Modell, am Sender: Einstellungen der <b>Bildschirme</b> öffnen, ein Layout mit einem großen Bereich wählen und das Widget <b>ArduDeck</b> hinzufügen. Im Vollbild lässt sich zwischen den Bildschirmen wischen.",
+    "telemetryTitle": "Telemetrie senden",
+    "telemetryBody": "Das Widget liest die Passthrough-Telemetrie von ArduPilot. Bei FrSky den seriellen Port des Empfängers auf <b>SERIALn_PROTOCOL = 10</b> stellen. Bei CRSF oder ExpressLRS in <b>RC_OPTIONS</b> Bit 8 setzen (Passthrough für CRSF-Telemetrie). Danach am Sender <b>neue Sensoren suchen</b>.",
+    "statesTitle": "Wenn etwas fehlt",
+    "statesHint": "Was der Sender statt der Bildschirme zeigt, und was zu prüfen ist.",
+    "state": {
+      "no-link": "<b>NO LINK</b>: Der Sender hört nichts vom Empfänger. Prüfen, ob der Empfänger Strom hat und gebunden ist.",
+      "no-mavlink": "<b>NO MAVLINK</b>: Die Verbindung steht, aber es kommen keine Telemetrie-Frames. Passthrough-Einstellung oder ELRS-MAVLink-Modus prüfen.",
+      "streams-off": "<b>STREAMS OFF</b>: Frames kommen an, aber der Flugcontroller sendet zu wenig. ArduDeck einmal verbinden, um die Telemetrieraten zu setzen."
+    }
   }
 }

@@ -47,33 +47,38 @@ export function batteryParams(p: VehicleProfile): ParamSpec[] {
 }
 
 /**
- * Airspeed envelope for fixed-wing. Derives MIN/CRUISE/MAX from stallSpeed
- * with the classic ArduPilot recommended multipliers.
+ * Airspeed envelope for fixed-wing, from the profile's stall speed:
+ * MIN 25% above stall (the parameter doc asks for at least 20%), CRUISE 1.5x,
+ * MAX twice cruise, which keeps it 50% above MIN as TECS needs.
+ * Firmware 4.5 renamed ARSPD_FBW_MIN / TRIM_ARSPD_CM / ARSPD_FBW_MAX to
+ * AIRSPEED_MIN / _CRUISE / _MAX (m/s) and 4.6 added AIRSPEED_STALL; both
+ * generations are emitted and the diff keeps only the names the vehicle has.
  */
+export const AIRSPEED_MIN_FACTOR = 1.25;
+export const AIRSPEED_CRUISE_FACTOR = 1.5;
+export const AIRSPEED_MAX_FACTOR = 3.0;
+/** AIRSPEED_STALL is "typically set slightly higher than true stall speed". */
+export const AIRSPEED_STALL_FACTOR = 1.05;
+
 export function airspeedParams(p: VehicleProfile): ParamSpec[] {
   if (!p.stallSpeed || p.stallSpeed <= 0) return [];
   const stall = p.stallSpeed;
+  const min = round(stall * AIRSPEED_MIN_FACTOR, 1);
+  const cruise = round(stall * AIRSPEED_CRUISE_FACTOR, 1);
+  const max = round(stall * AIRSPEED_MAX_FACTOR, 1);
+  const stallSet = round(stall * AIRSPEED_STALL_FACTOR, 1);
+  const minReason = t('lib:vehicleTemplates.helpers.airspeedMin', { speed: min });
+  const cruiseReason = t('lib:vehicleTemplates.helpers.airspeedCruise', { speed: cruise });
+  const maxReason = t('lib:vehicleTemplates.helpers.airspeedMax', { speed: max });
   return [
-    {
-      name: 'AIRSPEED_MIN',
-      value: round(stall * 1.15, 1),
-      reason: t('lib:vehicleTemplates.helpers.airspeedMin', { speed: round(stall * 1.15, 1) }),
-    },
-    {
-      name: 'AIRSPEED_CRUISE',
-      value: round(stall * 1.5, 1),
-      reason: t('lib:vehicleTemplates.helpers.airspeedCruise', { speed: round(stall * 1.5, 1) }),
-    },
-    {
-      name: 'AIRSPEED_MAX',
-      value: round(stall * 2.2, 1),
-      reason: t('lib:vehicleTemplates.helpers.airspeedMax', { speed: round(stall * 2.2, 1) }),
-    },
-    {
-      name: 'TRIM_ARSPD_CM',
-      value: Math.round(stall * 150),  // cm/s (cruise × 100)
-      reason: t('lib:vehicleTemplates.helpers.trimAirspeed'),
-    },
+    { name: 'AIRSPEED_MIN', value: min, reason: minReason },
+    { name: 'AIRSPEED_CRUISE', value: cruise, reason: cruiseReason },
+    { name: 'AIRSPEED_MAX', value: max, reason: maxReason },
+    { name: 'AIRSPEED_STALL', value: stallSet, reason: t('lib:vehicleTemplates.helpers.airspeedStall', { speed: stallSet }) },
+    // firmware before 4.5: integer m/s for the limits, cm/s for cruise
+    { name: 'ARSPD_FBW_MIN', value: Math.round(min), reason: minReason },
+    { name: 'TRIM_ARSPD_CM', value: Math.round(cruise * 100), reason: t('lib:vehicleTemplates.helpers.trimAirspeed', { speed: cruise }) },
+    { name: 'ARSPD_FBW_MAX', value: Math.round(max), reason: maxReason },
   ];
 }
 

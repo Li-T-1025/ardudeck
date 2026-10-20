@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Loader2, MapPin, Search, X } from 'lucide-react';
+import { Loader2, MapPin, Mountain, Search, X } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import type {
   TrainerBakeProgress,
   TrainerCatalogue,
   TrainerBakeRequest,
+  TrainerLocusSurvey,
 } from '../../../shared/trainer-types';
 
 /**
@@ -47,6 +48,20 @@ export function NewRegionDialog({
   // Medium, not the pipeline's own default of high. High is ~36 provider renders of 2000 px
   // each and is by far the longest thing a bake does; medium still resolves field boundaries.
   const [detail, setDetail] = useState('medium');
+  // Where the ground comes from: open data for any place on Earth, or one of the Locus surveys here.
+  const [source, setSource] = useState<'place' | 'locus'>('place');
+  const [surveys, setSurveys] = useState<TrainerLocusSurvey[] | null>(null);
+  const [survey, setSurvey] = useState<TrainerLocusSurvey | null>(null);
+  useEffect(() => {
+    void window.electronAPI.trainerLocusSurveys().then(setSurveys).catch(() => setSurveys([]));
+  }, []);
+  const pickSurvey = (sv: TrainerLocusSurvey): void => {
+    setSurvey(sv);
+    setPlace({ label: sv.name, lat: sv.centre.lat, lon: sv.centre.lon });
+    setSideKm(Math.min(limits.sideMaxKm, Math.max(limits.sideMinKm, sv.sideKm)));
+    setRes(Math.min(limits.resMaxM, Math.max(limits.resMinM, Math.ceil(sv.source.cellM * 2))));
+    if (!name.trim()) setName(sv.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40));
+  };
   const [superRes, setSuperRes] = useState(true);
   const [progress, setProgress] = useState<TrainerBakeProgress | null>(null);
   const [busy, setBusy] = useState(false);
@@ -116,6 +131,7 @@ export function NewRegionDialog({
       metersPerTexel: res,
       detail,
       superRes,
+      ...(source === 'locus' && survey ? { locus: survey.source } : {}),
     };
     try {
       const done = await window.electronAPI.trainerBake(request);
@@ -194,6 +210,55 @@ export function NewRegionDialog({
               />
             </Field>
 
+            <Field label={t('trainer:newRegionDialog.source')}>
+              <div className="flex gap-1 rounded-lg border border-subtle bg-surface p-1">
+                {(['place', 'locus'] as const).map((id) => (
+                  <button
+                    key={id}
+                    type="button"
+                    onClick={() => { setSource(id); if (id === 'place') setSurvey(null); }}
+                    className={`flex-1 rounded-md px-2 py-1.5 text-xs font-medium transition-colors ${source === id ? 'bg-blue-500/15 text-blue-400' : 'text-content-secondary hover:bg-surface-raised'}`}
+                  >
+                    {t(`trainer:newRegionDialog.source_${id}`)}
+                  </button>
+                ))}
+              </div>
+              <p className="mt-1.5 text-[11px] text-content-tertiary">{t(`trainer:newRegionDialog.source_${source}_hint`)}</p>
+            </Field>
+
+            {source === 'locus' && (
+              <Field label={t('trainer:newRegionDialog.survey')}>
+                {surveys === null ? (
+                  <p className="flex items-center gap-2 text-xs text-content-tertiary"><Loader2 className="h-3.5 w-3.5 animate-spin" />{t('trainer:newRegionDialog.surveysLoading')}</p>
+                ) : surveys.length === 0 ? (
+                  <p className="text-xs text-content-tertiary">{t('trainer:newRegionDialog.noSurveys')}</p>
+                ) : (
+                  <ul className="max-h-44 space-y-1 overflow-auto">
+                    {surveys.map((sv) => (
+                      <li key={sv.output}>
+                        <button
+                          type="button"
+                          onClick={() => pickSurvey(sv)}
+                          className={`flex w-full items-start gap-2 rounded-lg border px-2.5 py-1.5 text-left text-xs transition-colors ${survey?.output === sv.output ? 'border-blue-500/50 bg-blue-500/10' : 'border-subtle hover:bg-surface-raised'}`}
+                        >
+                          <Mountain className="mt-0.5 h-3 w-3 shrink-0 text-content-tertiary" />
+                          <span className="min-w-0">
+                            <span className="block text-content">{sv.name}</span>
+                            <span className="block truncate text-[11px] text-content-tertiary">
+                              {t('trainer:newRegionDialog.surveyMeta', { side: sv.sideKm, cell: Math.round(sv.source.cellM * 100) })}
+                              {sv.source.dtm ? ` · ${t('trainer:newRegionDialog.surveyTrees')}` : ''}
+                              {sv.source.ortho ? ` · ${t('trainer:newRegionDialog.surveyOrtho')}` : ''}
+                            </span>
+                          </span>
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </Field>
+            )}
+
+            {source === 'place' && (
             <Field label={t('trainer:newRegionDialog.place')}>
               <div className="flex gap-2">
                 <input
@@ -239,6 +304,7 @@ export function NewRegionDialog({
                 </p>
               )}
             </Field>
+            )}
 
             <div className="grid gap-4 sm:grid-cols-2">
               <Slider

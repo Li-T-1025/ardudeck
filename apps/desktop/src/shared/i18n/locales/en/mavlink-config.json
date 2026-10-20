@@ -76,8 +76,8 @@
     "notLoadedBody": "Autotune settings are read from the vehicle",
     "selectAllThree": "Select all three",
     "skipAxis": "Skip {{axis}} this tune",
-    "staged_one": "{{count}} change staged. Nothing is written to the vehicle until Apply.",
-    "staged_other": "{{count}} changes staged. Nothing is written to the vehicle until Apply.",
+    "staged_one": "{{count}} change ready. Apply stages it with your other changes; it is written to the vehicle when you save all changes.",
+    "staged_other": "{{count}} changes ready. Apply stages them with your other changes; they are written to the vehicle when you save all changes.",
     "startNoMode": "Switch the aircraft into AutoTune once you are flying.",
     "startWithMode": "Switch into AutoTune (mode {{mode}}) once you are flying, either from the mode picker on the telemetry screen or from a transmitter switch.",
     "switchHint": "To put it on a switch, use Switch Actions on the Flight Modes tab: pick the channel, then the AutoTune option. That is the same RCn_OPTION you would otherwise hunt for by number.",
@@ -390,10 +390,6 @@
     "position4": "Position 4",
     "position5": "Position 5",
     "position6": "Position 6 (High)",
-    "presetHint": "Click to apply a mode configuration",
-    "presetIntermediate": "Intermediate",
-    "presetMapping": "Mapping",
-    "presetVtol": "VTOL",
     "simple": "Simple",
     "simpleHint": "Configure the 3 primary switch positions. Most transmitters use a 3-position switch.",
     "slotN": "Slot {{n}}",
@@ -410,7 +406,9 @@
   "frameDiagram": {
     "clickToTest": "Click a motor to test",
     "frame": "Frame",
-    "quadplane": "QuadPlane lift motors"
+    "quadplane": "QuadPlane lift motors",
+    "yawServo": "yaw servo, output {{n}}",
+    "eitherWay": "either way"
   },
   "gpsDiagnosticsDialog": {
     "accuracy": "Accuracy",
@@ -705,8 +703,8 @@
       "storageGroupDesc": "Raw parameter table + FC filesystem browser",
       "telemetryRates": "Telemetry Rates",
       "telemetryRatesDesc": "How often each kind of data is sent, and what it costs on the link",
-      "tuningDesc": "Performance presets and basic tuning",
-      "tuningGroupDesc": "PID gains, rate curves, and performance presets",
+      "tuningDesc": "Simple tuning sliders without the PID details",
+      "tuningGroupDesc": "PID gains, rate curves and AutoTune",
       "quickSetup": "Quick setup",
       "quickSetupDesc": "The settings changed most often, as simple controls"
     },
@@ -790,124 +788,6 @@
       "3": "Both altitude and circular limits",
       "4": "Custom polygon boundary",
       "7": "Altitude, circle, and polygon"
-    },
-    "flightMode": {
-      "advanced": {
-        "description": "Full control with Acro and Sport modes",
-        "name": "Advanced"
-      },
-      "beginner": {
-        "description": "Safe modes only - Stabilize, AltHold, Loiter, RTL",
-        "name": "Beginner Safe"
-      },
-      "intermediate": {
-        "description": "Add Auto and PosHold for missions",
-        "name": "Intermediate"
-      },
-      "mapping": {
-        "description": "Optimized for aerial mapping missions",
-        "name": "Mapping/Survey"
-      }
-    },
-    "mission": {
-      "cinema": {
-        "description": "Ultra-smooth movements for professional video.",
-        "name": "Cinematic"
-      },
-      "mapping": {
-        "description": "Slow, stable flight for aerial mapping and photogrammetry.",
-        "name": "Mapping/Survey"
-      },
-      "sport": {
-        "description": "Fast, responsive flight for fun flying.",
-        "name": "Sport"
-      },
-      "surveillance": {
-        "description": "Moderate speed, good stability for video.",
-        "name": "Surveillance"
-      }
-    },
-    "pid": {
-      "beginner": {
-        "description": "Smooth & forgiving - great for learning",
-        "name": "Beginner"
-      },
-      "cinematic": {
-        "description": "Ultra-smooth for video",
-        "name": "Cinematic"
-      },
-      "freestyle": {
-        "description": "Responsive & smooth for tricks",
-        "name": "Freestyle"
-      },
-      "racing": {
-        "description": "Snappy & precise for speed",
-        "name": "Racing"
-      }
-    },
-    "planeFlightMode": {
-      "advanced": {
-        "description": "Full control with Manual and Acro",
-        "name": "Advanced"
-      },
-      "beginner": {
-        "description": "Safe modes - FBWA, Loiter, RTL",
-        "name": "Beginner Safe"
-      },
-      "intermediate": {
-        "description": "Add Auto and Cruise for missions",
-        "name": "Intermediate"
-      },
-      "vtol": {
-        "description": "QLoiter, FBWA, QRTL for VTOL aircraft",
-        "name": "VTOL QuadPlane"
-      }
-    },
-    "rate": {
-      "beginner": {
-        "description": "Slow & predictable - great for learning",
-        "name": "Beginner"
-      },
-      "cinematic": {
-        "description": "Ultra-smooth for filming",
-        "name": "Cinematic"
-      },
-      "freestyle": {
-        "description": "Balanced for tricks & flow",
-        "name": "Freestyle"
-      },
-      "racing": {
-        "description": "Fast & responsive for speed",
-        "name": "Racing"
-      }
-    },
-    "safety": {
-      "balanced": {
-        "description": "Essential safety features without being restrictive.",
-        "name": "Balanced"
-      },
-      "maximum": {
-        "description": "All safety features enabled. Recommended for beginners.",
-        "name": "Maximum Safety"
-      },
-      "minimal": {
-        "description": "Only critical safety features. For experienced pilots.",
-        "name": "Minimal"
-      }
-    },
-    "skill": {
-      "beginner": {
-        "description": "Soft, forgiving response. Great for learning.",
-        "name": "Beginner"
-      },
-      "expert": {
-        "description": "Aggressive response for experienced pilots.",
-        "name": "Expert"
-      },
-      "intermediate": {
-        "description": "Balanced response for general flying.",
-        "name": "Intermediate"
-      }
     }
   },
   "motorTestTab": {
@@ -1237,7 +1117,6 @@
     "pHint": "Higher = snappier",
     "pLabel": "P - Response",
     "paramsNotLoaded": "Parameters Not Loaded",
-    "presetsHint": "Click to apply a tuning style",
     "px4DualIntro": "This VTOL runs separate multicopter and fixed-wing controllers.",
     "quadPlaneDualIntro": "This QuadPlane runs separate VTOL and fixed-wing controllers.",
     "unknownSchemeBody": "Could not detect a known PID parameter scheme on this board. Expected <m>ATC_RAT_*</m>, <m>RATE_RLL_*</m>, <m>RLL_RATE_*</m>, <m>RLL2SRV_*</m>, <m>Q_A_RAT_*</m>, <m>MC_*RATE_*</m>, or <m>FW_*R_*</m> parameters.",
@@ -1576,7 +1455,6 @@
     "noExpo": " (no expo on this firmware)",
     "paramsNotLoaded": "Parameters Not Loaded",
     "pitchRate": "Pitch Rate ({{unit}})",
-    "presetsHint": "Click to apply a rate style",
     "rateMultiplier": "Rate multiplier",
     "rollAndPitch": "Roll and pitch",
     "rollPitchExpo": "Roll/Pitch Expo",
@@ -1754,17 +1632,12 @@
     "actionSmartRtlOrLand": "SmartRTL or Land",
     "actionSmartRtlOrRtl": "SmartRTL or RTL",
     "actionTerminate": "Terminate",
-    "applyPreset": "Apply Preset",
-    "applyPresetDesc": "The following parameters will be changed on the vehicle.",
-    "applyPresetTitle": "Apply \"{{name}}\" Preset",
     "breachAction": "Breach Action",
     "breachAlwaysLand": "Always Land",
     "breachBrakeOrLand": "Brake or Land",
     "breachReportOnly": "Report Only",
     "breachRtlOrLand": "RTL or Land",
     "breachSmartRtlOrRtl": "SmartRTL or RTL",
-    "colCurrent": "Current",
-    "colNew": "New",
     "criticalBatteryDesc": "Last resort when battery is dangerously low",
     "criticalBatteryTitle": "Critical Battery",
     "criticalBatteryWarning": "<hl>Warning:</hl> Critical battery should trigger a more aggressive action than low battery (e.g. Land vs RTL). Set voltage lower than the low battery threshold.",
@@ -1796,9 +1669,6 @@
     "maxAltitude": "Max Altitude (m)",
     "maxRadius": "Max Radius (m)",
     "paramsNotLoaded": "Parameters Not Loaded",
-    "presetBalanced": "Balanced",
-    "presetMaximum": "Maximum",
-    "presetMinimal": "Minimal",
     "px4AutoDisarmDesc": "Automatically disarm after landing or idle on the ground",
     "px4AutoDisarmTitle": "Auto-Disarm",
     "px4BatteryThresholdsNote": "Battery warning, critical, and emergency thresholds are configured on the Battery tab (BAT_LOW_THR, BAT_CRIT_THR, BAT_EMERGEN_THR).",
@@ -1829,8 +1699,6 @@
     "rcLostTitle": "RC Signal Lost",
     "safetyFeaturesBody": "Configure what happens when things go wrong. Failsafes can save your aircraft from flyaways and crashes. Beginners should use the Maximum Safety preset.",
     "safetyFeaturesTitle": "Safety Features",
-    "safetyPresets": "Safety Presets",
-    "safetyPresetsHint": "Click to review and apply all settings",
     "triggerPwmThreshold": "Trigger PWM Threshold",
     "triggerPwmThresholdHint": "Failsafe triggers when throttle drops below this value",
     "unsavedReminder": "You have unsaved changes. Click <b>\"Save All Changes\"</b> in the header to save."
@@ -2076,6 +1944,7 @@
     "stepCheck": "Check it works",
     "category": {
       "rangefinder": "Rangefinders",
+      "depth": "Depth sounders",
       "airspeed": "Airspeed (pitot)",
       "proximity": "Proximity (obstacle sensing)",
       "flow": "Optical flow",
@@ -2134,7 +2003,10 @@
       "smbus": "Smart battery that reports its own state of charge and cells.",
       "mlrs": "Long-range MAVLink link for telemetry and RC.",
       "esp32": "WiFi telemetry to a phone or laptop through an ESP32 or ESP8266.",
-      "bdshot": "Live RPM from every motor over the motor signal wire, for the RPM notch filter. No extra wires."
+      "bdshot": "Live RPM from every motor over the motor signal wire, for the RPM notch filter. No extra wires.",
+      "ping": "Blue Robotics sonar for boats, depth to 50 m (Ping2 to 100 m). Also feeds the echogram on the radio.",
+      "nmeaSounder": "Any depth sounder that talks NMEA 0183 (DPT or DBT), such as a fish finder or chartplotter output.",
+      "kogger": "Underwater echosounder for boats, 0.3 to 50 m. Set its dataset to NMEA at 115200 in KoggerApp and flash it first; the Sonar cargo shows the full echogram."
     },
     "whichPort": "Which serial port is it plugged into?",
     "choosePort": "Choose a port",
@@ -2170,6 +2042,7 @@
     "docs": "Wiring and details",
     "checkHint": {
       "rangefinder": "Move your hand in front of the sensor: the distance should change.",
+      "depth": "Transducer in the water, or a hand held flat in front of it: the depth should appear and change.",
       "proximity": "Hold something near the sensor: the closest distance should drop.",
       "airspeed": "Blow gently into the pitot tube: the airspeed should rise. Cover it from wind while the board boots, so it zeroes correctly.",
       "gps": "Outdoors with a clear sky view, the fix should reach 3 within a few minutes.",
@@ -2195,7 +2068,9 @@
     "manualStep": "In the parameter table, set {{param}} to {{label}} ({{value}}).",
     "manualDone": "{{param}} is {{label}}.",
     "manualWhy": "ArduDeck never changes motor output settings for you: a wrong value can spin the motors. Do it with the props off; this list ticks itself off as soon as the vehicle reports it.",
-    "escValue": "{{n}} motors reporting · {{rpm}} rpm"
+    "escValue": "{{n}} motors reporting · {{rpm}} rpm",
+    "portOptionNamed": "{{name}}  ·  SERIAL{{n}}  ·  {{use}}",
+    "portFree": "free"
   },
   "gimbalRange": {
     "open": "Set camera range",
@@ -2319,7 +2194,16 @@
       "rtlAlt": "Return home at least {{m}} m high",
       "radio": "React to radio loss (return home)",
       "battLow": "Return home when the battery is low",
-      "spacing": "Terrain grid of 30 m, to keep the Locus survey's detail"
+      "spacing": "Terrain grid of 30 m, to keep the Locus survey's detail",
+      "ffPlane": "Roll and pitch feed-forward is 0, so the rate controller answers late and feels soft. Set it to {{value}} as a starting point; AutoTune will refine it.",
+      "ffQuadPlane": "Fixed-wing roll and pitch feed-forward is 0, so forward flight answers late and feels soft. Set it to {{value}} as a starting point; AutoTune will refine it.",
+      "gpsModes": "No GPS is configured, but mode slots {{slots}} use {{modes}}, which need GPS. Switch them to {{safe}}.",
+      "qModes": "QuadPlane is off (Q_ENABLE 0), but mode slots {{slots}} use {{modes}}, which only work on a QuadPlane. Switch them to {{safe}}.",
+      "battLowInvalid": "Low battery action {{value}} is not a valid action for this vehicle. Return home instead.",
+      "battCrtInvalid": "Critical battery action {{value}} is not a valid action for this vehicle. Land instead.",
+      "battCrtNone": "A critical battery level is set, but nothing happens when it is reached. Land when it is.",
+      "battCrtWeaker": "The critical battery action is milder than the low battery one. Land at critical instead.",
+      "armingChecks": "All arming checks are off, so the vehicle arms with a bad compass, no GPS or a failing sensor. Turn every check back on."
     },
     "introTitle": "Quick setup",
     "elrs": {
@@ -2355,6 +2239,241 @@
       "hz": "{{v}} Hz",
       "hzChange": "{{from}} → {{to}} Hz",
       "ratesPickPort": "Pick the receiver's port above to see and set its rates."
+    },
+    "depth": {
+      "title": "Depth sounder",
+      "hint": "Depth under the boat, for the map, logs and the radio.",
+      "state": {
+        "none": "none fitted",
+        "ready": "Blue Robotics Ping",
+        "installed": "Ping via sonar script",
+        "nmea": "NMEA sounder",
+        "companion": "from the companion"
+      },
+      "belowTransducer": "below the transducer",
+      "noReading": "no reading yet",
+      "noneBody": "No downward depth sounder is set up. Pick yours; the hardware setup sets the port and the rangefinder for you.",
+      "add": {
+        "ping": "Blue Robotics Ping",
+        "nmea": "NMEA depth sounder"
+      },
+      "nmeaNote": "NMEA sounders send the depth only, so the radio can show depth and a bottom profile but no echogram.",
+      "onRadio": "Show depth on the radio"
+    },
+    "hero": {
+      "title": "Set up a new vehicle",
+      "body": "Start with how big it is: two numbers fill in most of the rest. Then motors, receiver, modes and failsafes, each checked against what the board reports. Nothing is written until you have seen it.",
+      "start": "Start",
+      "notReady": "The guided setup is not in this build yet; the full parameter list opens instead."
+    },
+    "problems": {
+      "title": "Something wrong?",
+      "arm": "It will not arm",
+      "armNone": "nothing refused in the last minute",
+      "flip": "It flips on take-off",
+      "flipDetail": "Check motor layout, order and direction",
+      "motors": "Motors do not spin",
+      "motorsDetail": "ESC type, battery plugged in, safety switch",
+      "wobble": "It wobbles or shakes",
+      "wobbleDetail": "Starting values for your prop size, then the vibration filter"
+    },
+    "hardware": {
+      "title": "Add hardware",
+      "hint": "Each card checks its device against what the board reports. Everything else is in the hardware setup.",
+      "more": "All hardware"
+    },
+    "telemetry": {
+      "title": "Telemetry radio",
+      "hint": "SiK, RFD900 or RFD868 on the flight controller.",
+      "none": "none set up",
+      "ready": "ready",
+      "toFix_one": "{{count}} thing to fix",
+      "toFix_other": "{{count}} things to fix",
+      "portOk": "{{port}} speaks MAVLink 2 at {{baud}}",
+      "mav2": "{{port}} speaks MAVLink 1, radios do better with MAVLink 2",
+      "baud": "{{port}} runs at {{baud}}, radios expect 57600",
+      "flowOn": "Hardware flow control on {{port}} is on",
+      "flowOff": "Hardware flow control on {{port}} is off",
+      "flowHint": "Match it to the radio: when the radio is set to RTS/CTS, turn it on here and tick \"Hardware flow control\" when connecting over it.",
+      "turnOn": "Turn on",
+      "turnOff": "Turn off",
+      "fix": "Fix",
+      "pickPort": "Which port is the radio on?",
+      "usePort": "Radio on {{port}}"
+    },
+    "rangefinder": {
+      "title": "Rangefinder",
+      "hint": "Distance to the ground for landing and terrain following.",
+      "none": "none fitted",
+      "fitted": "fitted",
+      "reading": "{{m}} m now",
+      "noReading": "no reading yet",
+      "pick": "Pick the one you have; ArduDeck sets the port and the type for you.",
+      "all": "All rangefinders"
+    },
+    "gps": {
+      "title": "GPS and compass",
+      "hint": "Position, and the heading the compass gives it.",
+      "ok": "ready",
+      "noFix": "no fix yet",
+      "compassUncal": "compass not calibrated",
+      "noGps": "no GPS set up",
+      "fix": "GPS: {{fix}}, {{sats}} satellites",
+      "fixNone": "no fix",
+      "fix2d": "2D fix",
+      "fix3d": "3D fix",
+      "fixDgps": "DGPS fix",
+      "fixRtk": "RTK fix",
+      "gpsOff": "No GPS is set up",
+      "compassOk_one": "{{count}} compass calibrated",
+      "compassOk_other": "{{count}} compasses calibrated",
+      "compassBad": "Compass {{n}} not calibrated",
+      "noCompass": "No compass found",
+      "calibrate": "Calibrate",
+      "onPort": "GPS on {{port}}",
+      "pickPort": "Which port is the GPS on?",
+      "usePort": "GPS on {{port}}",
+      "useCan": "GPS on DroneCAN",
+      "portsHint": "Stages the port on the GPS protocol and the GPS type on auto. After Write to Flash the fix and satellites above confirm it."
+    },
+    "vibration": {
+      "title": "Motor vibration filter",
+      "hint": "Removes motor buzz from the gyros. Smoother flight, cooler motors.",
+      "status": {
+        "off": "off",
+        "needsReboot": "enable, then reboot",
+        "needsFlight": "needs a flight",
+        "staged": "staged, write to flash",
+        "done": "tuned",
+        "analysing": "reading the log",
+        "on": "on"
+      },
+      "stages": {
+        "found": "What ArduDeck found",
+        "fly": "Fly once",
+        "pick": "Pick the flight",
+        "result": "Result"
+      },
+      "case": {
+        "esc": {
+          "title": "Your ESCs report motor speed",
+          "body": "{{n}} of {{total}} motors send their RPM. The filter can follow each motor exactly, at every throttle. This is the best case."
+        },
+        "escMask": {
+          "title": "Your ESCs are set up for bidirectional DShot",
+          "body": "RPM comes back from the ESCs once the motors turn. The filter can follow each motor exactly, at every throttle."
+        },
+        "fft": {
+          "title": "No RPM from the ESCs, but the board can listen for itself",
+          "body": "This firmware carries the in-flight noise analysis. It points the filter at whatever it hears, nothing to measure by hand."
+        },
+        "thr": {
+          "title": "No RPM and no live analysis on this board",
+          "body": "The filter still works: it follows the throttle. It just needs to be told the buzz frequency once, measured from a short hover log."
+        }
+      },
+      "howTitle": "How it will work",
+      "how": {
+        "esc": [
+          "The filter follows the RPM the ESCs report.",
+          "A hover tells ArduDeck the lowest speed worth filtering.",
+          "The log of that flight shows the noise before and after."
+        ],
+        "fft": [
+          "The board listens to the gyros while flying.",
+          "It moves the filter to the loudest buzz on its own.",
+          "The log of the first flight shows the noise before and after."
+        ],
+        "thr": [
+          "ArduDeck turns on extra vibration logging.",
+          "You hover, land and ArduDeck reads the log.",
+          "It finds the buzz and sets the filter from it."
+        ]
+      },
+      "writesNow": "Settings it stages now",
+      "review": "reviewed in Write to Flash",
+      "later": {
+        "esc": "After the hover: INS_HNTCH_FREQ below the hover speed and INS_HNTCH_BW from it.",
+        "fft": "Takes effect after a reboot. The hover lets it lock on.",
+        "thr": "After the hover: INS_HNTCH_FREQ from the log, INS_HNTCH_REF from the hover throttle, INS_HNTCH_BW half of FREQ."
+      },
+      "harmonics": "Leaves the number of harmonics at its default. ArduPilot: \"three harmonics is usually safe\".",
+      "rebootHint": "The mode settings only appear after the notch is enabled and the board rebooted. Write to flash, reboot, then come back here.",
+      "stage": "Set it up",
+      "staged": "Staged for Write to Flash",
+      "restage": "Stage again",
+      "hover": {
+        "title": "One short hover, now or any time later",
+        "body": "Somewhere open, little wind. Any normal flight with a steady hover works. Not flying today? Close this: the settings are on the board once written and the card waits for a log.",
+        "step1": "Take off in Loiter",
+        "step2": "Hover at about 3 m for 30 seconds",
+        "step3": "Land and disarm",
+        "step4esc": "ArduDeck reads the hover speed",
+        "step4log": "ArduDeck reads the log",
+        "liveEsc": "Motor speed, live from the ESCs",
+        "liveEscBody": "{{rpm}} rpm average over {{n}} motors. Hold the hover until it settles.",
+        "liveNone": "no ESC data yet",
+        "useLive": "Use this hover speed",
+        "pickLog": "I already flew, pick the log"
+      },
+      "pick": {
+        "title": "Pick the flight",
+        "fc": "From the flight controller",
+        "fcHint": "the logs on its SD card",
+        "file": "Open a log file",
+        "fileHint": ".bin from the SD card or anywhere",
+        "recent": "Already downloaded",
+        "recentHint_one": "{{count}} log in ArduDeck",
+        "recentHint_other": "{{count}} logs in ArduDeck",
+        "refresh": "List logs",
+        "noLogs": "No logs listed yet",
+        "use": "Use this one",
+        "downloading": "Downloading log {{id}}, {{pct}}%",
+        "parsing": "Reading {{name}}, {{pct}}%",
+        "slowHint": "Download over USB is much faster than over the radio.",
+        "notConnected": "Connect the vehicle to list its logs",
+        "choose": "Choose file",
+        "noHover": "No steady hover of {{s}} s in this log. Fly a calm hover and try again.",
+        "noGyro": "This log has no gyro samples to analyse. Write the logging settings, fly again and pick that log.",
+        "cancel": "Cancel",
+        "failed": "Could not read the log: {{error}}"
+      },
+      "result": {
+        "title": "Motor buzz cut by {{db}} dB",
+        "titleNoAfter": "Motor buzz found at {{hz}} Hz",
+        "body": "Biggest peak at {{hz}} Hz, the motors at hover. Measured from {{source}}.",
+        "before": "before the filter",
+        "after": "with the filter as it was in this flight",
+        "band": "where the filter sits",
+        "axis": "gyro noise, roll axis",
+        "writes": "Settings from this flight",
+        "verdict": "The bumps at 2x and 3x the motor speed are the same buzz; the filter covers those too.",
+        "next": "Next step if you want more: AutoTune now works on a clean signal. The full spectrum is in Logs, Spectrum.",
+        "sourceLive": "the live hover",
+        "sourceLog": "log {{name}}",
+        "again": "Start over",
+        "onlyBefore": "This log has only pre-filter samples, so there is no after. Fly once more with the settings written and pick that log."
+      },
+      "why": {
+        "enable": "turn the filter on",
+        "batMask": "log raw gyro data of the first IMU",
+        "batMaskCheck": "log raw gyro data for the before and after picture",
+        "batOpt": "pre-filter samples",
+        "fft": "live noise analysis",
+        "mode-esc": "follow ESC RPM",
+        "mode-fft": "follow the analysis",
+        "mode-thr": "follow the throttle",
+        "refOne": "no throttle scaling",
+        "perMotor": "one notch per motor",
+        "freqBelowHover": "30% below hover, above the gyro filter",
+        "freqFromLog": "the buzz in the log",
+        "bwHalf": "half of FREQ",
+        "bwQuarter": "a quarter of FREQ, one notch per motor",
+        "refHover": "hover throttle",
+        "batOff": "logging off again, frees RAM"
+      },
+      "escCount": "{{n}} of {{total}} motors report speed",
+      "notCopter": "The filter card is for multirotors and QuadPlanes."
     }
   }
 }

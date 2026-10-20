@@ -10,7 +10,7 @@ import type { CameraPreset } from '../components/survey/survey-types';
 import '../components/survey/generators';
 import { getSurveyGenerator, patternToGeneratorId, resolveGeneratorId } from '../components/survey/generator-registry';
 import { surveyToMissionItems } from '../components/survey/mission-builder';
-import { computeTerrainFollowAltitudes } from '../components/survey/survey-terrain-follow';
+import { computeTerrainFollowAltitudes, densifyTerrainFollow } from '../components/survey/survey-terrain-follow';
 import { calculateAltitudeForGSD } from '../components/survey/survey-stats';
 import { simplifyPolygon, bufferPolygonLatLng, latLngBboxOverlap } from '../components/survey/geo-math';
 import { runWithActivity } from './activity-store';
@@ -1038,9 +1038,13 @@ export const useSurveyStore = create<SurveyStore>()(subscribeWithSelector((set, 
         const outcome = await computeTerrainFollowAltitudes(generated, fullConfig);
         // Stale guard: a newer generate ran while we were fetching.
         if (seq !== generationSeq || !outcome) return;
+        if (get().result !== generated) return;
+        // Legs follow the ground too, not only their ends, so the photo scale holds across a slope.
+        const followed = await densifyTerrainFollow(generated, fullConfig, outcome.altitudes);
+        if (seq !== generationSeq) return;
         const current = get().result;
         if (current !== generated) return;
-        const terrainResult: SurveyResult = { ...generated, altitudes: outcome.altitudes };
+        const terrainResult: SurveyResult = followed;
         set({ result: terrainResult });
         if (get().editingGroupId === editingGroupId && editingGroupId) {
           syncResultToEditingGroup(editingGroupId, polygon, fullConfig, terrainResult);

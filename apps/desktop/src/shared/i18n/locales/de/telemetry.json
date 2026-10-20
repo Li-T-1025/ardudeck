@@ -92,6 +92,7 @@
     "saved": "Gespeichert",
     "selectingArea": "Auswahl… ziehen Sie einen Rahmen auf der Karte",
     "telemetryRate": "Telemetrierate",
-    "telemetryRateHint": "Wie oft das Fahrzeug Telemetrie sendet. FC lässt die Raten des Flugcontrollers unverändert."
+    "telemetryRateHint": "Wie oft das Fahrzeug Telemetrie sendet. FC lässt die Raten des Flugcontrollers unverändert.",
+    "cargoPanelMissing": "Dieses Panel kommt von einem Cargo, das gerade nicht geladen ist."
   }
 }

@@ -734,7 +734,14 @@
       "yaw": "Gieren",
       "yawAngle": "Gierwinkel",
       "zoomType": "Zoomtyp",
-      "zoomValue": "Zoomwert"
+      "zoomValue": "Zoomwert",
+      "passBy": "Überflugstrecke",
+      "passByTip": "So weit fliegt das Flugzeug über den Wegpunkt hinaus, bevor es zum nächsten dreht, damit die Linie durch den Punkt gehalten wird statt die Kurve abzukürzen. 0 dreht wie gewohnt früher ein.",
+      "acceptanceRadiusTip": "Wie nah das Flugzeug kommen muss, damit der Wegpunkt als erreicht gilt. 0 lässt den Autopiloten das aus der Kurve berechnen.",
+      "onlyFor": {
+        "plane": "nur Flugzeug",
+        "notPlane": "Copter und Rover"
+      }
     },
     "searchCommands": "Befehle suchen...",
     "summary": {

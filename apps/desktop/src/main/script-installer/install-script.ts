@@ -11,7 +11,12 @@ export function setScriptInstallAdapter(factory: () => FcAdapter): void {
 }
 
 /** Scripting on with enough heap, upload, reboot, then optionally wait for a parameter the script adds at boot. */
-export async function installScript(req: ScriptInstallRequest, onProgress: (p: ScriptInstallProgress) => void = () => {}): Promise<ScriptInstallResult> {
+export async function installScript(
+  req: ScriptInstallRequest,
+  onProgress: (p: ScriptInstallProgress) => void = () => {},
+  /** Core only: parameters set once the upload succeeded and before the reboot, so a failed upload changes nothing else. */
+  afterUpload: Array<[string, number]> = [],
+): Promise<ScriptInstallResult> {
   if (!adapterFactory) return { status: 'error', message: t('main:scriptInstall.notConnected') };
   if (running) return { status: 'error', message: t('main:scriptInstall.busy') };
   if (!/^[\w.-]+\.lua$/.test(req.filename)) return { status: 'error', message: t('main:scriptInstall.badName', { name: req.filename }) };
@@ -45,6 +50,11 @@ export async function installScript(req: ScriptInstallRequest, onProgress: (p: S
       failure = err instanceof Error ? err.message : String(err);
     }
     if (!uploaded) return { status: 'manual', targetPath: target, reason: failure || t('main:scriptInstall.uploadFailed') };
+
+    for (const [param, value] of afterUpload) {
+      onProgress({ phase: 'configuring', param, value });
+      if (!(await adapter.setParam(param, value))) return { status: 'error', message: t('main:scriptInstall.setFailed', { param }) };
+    }
 
     // scripts and the heap are only picked up at boot; in SITL the upload already restarted the simulator
     onProgress({ phase: 'rebooting' });

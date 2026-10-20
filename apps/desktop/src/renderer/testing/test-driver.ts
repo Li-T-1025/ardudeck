@@ -220,7 +220,8 @@ export function scroll(
   direction: 'up' | 'down' | 'left' | 'right',
   amount: number = 300
 ): void {
-  const el = selector ? (resolveElement(selector) as HTMLElement) : document.documentElement;
+  // Scroll containers have no text of their own, so a CSS selector (.foo, #id, [attr]) is resolved as CSS.
+  const el = selector ? (resolveElement(selector, /^[.#[]/.test(selector) ? 'css' : undefined) as HTMLElement) : document.documentElement;
   const scrollMap = {
     up: { top: -amount },
     down: { top: amount },

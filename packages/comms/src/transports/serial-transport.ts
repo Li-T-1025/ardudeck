@@ -27,6 +27,7 @@ export class SerialTransport extends BaseTransport {
   private _dataBits: 5 | 6 | 7 | 8;
   private _parity: 'none' | 'even' | 'odd' | 'mark' | 'space';
   private _stopBits: 1 | 1.5 | 2;
+  private _rtscts: boolean;
 
   constructor(portName: string, options: TransportOptions = {}) {
     super();
@@ -37,6 +38,7 @@ export class SerialTransport extends BaseTransport {
     this._stopBits = options.stopBits ?? 1;
     this.dtrEnable = options.dtrEnable ?? false;
     this.rtsEnable = options.rtsEnable ?? false;
+    this._rtscts = options.rtscts ?? false;
     this.readTimeout = options.readTimeout ?? 5000;
     this.writeTimeout = options.writeTimeout ?? 5000;
   }
@@ -69,6 +71,7 @@ export class SerialTransport extends BaseTransport {
         dataBits: this._dataBits,
         parity: this._parity,
         stopBits: this._stopBits,
+        rtscts: this._rtscts,
         autoOpen: false,
       });
 
@@ -105,9 +108,10 @@ export class SerialTransport extends BaseTransport {
 
         this._isOpen = true;
 
-        // Set DTR/RTS after opening
+        // Set DTR/RTS after opening; with hardware flow control RTS is the driver's to drive
         if (this.port) {
-          this.port.set({ dtr: this.dtrEnable, rts: this.rtsEnable }, (err) => {
+          const lines = this._rtscts ? { dtr: this.dtrEnable } : { dtr: this.dtrEnable, rts: this.rtsEnable };
+          this.port.set(lines, (err) => {
             if (err) {
               console.warn('Failed to set DTR/RTS:', err.message);
             }

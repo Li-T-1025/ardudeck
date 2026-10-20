@@ -50,6 +50,7 @@ import type {
   TrainerBakeDone,
   TrainerBakeProgress,
   TrainerBakeRequest,
+  TrainerLocusSurvey,
   TrainerCatalogue,
   TrainerLaunchInput,
   TrainerStatus,
@@ -959,6 +960,9 @@ const api = {
   importSurveyArea: (): Promise<{ success: boolean; error?: string; format?: 'kml' | 'geojson'; content?: string; fileName?: string }> =>
     ipcRenderer.invoke(IPC_CHANNELS.MISSION_IMPORT_AREA),
 
+  pickFolder: (title?: string): Promise<string | null> =>
+    ipcRenderer.invoke(IPC_CHANNELS.DIALOG_PICK_FOLDER, title),
+
   // Mission event listeners
   onMissionItem: (callback: (item: MissionItem) => void) => {
     const handler = (_: unknown, item: MissionItem) => callback(item);
@@ -1323,6 +1327,15 @@ const api = {
 
   edgetxHudConfigSuggest: (): Promise<{ connected: boolean; cfg: Record<string, string | number> }> =>
     ipcRenderer.invoke(IPC_CHANNELS.EDGETX_HUD_CONFIG_SUGGEST),
+  /** Installs the sonar script for the radio echogram; `changes` are applied after the upload. */
+  radioHudInstallSonar: (changes: Array<[string, number]>): Promise<
+    { status: 'installed' } | { status: 'manual'; targetPath: string; reason: string } | { status: 'error'; message: string }
+  > => ipcRenderer.invoke(IPC_CHANNELS.RADIO_HUD_SONAR_INSTALL, changes),
+  onRadioHudSonarProgress: (callback: (progress: { phase: string; param?: string; value?: number; written?: number; total?: number }) => void) => {
+    const handler = (_: unknown, progress: { phase: string }) => callback(progress);
+    ipcRenderer.on(IPC_CHANNELS.RADIO_HUD_SONAR_PROGRESS, handler);
+    return () => { ipcRenderer.removeListener(IPC_CHANNELS.RADIO_HUD_SONAR_PROGRESS, handler); };
+  },
 
   edgetxHudConfigWrite: (volumePath: string, cfg: Record<string, string | number>, modelName?: string): Promise<{ ok: boolean; cfg?: Record<string, string | number>; error?: string }> =>
     ipcRenderer.invoke(IPC_CHANNELS.EDGETX_HUD_CONFIG_WRITE, volumePath, cfg, modelName),
@@ -2897,6 +2910,7 @@ const api = {
   trainerBake: (request: TrainerBakeRequest): Promise<TrainerBakeDone> =>
     ipcRenderer.invoke(IPC_CHANNELS.TRAINER_BAKE, request),
   trainerBakeCancel: (): Promise<void> => ipcRenderer.invoke(IPC_CHANNELS.TRAINER_BAKE_CANCEL),
+  trainerLocusSurveys: (): Promise<TrainerLocusSurvey[]> => ipcRenderer.invoke(IPC_CHANNELS.TRAINER_LOCUS_SURVEYS),
   trainerDeleteRegion: (name: string): Promise<{ ok: boolean; error?: string }> =>
     ipcRenderer.invoke(IPC_CHANNELS.TRAINER_DELETE_REGION, name),
   onTrainerBakeProgress: (cb: (p: TrainerBakeProgress) => void): (() => void) => {

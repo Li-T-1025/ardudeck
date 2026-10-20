@@ -24,6 +24,8 @@ import { useSettingsStore } from '../../stores/settings-store';
 import { useEditModeStore } from '../../stores/edit-mode-store';
 import { useTileCacheAreaStore } from '../../stores/tile-cache-area-store';
 import { useTelemetryLayoutStore } from '../../stores/telemetry-layout-store';
+import { MODULE_WORKSPACE_COMPONENT, useModuleWorkspacePanelsStore } from '../../modules/module-workspace-panels';
+import { ErrorBoundary } from '../ui/ErrorBoundary';
 import { useWorkspaceDialogStore } from '../../stores/workspace-dialog-store';
 import { useResolvedTheme } from '../../hooks/useTheme';
 import type { TelemetrySpeed } from '../../../shared/ipc-channels';
@@ -193,8 +195,30 @@ function PanelHeaderActions(props: IDockviewHeaderActionsProps): JSX.Element | n
   );
 }
 
+// A cargo panel: the body comes from the registry by the id in the panel params, so a saved layout
+// restores it once its cargo loads and says so until then.
+function ModuleWorkspacePanelBody({ params }: IDockviewPanelProps) {
+  const { t } = useTranslation();
+  const id = (params as { cargoPanelId?: string } | undefined)?.cargoPanelId;
+  const entry = useModuleWorkspacePanelsStore((s) => s.panels.find((p) => p.id === id));
+  if (!entry) {
+    return (
+      <div className="h-full flex items-center justify-center bg-surface-base text-xs text-content-secondary px-4 text-center">
+        {t('telemetry:workspaceDialog.cargoPanelMissing')}
+      </div>
+    );
+  }
+  const Body = entry.Component;
+  return (
+    <ErrorBoundary label={entry.id}>
+      <Body />
+    </ErrorBoundary>
+  );
+}
+
 // Component registry for dockview
 const components: Record<string, React.FC<IDockviewPanelProps>> = {
+  [MODULE_WORKSPACE_COMPONENT]: ModuleWorkspacePanelBody,
   // Telemetry panels
   AttitudePanel: () => <PanelWrapper component={AttitudePanel} />,
   AltitudePanel: () => <PanelWrapper component={AltitudePanel} />,
@@ -238,7 +262,7 @@ interface WorkspaceProps {
   onShare: (name: string, how: 'copy' | 'file' | 'native') => Promise<string | null>;
   /** Resolves to an error message, or null when the file was imported. */
   onImport: (raw: string) => Promise<string | null>;
-  onAddPanel: (id: string, component: string, title: string) => void;
+  onAddPanel: (id: string, component: string, title: string, params?: Record<string, unknown>) => void;
   layouts: string[];
   layoutDescriptions: Record<string, string>;
   activeLayout: string;
@@ -601,6 +625,7 @@ function WorkspaceDialog(props: WorkspaceProps & { onClose: () => void }): JSX.E
     if (SITL_PANEL_IDS.includes(id) && !isSitlRunning) return false;
     return true;
   });
+  const cargoPanels = useModuleWorkspacePanelsStore((s) => s.panels);
 
 
   const bookmarkIcon = (<svg className="w-3.5 h-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-4-7 4V5z" /></svg>);
@@ -756,6 +781,16 @@ function WorkspaceDialog(props: WorkspaceProps & { onClose: () => void }): JSX.E
                     label={t(titleKey)}
                     onClick={() => onAddPanel(id, component, t(titleKey))}
                     dataTour={id === panelIds[0] ? 'add-panel' : id === 'rtk' ? 'add-panel-rtk' : undefined}
+                  />
+                ))}
+                {cargoPanels.map((p) => (
+                  <WsCard
+                    key={p.id}
+                    accent={WS_ACCENT.panel}
+                    accentIcon
+                    icon={p.Icon ? <p.Icon className="w-3.5 h-3.5 shrink-0" /> : panelIcon(p.id)}
+                    label={p.title()}
+                    onClick={() => onAddPanel(p.id, MODULE_WORKSPACE_COMPONENT, p.title(), { cargoPanelId: p.id })}
                   />
                 ))}
               </div>
@@ -1074,7 +1109,7 @@ function TelemetryDashboardImpl() {
     loadBuiltinLayout(apiRef.current, DEFAULT_LAYOUT);
   }, []);
 
-  const handleAddPanel = useCallback((id: string, component: string, title: string) => {
+  const handleAddPanel = useCallback((id: string, component: string, title: string, params?: Record<string, unknown>) => {
     if (!apiRef.current) return;
 
     // Generate unique panel id (in case the panel is already open)
@@ -1085,6 +1120,7 @@ function TelemetryDashboardImpl() {
       id: uniqueId,
       component,
       title,
+      ...(params ? { params } : {}),
     });
   }, []);
 

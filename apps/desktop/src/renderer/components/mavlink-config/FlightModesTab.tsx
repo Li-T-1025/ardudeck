@@ -7,11 +7,7 @@
 
 import React, { useMemo, useEffect, useState, useCallback, useRef } from 'react';
 import { useTranslation, Trans } from 'react-i18next';
-import type { TFunction } from 'i18next';
 import {
-  Settings,
-  Shield,
-  TrendingUp,
   Map,
   Hand,
   Gamepad2,
@@ -53,12 +49,6 @@ import { useConnectionStore } from '../../stores/connection-store';
 import { InfoCard } from '../ui/InfoCard';
 import Px4FlightModesConfig from './Px4FlightModesConfig';
 import { SwitchActionsSection } from './switches/SwitchActionsSection';
-import { PresetSelector, type Preset } from '../ui/PresetSelector';
-import {
-  FLIGHT_MODE_PRESETS,
-  PLANE_FLIGHT_MODE_PRESETS,
-  type FlightModePreset,
-} from './presets/mavlink-presets';
 
 // PWM ranges for each mode slot (standard 3-position switch mapping)
 const MODE_PWM_RANGES = [
@@ -155,69 +145,6 @@ const ROVER_MODES: Record<number, { name: string; descriptionKey: string; icon: 
   15: { name: 'Guided', descriptionKey: 'mavlink-config:flightModesTab.modeDesc.driveToGcsCommandedPoints', icon: Navigation, safe: true },
   16: { name: 'Initialising', descriptionKey: 'mavlink-config:flightModesTab.modeDesc.systemInitializing', icon: Activity, safe: false },
 };
-
-// Convert FLIGHT_MODE_PRESETS to PresetSelector format
-const getCopterPresetSelector = (t: TFunction): Record<string, Preset> => ({
-  beginner: {
-    name: t('common:beginner'),
-    description: t(FLIGHT_MODE_PRESETS.beginner!.descriptionKey),
-    icon: Shield,
-    iconColor: 'text-green-400',
-    color: 'from-green-500/20 to-emerald-500/10 border-green-500/30',
-  },
-  intermediate: {
-    name: t('mavlink-config:flightModesTab.presetIntermediate'),
-    description: t(FLIGHT_MODE_PRESETS.intermediate!.descriptionKey),
-    icon: TrendingUp,
-    iconColor: 'text-blue-400',
-    color: 'from-blue-500/20 to-cyan-500/10 border-blue-500/30',
-  },
-  advanced: {
-    name: t('common:advanced'),
-    description: t(FLIGHT_MODE_PRESETS.advanced!.descriptionKey),
-    icon: Settings,
-    iconColor: 'text-purple-400',
-    color: 'from-purple-500/20 to-pink-500/10 border-purple-500/30',
-  },
-  mapping: {
-    name: t('mavlink-config:flightModesTab.presetMapping'),
-    description: t(FLIGHT_MODE_PRESETS.mapping!.descriptionKey),
-    icon: Map,
-    iconColor: 'text-amber-400',
-    color: 'from-amber-500/20 to-orange-500/10 border-amber-500/30',
-  },
-});
-
-const getPlanePresetSelector = (t: TFunction): Record<string, Preset> => ({
-  beginner: {
-    name: t('common:beginner'),
-    description: t(PLANE_FLIGHT_MODE_PRESETS.beginner!.descriptionKey),
-    icon: Shield,
-    iconColor: 'text-green-400',
-    color: 'from-green-500/20 to-emerald-500/10 border-green-500/30',
-  },
-  intermediate: {
-    name: t('mavlink-config:flightModesTab.presetIntermediate'),
-    description: t(PLANE_FLIGHT_MODE_PRESETS.intermediate!.descriptionKey),
-    icon: TrendingUp,
-    iconColor: 'text-blue-400',
-    color: 'from-blue-500/20 to-cyan-500/10 border-blue-500/30',
-  },
-  advanced: {
-    name: t('common:advanced'),
-    description: t(PLANE_FLIGHT_MODE_PRESETS.advanced!.descriptionKey),
-    icon: Settings,
-    iconColor: 'text-purple-400',
-    color: 'from-purple-500/20 to-pink-500/10 border-purple-500/30',
-  },
-  vtol: {
-    name: t('mavlink-config:flightModesTab.presetVtol'),
-    description: t(PLANE_FLIGHT_MODE_PRESETS.vtol!.descriptionKey),
-    icon: Plane,
-    iconColor: 'text-amber-400',
-    color: 'from-amber-500/20 to-orange-500/10 border-amber-500/30',
-  },
-});
 
 type VehicleCategory = 'copter' | 'plane' | 'rover';
 
@@ -358,20 +285,6 @@ const FlightModesTab: React.FC<FlightModesTabProps> = ({ vehicleCategory = 'copt
     setParameter(`${paramPrefix}_CH`, channel);
   };
 
-  // Get presets for current vehicle category
-  const presetData = vehicleCategory === 'plane' ? PLANE_FLIGHT_MODE_PRESETS : FLIGHT_MODE_PRESETS;
-  const presetSelectorPresets = vehicleCategory === 'plane' ? getPlanePresetSelector(t) : getCopterPresetSelector(t);
-
-  // Apply preset
-  const applyPreset = (presetKey: string) => {
-    const preset = presetData[presetKey];
-    if (preset) {
-      preset.modes.forEach((mode, index) => {
-        setParameter(`${paramPrefix}${index + 1}`, mode);
-      });
-    }
-  };
-
   const modified = modifiedCount();
 
   if (firmware === 'px4') {
@@ -504,17 +417,6 @@ const FlightModesTab: React.FC<FlightModesTabProps> = ({ vehicleCategory = 'copt
           </div>
         )}
       </div>
-
-      {/* Quick Presets. Hidden for rovers: the presets contain copter/plane mode numbers
-          which are wrong for the rover mode table. */}
-      {!isRover && (
-        <PresetSelector
-          presets={presetSelectorPresets}
-          onApply={applyPreset}
-          label={t('common:quickPresets')}
-          hint={t('mavlink-config:flightModesTab.presetHint')}
-        />
-      )}
 
       {/* Visual Switch Position Diagram */}
       <div className="bg-surface rounded-xl border border-subtle p-4">

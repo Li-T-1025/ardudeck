@@ -291,6 +291,8 @@ export const IPC_CHANNELS = {
   MISSION_SAVE_FILE: 'mission:save-file',
   MISSION_LOAD_FILE: 'mission:load-file',
   MISSION_IMPORT_AREA: 'mission:import-area',
+  /** Renderer -> main: folder picker for cargos (host.files.pickFolder). */
+  DIALOG_PICK_FOLDER: 'dialog:pick-folder',
   /**
    * Cross-window mission mirror. The primary (main) window publishes a full
    * snapshot of its mission store (items + groups + home + fcSeqOffset) on this
@@ -349,6 +351,8 @@ export const IPC_CHANNELS = {
   EDGETX_HUD_CONFIG_GET: 'edgetx:hud-config-get',
   EDGETX_HUD_CONFIG_REGEN: 'edgetx:hud-config-regen',
   EDGETX_HUD_CONFIG_SUGGEST: 'edgetx:hud-config-suggest',
+  RADIO_HUD_SONAR_INSTALL: 'radio-hud:sonar-install',
+  RADIO_HUD_SONAR_PROGRESS: 'radio-hud:sonar-progress',
   EDGETX_HUD_CONFIG_WRITE: 'edgetx:hud-config-write',
   EDGETX_EJECT: 'edgetx:eject',
   EDGETX_HUD_MAPS_WRITE: 'edgetx:hud-maps-write',
@@ -900,6 +904,8 @@ export const IPC_CHANNELS = {
   TRAINER_LOG: 'trainer:log',
   TRAINER_SESSION: 'trainer:session',
   TRAINER_SESSION_ACTIVE: 'trainer:session-active',
+  /** Renderer -> main: Locus surveys on this machine that a region can be baked from. */
+  TRAINER_LOCUS_SURVEYS: 'trainer:locus-surveys',
 
   // Map overlays
   OVERLAY_GET_RADAR_META: 'overlay:get-radar-meta',
@@ -1112,6 +1118,8 @@ export interface ConnectOptions {
   type: 'serial' | 'tcp' | 'udp';
   port?: string;
   baudRate?: number;
+  /** Serial only: hardware flow control (RTS/CTS), for radios such as RFD900/868 set to RTSCTS. */
+  flowControl?: boolean;
   host?: string;
   tcpPort?: number;
   udpPort?: number;

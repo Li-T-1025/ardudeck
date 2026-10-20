@@ -92,6 +92,7 @@
     "saved": "Saved",
     "selectingArea": "Selecting… draw a box on the map",
     "telemetryRate": "Telemetry rate",
-    "telemetryRateHint": "How often the vehicle streams telemetry. FC leaves the flight controller's own rates untouched."
+    "telemetryRateHint": "How often the vehicle streams telemetry. FC leaves the flight controller's own rates untouched.",
+    "cargoPanelMissing": "This panel comes from a cargo that is not loaded right now."
   }
 }

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { AlertTriangle, Battery, Box, Hand, Search, Cable, Check, CircuitBoard, Cpu, ExternalLink, Fan, Lightbulb, Loader2, Navigation, Network, Plus, Radar, Radio, Ruler, Satellite, ScanEye, Usb, Wifi, Wind, type LucideIcon } from 'lucide-react';
+import { AlertTriangle, Battery, Box, Hand, Search, Cable, Check, CircuitBoard, Cpu, ExternalLink, Fan, Lightbulb, Loader2, Navigation, Network, Plus, Radar, Radio, Ruler, Satellite, ScanEye, Usb, Waves, Wifi, Wind, type LucideIcon } from 'lucide-react';
 import type { HardwareSetupCategory, HardwareSetupEntry } from '@ardudeck/module-sdk';
 import { hardwareSetupRegistry } from '../../../modules/module-extension-registries';
 import { useParameterStore } from '../../../stores/parameter-store';
@@ -9,6 +9,8 @@ import { useTelemetryStore } from '../../../stores/telemetry-store';
 import { proposeParameterChanges } from '../../../lib/param-proposal';
 import { HARDWARE_PRESETS, CATEGORY_ORDER, type HardwarePreset, type Mount, type SetupAnswers } from './presets';
 import { planSetup, serialPorts, firstFreePort, portIsVital, type ParamLookup } from './plan';
+import { boardPortLabel, boardPortRegistry } from '../../../modules/module-extension-registries';
+import { serialPortLabel } from '../../../../shared/mavlink-channels';
 
 type Step = 'pick' | 'configure' | 'applying' | 'restarting' | 'finishing' | 'check';
 const STEPS: { steps: Step[]; key: string }[] = [
@@ -22,6 +24,7 @@ const RECONNECT_TIMEOUT_MS = 90_000;
 // same tinted-square language as the Hardware tab's parts (GPS emerald, datalinks indigo)
 const CATEGORY_STYLE: Record<HardwareSetupCategory, { Icon: LucideIcon; box: string; icon: string }> = {
   rangefinder: { Icon: Ruler, box: 'bg-violet-500/20', icon: 'text-violet-400' },
+  depth: { Icon: Waves, box: 'bg-sky-500/20', icon: 'text-sky-400' },
   airspeed: { Icon: Wind, box: 'bg-blue-500/20', icon: 'text-blue-400' },
   proximity: { Icon: Radar, box: 'bg-fuchsia-500/20', icon: 'text-fuchsia-400' },
   flow: { Icon: ScanEye, box: 'bg-lime-500/20', icon: 'text-lime-400' },
@@ -84,7 +87,7 @@ function keyParam(p: HardwarePreset): string | undefined {
   return param?.name.replace('{i}', '1');
 }
 
-export function HardwareSetupWizard({ onClose }: { onClose: () => void }) {
+export function HardwareSetupWizard({ onClose, initialQuery = '' }: { onClose: () => void; initialQuery?: string }) {
   const { t } = useTranslation();
   const lookup = useLookup();
   const [step, setStep] = useState<Step>('pick');
@@ -92,7 +95,7 @@ export function HardwareSetupWizard({ onClose }: { onClose: () => void }) {
   const [answers, setAnswers] = useState<SetupAnswers>({});
   const [failure, setFailure] = useState<string | null>(null);
   const [laterMissing, setLaterMissing] = useState<string[]>([]);
-  const [query, setQuery] = useState('');
+  const [query, setQuery] = useState(initialQuery);
   const cargoSetups = hardwareSetupRegistry.useEntries();
   const cargoEntries = useMemo(() => cargoSetups.flatMap((e) => e.value.map((entry) => ({ key: `${e.slug}:${entry.id}`, entry }))), [cargoSetups]);
   /** Every word must appear in the name, description, category or vendor. */
@@ -109,6 +112,10 @@ export function HardwareSetupWizard({ onClose }: { onClose: () => void }) {
   };
 
   const ports = useMemo(() => serialPorts(lookup), [lookup]);
+  // the board's own connector names (TELEM2, GPS2...) where a cargo knows them, else the usual ones
+  const boardPorts = boardPortRegistry.useEntries();
+  const boardVersion = useConnectionStore((s) => s.connectionState.boardVersion);
+  const portName = (n: number) => boardPortLabel(boardPorts, boardVersion ? boardVersion >>> 16 : undefined, n)?.label ?? serialPortLabel(n);
   const plan = preset ? planSetup(preset, answers, lookup) : null;
   const errorText = (e: { key: string; values?: Record<string, string | number> }) => t(`mavlink-config:hardwareSetup.error.${e.key}`, e.values ?? {});
 
@@ -269,8 +276,8 @@ export function HardwareSetupWizard({ onClose }: { onClose: () => void }) {
 
           {step === 'configure' && preset && plan && (
             <div className="space-y-4">
-              <div className="flex items-center gap-2 text-xs text-content-secondary">
-                <span className="inline-flex items-center gap-1 rounded-full bg-surface-raised px-2 py-0.5 text-[10px]">
+              <div className="flex items-start gap-2 text-xs text-content-secondary">
+                <span className="inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-full border border-subtle bg-surface-input px-2 py-0.5 text-[10px]">
                   {(() => { const Conn = CONNECTION_ICON[preset.connection]; return <Conn className="w-3 h-3" />; })()}
                   {t(`mavlink-config:hardwareSetup.connection.${preset.connection}`)}
                 </span>
@@ -282,11 +289,17 @@ export function HardwareSetupWizard({ onClose }: { onClose: () => void }) {
                   <select
                     value={answers.serial ?? ''}
                     onChange={(e) => setAnswers((a) => ({ ...a, serial: e.target.value === '' ? undefined : Number(e.target.value) }))}
-                    className="w-full rounded-lg bg-surface-input border border-subtle px-2 py-1.5 text-sm text-content"
+                    className="w-full px-3 py-2 bg-surface-raised border rounded-lg text-sm text-content focus:outline-none focus:border-blue-500"
                   >
                     <option value="">{t('mavlink-config:hardwareSetup.choosePort')}</option>
                     {ports.map((p) => (
-                      <option key={p.port} value={p.port}>{t('mavlink-config:hardwareSetup.portOption', { n: p.port, use: p.label })}</option>
+                      <option key={p.port} value={p.port}>
+                        {t('mavlink-config:hardwareSetup.portOptionNamed', {
+                          name: portName(p.port),
+                          n: p.port,
+                          use: /^none$/i.test(p.label) ? t('mavlink-config:hardwareSetup.portFree') : p.label,
+                        })}
+                      </option>
                     ))}
                   </select>
                   {(() => {
@@ -343,7 +356,7 @@ export function HardwareSetupWizard({ onClose }: { onClose: () => void }) {
               {plan.errors.length > 0 ? (
                 <div className="space-y-1">{plan.errors.map((e) => <p key={e.key + JSON.stringify(e.values)} className="text-xs text-amber-300">{errorText(e)}</p>)}</div>
               ) : (
-                <div className="rounded-lg bg-surface-raised/40 p-3 text-xs text-content-secondary space-y-1">
+                <div className="rounded-lg border border-subtle bg-surface-input p-3 text-xs text-content-secondary space-y-1">
                   <p>{t('mavlink-config:hardwareSetup.willSet', { count: plan.now.length })}</p>
                   {plan.instance !== null && <p>{t('mavlink-config:hardwareSetup.usesSlot', { family: preset.instance!.prefix, n: plan.instance })}</p>}
                   <p>{t('mavlink-config:hardwareSetup.thenRestart', { count: plan.afterRestart.length })}</p>
@@ -427,7 +440,7 @@ function LiveCheck({ check }: { check: HardwarePreset['check'] }) {
   const esc = useTelemetryStore((s) => s.escTelemetry);
   if (!check) return null;
   let value: string | null = null;
-  if (check === 'rangefinder' && rangefinder && Date.now() - rangefinder.receivedAt < 2000) value = `${rangefinder.distance.toFixed(2)} m`;
+  if ((check === 'rangefinder' || check === 'depth') && rangefinder && Date.now() - rangefinder.receivedAt < 2000) value = `${rangefinder.distance.toFixed(2)} m`;
   if (check === 'proximity') {
     const live = Object.values(proximity).filter((d) => Date.now() - d.receivedAt < 2000);
     if (live.length > 0) value = `${Math.min(...live.map((d) => d.distance)).toFixed(2)} m`;

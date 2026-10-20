@@ -1,7 +1,7 @@
 import { useTranslation } from 'react-i18next';
 import { useEffect, useState, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { Download, Boxes, Package, KeyRound, X, User, ChevronLeft, ChevronRight, type LucideIcon } from 'lucide-react';
+import { Download, Boxes, Package, KeyRound, X, User, ChevronDown, ChevronLeft, ChevronRight, BookOpen, type LucideIcon } from 'lucide-react';
 import { useModuleStore } from '../../stores/module-store';
 import { HangarApps } from './HangarApps';
 import type {
@@ -743,6 +743,24 @@ function PreviewBlockView({ block }: { block: CargoPreviewBlock }) {
           </div>
         </div>
       );
+    case 'link':
+      if (!block.url.startsWith('https://')) return null;
+      return (
+        <button
+          type="button"
+          onClick={() => window.electronAPI?.openExternal(block.url)}
+          className="group flex w-full max-w-2xl items-center gap-4 rounded-xl border border-purple-500/30 bg-purple-500/5 px-4 py-3.5 text-left transition-colors duration-200 hover:border-purple-500/60 hover:bg-purple-500/10"
+        >
+          <BookOpen className="w-5 h-5 shrink-0 text-purple-600 dark:text-purple-400" />
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-semibold text-purple-700 dark:text-purple-400 leading-snug">{block.label}</p>
+            {block.description && (
+              <p className="mt-0.5 text-xs text-content-secondary leading-relaxed">{block.description}</p>
+            )}
+          </div>
+          <ChevronRight className="w-4 h-4 shrink-0 text-purple-600 dark:text-purple-400 transition-transform duration-200 group-hover:translate-x-0.5" />
+        </button>
+      );
     default:
       return null;
   }
@@ -1004,11 +1022,14 @@ const TAB_COLORS: Record<CargoTabId, { active: string; icon: string; badge: stri
 // Main View
 // ---------------------------------------------------------------------------
 
+const DEV_OPEN_KEY = 'ardudeck.cargoBay.devOpen';
+
 function DevCargoSection() {
   const { t } = useTranslation();
   const [available, setAvailable] = useState(false);
   const [items, setItems] = useState<{ slug: string; name: string; version: string; path: string }[]>([]);
   const [error, setError] = useState('');
+  const [open, setOpen] = useState(() => localStorage.getItem(DEV_OPEN_KEY) === '1');
   // Bumped on every rebuild so a freshly added icon.png shows without reopening the screen.
   const [iconEpoch, setIconEpoch] = useState(0);
   useEffect(() => {
@@ -1026,78 +1047,93 @@ function DevCargoSection() {
     })();
   }, []);
 
+  const toggle = () => {
+    setOpen((v) => {
+      localStorage.setItem(DEV_OPEN_KEY, v ? '0' : '1');
+      return !v;
+    });
+  };
+
   if (!available) return null;
 
   return (
-    <div className="mt-8 rounded-lg border border-dashed border-amber-500/40 p-4">
-      <div className="flex items-center justify-between">
-        <div>
-          <div className="text-sm font-semibold text-content">{t('modules:moduleManager.developer')}</div>
-          <p className="mt-0.5 text-xs text-content-secondary">
-            {t('modules:moduleManager.developerHint')}
-          </p>
-        </div>
+    <div className="mt-6 rounded-lg border border-dashed border-amber-500/40">
+      <div className="flex items-center gap-3 px-4 py-2.5">
+        <button type="button" onClick={toggle} className="flex min-w-0 flex-1 items-center gap-2 text-left">
+          <ChevronDown className={`h-4 w-4 shrink-0 text-content-tertiary transition-transform ${open ? '' : '-rotate-90'}`} />
+          <span className="text-sm font-semibold text-content">{t('modules:moduleManager.developer')}</span>
+          {items.length > 0 && (
+            <span className="rounded-full bg-amber-500/15 px-2 py-0.5 text-[11px] text-amber-300">
+              {t('modules:moduleManager.devLoadedCount', { count: items.length })}
+            </span>
+          )}
+          {!open && (
+            <span className="truncate text-xs text-content-tertiary">{items.map((m) => m.name).join(', ')}</span>
+          )}
+        </button>
         <button
           type="button"
-          className="rounded bg-surface-raised px-3 py-1.5 text-sm text-content hover:bg-surface-hover"
+          className="shrink-0 rounded bg-surface-raised px-3 py-1.5 text-sm text-content hover:bg-surface-hover"
           onClick={async () => {
             const r = await window.electronAPI.moduleDevLoad();
             setError(r.ok ? '' : (r.error ?? t('modules:moduleManager.couldNotLoad')));
             await refresh();
+            if (r.ok) { setOpen(true); localStorage.setItem(DEV_OPEN_KEY, '1'); }
           }}
         >
           {t('modules:moduleManager.loadUnpacked')}
         </button>
       </div>
 
-      {error && error !== 'Cancelled' && (
-        <div className="mt-2 text-xs text-red-400">{error}</div>
-      )}
-
-      {items.length > 0 && (
-        <div className="mt-3 space-y-1.5">
-          {items.map((m) => (
-            <div
-              key={m.slug}
-              className="flex items-center justify-between rounded border border-subtle px-3 py-2"
-            >
-              <div className="flex items-center gap-3 min-w-0">
-                <CargoIcon iconUrl={`${bundledIconUrl(m.slug)}?v=${iconEpoch}`} active className="w-10 h-10" />
-                <div className="min-w-0">
-                  <div className="truncate text-sm text-content">
+      {open && (
+        <div className="border-t border-subtle px-4 pb-3 pt-2">
+          <p className="text-xs text-content-secondary">{t('modules:moduleManager.developerHint')}</p>
+          {error && error !== 'Cancelled' && (
+            <div className="mt-2 text-xs text-red-400">{error}</div>
+          )}
+          {items.length > 0 && (
+            <div className="mt-2 max-h-64 space-y-1 overflow-y-auto pr-1">
+              {items.map((m) => (
+                <div
+                  key={m.slug}
+                  className="flex items-center gap-2.5 rounded border border-subtle px-2.5 py-1.5"
+                  title={m.path}
+                >
+                  <CargoIcon iconUrl={`${bundledIconUrl(m.slug)}?v=${iconEpoch}`} active className="h-6 w-6" />
+                  <div className="min-w-0 flex-1 truncate text-sm text-content">
                     {m.name} <span className="text-content-tertiary">{m.version}</span>
+                    <span className="ml-2 text-[11px] text-content-tertiary">{m.path.replace(/^\/Users\/[^/]+/, '~')}</span>
                   </div>
-                  <div className="truncate text-[11px] text-content-tertiary">{m.path}</div>
+                  <button
+                    type="button"
+                    className="shrink-0 text-xs text-content-secondary hover:text-content"
+                    onClick={() =>
+                      window.dispatchEvent(
+                        new CustomEvent('ardudeck:reload-module', { detail: m.slug }),
+                      )
+                    }
+                  >
+                    {t('common:reload')}
+                  </button>
+                  <button
+                    type="button"
+                    className="shrink-0 text-xs text-content-secondary hover:text-content"
+                    onClick={async () => {
+                      await window.electronAPI.moduleDevUnload(m.slug);
+                      await refresh();
+                    }}
+                  >
+                    {t('modules:moduleManager.unload')}
+                  </button>
                 </div>
-              </div>
-              <div className="ml-3 flex shrink-0 items-center gap-3">
-                <button
-                  type="button"
-                  className="text-xs text-content-secondary hover:text-content"
-                  onClick={() =>
-                    window.dispatchEvent(
-                      new CustomEvent('ardudeck:reload-module', { detail: m.slug }),
-                    )
-                  }
-                >
-                  {t('common:reload')}
-                </button>
-                <button
-                  type="button"
-                  className="text-xs text-content-secondary hover:text-content"
-                  onClick={async () => {
-                    await window.electronAPI.moduleDevUnload(m.slug);
-                    await refresh();
-                  }}
-                >
-                  {t('modules:moduleManager.unload')}
-                </button>
-              </div>
+              ))}
             </div>
-          ))}
-          <p className="pt-1 text-[11px] text-content-tertiary">
-            {t('modules:moduleManager.devRestartNote')}
-          </p>
+          )}
+          {items.length > 0 && (
+            <p className="pt-2 text-[11px] text-content-tertiary">
+              {t('modules:moduleManager.devRestartNote')}
+            </p>
+          )}
         </div>
       )}
     </div>

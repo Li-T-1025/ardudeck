@@ -20,9 +20,9 @@ function extent(points: { lat: number; lng: number }[]): string {
 }
 
 /** The outline, so the pilot sees the shape rather than a point count. */
-function Outline({ points }: { points: { lat: number; lng: number }[] }): JSX.Element | null {
+function Outline({ points, closed = true }: { points: { lat: number; lng: number }[]; closed?: boolean }): JSX.Element | null {
   const { t } = useTranslation();
-  if (points.length < 3) return null;
+  if (points.length < (closed ? 3 : 2)) return null;
   const lats = points.map((p) => p.lat);
   const lngs = points.map((p) => p.lng);
   const minLat = Math.min(...lats);
@@ -42,7 +42,7 @@ function Outline({ points }: { points: { lat: number; lng: number }[] }): JSX.El
   return (
     <svg viewBox="0 0 200 100" className="w-full h-[100px]" role="img" aria-label={t('modules:moduleProposalDialog.outlineLabel')}>
       <rect x="0" y="0" width="200" height="100" fill="rgba(255,255,255,0.03)" />
-      <path d={`${d} Z`} fill="rgba(34,197,94,0.12)" stroke="#22c55e" strokeWidth="1.5" />
+      <path d={closed ? `${d} Z` : d} fill={closed ? 'rgba(34,197,94,0.12)' : 'none'} stroke="#22c55e" strokeWidth="1.5" />
     </svg>
   );
 }
@@ -58,24 +58,51 @@ export function ModuleProposalDialog(): JSX.Element | null {
   }, [pending]);
 
   if (!pending) return null;
-  const { proposal, from, existing } = pending;
+  const { from } = pending;
+  const proposal = pending.proposal;
   const kept: string[] = [];
-  if (existing.exclusionShapes > 0) {
-    kept.push(t('modules:moduleProposalDialog.exclusionZones', { count: existing.exclusionShapes }));
+  if (pending.kind === 'fence') {
+    if (pending.existing.exclusionShapes > 0) kept.push(t('modules:moduleProposalDialog.exclusionZones', { count: pending.existing.exclusionShapes }));
+    if (pending.existing.hasReturnPoint) kept.push(t('modules:moduleProposalDialog.returnPoint'));
   }
-  if (existing.hasReturnPoint) kept.push(t('modules:moduleProposalDialog.returnPoint'));
+  const heading = pending.kind === 'landing' ? t('modules:moduleProposalDialog.asksToLand', { from }) : pending.kind === 'mission' ? t('modules:moduleProposalDialog.asksToPlan', { from }) : t('modules:moduleProposalDialog.asksToWrite', { from });
+  const confirm = pending.kind === 'landing' ? t('modules:moduleProposalDialog.flyAndLand') : pending.kind === 'mission' ? t('modules:moduleProposalDialog.addToMission') : t('modules:moduleProposalDialog.writeToAircraft');
+  const blocked = pending.kind === 'landing' ? pending.refusal : null;
 
   return (
     <div className="fixed inset-0 z-[3000] flex items-center justify-center bg-black/50">
       <div className="w-[420px] max-w-[92vw] rounded-lg border border-subtle bg-surface-solid shadow-xl">
         <div className="px-4 pt-4">
-          <div className="text-[11px] uppercase tracking-wide text-content-tertiary">
-            {t('modules:moduleProposalDialog.asksToWrite', { from })}
-          </div>
+          <div className="text-[11px] uppercase tracking-wide text-content-tertiary">{heading}</div>
           <div className="mt-1 text-base font-semibold text-content">{proposal.name}</div>
           <p className="mt-1 text-xs text-content-secondary">{proposal.reason}</p>
         </div>
 
+        {pending.kind === 'mission' && (
+          <div className="px-4 pt-3">
+            <Outline points={pending.proposal.items.map((i) => ({ lat: i.lat, lng: i.lng }))} closed={false} />
+            <div className="mt-2 text-xs text-content-secondary tabular-nums">
+              {t('modules:moduleProposalDialog.missionSummary', { count: pending.proposal.items.length, extent: extent(pending.proposal.items.map((i) => ({ lat: i.lat, lng: i.lng }))) })}
+            </div>
+            <div className={`mt-2 rounded border px-2 py-1.5 text-xs ${pending.proposal.mode === 'replace' && pending.existingItems > 0 ? 'border-amber-500/60 text-amber-400' : 'border-subtle text-content-tertiary'}`}>
+              {pending.proposal.mode === 'replace'
+                ? t('modules:moduleProposalDialog.missionReplace', { count: pending.existingItems })
+                : t('modules:moduleProposalDialog.missionAppend', { count: pending.existingItems })}
+            </div>
+          </div>
+        )}
+
+        {pending.kind === 'landing' && (
+          <div className="px-4 pt-3">
+            <div className="rounded border border-subtle bg-surface-inset px-3 py-2 font-mono text-xs tabular-nums text-content">
+              {pending.proposal.at.lat.toFixed(6)}, {pending.proposal.at.lng.toFixed(6)}
+            </div>
+            <div className="mt-2 text-xs text-content-secondary">{t('modules:moduleProposalDialog.landingSummary', { alt: Math.round(pending.proposal.transitAltRelM) })}</div>
+            {blocked && <div className="mt-2 rounded border border-red-500/60 px-2 py-1.5 text-xs text-red-400">{blocked}</div>}
+          </div>
+        )}
+
+        {pending.kind === 'fence' && (() => { const proposal = pending.proposal; const existing = pending.existing; return (
         <div className="px-4 pt-3">
           <Outline points={proposal.inclusion ?? proposal.exclusions?.[0]?.points ?? []} />
           {proposal.inclusion && (
@@ -102,6 +129,7 @@ export function ModuleProposalDialog(): JSX.Element | null {
             </div>
           )}
         </div>
+        ); })()}
 
         <div className="mt-4 flex items-center justify-end gap-2 border-t border-subtle px-4 py-3">
           <button
@@ -113,14 +141,14 @@ export function ModuleProposalDialog(): JSX.Element | null {
           </button>
           <button
             type="button"
-            disabled={busy}
+            disabled={busy || !!blocked}
             className="rounded bg-emerald-600 px-3 py-1.5 text-sm font-medium text-white disabled:opacity-60"
             onClick={() => {
               setBusy(true);
               pending.resolve({ accepted: true });
             }}
           >
-            {busy ? t('common:writing') : t('modules:moduleProposalDialog.writeToAircraft')}
+            {busy ? t('common:writing') : confirm}
           </button>
         </div>
       </div>

@@ -734,7 +734,14 @@
       "yaw": "Yaw",
       "yawAngle": "Yaw Angle",
       "zoomType": "Zoom Type",
-      "zoomValue": "Zoom Value"
+      "zoomValue": "Zoom Value",
+      "passBy": "Pass-by distance",
+      "passByTip": "Plane flies this far past the waypoint before it turns to the next one, so the line is held through the point instead of cutting the corner. 0 turns early as usual.",
+      "acceptanceRadiusTip": "How close Plane has to get for the waypoint to count as reached. 0 lets the autopilot work it out from the turn.",
+      "onlyFor": {
+        "plane": "Plane only",
+        "notPlane": "Copter and Rover"
+      }
     },
     "searchCommands": "Search commands...",
     "summary": {

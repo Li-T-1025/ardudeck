@@ -82,6 +82,7 @@ import { useBoardProfileAssociation } from './hooks/useBoardProfileAssociation';
 import { SitlAutoApplyWatcher } from './components/settings/vehicle-profile/SitlAutoApplyWatcher';
 import { ProfileApplyOverlay } from './components/settings/vehicle-profile/ProfileApplyOverlay';
 import { ParameterCompareModalRoot } from './components/parameters/ParameterCompareModalRoot';
+import { WiringCheckPrompt } from './components/parameters/WiringCheckPrompt';
 import { GlobalTooltip } from './components/GlobalTooltip';
 import { ActivityIndicator } from './components/ui/ActivityIndicator';
 import type { ElectronAPI } from '../main/preload';
@@ -1271,6 +1272,7 @@ function App() {
       <SitlAutoApplyWatcher />
       <ProfileApplyOverlay />
       <ParameterCompareModalRoot />
+      <WiringCheckPrompt />
       <div className="flex h-full">
         {/* Navigation Rail */}
         <NavigationRail onViewChange={handleViewChange} />

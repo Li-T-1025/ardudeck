@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { computeCameraTriggerPoints } from './camera-triggers';
+import { computeCameraTriggerPoints, photographedSeqs } from './camera-triggers';
 import { MAV_CMD, MAV_FRAME, type MissionItem } from '../../../shared/mission-types';
 
 let seq = 0;
@@ -34,3 +34,19 @@ describe('camera trigger points', () => {
     expect(computeCameraTriggerPoints([wp(0), wp(100 * M)])).toHaveLength(0);
   });
 });
+
+describe('photographed corners', () => {
+  it('none in a plain waypoint mission', () => {
+    seq = 0;
+    expect(photographedSeqs([wp(0), wp(100 * M), wp(200 * M), wp(300 * M)]).size).toBe(0);
+  });
+
+  it('only the corners on a leg flown with the camera on', () => {
+    seq = 0;
+    // 0 -> 1 camera off, 1 -> 2 and 2 -> 3 on, then off for 3 -> 4
+    const items = [wp(0), wp(100 * M), cam(10), wp(200 * M), wp(300 * M), cam(0), wp(400 * M), wp(500 * M)];
+    const s = photographedSeqs(items);
+    expect([...s].sort((a, b) => a - b)).toEqual([1, 3, 4]);
+  });
+});
+

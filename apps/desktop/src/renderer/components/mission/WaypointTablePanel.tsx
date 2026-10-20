@@ -48,6 +48,7 @@ import { validateMission } from '../../../shared/mission-validation';
 import { MissionValidationBadge } from './MissionValidationBadge';
 import { midMissionReturns, flownSeparately, flightBoundaries, vehicleItemNumbers } from './mission-end';
 import { predictFlownPath, turnRadiusFor, coverageGaps, type CornerCut } from './flown-path';
+import { photographedSeqs } from './camera-triggers';
 import { planSpeed } from '../survey/generators/turn-radius';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import {
@@ -847,10 +848,17 @@ type CommandParamConfig = {
   show: boolean;
   /** Added for display and taken off on edit: a jump target shows as the row number, stored 0-based. */
   displayOffset?: number;
+  /** Only this firmware acts on it; shown as a note when the vehicle is not known. */
+  onlyFor?: 'plane' | 'notPlane';
 };
 
 // Get the parameters config for each command type
-export function getCommandParams(cmd: number): CommandParamConfig[] {
+/**
+ * `vehicle`: 'plane' or 'other' when known. ArduPilot packs a plane waypoint's acceptance radius and
+ * pass-by distance into the field Copter and Rover use for the hold time (AP_Mission.cpp), so each
+ * vehicle only reads its own.
+ */
+export function getCommandParams(cmd: number, vehicle?: 'plane' | 'other'): CommandParamConfig[] {
   const baseLocation: CommandParamConfig[] = [
     { key: 'altitude' as const, labelKey: 'mission:waypointTable.param.altitude', unit: 'm', unitKind: 'altitude', min: 0, step: 5, show: true },
   ];
@@ -864,8 +872,11 @@ export function getCommandParams(cmd: number): CommandParamConfig[] {
     case MAV_CMD.NAV_WAYPOINT:
       return [
         ...baseLocation,
-        { key: 'param1' as const, labelKey: 'mission:waypointTable.param.waitTime', unit: 's', min: 0, max: 300, step: 1, show: true },
-        { key: 'param2' as const, labelKey: 'mission:waypointTable.param.acceptanceRadius', unit: 'm', unitKind: 'distance', min: 0, max: 50, step: 1, show: false },
+        { key: 'param1' as const, labelKey: 'mission:waypointTable.param.waitTime', unit: 's', min: 0, max: 300, step: 1, show: vehicle !== 'plane', onlyFor: 'notPlane' },
+        // 0 lets Plane work it out from the turn; 8 bits on the vehicle, so 255 m at most
+        { key: 'param2' as const, labelKey: 'mission:waypointTable.param.acceptanceRadius', unit: 'm', unitKind: 'distance', min: 0, max: 255, step: 1, show: vehicle !== 'other', onlyFor: 'plane' },
+        // Plane flies this far past the waypoint before turning to the next (commands_logic.cpp, "pass by")
+        { key: 'param3' as const, labelKey: 'mission:waypointTable.param.passBy', unit: 'm', unitKind: 'distance', min: 0, max: 255, step: 1, show: vehicle !== 'other', onlyFor: 'plane' },
       ];
     case MAV_CMD.NAV_SPLINE_WAYPOINT:
       return [
@@ -2194,6 +2205,10 @@ function WaypointListContent({ readOnly = false }: { readOnly?: boolean }) {
   const speedUnit = useSettingsStore((s) => s.unitPreferences.speed);
   const verticalSpeedUnit = useSettingsStore((s) => s.unitPreferences.verticalSpeed);
   const connectionState = useConnectionStore((s) => s.connectionState);
+  // which waypoint fields the vehicle reads; unknown while planning offline, then all show with a note
+  const planVehicle: 'plane' | 'other' | undefined = connectionState.isConnected && connectionState.mavType !== undefined
+    ? (mavTypeToVehicleType(connectionState.mavType) === 'plane' ? 'plane' : 'other')
+    : undefined;
 
   const showSegmentColors = useSettingsStore((s) => s.missionDefaults.showSegmentColors);
 
@@ -2429,9 +2444,11 @@ function WaypointListContent({ readOnly = false }: { readOnly?: boolean }) {
       placed.map((it) => ({ lat: it.latitude, lng: it.longitude })),
       turnRadiusFor(speedMs, flownPathBankDeg),
     );
+    // only corners the camera is shooting through can leave the ground unphotographed
+    const shooting = photographedSeqs(missionItems);
     for (const cut of coverageGaps(cuts, surveySwathWidth)) {
       const at = placed[cut.index];
-      if (at) byIndex.set(at.seq, cut);
+      if (at && shooting.has(at.seq)) byIndex.set(at.seq, cut);
     }
     return byIndex;
   }, [showFlownPath, missionItems, surveyConfig, surveySwathWidth, flownPathBankDeg]);
@@ -3701,14 +3718,15 @@ function WaypointListContent({ readOnly = false }: { readOnly?: boolean }) {
 
           {/* Dynamic parameters */}
           <div className="grid grid-cols-2 gap-2">
-            {getCommandParams(selectedWaypoint.command)
+            {getCommandParams(selectedWaypoint.command, planVehicle)
               .filter(p => p.show)
               .map((param) => {
                 const displayUnit = displayParamUnit(param, distanceUnit, altitudeUnit, speedUnit, verticalSpeedUnit);
                 return (
                   <div key={param.key}>
-                    <label className="block text-[11px] text-content-secondary mb-1">
+                    <label className="block text-[11px] text-content-secondary mb-1" data-tip={param.key === 'param3' && param.onlyFor === 'plane' ? t('mission:waypointTable.param.passByTip') : param.key === 'param2' && param.onlyFor === 'plane' ? t('mission:waypointTable.param.acceptanceRadiusTip') : undefined}>
                       {t(param.labelKey)} {(displayUnit || param.unitHintKey) && <span className="text-content-tertiary">({displayUnit || (param.unitHintKey ? t(param.unitHintKey) : '')})</span>}
+                      {!planVehicle && param.onlyFor && <span className="ml-1 text-content-tertiary">· {t(`mission:waypointTable.param.onlyFor.${param.onlyFor}`)}</span>}
                     </label>
                     {param.unitKind === 'distance' || param.unitKind === 'altitude' || param.unitKind === 'speed' || param.unitKind === 'verticalSpeed' ? (
                       <UnitParamInput

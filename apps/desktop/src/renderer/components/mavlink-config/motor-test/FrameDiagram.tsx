@@ -70,7 +70,8 @@ export const FrameDiagram: React.FC<FrameDiagramProps> = ({
   const { t } = useTranslation();
   const positions = layoutToSvgPositions(layout, size);
   const center = size / 2;
-  const motorRadius = 26;
+  const motors = positions.filter((p) => !p.servo);
+  const yawServo = positions.find((p) => p.servo);
 
   return (
     <div className="flex flex-col items-center gap-3">
@@ -135,7 +136,7 @@ export const FrameDiagram: React.FC<FrameDiagramProps> = ({
         </g>
 
         {/* Motor arms: from the centre, or on a QuadPlane booms back to the wing */}
-        {positions.map((pos) => (
+        {motors.map((pos) => (
           <line
             key={`arm-${pos.number}`}
             x1={quadplane ? pos.cx : center}
@@ -148,8 +149,19 @@ export const FrameDiagram: React.FC<FrameDiagramProps> = ({
           />
         ))}
 
+        {/* Tricopter: the yaw servo tilts the rear motor, it is listed as output 7 but spins nothing */}
+        {yawServo && (
+          <g pointerEvents="none">
+            <rect x={center - 9} y={center - 7} width={18} height={14} rx={2} fill="var(--bg-base)" stroke="var(--text-tertiary)" strokeWidth={1.5} />
+            <text x={center} y={center + 24} textAnchor="middle" fill="var(--text-secondary)" fontSize={10} fontFamily="monospace">
+              {t('mavlink-config:frameDiagram.yawServo', { n: yawServo.number })}
+            </text>
+          </g>
+        )}
+
         {/* Motor circles */}
-        {positions.map((pos) => {
+        {motors.map((pos) => {
+          const motorRadius = pos.r;
           const isActive = activeMotor === pos.number || !!spinning?.has(pos.number);
           const rpm = rpmByMotor?.get(pos.number);
           const isCw = pos.rotation === 'CW';
@@ -206,7 +218,7 @@ export const FrameDiagram: React.FC<FrameDiagramProps> = ({
               {/* Rotation arrow — a real curved arrow (arc + arrowhead) so the
                   spin direction reads at a glance without the colour legend. */}
               {!unknownRotation && (() => {
-                const arrow = rotationArrow(pos.cx, pos.cy, isCw);
+                const arrow = rotationArrow(pos.cx, pos.cy, isCw, motorRadius * 0.65);
                 return (
                   <g opacity={0.85} pointerEvents="none">
                     <path d={arrow.d} fill="none" stroke={color} strokeWidth={2} />
@@ -232,7 +244,7 @@ export const FrameDiagram: React.FC<FrameDiagramProps> = ({
                 y={pos.cy + 2}
                 textAnchor="middle"
                 fill="var(--text-primary)"
-                fontSize={16}
+                fontSize={Math.max(10, Math.round(motorRadius * 0.62))}
                 fontWeight="bold"
                 fontFamily="monospace"
                 pointerEvents="none"
@@ -250,7 +262,7 @@ export const FrameDiagram: React.FC<FrameDiagramProps> = ({
                 pointerEvents="none"
               >
                 <tspan fill="var(--text-secondary)">{testOrderToLabel(pos.testOrder)}</tspan>
-                <tspan fill={color} fontWeight="bold"> {pos.rotation}</tspan>
+                <tspan fill={color} fontWeight="bold"> {unknownRotation ? t('mavlink-config:frameDiagram.eitherWay') : pos.rotation}</tspan>
               </text>
 
               {/* RPM (if available) */}

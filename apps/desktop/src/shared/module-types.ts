@@ -95,6 +95,7 @@ export type CargoPreviewBlock =
   | { type: 'screenshots'; images: { url: string; alt?: string }[] }
   | { type: 'features'; items: { title: string; description?: string }[] }
   | { type: 'stats'; title?: string; tiles: { value: string; label: string }[] }
+  | { type: 'link'; label: string; url: string; description?: string }
   | {
       type: 'conversation';
       title?: string;

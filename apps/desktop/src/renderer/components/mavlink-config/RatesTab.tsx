@@ -8,7 +8,6 @@
  * Features:
  * - Per-axis rate curve visualization
  * - Sliders for rate and expo
- * - Quick presets mapped to detected scheme
  * - Custom profile save/load
  */
 
@@ -18,11 +17,9 @@ import { MoveHorizontal, MoveVertical, RefreshCw, Link, Lightbulb, AlertTriangle
 import { useParameterStore } from '../../stores/parameter-store';
 import { DraggableSlider } from '../ui/DraggableSlider';
 import { RateResponsePlot } from './RateResponsePlot';
-import { PresetSelector, type Preset } from '../ui/PresetSelector';
 import { ProfileManager } from '../ui/ProfileManager';
 import { InfoCard } from '../ui/InfoCard';
 import { RateCurve } from '../ui/RateCurve';
-import { RATE_PRESETS } from './presets/mavlink-presets';
 import { detectRateScheme, buildRatePresetParams, type RateScheme } from './mavlink-pid-schemes';
 
 // Storage key for custom profiles
@@ -43,12 +40,6 @@ const RatesTab: React.FC = () => {
     return detectRateScheme(parameters);
   }, [hasParameters, parameters]);
   const rateUnit = scheme?.rateUnitKey ? t(scheme.rateUnitKey) : (scheme?.rateUnit ?? '');
-  const ratePresets = useMemo(
-    () => Object.fromEntries(
-      Object.entries(RATE_PRESETS).map(([key, preset]) => [key, { ...preset, name: t(preset.nameKey), description: t(preset.descriptionKey) }]),
-    ) as Record<string, Preset>,
-    [t],
-  );
 
   const isUnknown = scheme?.id === 'unknown';
 
@@ -70,18 +61,6 @@ const RatesTab: React.FC = () => {
     if (!scheme || !rateValues) return {};
     return buildRatePresetParams(scheme, rateValues);
   }, [scheme, rateValues]);
-
-  // Apply a preset
-  const applyPreset = useCallback(async (presetKey: string) => {
-    if (!scheme) return;
-    const preset = RATE_PRESETS[presetKey];
-    if (preset) {
-      const params = buildRatePresetParams(scheme, preset.values);
-      for (const [param, value] of Object.entries(params)) {
-        await setParameter(param, value);
-      }
-    }
-  }, [scheme, setParameter]);
 
   // Reset to defaults
   const resetToDefaults = useCallback(() => {
@@ -162,13 +141,6 @@ const RatesTab: React.FC = () => {
       {/* Controls disabled when scheme unknown */}
       <div className={isUnknown || !scheme ? 'opacity-40 pointer-events-none' : ''}>
       <div className="space-y-6">
-      <PresetSelector
-        presets={ratePresets}
-        onApply={applyPreset}
-        label={t('common:quickPresets')}
-        hint={t('mavlink-config:ratesTab.presetsHint')}
-      />
-
       <ProfileManager<Record<string, number>>
         storageKey={RATE_PROFILES_KEY}
         currentData={profileData}

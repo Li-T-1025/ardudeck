@@ -649,7 +649,16 @@
     "willChange_one": "{{count}} parameter will change. Pick which to apply.",
     "willChange_other": "{{count}} parameters will change. Pick which to apply.",
     "writing": "Writing…",
-    "writingParameters": "Writing parameters…"
+    "writingParameters": "Writing parameters…",
+    "wiring": "wiring",
+    "wiringTip": "Changes what an output or the board drives. Check it in Quick setup after applying.",
+    "wiringCheckTitle": "Check the wiring before you fly",
+    "wiringCheckBody": "These changes move what the outputs or the board do. Run the check in Quick setup so nothing moves the wrong way.",
+    "wiringCheck": {
+      "surfaces": "Run the surface check",
+      "motors": "Run the motor test",
+      "orientation": "Check the board orientation"
+    }
   },
   "parametersView": {
     "addToFavourites": "Add to favourites",

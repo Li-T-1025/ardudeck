@@ -22,6 +22,8 @@ export interface TransportOptions {
   dtrEnable?: boolean;
   /** Enable RTS signal */
   rtsEnable?: boolean;
+  /** Hardware flow control (RTS/CTS); the driver then owns the RTS line */
+  rtscts?: boolean;
   /** Read timeout in milliseconds */
   readTimeout?: number;
   /** Write timeout in milliseconds */

@@ -21,6 +21,7 @@ import {
 } from './trainer-process.js';
 import type { TrainerBakeDone } from '../../shared/trainer-types.js';
 import { t } from '../../shared/i18n/index.js';
+import { listLocusSurveys } from './locus-surveys.js';
 
 /**
  * Flying what is planned here, in the Trainer, without leaving this app first.
@@ -149,6 +150,7 @@ export function setupTrainerHandlers(mainWindow: BrowserWindow | null, deps: Tra
   );
 
   ipcMain.handle(IPC_CHANNELS.TRAINER_BAKE_CANCEL, (): void => bake?.cancel());
+  ipcMain.handle(IPC_CHANNELS.TRAINER_LOCUS_SURVEYS, () => listLocusSurveys());
 
   ipcMain.handle(
     IPC_CHANNELS.TRAINER_DELETE_REGION,

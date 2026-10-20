@@ -76,7 +76,9 @@
     "udpClient": "Client (Connect)",
     "udpListen": "Listen (Server)",
     "vehicleRefused": "The vehicle refused the change",
-    "waitingHeartbeat": "Waiting for heartbeat..."
+    "waitingHeartbeat": "Waiting for heartbeat...",
+    "flowControl": "Hardware flow control (RTS/CTS)",
+    "flowControlTip": "Turn on when the radio is set to RTS/CTS flow control, as RFD900 and RFD868 radios often are. Needs the RTS and CTS wires connected."
   },
   "driverAssistant": {
     "bundled": "Bundled",

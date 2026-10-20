@@ -48,6 +48,7 @@ export function ConnectionPanel() {
   const [isRefreshingPorts, setIsRefreshingPorts] = useState(false);
   const [selectedPort, setSelectedPort] = useState('');
   const [baudRate, setBaudRate] = useState(115200);
+  const [flowControl, setFlowControl] = useState(false);
   const [connectionType, setConnectionType] = useState<'serial' | 'tcp' | 'udp'>('serial');
   const [tcpHost, setTcpHost] = useState('127.0.0.1');
   const [tcpPort, setTcpPort] = useState(5760);
@@ -117,6 +118,7 @@ export function ConnectionPanel() {
     if (!settingsInitialized || hasAppliedMemory.current) return;
     if (connectionMemory.lastConnectionType) setConnectionType(connectionMemory.lastConnectionType);
     if (connectionMemory.lastBaudRate) setBaudRate(connectionMemory.lastBaudRate);
+    if (connectionMemory.lastFlowControl !== undefined) setFlowControl(connectionMemory.lastFlowControl);
     if (connectionMemory.lastTcpHost) setTcpHost(connectionMemory.lastTcpHost);
     if (connectionMemory.lastTcpPort) setTcpPort(connectionMemory.lastTcpPort);
     if (connectionMemory.lastUdpPort) setUdpPort(connectionMemory.lastUdpPort);
@@ -617,11 +619,12 @@ export function ConnectionPanel() {
     setDiagnosis(null);
 
     if (connectionType === 'serial') {
-      success = await connect({ type: 'serial', port: selectedPort, baudRate });
+      success = await connect({ type: 'serial', port: selectedPort, baudRate, flowControl });
       if (success) {
         updateConnectionMemory({
           lastSerialPort: selectedPort,
           lastBaudRate: baudRate,
+          lastFlowControl: flowControl,
           lastConnectionType: 'serial',
         });
       }
@@ -885,6 +888,16 @@ export function ConnectionPanel() {
                   <option key={rate} value={rate}>{rate}</option>
                 ))}
               </select>
+              <label className="mt-2 flex cursor-pointer items-center gap-2" data-tip={t('connection:connectionPanel.flowControlTip')}>
+                <input
+                  type="checkbox"
+                  checked={flowControl}
+                  onChange={(e) => setFlowControl(e.target.checked)}
+                  disabled={primaryLinkUp}
+                  className="rounded border bg-surface-input"
+                />
+                <span className="text-xs text-content-secondary">{t('connection:connectionPanel.flowControl')}</span>
+              </label>
             </div>
 
             {!primaryLinkUp && (

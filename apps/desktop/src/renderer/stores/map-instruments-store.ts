@@ -13,7 +13,8 @@
  * they re-read their stored position.
  */
 import { create } from 'zustand';
-import { MAP_INSTRUMENTS } from '../components/map/instruments/registry';
+import { MAP_INSTRUMENTS, allMapInstruments, findMapInstrument } from '../components/map/instruments/registry';
+import { isCargoInstrumentId } from '../modules/module-map-instruments';
 import {
   readOverlayPosPayload,
   writeOverlayPosPayload,
@@ -65,12 +66,23 @@ export const INSTRUMENT_OPACITY_MIN = 0.25;
 /** Overlay-position keys a layout snapshot covers (instruments + docked groups). */
 function layoutPosKeys(groups: DockGroups): string[] {
   return [
-    ...MAP_INSTRUMENTS.map((i) => 'instrument:' + i.id),
+    ...allMapInstruments().map((i) => 'instrument:' + i.id),
     ...Object.keys(groups).map(groupOverlayKey),
   ];
 }
 
+// Cargo instruments register after this store loads, so their ids pass on shape alone.
 const INSTRUMENT_IDS = MAP_INSTRUMENTS.map((i) => i.id);
+function knownIdsPlusCargo(parsed: unknown): string[] {
+  const extra = new Set<string>();
+  const walk = (v: unknown) => {
+    if (typeof v === 'string') { if (isCargoInstrumentId(v)) extra.add(v); return; }
+    if (Array.isArray(v)) v.forEach(walk);
+    else if (v && typeof v === 'object') Object.values(v as Record<string, unknown>).forEach(walk);
+  };
+  walk(parsed);
+  return extra.size === 0 ? INSTRUMENT_IDS : [...INSTRUMENT_IDS, ...extra];
+}
 
 /** The analog gauge, the numeric card, or any variant id an instrument
  * registers (strip/cell/inline, or a bespoke one like the battery's 'used').
@@ -150,7 +162,7 @@ function sanitizeDisplayMode(parsed: unknown): Record<string, InstrumentDisplayM
   const out: Record<string, InstrumentDisplayMode> = {};
   if (parsed && typeof parsed === 'object') {
     for (const [k, v] of Object.entries(parsed as Record<string, unknown>)) {
-      if (typeof v === 'string' && DISPLAY_MODES.has(v)) out[k] = v;
+      if (typeof v === 'string' && (DISPLAY_MODES.has(v) || isCargoInstrumentId(k))) out[k] = v;
     }
   }
   return out;
@@ -180,7 +192,7 @@ function readStored(): PersistedMain {
         opacity: typeof parsed.opacity === 'number' && Number.isFinite(parsed.opacity) ? clampOpacity(parsed.opacity) : 1,
         instrumentOpacity: sanitizeInstrumentOpacity(parsed.instrumentOpacity),
         displayMode: sanitizeDisplayMode(parsed.displayMode),
-        groups: sanitizeGroups(parsed.groups, INSTRUMENT_IDS),
+        groups: sanitizeGroups(parsed.groups, knownIdsPlusCargo(parsed.groups)),
       };
     }
     return { ...fallback, visible: sanitizeVisible(parsed) };
@@ -206,7 +218,7 @@ export function sanitizeLayout(parsed: unknown): InstrumentLayoutSnapshot | null
     opacity: typeof p.opacity === 'number' && Number.isFinite(p.opacity) ? clampOpacity(p.opacity) : 1,
     instrumentOpacity: sanitizeInstrumentOpacity(p.instrumentOpacity),
     displayMode: sanitizeDisplayMode(p.displayMode),
-    groups: sanitizeGroups(p.groups, INSTRUMENT_IDS),
+    groups: sanitizeGroups(p.groups, knownIdsPlusCargo(p.groups)),
     positions: p.positions && typeof p.positions === 'object' ? (p.positions as Record<string, unknown>) : {},
   };
 }
@@ -239,7 +251,7 @@ function persistLayouts(layouts: Record<string, InstrumentLayoutSnapshot>): void
 
 /** Effective visibility: explicit user choice wins, else the registry default. */
 export function resolveInstrumentVisible(overrides: Record<string, boolean>, id: string): boolean {
-  return overrides[id] ?? DEFAULT_VISIBLE[id] ?? false;
+  return overrides[id] ?? DEFAULT_VISIBLE[id] ?? (isCargoInstrumentId(id) ? findMapInstrument(id)?.defaultVisible ?? false : false);
 }
 
 interface MapInstrumentsStore {
@@ -521,7 +533,7 @@ export const useMapInstrumentsStore = create<MapInstrumentsStore>((set, get) => 
       // Snapshot the RESOLVED visibility so a later registry-default change
       // can't silently alter a saved layout.
       const resolvedVisible: Record<string, boolean> = Object.fromEntries(
-        MAP_INSTRUMENTS.map((i) => [i.id, resolveInstrumentVisible(visible, i.id)]),
+        allMapInstruments().map((i) => [i.id, resolveInstrumentVisible(visible, i.id)]),
       );
       return {
         visible: resolvedVisible,

@@ -1,6 +1,5 @@
-// @vitest-environment jsdom
 import { describe, expect, it } from 'vitest';
-import { firstRunLayout } from './RadioHudView';
+import { firstRunLayout } from './hud-model';
 
 describe('firstRunLayout', () => {
   const ids = (cls: Parameters<typeof firstRunLayout>[0]) => firstRunLayout(cls).map((t) => t.id);
@@ -11,8 +10,8 @@ describe('firstRunLayout', () => {
   });
 
   it('starts a rover on the rover set and a sub on the sub set', () => {
-    expect(ids('rover')).toContain('thr');
-    expect(ids('sub')).toEqual(['alt', 'compass', 'att', 'batt', 'timer']);
+    expect(ids('rover')).toEqual(expect.arrayContaining(['speedo', 'heading', 'roll', 'pitch', 'thr']));
+    expect(ids('sub')).toEqual(expect.arrayContaining(['depth', 'heading', 'att']));
   });
 
   it('keeps the classic layout for a copter', () => {

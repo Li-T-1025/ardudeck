@@ -4,7 +4,7 @@
  * has no write path, only this queue.
  */
 
-import type { FenceProposal, ProposalResult } from '@ardudeck/module-sdk';
+import type { FenceProposal, LandingProposal, MissionProposal, ProposalResult } from '@ardudeck/module-sdk';
 import { t } from '../../shared/i18n/index.js';
 
 /**
@@ -22,15 +22,35 @@ export interface ExistingFence {
   hasReturnPoint: boolean;
 }
 
-export interface PendingProposal {
+interface PendingBase {
   key: string;
   slug: string;
   /** Module display name where known, else the slug. */
   from: string;
-  proposal: FenceProposal;
-  existing: ExistingFence;
   resolve: (r: ProposalResult) => void;
 }
+
+export interface PendingFence extends PendingBase {
+  kind: 'fence';
+  proposal: FenceProposal;
+  existing: ExistingFence;
+}
+
+export interface PendingMission extends PendingBase {
+  kind: 'mission';
+  proposal: MissionProposal;
+  /** Waypoints the mission holds now, so "replace" says what goes. */
+  existingItems: number;
+}
+
+export interface PendingLanding extends PendingBase {
+  kind: 'landing';
+  proposal: LandingProposal;
+  /** Why the aircraft cannot do it right now, or null. */
+  refusal: string | null;
+}
+
+export type PendingProposal = PendingFence | PendingMission | PendingLanding;
 
 let pending: PendingProposal | null = null;
 const listeners = new Set<() => void>();
@@ -69,21 +89,35 @@ export function proposeFence(
   if (!hasInclusion && !hasExclusions) {
     return Promise.resolve({ accepted: false, error: t('modules:moduleProposal.needsThreePoints') });
   }
+  return queue({ kind: 'fence', slug, from, proposal, existing });
+}
+
+function queue(p: Omit<PendingFence, 'key' | 'resolve'> | Omit<PendingMission, 'key' | 'resolve'> | Omit<PendingLanding, 'key' | 'resolve'>): Promise<ProposalResult> {
   return new Promise<ProposalResult>((resolve) => {
     pending = {
+      ...p,
       key: `p${++seq}`,
-      slug,
-      from,
-      proposal,
-      existing,
       resolve: (r) => {
         pending = null;
         emit();
         resolve(r);
       },
-    };
+    } as PendingProposal;
     emit();
   });
+}
+
+export function proposeMission(slug: string, from: string, proposal: MissionProposal, existingItems: number): Promise<ProposalResult> {
+  if (pending) return Promise.resolve({ accepted: false, error: t('modules:moduleProposal.alreadyOpen') });
+  const ok = Array.isArray(proposal?.items) && proposal.items.length > 0 && proposal.items.every((i) => Number.isFinite(i?.lat) && Number.isFinite(i?.lng) && Number.isFinite(i?.altitude));
+  if (!ok) return Promise.resolve({ accepted: false, error: t('modules:moduleProposal.needsItems') });
+  return queue({ kind: 'mission', slug, from, proposal, existingItems });
+}
+
+export function proposeLanding(slug: string, from: string, proposal: LandingProposal, refusal: string | null): Promise<ProposalResult> {
+  if (pending) return Promise.resolve({ accepted: false, error: t('modules:moduleProposal.alreadyOpen') });
+  if (!Number.isFinite(proposal?.at?.lat) || !Number.isFinite(proposal?.at?.lng)) return Promise.resolve({ accepted: false, error: t('modules:moduleProposal.needsPoint') });
+  return queue({ kind: 'landing', slug, from, proposal, refusal });
 }
 
 /** Withdraw anything a module has waiting, for unload. */

@@ -12,6 +12,8 @@ import {
 import { unregisterModulePanels } from './module-panel-registry';
 import { unregisterModuleOsdElements } from './module-osd-registry';
 import { unregisterModuleHudInstruments } from './module-hud-registry';
+import { unregisterModuleMapInstrumentsForSlug } from './module-map-instruments';
+import { unregisterModuleWorkspacePanelsForSlug } from './module-workspace-panels';
 
 interface MountEntry {
   slug: string;
@@ -92,6 +94,8 @@ export function ModuleRuntime({ children }: { children: ReactNode }) {
       unregisterModulePanels(slug);
       unregisterModuleOsdElements(slug);
       unregisterModuleHudInstruments(slug);
+      unregisterModuleMapInstrumentsForSlug(slug);
+      unregisterModuleWorkspacePanelsForSlug(slug);
       setMounts((prev) => {
         const next: MountMap = {};
         for (const [name, entries] of Object.entries(prev)) {

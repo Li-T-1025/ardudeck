@@ -262,6 +262,8 @@ export interface SavedConnection {
 export interface ConnectionMemory {
   lastSerialPort?: string;
   lastBaudRate?: number;
+  /** Hardware flow control on the last serial connection. */
+  lastFlowControl?: boolean;
   lastTcpHost?: string;
   lastTcpPort?: number;
   lastTcpProtocol?: 'mavlink' | 'msp' | 'crsf';

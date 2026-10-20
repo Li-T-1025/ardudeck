@@ -1,6 +1,6 @@
 import { useTranslation } from 'react-i18next';
 import type { ReactNode } from 'react';
-import { ArrowRight, CheckCircle2, Database, Home, Lightbulb, Mountain, Radar, Radio, Satellite, Send, XCircle } from 'lucide-react';
+import { AlertTriangle, ArrowRight, CheckCircle2, Database, Home, Lightbulb, Mountain, Radar, Radio, Rocket, Satellite, Send, Waves, XCircle } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { mavlinkLinks, paramLookup, RATE_GROUPS, rateGroupLabel, rateParamName, serialPortLabel } from '../../../shared/mavlink-channels';
 import { boardPortLabel, boardPortRegistry } from '../../modules/module-extension-registries';
@@ -13,110 +13,21 @@ import { useTileSourceStore } from '../../stores/tile-source-store';
 import { DraggableSlider } from '../ui/DraggableSlider';
 import { InfoCard } from '../ui/InfoCard';
 import { LOCUS_SLUG } from '../mission/locus-terrain';
-
-type Tone = 'ok' | 'warn' | 'risk' | 'off';
-
-const TONE_DOT: Record<Tone, string> = {
-  ok: 'bg-emerald-500',
-  warn: 'bg-amber-500',
-  risk: 'bg-red-500',
-  off: 'bg-content-tertiary/40',
-};
-const TONE_TEXT: Record<Tone, string> = {
-  ok: 'text-emerald-600 dark:text-emerald-400',
-  warn: 'text-amber-600 dark:text-amber-400',
-  risk: 'text-red-600 dark:text-red-400',
-  off: 'text-content-tertiary',
-};
+import { SONAR_PARAMS, sonarSetupState } from '../radio-hud/sonar-setup';
+import { SonarSetupCard } from '../radio-hud/SonarSetupCard';
+import { useNavigationStore } from '../../stores/navigation-store';
+import { getVehicleClass } from '../../../shared/telemetry-types';
+import { buildRecommendations } from './quick-setup-recommendations';
+import { useMessagesStore } from '../../stores/messages-store';
+import { currentPrearmFailures } from './prearm-status';
+import { hasNewVehicleWizard, openNewVehicleWizard, type WizardEntry } from './new-vehicle-wizard-entry';
+import { GpsCompassCard, RangefinderCard, TelemetryRadioCard } from './quick-setup-hardware-cards';
+import { HardwareSetupWizard } from './hardware-setup/HardwareSetupWizard';
+import { VibrationFilterCard } from './VibrationFilterCard';
+import { Card, Chips, Toggle, TONE_DOT, TONE_TEXT, useParam, type Tone } from './quick-setup-ui';
 
 function isPlaneType(mavType: number | undefined): boolean {
   return mavType === 1 || (mavType !== undefined && mavType >= 19 && mavType <= 25);
-}
-
-/** One parameter as the card sees it: staged value, whether the vehicle has it, and how to stage a change. */
-function useParam() {
-  const parameters = useParameterStore((s) => s.parameters);
-  const setParameter = useParameterStore((s) => s.setParameter);
-  const meta = useParameterStore((s) => s.getParameterMetadata);
-  return {
-    has: (name: string) => parameters.has(name),
-    get: (name: string, fallback = 0) => parameters.get(name)?.value ?? fallback,
-    // staged only: it reaches the aircraft through Write to Flash and its review
-    set: (name: string, value: number) => setParameter(name, value),
-    meta,
-  };
-}
-
-function Card({ icon, iconTone, title, hint, status, statusText, children, more }: {
-  icon: ReactNode; iconTone: string; title: string; hint: string; status: Tone; statusText: string;
-  children: ReactNode; more?: { label: string; onClick: () => void };
-}) {
-  return (
-    <section className="bg-surface rounded-xl border border-subtle p-4 space-y-4">
-      <div className="flex items-start gap-3">
-        <div className={`w-10 h-10 shrink-0 rounded-lg flex items-center justify-center ${iconTone}`}>{icon}</div>
-        <div className="min-w-0 flex-1">
-          <h3 className="text-sm font-medium text-content">{title}</h3>
-          <p className="text-xs text-content-secondary">{hint}</p>
-        </div>
-        <span className={`flex shrink-0 items-center gap-1.5 text-[11px] font-medium ${TONE_TEXT[status]}`}>
-          <span className={`h-2 w-2 rounded-full ${TONE_DOT[status]}`} />
-          {statusText}
-        </span>
-      </div>
-      {children}
-      {more && (
-        <button type="button" onClick={more.onClick} className="inline-flex items-center gap-1 text-xs text-content-secondary hover:text-content">
-          {more.label}
-          <ArrowRight className="h-3.5 w-3.5" />
-        </button>
-      )}
-    </section>
-  );
-}
-
-function Chips<T extends number>({ options, value, onChange, label }: {
-  options: Array<{ value: T; label: string }>; value: number; onChange: (v: T) => void; label: string;
-}) {
-  return (
-    <div>
-      {label && <div className="text-xs text-content-secondary mb-1.5">{label}</div>}
-      <div className="flex flex-wrap gap-1.5">
-        {options.map((o) => (
-          <button
-            key={o.value}
-            type="button"
-            aria-pressed={value === o.value}
-            onClick={() => onChange(o.value)}
-            className={`rounded-md border px-2.5 py-1 text-xs font-medium transition-colors ${value === o.value ? 'border-blue-500/60 bg-blue-500/15 text-content' : 'border-subtle text-content-secondary hover:text-content'}`}
-          >
-            {o.label}
-          </button>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function Toggle({ on, onChange, label, hint }: { on: boolean; onChange: (on: boolean) => void; label: string; hint?: string }) {
-  return (
-    <div className="flex items-center justify-between gap-3">
-      <div className="min-w-0">
-        <div className="text-xs text-content">{label}</div>
-        {hint && <div className="text-[11px] text-content-tertiary">{hint}</div>}
-      </div>
-      <button
-        type="button"
-        role="switch"
-        aria-checked={on}
-        aria-label={label}
-        onClick={() => onChange(!on)}
-        className={`relative h-5 w-9 shrink-0 rounded-full transition-colors ${on ? 'bg-blue-600' : 'border border-subtle bg-surface-inset'}`}
-      >
-        <span className={`absolute top-0.5 h-4 w-4 rounded-full border border-strong bg-white shadow-sm transition-all ${on ? 'left-[18px]' : 'left-0.5'}`} />
-      </button>
-    </div>
-  );
 }
 
 /** Chips for every bit a bitmask parameter has, named by the firmware's own metadata. */
@@ -355,7 +266,7 @@ const RC_CRSF = 512;
 const ELRS_RATES: Record<string, number> = { attitude: 10, position: 2, vfr: 2, status: 2, rc: 0, raw: 0, extra3: 1 };
 
 /** Everything ELRS needs, from Serial Ports, RC and the parameter list, in one place. */
-function ElrsCard({ highlight }: { highlight: boolean }) {
+export function ElrsCard({ highlight }: { highlight: boolean }) {
   const { t } = useTranslation();
   const p = useParam();
   const k = 'mavlink-config:quickSetup.elrs';
@@ -528,10 +439,143 @@ function ElrsCard({ highlight }: { highlight: boolean }) {
   );
 }
 
+const MAV_TYPE_SURFACE_BOAT = 11;
+
+/** Depth sounder for boats: what is fitted, a way to fit one, and the echogram for the radio. */
+function DepthSounderCard() {
+  const { t } = useTranslation();
+  const k = 'mavlink-config:quickSetup.depth';
+  const parameters = useParameterStore((s) => s.parameters);
+  const connected = useConnectionStore((s) => s.connectionState.isConnected);
+  const range = useTelemetryStore((s) => s.rangefinder);
+  const state = useMemo(() => {
+    const values: Record<string, number | undefined> = {};
+    for (const name of SONAR_PARAMS) values[name] = parameters.get(name)?.value;
+    return sonarSetupState(values);
+  }, [parameters]);
+  const go = useNavigationStore((s) => s.setView);
+  const [setupQuery, setSetupQuery] = useState<string | null>(null);
+  const fitted = state.kind !== 'none';
+  const status = fitted ? 'ok' : 'warn';
+  const statusText = t(`${k}.state.${state.kind}`);
+
+  return (
+    <Card
+      icon={<Waves className="w-5 h-5 text-blue-500 dark:text-blue-400" />}
+      iconTone="bg-blue-500/15"
+      title={t(`${k}.title`)}
+      hint={t(`${k}.hint`)}
+      status={status}
+      statusText={statusText}
+      more={{ label: t(`${k}.onRadio`), onClick: () => go('radio-hud') }}
+    >
+      {setupQuery !== null && <HardwareSetupWizard initialQuery={setupQuery} onClose={() => setSetupQuery(null)} />}
+      {fitted ? (
+        <div className="flex items-baseline gap-2">
+          <span className="text-2xl font-semibold tabular-nums text-content">{range ? `${range.distance.toFixed(1)} m` : '--'}</span>
+          <span className="text-xs text-content-secondary">{range ? t(`${k}.belowTransducer`) : t(`${k}.noReading`)}</span>
+        </div>
+      ) : (
+        <div className="space-y-2">
+          <p className="text-xs text-content-secondary">{t(`${k}.noneBody`)}</p>
+          <div className="flex flex-wrap gap-2">
+            {(['ping', 'nmea'] as const).map((q) => (
+              <button key={q} type="button" onClick={() => setSetupQuery(q === 'ping' ? 'Ping' : 'NMEA')}
+                className="rounded-lg border border-subtle bg-surface-raised px-3 py-1.5 text-xs text-content hover:bg-surface-inset">
+                {t(`${k}.add.${q}`)}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+      {(state.kind === 'ready' || state.kind === 'installed') && <SonarSetupCard connected={connected} />}
+      {state.kind === 'nmea' && <p className="text-[11px] text-content-tertiary">{t(`${k}.nmeaNote`)}</p>}
+    </Card>
+  );
+}
+
+/** The door into the guided setup, and the four problems that lead into its steps. */
+function NewVehicleHero({ onGoTo }: { onGoTo: (tab: string) => void }) {
+  const { t } = useTranslation();
+  const k = 'mavlink-config:quickSetup.hero';
+  const open = (entry: WizardEntry) => { if (!openNewVehicleWizard(entry)) onGoTo('parameters'); };
+  return (
+    <section className="rounded-xl border border-sky-500/30 bg-sky-500/10 p-4 flex items-start gap-3">
+      <div className="w-10 h-10 shrink-0 rounded-lg bg-sky-500/20 flex items-center justify-center">
+        <Rocket className="w-5 h-5 text-sky-500 dark:text-sky-400" />
+      </div>
+      <div className="min-w-0 flex-1">
+        <h3 className="text-sm font-medium text-content">{t(`${k}.title`)}</h3>
+        <p className="text-xs text-content-secondary">{t(`${k}.body`)}</p>
+        {!hasNewVehicleWizard() && <p className="mt-1 text-[11px] text-content-tertiary">{t(`${k}.notReady`)}</p>}
+      </div>
+      <button type="button" onClick={() => open('start')} className="shrink-0 rounded-md bg-sky-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-sky-500">
+        {t(`${k}.start`)}
+      </button>
+    </section>
+  );
+}
+
+function ProblemRow({ onGoTo }: { onGoTo: (tab: string) => void }) {
+  const { t } = useTranslation();
+  const k = 'mavlink-config:quickSetup.problems';
+  const statusMessages = useMessagesStore((s) => s.messages);
+  const failures = useMemo(() => currentPrearmFailures(statusMessages as Array<{ text: string; timestamp?: number }>), [statusMessages]);
+  const open = (entry: WizardEntry) => { if (!openNewVehicleWizard(entry)) onGoTo('parameters'); };
+  const items: Array<{ entry: WizardEntry; title: string; detail: string; count?: number }> = [
+    { entry: 'arm', title: t(`${k}.arm`), detail: failures.length ? failures.map((f) => f.text).join(', ') : t(`${k}.armNone`), count: failures.length },
+    { entry: 'flip', title: t(`${k}.flip`), detail: t(`${k}.flipDetail`) },
+    { entry: 'motors', title: t(`${k}.motors`), detail: t(`${k}.motorsDetail`) },
+    { entry: 'wobble', title: t(`${k}.wobble`), detail: t(`${k}.wobbleDetail`) },
+  ];
+  return (
+    <section className="space-y-2">
+      <div className="flex items-center gap-2 text-xs text-content-secondary">
+        <AlertTriangle className="h-3.5 w-3.5" />
+        {t(`${k}.title`)}
+      </div>
+      <div className="grid grid-cols-4 gap-2">
+        {items.map((i) => (
+          <button key={i.entry} type="button" onClick={() => open(i.entry)} className="rounded-lg border border-subtle bg-surface p-3 text-left hover:bg-surface-raised">
+            <div className="flex items-center gap-2 text-xs font-medium text-content">
+              <span className="truncate">{i.title}</span>
+              {i.count ? <span className="shrink-0 rounded-full bg-red-500/20 px-1.5 text-[10px] text-red-600 dark:text-red-400">{i.count}</span> : null}
+            </div>
+            <div className="mt-0.5 line-clamp-2 text-[11px] text-content-tertiary">{i.detail}</div>
+          </button>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function HardwareGroup({ children }: { children: ReactNode }) {
+  const { t } = useTranslation();
+  const k = 'mavlink-config:quickSetup.hardware';
+  const [setupOpen, setSetupOpen] = useState(false);
+  return (
+    <section className="space-y-3">
+      {setupOpen && <HardwareSetupWizard onClose={() => setSetupOpen(false)} />}
+      <div className="flex items-end justify-between gap-3">
+        <div>
+          <h3 className="text-sm font-medium text-content">{t(`${k}.title`)}</h3>
+          <p className="text-xs text-content-secondary">{t(`${k}.hint`)}</p>
+        </div>
+        <button type="button" onClick={() => setSetupOpen(true)} className="inline-flex shrink-0 items-center gap-1 text-xs text-content-secondary hover:text-content">
+          {t(`${k}.more`)}
+          <ArrowRight className="h-3.5 w-3.5" />
+        </button>
+      </div>
+      {children}
+    </section>
+  );
+}
+
 /** Fixes worth making, staged together for one review: never written from here. */
-function Recommendations({ plane }: { plane: boolean }) {
+function Recommendations({ plane, mavType }: { plane: boolean; mavType: number | undefined }) {
   const { t } = useTranslation();
   const p = useParam();
+  const parameters = useParameterStore((s) => s.parameters);
   const locus = useTileSourceStore((s) => s.entries.some((e) => e.slug === LOCUS_SLUG && e.kind === 'dem'));
   const k = 'mavlink-config:quickSetup.recommend';
   const items: Array<{ text: string; apply: () => void }> = [];
@@ -549,6 +593,10 @@ function Recommendations({ plane }: { plane: boolean }) {
   }
   if (locus && p.has('TERRAIN_SPACING') && p.get('TERRAIN_SPACING') > 30) {
     items.push({ text: t(`${k}.spacing`), apply: () => { p.set('TERRAIN_ENABLE', 1); p.set('TERRAIN_SPACING', 30); } });
+  }
+  const vehicle = plane ? 'plane' : mavType !== undefined && getVehicleClass(mavType) === 'copter' ? 'copter' : 'other';
+  for (const r of buildRecommendations({ parameters, vehicle, enumOf: (n) => p.meta(n)?.values })) {
+    items.push({ text: t(`${k}.${r.textKey}`, r.textParams), apply: () => Object.entries(r.changes).forEach(([n, v]) => p.set(n, v)) });
   }
   if (items.length === 0) return null;
   return (
@@ -588,18 +636,57 @@ export function QuickSetupTab({ onGoTo, focus }: { onGoTo: (tab: string) => void
     const timer = setTimeout(() => setLit(null), 2500);
     return () => clearTimeout(timer);
   }, [focus]);
-  const plane = isPlaneType(useConnectionStore((s) => s.connectionState.mavType));
+  const mavType = useConnectionStore((s) => s.connectionState.mavType);
+  const plane = isPlaneType(mavType);
+  // rover and boat: their own cards only, the return-height and terrain cards are written for aircraft
+  if (mavType !== undefined && getVehicleClass(mavType) === 'rover') {
+    return (
+      <div className="p-6 space-y-6">
+        <InfoCard title={t('mavlink-config:quickSetup.introTitle')} variant="info">
+          {t('mavlink-config:quickSetup.intro')}
+        </InfoCard>
+        <NewVehicleHero onGoTo={onGoTo} />
+        <ProblemRow onGoTo={onGoTo} />
+        <HardwareGroup>
+          <div className="grid grid-cols-2 gap-4 items-start">
+            <div className="space-y-4">
+              <ElrsCard highlight={lit === 'elrs'} />
+              <GpsCompassCard onGoTo={onGoTo} />
+            </div>
+            <div className="space-y-4">
+              <TelemetryRadioCard />
+              {mavType === MAV_TYPE_SURFACE_BOAT && <DepthSounderCard />}
+            </div>
+          </div>
+        </HardwareGroup>
+      </div>
+    );
+  }
   return (
     <div className="p-6 space-y-6">
       <InfoCard title={t('mavlink-config:quickSetup.introTitle')} variant="info">
         {t('mavlink-config:quickSetup.intro')}
       </InfoCard>
-      <Recommendations plane={plane} />
+      <NewVehicleHero onGoTo={onGoTo} />
+      <ProblemRow onGoTo={onGoTo} />
+      <Recommendations plane={plane} mavType={mavType} />
       {/* two stacks, not a grid: rows of a grid are as tall as their tallest card and leave holes */}
+      <HardwareGroup>
+        <div className="grid grid-cols-2 gap-4 items-start">
+          <div className="space-y-4">
+            <ElrsCard highlight={lit === 'elrs'} />
+            <GpsCompassCard onGoTo={onGoTo} />
+          </div>
+          <div className="space-y-4">
+            <TelemetryRadioCard />
+            <RangefinderCard />
+            <VibrationFilterCard />
+          </div>
+        </div>
+      </HardwareGroup>
       <div className="grid grid-cols-2 gap-4 items-start">
         <div className="space-y-4">
           <ReturnHomeCard plane={plane} onGoTo={onGoTo} />
-          <ElrsCard highlight={lit === 'elrs'} />
         </div>
         <div className="space-y-4">
           <TerrainCard plane={plane} onGoTo={onGoTo} />

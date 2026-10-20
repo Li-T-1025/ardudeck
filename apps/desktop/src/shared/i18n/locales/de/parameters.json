@@ -649,7 +649,16 @@
     "willChange_one": "{{count}} Parameter wird geändert. Wählen Sie aus, was übernommen werden soll.",
     "willChange_other": "{{count}} Parameter werden geändert. Wählen Sie aus, was übernommen werden soll.",
     "writing": "Wird geschrieben…",
-    "writingParameters": "Parameter werden geschrieben…"
+    "writingParameters": "Parameter werden geschrieben…",
+    "wiring": "Verkabelung",
+    "wiringTip": "Ändert, was ein Ausgang oder das Board ansteuert. Prüf es nach dem Anwenden im Schnellstart.",
+    "wiringCheckTitle": "Prüf die Verkabelung vor dem Flug",
+    "wiringCheckBody": "Diese Änderungen verschieben, was die Ausgänge oder das Board tun. Mach den Check im Schnellstart, damit sich nichts in die falsche Richtung bewegt.",
+    "wiringCheck": {
+      "surfaces": "Ruder-Check starten",
+      "motors": "Motortest starten",
+      "orientation": "Board-Ausrichtung prüfen"
+    }
   },
   "parametersView": {
     "addToFavourites": "Zu Favoriten hinzufügen",

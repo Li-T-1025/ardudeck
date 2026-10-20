@@ -8,9 +8,6 @@
 import React, { useMemo, useCallback, useState, useRef } from 'react';
 import { useTranslation, Trans } from 'react-i18next';
 import {
-  Shield,
-  Scale,
-  Zap,
   Radio,
   Monitor,
   Battery,
@@ -33,44 +30,13 @@ import {
   isNoChecks,
   toggleCheck,
 } from './arming-checks';
-import { formatParamValue } from '../../../shared/parameter-types';
 import { useConnectionStore } from '../../stores/connection-store';
 import { DraggableSlider } from '../ui/DraggableSlider';
 import { InfoCard } from '../ui/InfoCard';
-import { PresetSelector, type Preset } from '../ui/PresetSelector';
 import { SigningSection } from '../settings/SigningSection';
-import {
-  SAFETY_PRESETS,
-  FENCE_TYPES,
-  type SafetyPreset,
-} from './presets/mavlink-presets';
+import { FENCE_TYPES } from './presets/mavlink-presets';
 
-// Convert safety presets to PresetSelector format
-const PRESET_SELECTOR_PRESETS: Record<string, Omit<Preset, 'name' | 'description'> & { nameKey: string; descriptionKey: string }> = {
-  maximum: {
-    nameKey: 'mavlink-config:safetyTab.presetMaximum',
-    descriptionKey: SAFETY_PRESETS.maximum!.descriptionKey,
-    icon: Shield,
-    iconColor: 'text-green-400',
-    color: 'from-green-500/20 to-emerald-500/10 border-green-500/30',
-  },
-  balanced: {
-    nameKey: 'mavlink-config:safetyTab.presetBalanced',
-    descriptionKey: SAFETY_PRESETS.balanced!.descriptionKey,
-    icon: Scale,
-    iconColor: 'text-blue-400',
-    color: 'from-blue-500/20 to-cyan-500/10 border-blue-500/30',
-  },
-  minimal: {
-    nameKey: 'mavlink-config:safetyTab.presetMinimal',
-    descriptionKey: SAFETY_PRESETS.minimal!.descriptionKey,
-    icon: Zap,
-    iconColor: 'text-orange-400',
-    color: 'from-orange-500/20 to-red-500/10 border-orange-500/30',
-  },
-};
-
-type ConfirmAction = { type: 'preset'; key: string } | { type: 'no-checks' };
+type ConfirmAction = { type: 'no-checks' };
 
 // Fallback enum labels for PX4 failsafe/geofence params, used when bundled
 // metadata is unavailable. Labels mirror the PX4 parameter metadata values.
@@ -387,20 +353,6 @@ const SafetyTab: React.FC<SafetyTabProps> = ({ onGoTo }) => {
     armingCheck: parameters.get('ARMING_CHECK')?.value ?? 1,
   }), [parameters]);
 
-  // Apply preset (after confirmation)
-  const applyPresetConfirmed = useCallback(async (presetKey: string) => {
-    const preset = SAFETY_PRESETS[presetKey];
-    if (!preset) return;
-    const failed: string[] = [];
-    for (const [param, value] of Object.entries(preset.params)) {
-      const ok = await setParameter(param, value);
-      if (!ok) failed.push(param);
-    }
-    if (failed.length > 0) {
-      reportWriteError(t('mavlink-config:safetyTab.failedToSet', { params: failed.join(', ') }));
-    }
-  }, [setParameter, reportWriteError, t]);
-
   // 4.7 renamed this to ARMING_SKIPCHK and inverted it: bits are now checks to
   // SKIP. Same bit positions, so everything below works off bit indexes and the
   // model decides how to read and write them.
@@ -438,13 +390,6 @@ const SafetyTab: React.FC<SafetyTabProps> = ({ onGoTo }) => {
   }, [armingModel, armingValue, writeArmingCheck]);
 
   const modified = modifiedCount();
-
-  const presetSelectorPresets = useMemo(
-    () => Object.fromEntries(
-      Object.entries(PRESET_SELECTOR_PRESETS).map(([key, { nameKey, descriptionKey, ...preset }]) => [key, { ...preset, name: t(nameKey), description: t(descriptionKey) }]),
-    ) as Record<string, Preset>,
-    [t],
-  );
 
   if (firmware === 'px4') {
     return (
@@ -530,14 +475,6 @@ const SafetyTab: React.FC<SafetyTabProps> = ({ onGoTo }) => {
       <InfoCard title={t('mavlink-config:safetyTab.safetyFeaturesTitle')} variant="info">
         {t('mavlink-config:safetyTab.safetyFeaturesBody')}
       </InfoCard>
-
-      {/* Safety Presets */}
-      <PresetSelector
-        presets={presetSelectorPresets}
-        onApply={(key) => setConfirmAction({ type: 'preset', key })}
-        label={t('mavlink-config:safetyTab.safetyPresets')}
-        hint={t('mavlink-config:safetyTab.safetyPresetsHint')}
-      />
 
       {/* Failsafe Settings Grid */}
       <div className="grid grid-cols-2 gap-4">
@@ -838,96 +775,36 @@ const SafetyTab: React.FC<SafetyTabProps> = ({ onGoTo }) => {
         </div>
       )}
 
-      {/* Confirmation Modal (preset apply / disable arming checks) */}
+      {/* Confirmation Modal (disable arming checks) */}
       {confirmAction && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
           <div className="bg-surface-solid border rounded-xl shadow-2xl max-w-lg w-full mx-4 max-h-[80vh] flex flex-col">
-            {confirmAction.type === 'preset' ? (
-              <>
-                <div className="px-6 py-4 border-b border-subtle">
-                  <h3 className="text-lg font-semibold text-content">
-                    {t('mavlink-config:safetyTab.applyPresetTitle', { name: t(SAFETY_PRESETS[confirmAction.key]?.nameKey ?? '') })}
-                  </h3>
-                  <p className="text-sm text-content-secondary mt-1">
-                    {t('mavlink-config:safetyTab.applyPresetDesc')}
-                  </p>
-                </div>
-                <div className="flex-1 min-h-0 overflow-auto px-6 py-4">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="text-left text-xs text-content-secondary uppercase">
-                        <th className="pb-2">{t('common:parameter')}</th>
-                        <th className="pb-2 text-right">{t('mavlink-config:safetyTab.colCurrent')}</th>
-                        <th className="pb-2 text-center px-2">→</th>
-                        <th className="pb-2">{t('mavlink-config:safetyTab.colNew')}</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-subtle">
-                      {Object.entries(SAFETY_PRESETS[confirmAction.key]?.params ?? {}).map(([param, value]) => {
-                        const current = parameters.get(param);
-                        return (
-                          <tr key={param}>
-                            <td className="py-2 font-mono text-content">{param}</td>
-                            <td className="py-2 text-right font-mono text-content-secondary">
-                              {current ? formatParamValue(current.value) : '?'}
-                            </td>
-                            <td className="py-2 text-center text-content-tertiary">→</td>
-                            <td className="py-2 font-mono text-amber-400">{formatParamValue(value)}</td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-                <div className="px-6 py-4 border-t border-subtle flex justify-end gap-3">
-                  <button
-                    onClick={() => setConfirmAction(null)}
-                    className="px-4 py-2 text-sm text-content-secondary hover:text-content transition-colors"
-                  >
-                    {t('common:cancel')}
-                  </button>
-                  <button
-                    onClick={() => {
-                      const key = confirmAction.key;
-                      setConfirmAction(null);
-                      void applyPresetConfirmed(key);
-                    }}
-                    className="px-4 py-2 bg-green-500/20 hover:bg-green-500/30 text-green-400 rounded-lg text-sm font-medium transition-colors"
-                  >
-                    {t('mavlink-config:safetyTab.applyPreset')}
-                  </button>
-                </div>
-              </>
-            ) : (
-              <>
-                <div className="px-6 py-4">
-                  <h3 className="text-lg font-semibold text-content flex items-center gap-2">
-                    <AlertTriangle className="w-5 h-5 text-red-400 shrink-0" />
-                    {t('mavlink-config:safetyTab.disableChecksTitle')}
-                  </h3>
-                  <p className="text-sm text-content-secondary mt-2">
-                    {t('mavlink-config:safetyTab.disableChecksBody')}
-                  </p>
-                </div>
-                <div className="px-6 py-4 flex justify-end gap-3">
-                  <button
-                    onClick={() => setConfirmAction(null)}
-                    className="px-4 py-2 text-sm text-content-secondary hover:text-content transition-colors"
-                  >
-                    {t('common:cancel')}
-                  </button>
-                  <button
-                    onClick={() => {
-                      setConfirmAction(null);
-                      void writeArmingCheck(0);
-                    }}
-                    className="px-4 py-2 bg-red-500/20 hover:bg-red-500/30 text-red-400 rounded-lg text-sm font-medium transition-colors"
-                  >
-                    {t('mavlink-config:safetyTab.disableChecks')}
-                  </button>
-                </div>
-              </>
-            )}
+            <div className="px-6 py-4">
+              <h3 className="text-lg font-semibold text-content flex items-center gap-2">
+                <AlertTriangle className="w-5 h-5 text-red-400 shrink-0" />
+                {t('mavlink-config:safetyTab.disableChecksTitle')}
+              </h3>
+              <p className="text-sm text-content-secondary mt-2">
+                {t('mavlink-config:safetyTab.disableChecksBody')}
+              </p>
+            </div>
+            <div className="px-6 py-4 flex justify-end gap-3">
+              <button
+                onClick={() => setConfirmAction(null)}
+                className="px-4 py-2 text-sm text-content-secondary hover:text-content transition-colors"
+              >
+                {t('common:cancel')}
+              </button>
+              <button
+                onClick={() => {
+                  setConfirmAction(null);
+                  void writeArmingCheck(0);
+                }}
+                className="px-4 py-2 bg-red-500/20 hover:bg-red-500/30 text-red-400 rounded-lg text-sm font-medium transition-colors"
+              >
+                {t('mavlink-config:safetyTab.disableChecks')}
+              </button>
+            </div>
           </div>
         </div>
       )}

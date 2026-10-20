@@ -1,6 +1,5 @@
 import { describe, it, expect } from 'vitest';
 import {
-  SAFETY_PRESETS,
   BATTERY_CHEMISTRIES,
   getCellVoltages,
   type BatteryChemistry,
@@ -12,7 +11,7 @@ import {
  * Covers:
  * - Battery chemistry critical thresholds are sane
  * - getCellVoltages() returns correct critical voltages
- * - Safety presets critical-vs-low battery action consistency
+ * Action consistency lives in quick-setup-recommendations.test.ts.
  */
 
 // =============================================================================
@@ -114,67 +113,5 @@ describe('getCellVoltages - critical voltage calculations', () => {
   it('0 cells returns 0 critical voltage', () => {
     const v = getCellVoltages(0);
     expect(v.critical).toBe(0);
-  });
-});
-
-// =============================================================================
-// Safety Presets - Critical vs Low Battery Consistency
-// =============================================================================
-
-describe('SAFETY_PRESETS - critical vs low battery action consistency', () => {
-  // BATT_FS_CRT_ACT: 0=Disabled, 1=Land Immediately, 2=RTL
-  // BATT_FS_LOW_ACT: 0=Disabled, 1=Land, 2=RTL
-
-  it('if low battery is disabled, critical battery is also disabled', () => {
-    for (const [key, preset] of Object.entries(SAFETY_PRESETS)) {
-      const lowAction = preset.params['BATT_FS_LOW_ACT'] ?? 0;
-      const critAction = preset.params['BATT_FS_CRT_ACT'] ?? 0;
-      if (lowAction === 0) {
-        expect(
-          critAction,
-          `preset "${key}": critical battery enabled but low battery disabled - makes no sense`,
-        ).toBe(0);
-      }
-    }
-  });
-
-  it('critical action is at least as aggressive as low battery action in maximum preset', () => {
-    const preset = SAFETY_PRESETS['maximum']!;
-    const lowAction = preset.params['BATT_FS_LOW_ACT']!;
-    const critAction = preset.params['BATT_FS_CRT_ACT']!;
-
-    // Both enabled
-    expect(lowAction).toBeGreaterThan(0);
-    expect(critAction).toBeGreaterThan(0);
-
-    // For ArduPilot: Land (1) is more aggressive than RTL (2)
-    // So critical action value should be <= low action value (lower number = more aggressive)
-    expect(
-      critAction,
-      `maximum: critical action (${critAction}) should be at least as aggressive as low (${lowAction})`,
-    ).toBeLessThanOrEqual(lowAction);
-  });
-
-  it('balanced preset has both battery failsafe levels enabled', () => {
-    const preset = SAFETY_PRESETS['balanced']!;
-    expect(preset.params['BATT_FS_LOW_ACT']).toBeGreaterThan(0);
-    expect(preset.params['BATT_FS_CRT_ACT']).toBeGreaterThan(0);
-  });
-
-  it('minimal preset has both battery failsafe levels disabled', () => {
-    const preset = SAFETY_PRESETS['minimal']!;
-    expect(preset.params['BATT_FS_LOW_ACT']).toBe(0);
-    expect(preset.params['BATT_FS_CRT_ACT']).toBe(0);
-  });
-
-  it('no preset uses an invalid critical battery action code', () => {
-    const validActions = new Set([0, 1, 2]);
-    for (const [key, preset] of Object.entries(SAFETY_PRESETS)) {
-      const action = preset.params['BATT_FS_CRT_ACT'];
-      expect(
-        validActions.has(action!),
-        `preset "${key}" has unknown BATT_FS_CRT_ACT value: ${action}`,
-      ).toBe(true);
-    }
   });
 });

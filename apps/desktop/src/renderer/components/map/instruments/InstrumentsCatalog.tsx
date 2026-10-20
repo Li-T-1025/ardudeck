@@ -32,7 +32,8 @@ import {
   INSTRUMENT_OPACITY_MIN,
   type InstrumentDisplayMode,
 } from '../../../stores/map-instruments-store';
-import { MAP_INSTRUMENTS, instrumentLabel, instrumentSuitsProfile, type MapInstrumentDef } from './registry';
+import { useAllMapInstruments, instrumentLabel, instrumentSuitsProfile, defaultDisplayOption, type MapInstrumentDef } from './registry';
+import { isCargoInstrumentId } from '../../../modules/module-map-instruments';
 import { useDetectedProfile, useInstrumentProfile, useInstrumentProfileStore } from './useInstrumentProfile';
 import { PRESET_INSTRUMENT_LAYOUTS, type PresetAccent } from './preset-layouts';
 import { useTelemetryStore } from '../../../stores/telemetry-store';
@@ -56,7 +57,8 @@ type InstrumentRole =
   | 'navigation'
   | 'command'
   | 'status'
-  | 'summary';
+  | 'summary'
+  | 'cargo';
 
 // Flight-critical first, chrome last. Mirrors the mobile rail order.
 const ROLE_ORDER: InstrumentRole[] = [
@@ -66,6 +68,7 @@ const ROLE_ORDER: InstrumentRole[] = [
   'command',
   'status',
   'summary',
+  'cargo',
 ];
 
 const INSTRUMENT_ROLE: Record<string, InstrumentRole> = {
@@ -94,6 +97,7 @@ function roleOf(id: string): InstrumentRole {
   // as navigation here); anything else, generated battery instances
   // included, follows its placement semantics instead of dumping to status.
   if (INSTRUMENT_ROLE[id]) return INSTRUMENT_ROLE[id];
+  if (isCargoInstrumentId(id)) return 'cargo';
   const sem = semanticsOf(id).role;
   return sem === 'video' ? 'status' : sem;
 }
@@ -105,6 +109,7 @@ const ROLE_TITLE: Record<InstrumentRole, string> = {
   command: 'map:instrumentsCatalog.roleCommand',
   status: 'map:instrumentsCatalog.roleStatus',
   summary: 'map:instrumentsCatalog.roleSummary', // i18n-exempt: i18n key
+  cargo: 'map:instrumentsCatalog.roleCargo', // i18n-exempt: i18n key
 };
 
 const ROLE_BLURB: Record<InstrumentRole, string> = {
@@ -114,6 +119,7 @@ const ROLE_BLURB: Record<InstrumentRole, string> = {
   command: 'map:instrumentsCatalog.blurbCommand',
   status: 'map:instrumentsCatalog.blurbStatus',
   summary: 'map:instrumentsCatalog.blurbSummary', // i18n-exempt: i18n key
+  cargo: 'map:instrumentsCatalog.blurbCargo', // i18n-exempt: i18n key
 };
 
 // One accent per role, vivid in both themes (same intent as the mobile
@@ -126,6 +132,7 @@ const ROLE_COLOR: Record<InstrumentRole, string> = {
   command: '#ef4444',
   status: '#2dd4bf',
   summary: '#a78bfa',
+  cargo: '#f472b6',
 };
 
 function RoleIcon({ role, className }: { role: InstrumentRole; className?: string }): JSX.Element {
@@ -143,6 +150,8 @@ function RoleIcon({ role, className }: { role: InstrumentRole; className?: strin
       return (<svg {...p}><path d="M3 12h4l2 6 4-14 2 8h6" /></svg>);
     case 'summary':
       return (<svg {...p}><path d="M4 6h16M4 12h16M4 18h10" /></svg>);
+    case 'cargo':
+      return (<svg {...p}><path d="M21 8l-9-5-9 5v8l9 5 9-5V8z" /><path d="M3 8l9 5 9-5M12 13v8" /></svg>);
   }
 }
 
@@ -231,7 +240,7 @@ function StepButton({ glyph, onClick, disabled }: { glyph: 'minus' | 'plus'; onC
 // option set the on-map config popover offers, kept in one place.
 function displayOptionsOf(def: MapInstrumentDef): Array<{ id: InstrumentDisplayMode; labelKey: string }> {
   return [
-    { id: 'analog', labelKey: 'map:instrumentDisplay.analog' },
+    { id: 'analog', labelKey: defaultDisplayOption(def).labelKey },
     ...(def.NumericComponent ? [{ id: 'numeric' as InstrumentDisplayMode, labelKey: 'map:instrumentDisplay.numeric' }] : []),
     ...(def.variants ?? []).map((v) => ({ id: v.id as InstrumentDisplayMode, labelKey: v.labelKey })),
   ];
@@ -365,7 +374,7 @@ const CARD_GRID = 'grid gap-2.5 [grid-template-columns:repeat(auto-fill,minmax(2
 function GroupPane({ role }: { role: InstrumentRole }): JSX.Element {
   const { t } = useTranslation();
   const accent = ROLE_COLOR[role];
-  const defs = MAP_INSTRUMENTS.filter((d) => roleOf(d.id) === role);
+  const defs = useAllMapInstruments().filter((d) => roleOf(d.id) === role);
   return (
     <div className="p-4">
       <SectionHeading label={t(ROLE_TITLE[role])} accent={accent} />
@@ -380,7 +389,7 @@ function GroupPane({ role }: { role: InstrumentRole }): JSX.Element {
 function SearchPane({ query }: { query: string }): JSX.Element {
   const { t } = useTranslation();
   const q = query.toLowerCase();
-  const hits = MAP_INSTRUMENTS.filter((d) => {
+  const hits = useAllMapInstruments().filter((d) => {
     if (instrumentLabel(d, t).toLowerCase().includes(q)) return true;
     if (d.id.toLowerCase().includes(q)) return true;
     if (t(ROLE_TITLE[roleOf(d.id)]).toLowerCase().includes(q)) return true;
@@ -737,21 +746,22 @@ export function InstrumentsCatalog({ onClose }: { onClose: () => void }): JSX.El
     return () => window.removeEventListener('keydown', onKey);
   }, [onClose]);
 
+  const allInstruments = useAllMapInstruments();
   const visibleCount = useMemo(
-    () => MAP_INSTRUMENTS.reduce((n, i) => n + (resolveInstrumentVisible(visibleMap, i.id) ? 1 : 0), 0),
-    [visibleMap],
+    () => allInstruments.reduce((n, i) => n + (resolveInstrumentVisible(visibleMap, i.id) ? 1 : 0), 0),
+    [visibleMap, allInstruments],
   );
 
   const countsByRole = useMemo(() => {
     const out = {} as Record<InstrumentRole, { on: number; total: number }>;
     for (const r of ROLE_ORDER) out[r] = { on: 0, total: 0 };
-    for (const def of MAP_INSTRUMENTS) {
+    for (const def of allInstruments) {
       const r = roleOf(def.id);
       out[r].total += 1;
       if (resolveInstrumentVisible(visibleMap, def.id)) out[r].on += 1;
     }
     return out;
-  }, [visibleMap]);
+  }, [visibleMap, allInstruments]);
 
   return createPortal(
     <>
@@ -764,7 +774,7 @@ export function InstrumentsCatalog({ onClose }: { onClose: () => void }): JSX.El
           {/* Header */}
           <div className="flex items-center gap-3 px-4 py-3 border-b border-subtle">
             <span className="text-sm font-semibold text-content">{t('map:instrumentsCatalog.title')}</span>
-            <span className="text-[11px] text-content-tertiary">{t('map:instrumentsCatalog.onScreen', { visible: visibleCount, total: MAP_INSTRUMENTS.length })}</span>
+            <span className="text-[11px] text-content-tertiary">{t('map:instrumentsCatalog.onScreen', { visible: visibleCount, total: allInstruments.length })}</span>
             <div className="ml-auto relative">
               <svg className="w-3.5 h-3.5 absolute left-2 top-1/2 -translate-y-1/2 text-content-tertiary pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <circle cx="11" cy="11" r="7" /><path strokeLinecap="round" d="M21 21l-4-4" />

@@ -190,7 +190,8 @@ import { ingestNamedValueFloat, getScriptHealth, resetHeartbeat, subscribeHealth
 import * as scriptRegistry from './script-installer/registry-store.js';
 import { getScriptBundle } from './script-installer/bundle.js';
 import * as installerService from './script-installer/installer-service.js';
-import { setScriptInstallAdapter } from './script-installer/install-script.js';
+import { installScript, setScriptInstallAdapter } from './script-installer/install-script.js';
+import sonarLuaSource from './lua-scripts/ardudeck_sonar.lua?raw';
 import type { FcAdapter } from './script-installer/installer-service.js';
 import type { PreflightFix } from '../shared/script-installer-types.js';
 import {
@@ -6097,6 +6098,8 @@ export function setupIpcHandlers(mainWindow: BrowserWindow): void {
         // Port is back - attempt connection
         const transport = new SerialTransport(pendingReconnect.portPath, {
           baudRate: pendingReconnect.baudRate || 115200,
+          rtsEnable: true,
+          rtscts: pendingReconnect.options?.flowControl === true,
         });
 
         await transport.open();
@@ -6558,10 +6561,13 @@ export function setupIpcHandlers(mainWindow: BrowserWindow): void {
       switch (options.type) {
         case 'serial':
           if (!options.port) throw new Error(t('main:ipc.portRequired'));
+          // RTS held up as QGC and the OS leave it: a radio set to RTS/CTS sends nothing while it is down
           currentTransport = new SerialTransport(options.port, {
             baudRate: options.baudRate ?? 115200,
+            rtsEnable: true,
+            rtscts: options.flowControl === true,
           });
-          transportName = `${options.port} @ ${options.baudRate ?? 115200}`;
+          transportName = `${options.port} @ ${options.baudRate ?? 115200}${options.flowControl ? ' RTS/CTS' : ''}`;
           break;
         case 'tcp':
           if (!options.host || !options.tcpPort) throw new Error(t('main:ipc.hostPortRequired'));
@@ -10359,6 +10365,15 @@ export function setupIpcHandlers(mainWindow: BrowserWindow): void {
   });
 
   // Load parameters from file
+  ipcMain.handle(IPC_CHANNELS.DIALOG_PICK_FOLDER, async (event, title?: string): Promise<string | null> => {
+    const parentWindow = BrowserWindow.fromWebContents(event.sender) ?? mainWindow;
+    const result = await dialog.showOpenDialog(parentWindow, {
+      title: title || t('main:ipc.pickFolderTitle'),
+      properties: ['openDirectory', 'createDirectory'],
+    });
+    return result.canceled ? null : (result.filePaths[0] ?? null);
+  });
+
   ipcMain.handle(IPC_CHANNELS.MISSION_IMPORT_AREA, async (event): Promise<{ success: boolean; error?: string; format?: 'kml' | 'geojson'; content?: string; fileName?: string }> => {
     try {
       // Parent the dialog to the window that invoked it (the Area Editor is a
@@ -11895,6 +11910,18 @@ export function setupIpcHandlers(mainWindow: BrowserWindow): void {
 
   ipcMain.handle(IPC_CHANNELS.EDGETX_HUD_CONFIG_SUGGEST, async (): Promise<{ connected: boolean; cfg: Record<string, string | number> }> => {
     return { connected: connectionState.isConnected, cfg: computeHudConfig() };
+  });
+
+  // Echogram on the radio: the sonar script takes the Ping's serial port; its parameters change only after a good upload.
+  ipcMain.handle(IPC_CHANNELS.RADIO_HUD_SONAR_INSTALL, async (event, changes: Array<[string, number]>) => {
+    const safe = Array.isArray(changes)
+      ? changes.filter((c): c is [string, number] => Array.isArray(c) && /^(SERIAL\d_PROTOCOL|RNGFND\d_(TYPE|ORIENT))$/.test(String(c[0])) && Number.isFinite(c[1]))
+      : [];
+    return installScript(
+      { filename: 'ardudeck_sonar.lua', source: sonarLuaSource, minHeap: 65536 },
+      (progress) => { if (!event.sender.isDestroyed()) event.sender.send(IPC_CHANNELS.RADIO_HUD_SONAR_PROGRESS, progress); },
+      safe,
+    );
   });
 
   ipcMain.handle(IPC_CHANNELS.EDGETX_HUD_CONFIG_WRITE, async (

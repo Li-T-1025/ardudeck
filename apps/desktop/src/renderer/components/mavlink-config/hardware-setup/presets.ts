@@ -1,5 +1,5 @@
 /** Quick setups as data; every enum value names the label the firmware must report for it, or the setup is refused. */
-export type SetupCategory = 'rangefinder' | 'airspeed' | 'proximity' | 'flow' | 'gps' | 'receiver' | 'telemetry' | 'power' | 'esc';
+export type SetupCategory = 'rangefinder' | 'depth' | 'airspeed' | 'proximity' | 'flow' | 'gps' | 'receiver' | 'telemetry' | 'power' | 'esc';
 
 export type Mount = 'down' | 'forward' | 'up' | 'back';
 
@@ -42,7 +42,7 @@ export interface HardwarePreset {
   asks?: ('motors' | 'poles')[];
   params: PresetParam[];
   /** What to watch live once it is set up. */
-  check?: 'rangefinder' | 'proximity' | 'airspeed' | 'gps' | 'rc' | 'battery' | 'esc';
+  check?: 'rangefinder' | 'depth' | 'proximity' | 'airspeed' | 'gps' | 'rc' | 'battery' | 'esc';
   docs?: string;
 }
 
@@ -50,6 +50,8 @@ const RF = { prefix: 'RNGFND', typeParam: 'RNGFND{i}_TYPE', max: 10 };
 const PRX = { prefix: 'PRX', typeParam: 'PRX{i}_TYPE', max: 3 };
 const SERIAL_RANGEFINDER = /rangefinder/i;
 const BAUD_115200 = 115;
+// NMEA 0183 talkers default to 4800 baud
+const BAUD_4800 = 4;
 
 function serialPort(protocol: number, expect: RegExp, baud = BAUD_115200): PresetParam[] {
   return [
@@ -147,6 +149,26 @@ export const HARDWARE_PRESETS: HardwarePreset[] = [
     connection: 'serial', instance: RF, mounts: ['down'], check: 'rangefinder',
     params: [...serialPort(9, SERIAL_RANGEFINDER), { name: 'RNGFND{i}_TYPE', value: 43, expect: /rds02uf/i }, orient('RNGFND'), ...rangeParams(0.5, 20)],
     docs: 'https://ardupilot.org/copter/docs/common-rangefinder-landingpage.html',
+  },
+  // ─── Depth sounders (boats; ArduPilot files them under RNGFND) ───────────
+  {
+    id: 'bluerobotics-ping', category: 'depth', name: 'Blue Robotics Ping sonar (serial)', blurbKey: 'ping', // i18n-exempt: brand and model
+    connection: 'serial', instance: RF, mounts: ['down'], check: 'depth',
+    params: [...serialPort(9, SERIAL_RANGEFINDER), { name: 'RNGFND{i}_TYPE', value: 23, expect: /ping/i }, orient('RNGFND'), ...rangeParams(0.5, 50)],
+    docs: 'https://ardupilot.org/rover/docs/common-rangefinder-landingpage.html',
+  },
+  {
+    id: 'kogger-sonar', category: 'depth', name: 'KOGGER 2D sonar (serial)', blurbKey: 'kogger', // i18n-exempt: brand and model
+    connection: 'serial', instance: RF, mounts: ['down'], check: 'depth',
+    // The sonar talks NMEA to the autopilot once KoggerApp has set its dataset to NMEA at 115200 and flashed it.
+    params: [...serialPort(9, SERIAL_RANGEFINDER), { name: 'RNGFND{i}_TYPE', value: 17, expect: /nmea/i }, orient('RNGFND'), ...rangeParams(0.3, 50)],
+    docs: 'https://ardupilot.org/rover/docs/common-kogger-sonar.html',
+  },
+  {
+    id: 'nmea-sounder', category: 'depth', name: 'NMEA 0183 depth sounder (serial)', blurbKey: 'nmeaSounder', // i18n-exempt: protocol name
+    connection: 'serial', instance: RF, mounts: ['down'], check: 'depth',
+    params: [...serialPort(9, SERIAL_RANGEFINDER, BAUD_4800), { name: 'RNGFND{i}_TYPE', value: 17, expect: /nmea/i }, orient('RNGFND'), ...rangeParams(0.3, 100)],
+    docs: 'https://ardupilot.org/rover/docs/common-rangefinder-landingpage.html',
   },
   {
     id: 'maxbotix-i2c', category: 'rangefinder', name: 'MaxBotix I2C sonar', blurbKey: 'maxbotix', // i18n-exempt: brand and model
@@ -344,4 +366,4 @@ export const HARDWARE_PRESETS: HardwarePreset[] = [
   },
 ];
 
-export const CATEGORY_ORDER: SetupCategory[] = ['rangefinder', 'airspeed', 'proximity', 'flow', 'gps', 'receiver', 'telemetry', 'power', 'esc'];
+export const CATEGORY_ORDER: SetupCategory[] = ['rangefinder', 'depth', 'airspeed', 'proximity', 'flow', 'gps', 'receiver', 'telemetry', 'power', 'esc'];

@@ -76,7 +76,9 @@
     "udpClient": "Client (Verbinden)",
     "udpListen": "Lauschen (Server)",
     "vehicleRefused": "Das Fahrzeug hat die Änderung abgelehnt",
-    "waitingHeartbeat": "Warte auf Heartbeat..."
+    "waitingHeartbeat": "Warte auf Heartbeat...",
+    "flowControl": "Hardware-Flusskontrolle (RTS/CTS)",
+    "flowControlTip": "Einschalten, wenn das Funkmodul auf RTS/CTS-Flusskontrolle steht, wie oft bei RFD900 und RFD868. Braucht angeschlossene RTS- und CTS-Leitungen."
   },
   "driverAssistant": {
     "bundled": "Mitgeliefert",

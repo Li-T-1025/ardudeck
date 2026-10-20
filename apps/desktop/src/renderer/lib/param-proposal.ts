@@ -24,7 +24,7 @@ export async function proposeParameterChanges(
   proposals: ParamChangeProposal[],
   timeoutMs = 5 * 60 * 1000,
   /** Pilot-initiated in-flight tuning (e.g. loiter radius). Agents and modules never pass this. */
-  options: { allowArmed?: boolean } = {},
+  options: { allowArmed?: boolean; allowTopology?: boolean } = {},
 ): Promise<ParamProposalOutcome> {
   if (!Array.isArray(proposals) || proposals.length === 0) throw new Error('proposals array is empty'); // i18n-exempt
 
@@ -48,7 +48,8 @@ export async function proposeParameterChanges(
   const diffs: Array<Record<string, unknown>> = [];
   const rejected: Array<{ name: string; reason: string }> = [];
   for (const p of proposals) {
-    if (DENY.has(p.name)) {
+    // the new-vehicle wizard is the pilot setting up the frame; agents and modules never pass allowTopology
+    if (DENY.has(p.name) && !options.allowTopology) {
       rejected.push({ name: p.name, reason: 'denylisted (identity/motor-topology)' }); // i18n-exempt
       continue;
     }

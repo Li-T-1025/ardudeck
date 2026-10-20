@@ -27,7 +27,9 @@ import {
   INSTRUMENT_OPACITY_MIN,
   type InstrumentDisplayMode,
 } from '../../../stores/map-instruments-store';
-import { MAP_INSTRUMENTS, instrumentLabel, type MapInstrumentDef } from './registry';
+import { useAllMapInstruments, instrumentLabel, defaultDisplayOption, type MapInstrumentDef } from './registry';
+import { useModuleMapInstrumentsStore, openModuleInstrumentSettings, closeModuleInstrumentSettings } from '../../../modules/module-map-instruments';
+import { ErrorBoundary } from '../../ui/ErrorBoundary';
 import { DockedGroup } from './DockedGroup';
 import { variantGlyph } from './variant-glyphs';
 import { useDockPreviewStore, measureDockCandidate, commitDock, type MeasuredCandidate } from './dock-tracking';
@@ -62,17 +64,28 @@ function InstrumentConfigPopover({
   const toggle = useMapInstrumentsStore((s) => s.toggle);
 
   const effective = ownOpacity ?? globalOpacity;
-  const left = Math.max(8, Math.min(anchorRect.left, window.innerWidth - CONFIG_WIDTH - 8));
-  // Below the instrument unless that would clip at the bottom; then above.
-  const belowTop = anchorRect.bottom + 6;
-  const top = belowTop + 150 > window.innerHeight ? Math.max(8, anchorRect.top - 156) : belowTop;
+  const width = CONFIG_WIDTH;
+  const left = Math.max(8, Math.min(anchorRect.left, window.innerWidth - width - 8));
+  // Measured after the first paint: below the instrument when it fits, above when it fits
+  // there, otherwise pinned to the bottom edge and scrolling inside.
+  const panelRef = useRef<HTMLDivElement | null>(null);
+  const [top, setTop] = useState(anchorRect.bottom + 6);
+  useLayoutEffect(() => {
+    const h = panelRef.current?.offsetHeight ?? 150;
+    const below = anchorRect.bottom + 6;
+    const above = anchorRect.top - 6 - h;
+    if (below + h + 8 <= window.innerHeight) setTop(below);
+    else if (above >= 8) setTop(above);
+    else setTop(Math.max(8, window.innerHeight - h - 8));
+  }, [anchorRect]);
 
-  // Analog (the default Component) plus the numeric card and any extra
-  // variants the registry offers. Only a single option means no picker.
-  const displayOptions: Array<{ id: string; label: string }> = [
-    { id: 'analog', label: t('map:instrumentDisplay.analog') },
+  // The default face plus the numeric card and any extra variants the registry offers.
+  // Only a single option means no picker.
+  const base = defaultDisplayOption(instrument);
+  const displayOptions: Array<{ id: string; label: string; Glyph?: () => JSX.Element }> = [
+    { id: 'analog', label: t(base.labelKey), Glyph: base.Glyph },
     ...(instrument.NumericComponent ? [{ id: 'numeric', label: t('map:instrumentDisplay.numeric') }] : []),
-    ...(instrument.variants ?? []).map((v) => ({ id: v.id, label: t(v.labelKey) })),
+    ...(instrument.variants ?? []).map((v) => ({ id: v.id, label: t(v.labelKey), Glyph: v.Glyph })),
   ];
 
   return createPortal(
@@ -80,8 +93,9 @@ function InstrumentConfigPopover({
       {/* click-away; modal tier so it clears the dockview panels below the map */}
       <div className="fixed inset-0 z-[9998]" onClick={onClose} />
       <div
-        className="fixed z-[9999] rounded-lg bg-surface-solid border border-subtle shadow-xl"
-        style={{ top, left, width: CONFIG_WIDTH }}
+        ref={panelRef}
+        className="fixed z-[9999] rounded-lg bg-surface-solid border border-subtle shadow-xl max-h-[calc(100vh-16px)] overflow-y-auto"
+        style={{ top, left, width }}
       >
         <div className="px-3 py-2 text-[11px] uppercase tracking-wide text-content-tertiary border-b border-subtle">
           {instrumentLabel(instrument, t)}
@@ -106,13 +120,22 @@ function InstrumentConfigPopover({
                           : 'border-subtle text-content-secondary hover:border-default hover:text-content hover:bg-surface-raised')
                       }
                     >
-                      <span className="w-5 h-5 flex items-center justify-center">{variantGlyph(opt.id)}</span>
+                      <span className="w-5 h-5 flex items-center justify-center">{opt.Glyph ? <opt.Glyph /> : variantGlyph(opt.id)}</span>
                       <span className="text-[10px] leading-none">{opt.label}</span>
                     </button>
                   );
                 })}
               </div>
             </div>
+          )}
+          {instrument.Settings && (
+            <button
+              type="button"
+              onClick={() => { onClose(); openModuleInstrumentSettings(instrument.id); }}
+              className="w-full flex items-center justify-center gap-1.5 py-1.5 rounded-md border border-subtle text-xs text-content-secondary hover:text-content hover:bg-surface-raised transition-colors"
+            >
+              {t('map:instrumentsLayer.cargoSettings', { name: instrumentLabel(instrument, t) })}
+            </button>
           )}
           <div>
             <div className="text-[10px] uppercase tracking-wide text-content-tertiary mb-1">{t('map:instrumentsLayer.opacity')}</div>
@@ -392,9 +415,51 @@ function InstrumentSlot({ instrument }: { instrument: MapInstrumentDef }): JSX.E
 export function SingleMapInstrument({ id }: { id: string }): JSX.Element | null {
   const visible = useMapInstrumentsStore((s) => resolveInstrumentVisible(s.visible, id));
   const layoutRev = useMapInstrumentsStore((s) => s.layoutRev);
-  const instrument = MAP_INSTRUMENTS.find((i) => i.id === id);
+  const instrument = useAllMapInstruments().find((i) => i.id === id);
   if (!instrument || !visible) return null;
   return <InstrumentSlot key={id + ':' + layoutRev} instrument={instrument} />;
+}
+
+/** The settings a cargo instrument brings, in a dialog of its own (the gear popover stays about layout). */
+function CargoInstrumentSettingsDialog(): JSX.Element | null {
+  const { t } = useTranslation();
+  const openId = useModuleMapInstrumentsStore((s) => s.settingsOpen);
+  const instrument = useAllMapInstruments().find((i) => i.id === openId);
+  useLayoutEffect(() => {
+    if (!openId) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') closeModuleInstrumentSettings(); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [openId]);
+  if (!instrument?.Settings) return null;
+  const Settings = instrument.Settings;
+  return createPortal(
+    <div className="fixed inset-0 z-[9998] bg-black/50 backdrop-blur-sm flex items-center justify-center p-4" onClick={closeModuleInstrumentSettings}>
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className="bg-surface-solid rounded-2xl border border-subtle shadow-2xl overflow-hidden flex flex-col max-h-[88vh] w-full"
+        style={{ maxWidth: instrument.settingsWidth ?? 440 }}
+      >
+        <div className="shrink-0 flex items-center gap-3 px-4 py-3 border-b border-subtle">
+          <div className="text-sm font-semibold text-content truncate">{t('map:instrumentsLayer.cargoSettings', { name: instrumentLabel(instrument, t) })}</div>
+          <button
+            type="button"
+            onClick={closeModuleInstrumentSettings}
+            data-tip={t('common:close')}
+            className="ml-auto w-7 h-7 rounded-lg flex items-center justify-center hover:bg-surface-raised text-content-secondary hover:text-content transition-colors"
+          >
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" d="M6 6l12 12M18 6L6 18" /></svg>
+          </button>
+        </div>
+        <div className="flex-1 overflow-y-auto p-4">
+          <ErrorBoundary label={instrument.id}>
+            <Settings />
+          </ErrorBoundary>
+        </div>
+      </div>
+    </div>,
+    document.body,
+  );
 }
 
 export function InstrumentsLayer(): JSX.Element {
@@ -403,10 +468,11 @@ export function InstrumentsLayer(): JSX.Element {
   // layoutRev in the key remounts every slot when a saved layout is applied,
   // so useDraggableOverlay re-reads the freshly written position payloads.
   const layoutRev = useMapInstrumentsStore((s) => s.layoutRev);
+  const instruments = useAllMapInstruments();
   const grouped = new Set(Object.values(groups).flatMap((g) => g.members));
   return (
     <>
-      {MAP_INSTRUMENTS.map((instrument) =>
+      {instruments.map((instrument) =>
         resolveInstrumentVisible(visible, instrument.id) && !grouped.has(instrument.id)
           ? <InstrumentSlot key={instrument.id + ':' + layoutRev} instrument={instrument} />
           : null,
@@ -415,6 +481,7 @@ export function InstrumentsLayer(): JSX.Element {
         <DockedGroup key={gid + ':' + layoutRev} gid={gid} group={group} />
       ))}
       <DockPreview />
+      <CargoInstrumentSettingsDialog />
     </>
   );
 }

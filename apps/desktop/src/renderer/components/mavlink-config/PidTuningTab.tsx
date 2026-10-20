@@ -10,7 +10,6 @@
  * Features:
  * - 3-column color-coded layout (Roll/Pitch/Yaw)
  * - DraggableSlider for all values
- * - Quick presets mapped to detected scheme
  * - Custom profile save/load
  */
 
@@ -20,10 +19,8 @@ import { MoveHorizontal, MoveVertical, RefreshCw, Lightbulb, AlertTriangle, Gaug
 import { useParameterStore } from '../../stores/parameter-store';
 import { useSettingsStore } from '../../stores/settings-store';
 import { DraggableSlider } from '../ui/DraggableSlider';
-import { PresetSelector, type Preset } from '../ui/PresetSelector';
 import { ProfileManager } from '../ui/ProfileManager';
 import { InfoCard } from '../ui/InfoCard';
-import { PID_PRESETS } from './presets/mavlink-presets';
 import { detectPidScheme, buildPresetParams, buildAccelParams, buildPlaneScheme, QUADPLANE_SCHEME, hasDualVtolControllers, hasDualPx4Controllers, PX4_MULTICOPTER_SCHEME, PX4_FIXEDWING_SCHEME, type PidScheme, type AxisParams } from './mavlink-pid-schemes';
 
 /** Which control-law set a QuadPlane pilot is editing. */
@@ -77,13 +74,6 @@ const PidTuningTab: React.FC = () => {
   }, [hasParameters, parameters, dualController, dualPx4Controller, controllerSet]);
 
   const isUnknown = scheme?.id === 'unknown';
-
-  const pidPresets = useMemo(
-    () => Object.fromEntries(
-      Object.entries(PID_PRESETS).map(([key, preset]) => [key, { ...preset, name: t(preset.nameKey), description: t(preset.descriptionKey) }]),
-    ) as Record<string, Preset>,
-    [t],
-  );
 
   // Aircraft wording unless the scheme names its own controllers, and no third
   // card for a vehicle that has only two.
@@ -142,25 +132,6 @@ const PidTuningTab: React.FC = () => {
     }
     return pidParams;
   }, [scheme, pidValues, accelValues]);
-
-  // Apply a preset
-  const applyPreset = useCallback(async (presetKey: string) => {
-    if (!scheme) return;
-    const preset = PID_PRESETS[presetKey];
-    if (preset) {
-      const params = buildPresetParams(scheme, preset.values);
-      for (const [param, value] of Object.entries(params)) {
-        await setParameter(param, value);
-      }
-      // Apply acceleration limits if preset defines them and scheme supports them
-      if (preset.accel && scheme.accel) {
-        const accelParams = buildAccelParams(scheme, preset.accel);
-        for (const [param, value] of Object.entries(accelParams)) {
-          await setParameter(param, value);
-        }
-      }
-    }
-  }, [scheme, setParameter]);
 
   // Reset to defaults
   const resetToDefaults = useCallback(() => {
@@ -340,16 +311,9 @@ const PidTuningTab: React.FC = () => {
         </div>
       )}
 
-      {/* Quick Presets, Custom Profiles, and PID Sliders - disabled when scheme unknown */}
+      {/* Custom Profiles and PID Sliders - disabled when scheme unknown */}
       <div className={isUnknown || !scheme ? 'opacity-40 pointer-events-none' : ''}>
       <div className="space-y-6">
-      <PresetSelector
-        presets={pidPresets}
-        onApply={applyPreset}
-        label={t('common:quickPresets')}
-        hint={t('mavlink-config:pidTuningTab.presetsHint')}
-      />
-
       <ProfileManager<Record<string, number>>
         storageKey={PID_PROFILES_KEY}
         currentData={profileData}

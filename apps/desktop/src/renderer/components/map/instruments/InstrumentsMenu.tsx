@@ -11,7 +11,7 @@
 import { useTranslation } from 'react-i18next';
 import { useState } from 'react';
 import { useMapInstrumentsStore, resolveInstrumentVisible } from '../../../stores/map-instruments-store';
-import { MAP_INSTRUMENTS } from './registry';
+import { useAllMapInstruments } from './registry';
 import { InstrumentsCatalog } from './InstrumentsCatalog';
 
 const gaugeIcon = (
@@ -25,7 +25,7 @@ export function InstrumentsMenu(): JSX.Element {
   const { t } = useTranslation();
   const [open, setOpen] = useState(false);
   const visible = useMapInstrumentsStore((s) => s.visible);
-  const count = MAP_INSTRUMENTS.reduce((n, i) => n + (resolveInstrumentVisible(visible, i.id) ? 1 : 0), 0);
+  const count = useAllMapInstruments().reduce((n, i) => n + (resolveInstrumentVisible(visible, i.id) ? 1 : 0), 0);
 
   return (
     <>

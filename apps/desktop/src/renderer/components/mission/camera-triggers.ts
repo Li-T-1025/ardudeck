@@ -50,3 +50,37 @@ export function computeCameraTriggerPoints(items: MissionItem[], maxPoints = 500
   }
   return out;
 }
+
+/**
+ * Waypoints (by seq) whose corner is flown with the camera triggering, on the leg in or out.
+ * Only these can leave a coverage gap; a plain waypoint mission takes no photos.
+ */
+export function photographedSeqs(items: MissionItem[]): Set<number> {
+  const sorted = [...items].sort((a, b) => a.seq - b.seq);
+  const shootIn = new Map<number, boolean>();
+  const order: number[] = [];
+  let spacing = 0;
+  let hasPrev = false;
+  for (const it of sorted) {
+    if (it.command === MAV_CMD.DO_SET_CAM_TRIGG_DIST) {
+      spacing = it.param1 > 0 ? it.param1 : 0;
+      continue;
+    }
+    if (isReturnCommand(it.command) || isTakeoffCommand(it.command)) {
+      hasPrev = false;
+      order.push(-1);
+      continue;
+    }
+    if (!isNavigationCommand(it.command) || !commandHasLocation(it.command) || !hasValidCoordinates(it.latitude, it.longitude)) continue;
+    shootIn.set(it.seq, hasPrev && spacing > 0);
+    order.push(it.seq);
+    hasPrev = true;
+  }
+  const out = new Set<number>();
+  order.forEach((seq, i) => {
+    if (seq < 0) return;
+    const next = order[i + 1];
+    if (shootIn.get(seq) || (next !== undefined && next >= 0 && shootIn.get(next))) out.add(seq);
+  });
+  return out;
+}

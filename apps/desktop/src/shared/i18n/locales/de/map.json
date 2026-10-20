@@ -204,6 +204,7 @@
     "blurbPrimaryFlight": "Der Basic-T-Scan: Fluglage, Geschwindigkeit, Höhe, Kurs, Vertikalgeschwindigkeit.",
     "blurbStatus": "Verbindung, Modus, Warnungen und Fahrzeugmeldungen.",
     "blurbSummary": "Breite Karten mit mehreren Werten gleichzeitig.",
+    "blurbCargo": "Instrumente, die Cargo an Bord mitbringt. Jedes wird über sein Zahnrad eingestellt.",
     "deleteTip": "Layout löschen",
     "exportTip": "Layout zum Teilen exportieren",
     "fromFile": "Aus Datei…",
@@ -237,6 +238,7 @@
     "rolePrimaryFlight": "Primärflug",
     "roleStatus": "Status",
     "roleSummary": "Übersicht",
+    "roleCargo": "Aus Cargo",
     "saveCurrent": "Aktuelles Layout speichern...",
     "savedLayouts": "Gespeicherte Layouts",
     "searchPlaceholder": "Instrumente suchen",
@@ -252,7 +254,8 @@
     "hideInstrument": "Instrument ausblenden",
     "opacity": "Deckkraft",
     "settingsTip": "Instrumenteinstellungen",
-    "useGlobalOpacity": "Globale Deckkraft verwenden"
+    "useGlobalOpacity": "Globale Deckkraft verwenden",
+    "cargoSettings": "Einstellungen: {{name}}"
   },
   "instrumentsMenu": {
     "button": "Instrumente",

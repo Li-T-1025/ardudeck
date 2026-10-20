@@ -104,7 +104,13 @@ export interface MotorPosition {
   cx: number;
   /** SVG Y coordinate in the [0, size] range */
   cy: number;
+  /** Circle radius; smaller for a coaxial pair so both motors fit at one arm. */
+  r: number;
+  /** The tricopter's yaw servo: sits at the centre of the layout and is no motor. */
+  servo: boolean;
 }
+
+export const MOTOR_RADIUS = 26;
 
 /**
  * Convert a layout's Roll/Pitch positions to SVG coordinates centered in a
@@ -112,6 +118,8 @@ export interface MotorPosition {
  *
  * Roll axis: +X (right). Pitch axis: +Y (forward) — but SVG Y is inverted.
  * We pad so motors are drawn well inside the canvas edges.
+ * Coaxial frames (X8, Y6, DodecaHexa) list two motors at one arm position;
+ * they are drawn side by side across the arm instead of on top of each other.
  */
 export function layoutToSvgPositions(layout: FrameLayout, size: number, pad = 40): MotorPosition[] {
   if (layout.motors.length === 0) return [];
@@ -125,16 +133,33 @@ export function layoutToSvgPositions(layout: FrameLayout, size: number, pad = 40
 
   const radius = (size - pad * 2) / 2;
   const center = size / 2;
+  const scale = size / 340;
 
-  return layout.motors.map((m) => ({
-    number: m.Number,
-    testOrder: m.TestOrder,
-    rotation: m.Rotation,
+  const groups = new Map<string, number[]>();
+  for (const m of layout.motors) {
+    const key = `${m.Roll.toFixed(3)},${m.Pitch.toFixed(3)}`;
+    groups.set(key, [...(groups.get(key) ?? []), m.Number]);
+  }
+  const baseR = MOTOR_RADIUS * scale * (layout.motors.length > 6 ? 0.8 : 1);
+
+  return layout.motors.map((m) => {
     // Roll → X. Roll is a torque factor: -Roll = right side of vehicle = +X in SVG.
-    cx: center - (m.Roll / maxExtent) * radius,
+    let cx = center - (m.Roll / maxExtent) * radius;
     // Pitch → Y. +Pitch = forward = top of SVG = -Y, so we subtract.
-    cy: center - (m.Pitch / maxExtent) * radius,
-  }));
+    let cy = center - (m.Pitch / maxExtent) * radius;
+    let r = baseR;
+    const servo = layout.ClassName === 'TRI' && m.Roll === 0 && m.Pitch === 0;
+    const pair = groups.get(`${m.Roll.toFixed(3)},${m.Pitch.toFixed(3)}`) ?? [];
+    if (!servo && pair.length > 1) {
+      // across the arm: perpendicular to the line from the centre
+      const ang = Math.atan2(cy - center, cx - center) + Math.PI / 2;
+      const off = baseR * 0.78 * (pair.indexOf(m.Number) === 0 ? -1 : 1);
+      cx += Math.cos(ang) * off;
+      cy += Math.sin(ang) * off;
+      r = baseR * 0.74;
+    }
+    return { number: m.Number, testOrder: m.TestOrder, rotation: m.Rotation, cx, cy, r, servo };
+  });
 }
 
 /**

@@ -19,7 +19,7 @@ import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import {
   Gauge,
   Activity,
-  Satellite,
+  Compass,
   Lightbulb,
   Settings,
   Shield,
@@ -63,6 +63,7 @@ import RatesTab from './RatesTab';
 import FlightModesTab from './FlightModesTab';
 import SafetyTab from './SafetyTab';
 import { QuickSetupTab } from './QuickSetupTab';
+import { NewVehicleWizardHost } from './new-vehicle/NewVehicleWizard';
 import SensorsTab from './SensorsTab';
 import TuningTab from './TuningTab';
 import AutotuneTab from './AutotuneTab';
@@ -271,7 +272,7 @@ const HARDWARE_GROUP: TabGroup = {
   descriptionKey: 'mavlink-config:mavlinkConfigView.tabs.hardwareGroupDesc',
   children: [
     { id: 'sensors', nameKey: 'mavlink-config:mavlinkConfigView.tabs.sensors', Icon: Cpu, color: 'text-cyan-400', descriptionKey: 'mavlink-config:mavlinkConfigView.tabs.sensorsDesc' },
-    { id: 'sensor-config', nameKey: 'common:configuration', Icon: Satellite, color: 'text-emerald-400', descriptionKey: 'mavlink-config:mavlinkConfigView.tabs.sensorConfigDesc' },
+    { id: 'sensor-config', nameKey: 'common:configuration', Icon: Compass, color: 'text-emerald-400', descriptionKey: 'mavlink-config:mavlinkConfigView.tabs.sensorConfigDesc' },
     { id: 'notify', nameKey: 'mavlink-config:mavlinkConfigView.tabs.notify', Icon: Lightbulb, color: 'text-amber-400', descriptionKey: 'mavlink-config:mavlinkConfigView.tabs.notifyDesc' },
     { id: 'hardware', nameKey: 'mavlink-config:mavlinkConfigView.tabs.hardware', Icon: Boxes, color: 'text-teal-400', descriptionKey: 'mavlink-config:mavlinkConfigView.tabs.hardwareDesc' },
   ],
@@ -332,6 +333,7 @@ const ROVER_TABS: TabNode[] = [
   HARDWARE_GROUP,
   LINKS_GROUP,
   STORAGE_GROUP,
+  { kind: 'item', id: 'quick-setup', nameKey: 'mavlink-config:mavlinkConfigView.tabs.quickSetup', Icon: Wand2, color: 'text-sky-400', descriptionKey: 'mavlink-config:mavlinkConfigView.tabs.quickSetupDesc' },
 ];
 
 // ArduPilot-parameter presets with no PX4 counterpart. Hidden rather than
@@ -422,6 +424,7 @@ export const MavlinkConfigView: React.FC = () => {
   const [activeTab, setActiveTab] = useState<TabId>(defaultTab);
   // which Quick setup card another tab jumped to
   const [quickFocus, setQuickFocus] = useState<string | null>(null);
+  const [hardwareSetupQuery, setHardwareSetupQuery] = useState<string | null>(null);
   useEffect(() => { if (activeTab !== 'quick-setup') setQuickFocus(null); }, [activeTab]);
 
   // Reset active tab when vehicle type changes
@@ -438,7 +441,10 @@ export const MavlinkConfigView: React.FC = () => {
     if (!scrollTarget) return;
     const tabIds = collectTabIds(tabs);
     if (scrollTarget.startsWith('tab:')) {
-      const tab = scrollTarget.slice(4) as TabId;
+      // tab:hardware?setup=ping opens the hardware setup on that search
+      const [tabPart, query] = scrollTarget.slice(4).split('?');
+      const tab = tabPart as TabId;
+      setHardwareSetupQuery(tab === 'hardware' ? new URLSearchParams(query ?? '').get('setup') : null);
       // A tab this vehicle or firmware does not have falls back to the full table.
       if (tabIds.includes(tab)) setActiveTab(tab);
       else if (tabIds.includes('parameters')) setActiveTab('parameters');
@@ -627,11 +633,16 @@ export const MavlinkConfigView: React.FC = () => {
       case 'dronecan':
         return <DroneCanTab />;
       case 'hardware':
-        return <HardwareTab />;
+        return <HardwareTab key={hardwareSetupQuery ?? ''} openSetupWith={hardwareSetupQuery} />;
       case 'quick-setup':
-        return <QuickSetupTab focus={quickFocus} onGoTo={(tab) => {
-          if (collectTabIds(tabs).includes(tab as TabId)) setActiveTab(tab as TabId);
-        }} />;
+        return (
+          <>
+            <QuickSetupTab focus={quickFocus} onGoTo={(tab) => {
+              if (collectTabIds(tabs).includes(tab as TabId)) setActiveTab(tab as TabId);
+            }} />
+            <NewVehicleWizardHost />
+          </>
+        );
       case 'safety':
         return <SafetyTab onGoTo={(tab) => {
           if (collectTabIds(tabs).includes(tab as TabId)) setActiveTab(tab as TabId);

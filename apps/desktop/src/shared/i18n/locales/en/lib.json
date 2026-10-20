@@ -13,8 +13,8 @@
     },
     "helpers": {
       "airspeedCruise": "Stall × 1.5 = {{speed}} m/s (efficient cruise)",
-      "airspeedMax": "Stall × 2.2 = {{speed}} m/s (safe upper bound)",
-      "airspeedMin": "Stall × 1.15 = {{speed}} m/s (margin above stall)",
+      "airspeedMax": "Twice cruise = {{speed}} m/s (at least 50% above the minimum, for TECS height control)",
+      "airspeedMin": "Stall × 1.25 = {{speed}} m/s (at least 20% above stall, as ArduPilot asks)",
       "armingCheck": "Enable all pre-arm checks",
       "battMonitor": "Analog voltage + current monitoring",
       "capacity": "Capacity from profile ({{capacity}} mAh)",
@@ -28,10 +28,11 @@
       "simEngine": "Scaled from T/W {{ratio}} (engine power multiplier)",
       "simServo": "Servo response time from {{speed}}°/s",
       "simVoltage": "Simulated full-charge voltage ({{cells}}S × 4.20V)",
-      "trimAirspeed": "Trim airspeed in cm/s = cruise × 100",
+      "trimAirspeed": "Cruise {{speed}} m/s in cm/s, the name firmware before 4.5 uses",
       "vtailGain": "Standard V-tail mixing gain",
       "vtailLeft": "V-tail Left (pitch+yaw mix)",
-      "vtailRight": "V-tail Right (pitch+yaw mix)"
+      "vtailRight": "V-tail Right (pitch+yaw mix)",
+      "airspeedStall": "Stall × 1.05 = {{speed}} m/s (slightly above the true stall, for stall prevention and landing)"
     },
     "reason": {
       "aileron": "Aileron",

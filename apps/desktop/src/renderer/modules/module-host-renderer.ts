@@ -20,7 +20,9 @@ import {
   subscribeCurrentVaultUnit,
 } from '../stores/fleet-repo-store';
 import { raiseModuleAlert, clearModuleAlert, clearModuleAlertsFor } from './module-alert-registry';
-import { proposeFence, cancelProposalsFor } from './module-proposal-registry';
+import { proposeFence, proposeLanding, proposeMission, cancelProposalsFor } from './module-proposal-registry';
+import { createImportedGroup, nextGroupColor } from '../../shared/mission-group-types';
+import { createDefaultWaypoint, MAV_FRAME } from '../../shared/mission-types';
 import { summariseFence, replaceInclusion, appendExclusions } from './module-fence-write';
 import { fenceBudgetFor } from './fence-budget';
 import { getVehicleClass } from '../../shared/telemetry-types';
@@ -52,6 +54,8 @@ import {
   registerModuleHudInstrument,
   unregisterModuleHudInstrument,
 } from './module-hud-registry';
+import { cargoInstrumentId, openModuleInstrumentSettings, registerModuleMapInstrument, unregisterModuleMapInstrument } from './module-map-instruments';
+import { registerModuleWorkspacePanel, unregisterModuleWorkspacePanel } from './module-workspace-panels';
 import {
   registerModulePanel,
   unregisterModulePanel,
@@ -67,6 +71,7 @@ import {
   viewBodyRegistry,
 } from './module-extension-registries';
 import { viewOwnerSlug, CARGO_VIEWS } from './capabilities';
+import { createSetupApi } from './module-setup-api';
 import { vaultWorkspaceState, subscribeVaultWorkspace } from './vault-workspace';
 import * as productionHost from './production-host';
 import { sampleCanBusHealth } from '../lib/can-bus-health';
@@ -80,6 +85,32 @@ import type { VehicleTemplate } from '../lib/vehicle-templates/types';
 import type { DroneCanNode } from '../../shared/dronecan-types';
 import type { DroneCanNodeInfo, DetectedHardware } from '@ardudeck/module-sdk';
 import { Package } from 'lucide-react';
+
+const COPTER_LAND_MODE = 9;
+
+/** Why the aircraft cannot be flown somewhere and landed right now, or null. */
+function landingRefusal(): string | null {
+  const cs = useConnectionStore.getState().connectionState as { isConnected?: boolean; mavType?: number; firmware?: string };
+  const flight = useTelemetryStore.getState().flight;
+  if (!cs.isConnected) return t('modules:moduleHost.landingNoVehicle');
+  if (getVehicleClass(cs.mavType) !== 'copter') return t('modules:moduleHost.landingCopterOnly');
+  if (!flight.armed || !flight.isFlying) return t('modules:moduleHost.landingNotFlying');
+  return null;
+}
+
+function waitForArrival(at: { lat: number; lng: number }, timeoutMs: number): Promise<boolean> {
+  const start = Date.now();
+  return new Promise((resolve) => {
+    const tick = () => {
+      const p = useTelemetryStore.getState().position;
+      const d = Math.hypot((p.lon - at.lng) * 111320 * Math.cos((at.lat * Math.PI) / 180), (p.lat - at.lat) * 110540);
+      if (d < 3) return resolve(true);
+      if (Date.now() - start > timeoutMs || !useTelemetryStore.getState().flight.isFlying) return resolve(false);
+      setTimeout(tick, 500);
+    };
+    tick();
+  });
+}
 
 type RegisterFn = (slug: string, name: MountPointName, component: ComponentType) => void;
 
@@ -267,7 +298,21 @@ export function createRendererHostApi(
           ...(outcome.reason ? { error: outcome.reason } : {}),
         };
       },
+      ensureLoaded: async (timeoutMs = 45_000) => {
+        const store = useParameterStore.getState();
+        if (store.hasFullParameterSet()) return true;
+        if (!useConnectionStore.getState().connectionState?.isConnected) return false;
+        if (store.downloadState !== 'loading') await store.fetchParameters();
+        const deadline = Date.now() + timeoutMs;
+        while (Date.now() < deadline) {
+          if (useParameterStore.getState().hasFullParameterSet()) return true;
+          await new Promise((r) => setTimeout(r, 100));
+        }
+        return useParameterStore.getState().hasFullParameterSet();
+      },
     },
+
+    setup: createSetupApi(),
 
     i18n: {
       addResources: (resources) => {
@@ -458,6 +503,11 @@ export function createRendererHostApi(
       unregister: (id) => unregisterModulePanel(slug, id),
     },
 
+    workspace: {
+      registerPanel: (reg) => registerModuleWorkspacePanel(slug, reg),
+      unregisterPanel: (id) => unregisterModuleWorkspacePanel(slug, id),
+    },
+
     views: {
       register: (reg) => {
         if (!reg?.viewId || !reg.component) throw new Error(`[module:${slug}] view needs a viewId and a component`);
@@ -525,10 +575,47 @@ export function createRendererHostApi(
         if (!ok) result.error = useFenceStore.getState().error ?? t('modules:moduleHost.fenceNotConfirmed');
         return result;
       },
+      proposeMission: async (proposal) => {
+        const name = useModuleStore.getState().modules.find((m) => m.slug === slug)?.name;
+        const ms = useMissionStore.getState();
+        const answer = await proposeMission(slug, name || slug, proposal, ms.missionItems.length);
+        if (!answer.accepted) return answer;
+        const current = useMissionStore.getState();
+        const replace = proposal.mode === 'replace';
+        const base = replace ? [] : current.missionItems;
+        const group = createImportedGroup({ importedFrom: 'file', sourceLabel: name || slug, name: proposal.name, color: nextGroupColor(current.groups), order: current.groups.length });
+        const items = proposal.items.map((it, i) => {
+          const wp = createDefaultWaypoint(base.length + i, it.lat, it.lng, it.altitude, group.id);
+          if (it.frame === 'asl') wp.frame = MAV_FRAME.GLOBAL;
+          return wp;
+        });
+        if (replace) current.setMissionItemsFromFile(items, [group]);
+        else useMissionStore.setState({ missionItems: [...base, ...items], groups: [...current.groups, group], isDirty: true, selectedSeq: items[items.length - 1]?.seq ?? null });
+        return { accepted: true, pointsAccepted: items.length };
+      },
+      proposeLanding: async (proposal) => {
+        const name = useModuleStore.getState().modules.find((m) => m.slug === slug)?.name;
+        const refusal = landingRefusal();
+        const answer = await proposeLanding(slug, name || slug, proposal, refusal);
+        if (!answer.accepted) return answer;
+        if (landingRefusal()) return { accepted: false, error: landingRefusal() ?? undefined };
+        const api = window.electronAPI;
+        const alt = Math.max(5, proposal.transitAltRelM);
+        const sent = await api.mavlinkGoto(proposal.at.lat, proposal.at.lng, alt, 6);
+        if (!sent) return { accepted: true, error: t('modules:moduleHost.landingNotSent') };
+        const arrived = await waitForArrival(proposal.at, 180_000);
+        if (!arrived) return { accepted: true, error: t('modules:moduleHost.landingNoArrival') };
+        const landed = await api.mavlinkSetMode(COPTER_LAND_MODE);
+        return landed ? { accepted: true, pointsAccepted: 1 } : { accepted: true, error: t('modules:moduleHost.landingNotSent') };
+      },
       fenceBudget: async () => {
         const mavType = (useConnectionStore.getState().connectionState as { mavType?: number }).mavType;
         return fenceBudgetFor(getVehicleClass(mavType), useFenceStore.getState());
       },
+    },
+
+    files: {
+      pickFolder: (title) => window.electronAPI.pickFolder(title),
     },
 
     terrain: {
@@ -544,6 +631,9 @@ export function createRendererHostApi(
     map: {
       registerLayer: (reg) => registerModuleMapLayer(slug, reg),
       unregisterLayer: (id) => unregisterModuleMapLayer(slug, id),
+      registerInstrument: (reg) => registerModuleMapInstrument(slug, cargoNamespace(slug), reg),
+      unregisterInstrument: (id) => unregisterModuleMapInstrument(slug, id),
+      openInstrumentSettings: (id) => openModuleInstrumentSettings(cargoInstrumentId(slug, id)),
       pickPolygon: (prompt, initial) => startPolygonPick(prompt ?? t('modules:moduleHost.pickPolygonPrompt'), initial),
       pickPath: (prompt, initial) => startPick(prompt ?? t('modules:moduleHost.pickPathPrompt'), 'path', initial),
       pickPoint: (prompt, initial) => startPick(prompt ?? t('modules:moduleHost.pickPointPrompt'), 'point', initial ? [initial] : undefined).then((pts) => pts?.[0] ?? null),

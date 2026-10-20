@@ -1,27 +1,6 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'fs';
 import { join } from 'path';
-
-// Mock lucide-react since it's a renderer dependency not available in Node tests
-vi.mock('lucide-react', () => ({
-  Shield: 'Shield',
-  Scale: 'Scale',
-  Zap: 'Zap',
-  Radio: 'Radio',
-  Monitor: 'Monitor',
-  Battery: 'Battery',
-  Fence: 'Fence',
-  AlertTriangle: 'AlertTriangle',
-  CheckCircle: 'CheckCircle',
-  XCircle: 'XCircle',
-  Save: 'Save',
-  Lightbulb: 'Lightbulb',
-  Egg: 'Egg',
-  Drama: 'Drama',
-  Film: 'Film',
-}));
-
-import { SAFETY_PRESETS } from '../presets/mavlink-presets';
 
 /**
  * Comprehensive regression tests for issue #50: Low battery settings on Safety tab.
@@ -50,8 +29,8 @@ const enMavlinkConfig = JSON.parse(
   readFileSync(join(__dirname, '..', '..', '..', '..', 'shared', 'i18n', 'locales', 'en', 'mavlink-config.json'), 'utf-8'),
 ) as { safetyTab: Record<string, string> };
 
-const presetsSource = readFileSync(
-  join(__dirname, '..', 'presets', 'mavlink-presets.ts'),
+const recommendationsSource = readFileSync(
+  join(__dirname, '..', 'quick-setup-recommendations.ts'),
   'utf-8',
 );
 
@@ -97,32 +76,11 @@ describe('issue #50 - deprecated FS_BATT_* params removed from entire safety pip
     );
   });
 
-  describe('mavlink-presets.ts SAFETY_PRESETS section', () => {
+  describe('Quick setup recommendations', () => {
     it.each(deprecatedParams)(
-      'does not contain deprecated %s in any preset',
+      'does not contain deprecated %s',
       (deprecated) => {
-        for (const [key, preset] of Object.entries(SAFETY_PRESETS)) {
-          expect(
-            preset.params,
-            `SAFETY_PRESETS["${key}"] still uses deprecated "${deprecated}"`,
-          ).not.toHaveProperty(deprecated);
-        }
-      },
-    );
-
-    it.each(deprecatedParams)(
-      'presets source code does not reference deprecated %s as a key',
-      (deprecated) => {
-        // Match the param as a quoted key in the SAFETY_PRESETS object
-        const asKey = `'${deprecated}'`;
-        // Only check the SAFETY_PRESETS portion of the file
-        const safetyPresetsStart = presetsSource.indexOf('SAFETY_PRESETS');
-        expect(safetyPresetsStart).toBeGreaterThan(-1);
-        const safetyPresetsSection = presetsSource.slice(safetyPresetsStart);
-        expect(
-          safetyPresetsSection,
-          `mavlink-presets.ts SAFETY_PRESETS section still references "${deprecated}"`,
-        ).not.toContain(asKey);
+        expect(recommendationsSource).not.toContain(deprecated);
       },
     );
   });
@@ -146,44 +104,6 @@ describe('issue #50 - semantic label fix for mAh threshold', () => {
   it('critical battery also uses "remaining" semantics', () => {
     expect(safetyTabSource).toContain("t('mavlink-config:safetyTab.criticalMah')");
     expect(enMavlinkConfig.safetyTab.criticalMah).toBe('Critical mAh Remaining');
-  });
-});
-
-describe('issue #50 - preset values produce valid setParameter calls', () => {
-  // When applyPreset() is called, it iterates preset.params and calls
-  // setParameter(key, value) for each. Verify the keys are valid battery
-  // params that the component actually reads.
-
-  const paramsReadByComponent = [
-    'BATT_FS_LOW_ACT',
-    'BATT_LOW_VOLT',
-    'BATT_LOW_MAH',
-    'BATT_FS_CRT_ACT',
-    'BATT_CRT_VOLT',
-    'BATT_CRT_MAH',
-  ];
-
-  it('all battery-related preset keys are params the component reads', () => {
-    for (const [key, preset] of Object.entries(SAFETY_PRESETS)) {
-      const presetBattKeys = Object.keys(preset.params).filter(
-        (k) => k.startsWith('BATT_') || k.startsWith('FS_BATT'),
-      );
-      for (const battKey of presetBattKeys) {
-        expect(
-          paramsReadByComponent,
-          `SAFETY_PRESETS["${key}"] has battery param "${battKey}" but SafetyTab doesn't read it`,
-        ).toContain(battKey);
-      }
-    }
-  });
-
-  it('maximum preset action params would produce working setParameter calls', () => {
-    const preset = SAFETY_PRESETS['maximum']!;
-    // These must be valid: setParameter('BATT_FS_LOW_ACT', 2) and setParameter('BATT_FS_CRT_ACT', 1)
-    expect(preset.params).toHaveProperty('BATT_FS_LOW_ACT');
-    expect(typeof preset.params['BATT_FS_LOW_ACT']).toBe('number');
-    expect(preset.params).toHaveProperty('BATT_FS_CRT_ACT');
-    expect(typeof preset.params['BATT_FS_CRT_ACT']).toBe('number');
   });
 });
 

@@ -24,6 +24,8 @@ import BitmaskEditor from './BitmaskEditor';
 import ParamHistoryModal from './ParamHistoryModal';
 import { Tooltip } from '../ui/Tooltip';
 import { NON_DEFAULT_COLORS, getNonDefaultColor } from '../parameters/non-default-palette';
+import { wiringStepFor } from '../../lib/wiring-checks';
+import { detectSetupVehicle } from '../../../shared/vehicle-setup/plans';
 import { useOwnsCompareModal } from '../parameters/compare-modal-host';
 
 // Toast notification state
@@ -186,6 +188,10 @@ const ParameterTable: React.FC = () => {
   const [sitlSafeMode, setSitlSafeMode] = useState(!!connectionState.isSitl);
   useEffect(() => { setSitlSafeMode(!!connectionState.isSitl); }, [connectionState.isSitl]);
 
+  const setupVehicle = useMemo(
+    () => detectSetupVehicle(connectionState.mavType, (n) => parameters.get(n)?.value),
+    [connectionState.mavType, parameters],
+  );
   const sitlUnsafeMap = useMemo(() => {
     const m = new Map<string, string>();
     if (!connectionState.isSitl) return m;
@@ -1528,6 +1534,14 @@ const ParameterTable: React.FC = () => {
                                       title={t('mavlink-config:parameterTable.sitlUnsafeTip', { reason: unsafeReason })}
                                     >
                                       {t('mavlink-config:parameterTable.hwOnly')}
+                                    </span>
+                                  )}
+                                  {setupVehicle && wiringStepFor(diff.paramId, diff.currentValue, diff.fileValue, setupVehicle, (n) => parameters.get(n)?.value) && (
+                                    <span
+                                      className="ml-2 inline-flex items-center px-1.5 py-0.5 rounded text-[9px] uppercase tracking-wide font-medium bg-amber-500/15 text-amber-400 border border-amber-500/30"
+                                      title={t('parameters:parameterCompareModal.wiringTip')}
+                                    >
+                                      {t('parameters:parameterCompareModal.wiring')}
                                     </span>
                                   )}
                                 </td>

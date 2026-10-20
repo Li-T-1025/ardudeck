@@ -121,7 +121,7 @@ describe('planSetup', () => {
   it('every preset type value is what ArduPilot 4.6 calls it', () => {
     // guards the data itself: a typo in a preset is refused by its own label check
     const labels: Record<string, Record<number, string>> = {
-      RNGFND: { 24: 'DroneCAN', 20: 'BenewakeTFmini-Serial', 25: 'BenewakeTFmini-I2C', 16: 'VL53L0X or VL53L1X', 31: 'GYUS42v2', 43: 'RDS02UF', 19: 'BenewakeTF02', 27: 'BenewakeTF03', 8: 'LightWareSerial', 7: 'LightWareI2C', 11: 'USD1_Serial', 2: 'MaxbotixI2C', 32: 'MSP' },
+      RNGFND: { 17: 'NMEA', 23: 'BlueRoboticsPing', 24: 'DroneCAN', 20: 'BenewakeTFmini-Serial', 25: 'BenewakeTFmini-I2C', 16: 'VL53L0X or VL53L1X', 31: 'GYUS42v2', 43: 'RDS02UF', 19: 'BenewakeTF02', 27: 'BenewakeTF03', 8: 'LightWareSerial', 7: 'LightWareI2C', 11: 'USD1_Serial', 2: 'MaxbotixI2C', 32: 'MSP' },
       ARSPD: { 1: 'I2C-MS4525D0', 3: 'I2C-MS5525', 9: 'I2C-DLVR-10in', 8: 'DroneCAN' },
       PRX: { 8: 'LightwareSF45B', 5: 'RPLidarA2' },
       FLOW: { 7: 'MSP', 6: 'DroneCAN', 4: 'CXOF', 8: 'UPFLOW', 1: 'PX4Flow' },

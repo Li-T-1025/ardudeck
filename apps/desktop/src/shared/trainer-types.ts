@@ -109,6 +109,31 @@ export interface TrainerBakeRequest {
   metersPerTexel: number;
   detail?: string;
   superRes?: boolean;
+  /** Build from a Locus survey instead of open data: its surface, bare earth and orthophoto. */
+  locus?: TrainerLocusSource;
+}
+
+/** A Locus survey export the Trainer can bake a region from. */
+export interface TrainerLocusSource {
+  /** `<output>/ardudeck`, the export folder with manifest.json. */
+  exportDir: string;
+  /** Absolute paths to the GeoTIFFs the export was made from. */
+  dsm: string;
+  dtm?: string;
+  ortho?: string;
+  /** 'EGM96', 'ellipsoid' or another geoid name, as the export says. */
+  vertical: string;
+  cellM: number;
+}
+
+export interface TrainerLocusSurvey {
+  name: string;
+  output: string;
+  updated: string;
+  centre: { lat: number; lon: number };
+  /** Side of the square that covers the footprint, km. */
+  sideKm: number;
+  source: TrainerLocusSource;
 }
 
 /**

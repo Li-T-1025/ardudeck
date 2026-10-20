@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useTelemetryStore } from '../../stores/telemetry-store';
 import { useConnectionStore } from '../../stores/connection-store';
@@ -17,10 +17,16 @@ import logoLightUrl from './hud-logo-light.png';
 import { MapContainer, TileLayer, Circle, CircleMarker, useMap, useMapEvents } from 'react-leaflet';
 import {
   BatteryMedium, Zap, Fuel, MoveVertical, MoveRight, TrendingUp, Satellite, Home,
-  Wind, Crosshair, Ruler, Thermometer, MapPin, SlidersHorizontal, Compass, X, BookOpen,
+  Wind, Crosshair, Ruler, Thermometer, MapPin, SlidersHorizontal, Compass, X,
   type LucideIcon,
 } from 'lucide-react';
 import { BwGuide } from './BwGuide';
+import {
+  MAV_TYPE_SURFACE_BOAT, MAX_PAGES,
+  REF_SCREEN, SCREEN_MODELS, TILE_META, TILE_TOP, firstRunPages, fitTile, hudVehicleKind,
+  type HudVehicleKind, type ScreenModel, type TileDef,
+} from './hud-model';
+export type { TileDef } from './hud-model';
 import { modeVoiceCfg } from './mode-voice';
 import 'leaflet/dist/leaflet.css';
 import { SmoothWheelZoom } from '../map/SmoothWheelZoom';
@@ -30,11 +36,15 @@ import {
   loadLayouts,
   persistLayouts,
   removeLayout,
-  renameLayout,
-  uniqueLayoutName,
   upsertLayout,
   type SavedHudLayout,
 } from './hud-layout-library';
+import { ChevronRight, LayoutTemplate, Magnet, Map as MapIcon, MonitorSmartphone, RefreshCw, Usb } from 'lucide-react';
+import { ScreenStrip } from './ScreenStrip';
+import { TemplateGallery } from './TemplateGallery';
+import { TileInspector } from './TileInspector';
+import { HudGuide } from './HudGuide';
+import { SonarSetupCard } from './SonarSetupCard';
 
 /**
  * Radio HUD studio: configure the ArduDeck EdgeTX widget, arrange its tiles
@@ -93,26 +103,9 @@ const LIGHT: typeof DARK = {
 // state instead of prop-drilling through every tile body: rendering is
 // synchronous, so children always read the palette set by their preview.
 let C = DARK;
+// vehicle the preview draws for; set by HudPreview before its tiles render, as C is
+let KIND: HudVehicleKind = 'copter';
 
-/** Radio screen classes the HUD runs on (ids match the installer's
- *  RADIO_VARIANTS). Color radios get the widget (presets authored @480x320
- *  and rescaled); B&W radios get the fixed-layout telemetry script. */
-interface ScreenModel {
-  variant: string;
-  label: string;
-  w: number;
-  h: number;
-  /** monochrome telemetry script target: fixed layout, no tile editing */
-  bw?: boolean;
-}
-const SCREEN_MODELS: ScreenModel[] = [
-  { variant: 'c480x320', label: 'TX15 (480x320)', w: 480, h: 320 }, // i18n-exempt
-  { variant: 'c480x272', label: 'TX16S / T16 / T18 / X10 (480x272)', w: 480, h: 272 }, // i18n-exempt
-  { variant: 'c800x480', label: 'TX16S mkIII (800x480)', w: 800, h: 480 }, // i18n-exempt
-  { variant: 'c320x480', label: 'NV14 / EL18 (320x480 portrait)', w: 320, h: 480 }, // i18n-exempt
-  { variant: 'bw128x64', label: 'Boxer / Zorro / TX12 / Pocket (128x64 B&W)', w: 128, h: 64, bw: true }, // i18n-exempt
-  { variant: 'bw212x64', label: 'Taranis X9D (212x64 B&W)', w: 212, h: 64, bw: true }, // i18n-exempt
-];
 
 // Active screen geometry; RadioHudView reassigns from the selected radio
 // model before rendering children (same module-state idiom as the palette
@@ -123,185 +116,12 @@ let TICKER_TOP = SCREEN_H - 66;
 const TILE_REGION_TOP = 44;
 const SNAP = 8;
 
-/** Fixed widget chrome: header ends at 48, ticker owns the bottom 72px.
- *  Keep all geometry math in sync with loadable.lua. */
-const TILE_TOP = 48;
-const BOTTOM_CHROME = 72;
-
-/** Carry a tile onto another screen: SHRINK when the target is smaller,
- *  never inflate (EdgeTX fonts don't scale - bigger screens mean room for
- *  MORE instruments, not fatter ones), then clamp into bounds. */
-function fitTile(t: TileDef, from: { w: number; h: number }, to: { w: number; h: number }): TileDef {
-  const fx = Math.min(1, to.w / from.w);
-  const fy = Math.min(1, (to.h - TILE_TOP - BOTTOM_CHROME) / (from.h - TILE_TOP - BOTTOM_CHROME));
-  const w = Math.round(t.w * fx);
-  const h = Math.round(t.h * fy);
-  return {
-    ...t,
-    w,
-    h,
-    x: Math.max(0, Math.min(to.w - w, Math.round(t.x * fx))),
-    y: Math.max(TILE_TOP, Math.min(to.h - BOTTOM_CHROME - h + 6, Math.round(TILE_TOP + (t.y - TILE_TOP) * fy))),
-  };
-}
-const REF_SCREEN = { w: 480, h: 320 };
-
-/** Mirror of the widget's gridDefault: fills the screen with instruments at
- *  natural size - last column is a full-band attitude ball, the rest fill
- *  row-major by usefulness. @480x320 this is the classic 5-tile default. */
-function gridLayout(screen: { w: number; h: number }): TileDef[] {
-  const band = screen.h - TILE_TOP - BOTTOM_CHROME;
-  const cols = Math.max(2, Math.floor((screen.w - 8) / 152));
-  let pitch = Math.floor((screen.w - 8) / cols);
-  pitch -= pitch % 8;
-  const tw = pitch - 8;
-  const rows = Math.max(1, Math.floor((band + 8) / 104 + 0.5));
-  let th = Math.floor((band - (rows - 1) * 8) / rows);
-  th -= th % 8;
-  const ids = ['batt', 'home', 'alt', 'gps', 'spd', 'wind', 'link', 'timer',
-    'thr', 'imu', 'wp', 'compass', 'rng', 'txbat'];
-  const t: TileDef[] = [];
-  let n = 0;
-  for (let r = 0; r < rows; r++) {
-    for (let c = 0; c < cols - 1 && n < ids.length; c++, n++) {
-      t.push({ id: ids[n]!, x: 8 + c * pitch, y: TILE_TOP + r * (th + 8), w: tw, h: th, variant: 'default' });
-    }
-  }
-  t.push({ id: 'att', x: 8 + (cols - 1) * pitch, y: TILE_TOP, w: tw, h: band, variant: 'ball' });
-  return t;
-}
-
-export interface TileDef {
-  id: string;
-  x: number;
-  y: number;
-  w: number;
-  h: number;
-  variant: string;
-}
-
-// Mirror of the Lua DEFAULT_LAYOUT (the @480x320 grid = classic 5 tiles).
-const DEFAULT_LAYOUT: TileDef[] = gridLayout(REF_SCREEN);
-
-const TILE_META: Record<string, { labelKey: string; minW: number; minH: number; variants?: string[] }> = {
-  batt: { labelKey: 'common:battery', minW: 120, minH: 56, variants: ['default', 'icon'] },
-  home: { labelKey: 'common:home', minW: 100, minH: 56 },
-  alt: { labelKey: 'radio-hud:tiles.alt', minW: 100, minH: 56 },
-  gps: { labelKey: 'radio-hud:tiles.gps', minW: 100, minH: 56 },
-  att: { labelKey: 'common:attitude', minW: 100, minH: 80, variants: ['ball', 'line', 'bars'] },
-  compass: { labelKey: 'common:compass', minW: 100, minH: 100 },
-  spd: { labelKey: 'common:speed', minW: 100, minH: 56 },
-  timer: { labelKey: 'radio-hud:tiles.timer', minW: 100, minH: 56 },
-  wind: { labelKey: 'common:wind', minW: 110, minH: 56 },
-  link: { labelKey: 'common:signal', minW: 110, minH: 56 },
-  txbat: { labelKey: 'radio-hud:tiles.txbat', minW: 110, minH: 56 },
-  thr: { labelKey: 'common:throttle', minW: 90, minH: 56 },
-  imu: { labelKey: 'radio-hud:tiles.imu', minW: 90, minH: 56 },
-  rng: { labelKey: 'common:rangefinder', minW: 90, minH: 56 },
-  pos: { labelKey: 'common:position', minW: 140, minH: 64 },
-  map: { labelKey: 'common:map', minW: 140, minH: 100 },
-  wp: { labelKey: 'radio-hud:tiles.wp', minW: 120, minH: 56 },
-};
 
 // Sky/ground per the app's AttitudeIndicator (AttitudePanel.tsx gradients);
 // ground uses the deeper amber-800 end, the lighter one is cartoonish flat
 const SKY = '#2563eb';
 const GROUND = '#92400e';
 
-// Prebuilt layouts for common setups. All 8px-grid aligned.
-const LAYOUT_PRESETS: Record<string, TileDef[]> = {
-  'Classic copter': DEFAULT_LAYOUT, // i18n-exempt
-  'Navigator': [
-    { id: 'map', x: 8, y: 48, w: 296, h: 200, variant: 'default' },
-    { id: 'compass', x: 312, y: 48, w: 144, h: 96, variant: 'default' },
-    { id: 'home', x: 312, y: 152, w: 144, h: 96, variant: 'default' },
-  ],
-  'Plane': [
-    { id: 'spd', x: 8, y: 48, w: 144, h: 96, variant: 'default' },
-    { id: 'alt', x: 8, y: 152, w: 144, h: 96, variant: 'default' },
-    { id: 'att', x: 160, y: 48, w: 144, h: 200, variant: 'ball' },
-    { id: 'gps', x: 312, y: 48, w: 144, h: 96, variant: 'default' },
-    { id: 'wind', x: 312, y: 152, w: 144, h: 96, variant: 'default' },
-  ],
-  'Systems': [
-    { id: 'batt', x: 8, y: 48, w: 144, h: 96, variant: 'icon' },
-    { id: 'txbat', x: 160, y: 48, w: 144, h: 96, variant: 'default' },
-    { id: 'link', x: 312, y: 48, w: 144, h: 96, variant: 'default' },
-    { id: 'imu', x: 8, y: 152, w: 144, h: 96, variant: 'default' },
-    { id: 'thr', x: 160, y: 152, w: 144, h: 96, variant: 'default' },
-    { id: 'timer', x: 312, y: 152, w: 144, h: 96, variant: 'default' },
-  ],
-  'Big picture': [ // i18n-exempt
-    { id: 'att', x: 8, y: 48, w: 224, h: 200, variant: 'ball' },
-    { id: 'map', x: 240, y: 48, w: 216, h: 200, variant: 'default' },
-  ],
-  'Rangefinder work': [ // i18n-exempt
-    { id: 'rng', x: 8, y: 48, w: 144, h: 200, variant: 'default' },
-    { id: 'alt', x: 160, y: 48, w: 144, h: 96, variant: 'default' },
-    { id: 'batt', x: 160, y: 152, w: 144, h: 96, variant: 'default' },
-    { id: 'att', x: 312, y: 48, w: 144, h: 200, variant: 'bars' },
-  ],
-  'Mission flight': [ // i18n-exempt
-    { id: 'map', x: 8, y: 48, w: 296, h: 200, variant: 'default' },
-    { id: 'wp', x: 312, y: 48, w: 144, h: 96, variant: 'default' },
-    { id: 'home', x: 312, y: 152, w: 144, h: 96, variant: 'default' },
-  ],
-  'Long range': [ // i18n-exempt
-    { id: 'link', x: 8, y: 48, w: 144, h: 96, variant: 'default' },
-    { id: 'home', x: 8, y: 152, w: 144, h: 96, variant: 'default' },
-    { id: 'map', x: 160, y: 48, w: 296, h: 200, variant: 'default' },
-  ],
-  'Rover': [
-    { id: 'spd', x: 8, y: 48, w: 144, h: 96, variant: 'default' },
-    { id: 'thr', x: 8, y: 152, w: 144, h: 96, variant: 'default' },
-    { id: 'compass', x: 160, y: 48, w: 144, h: 200, variant: 'default' },
-    { id: 'batt', x: 312, y: 48, w: 144, h: 96, variant: 'default' },
-    { id: 'timer', x: 312, y: 152, w: 144, h: 96, variant: 'default' },
-  ],
-  'Sub': [
-    { id: 'alt', x: 8, y: 48, w: 144, h: 96, variant: 'default' },
-    { id: 'compass', x: 160, y: 48, w: 144, h: 200, variant: 'default' },
-    { id: 'att', x: 312, y: 48, w: 144, h: 96, variant: 'bars' },
-    { id: 'batt', x: 8, y: 152, w: 144, h: 96, variant: 'default' },
-    { id: 'timer', x: 312, y: 152, w: 144, h: 96, variant: 'default' },
-  ],
-  'FPV': [
-    { id: 'att', x: 8, y: 48, w: 296, h: 200, variant: 'ball' },
-    { id: 'link', x: 312, y: 48, w: 144, h: 96, variant: 'default' },
-    { id: 'batt', x: 312, y: 152, w: 144, h: 96, variant: 'default' },
-  ],
-  'Minimal glance': [ // i18n-exempt
-    { id: 'batt', x: 8, y: 48, w: 224, h: 200, variant: 'icon' },
-    { id: 'home', x: 240, y: 48, w: 216, h: 96, variant: 'default' },
-    { id: 'timer', x: 240, y: 152, w: 216, h: 96, variant: 'default' },
-  ],
-};
-const PRESET_LABEL_KEYS: Record<string, string> = {
-  'Classic copter': 'radio-hud:presets.classicCopter', // i18n-exempt
-  'Navigator': 'radio-hud:presets.navigator',
-  'Plane': 'radio-hud:presets.plane',
-  'Systems': 'radio-hud:presets.systems',
-  'Big picture': 'radio-hud:presets.bigPicture', // i18n-exempt
-  'Rangefinder work': 'radio-hud:presets.rangefinderWork', // i18n-exempt
-  'Mission flight': 'radio-hud:presets.missionFlight', // i18n-exempt
-  'Long range': 'radio-hud:presets.longRange', // i18n-exempt
-  'Rover': 'radio-hud:presets.rover',
-  'Sub': 'radio-hud:presets.sub',
-  'FPV': 'radio-hud:presets.fpv',
-  'Minimal glance': 'radio-hud:presets.minimalGlance', // i18n-exempt
-};
-const MAX_PAGES = 4;
-
-const MAV_TYPE_SURFACE_BOAT = 11;
-
-/** The preset a first-run studio starts on, for whatever is connected. */
-export function firstRunLayout(vehicleClass: ArduPilotVehicleClass): TileDef[] {
-  const name = vehicleClass === 'rover' ? 'Rover'
-    : vehicleClass === 'plane' || vehicleClass === 'vtol' ? 'Plane'
-      : vehicleClass === 'sub' ? 'Sub'
-        : null;
-  return (name && LAYOUT_PRESETS[name]) || DEFAULT_LAYOUT;
-}
 
 interface HudCfg {
   name: string;
@@ -345,6 +165,16 @@ interface PreviewData {
   homeDist: number;
   /** Trip distance; the radio integrates ground speed while armed, the preview only has the demo value. */
   odoM?: number;
+  /** Highest ground speed seen, m/s; the radio tracks it, the sample states one. */
+  maxSpd?: number;
+  /** Depth below the surface for a sub, m. */
+  depthM?: number;
+  /** Echogram columns from the sonar script, 32 levels 0..15 each, newest last. */
+  echo?: number[][];
+  echoStartM?: number;
+  echoLenM?: number;
+  /** Depth once a second for the bottom profile, newest last. */
+  depthHist?: number[];
   homeBearing: number;
   altM: number;
   vspd: number;
@@ -373,9 +203,21 @@ interface PreviewData {
   messages: Array<{ sev: number; text: string }>;
 }
 
+const SAMPLE_BOTTOM = Array.from({ length: 160 }, (_, i) => 9 + Math.sin(i / 14) * 2.2 + Math.sin(i / 5) * 0.4);
+const SAMPLE_ECHO = SAMPLE_BOTTOM.map((d, i) => {
+  const bottomRow = Math.floor((d / 20) * 32);
+  return Array.from({ length: 32 }, (_, r) => {
+    if (r >= bottomRow) return Math.max(0, 15 - (r - bottomRow) * 3);
+    if (i > 70 && i < 92 && Math.abs(r - 9 - Math.sin(i / 3)) < 1.5) return 11 + ((i * 7 + r) % 4);
+    if (r === bottomRow - 1 && i % 9 < 4) return 6;
+    return (i * 31 + r * 17) % 23 === 0 ? 2 : 0;
+  });
+});
+
 const SAMPLE: PreviewData = {
   armed: true, mode: 'LOITER', voltV: 23.4, currA: 7.3,
-  homeDist: 229, odoM: 1840, homeBearing: 156, altM: 63, vspd: -0.4, hspd: 4.2,
+  homeDist: 229, odoM: 1840, maxSpd: 8.9, depthM: 12.4, homeBearing: 156,
+  echo: SAMPLE_ECHO, echoStartM: 0, echoLenM: 20, depthHist: SAMPLE_BOTTOM, altM: 63, vspd: -0.4, hspd: 4.2,
   sats: 14, fix: 3, hdop: 0.8, roll: -8, pitch: 4, yaw: 244, lq: 100, mahUsed: 980,
   remainingPct: null,
   throttle: 41, imuTemp: 45, range: 1.34, lat: 42.4411, lon: 19.2632,
@@ -398,6 +240,40 @@ function FieldClickHandler({ onPick }: { onPick: (lat: number, lon: number) => v
   useMapEvents({
     click: (e) => onPick(e.latlng.lat, e.latlng.lng),
   });
+  return null;
+}
+
+/** A real preview of a screen, scaled to whatever box it is given (thumbnails, the gallery). */
+function ScaledScreen({ tiles, data, cfg, kind }: { tiles: TileDef[]; data: PreviewData; cfg: HudCfg; kind: HudVehicleKind }) {
+  const box = useRef<HTMLDivElement>(null);
+  const [scale, setScale] = useState(0);
+  useEffect(() => {
+    const el = box.current;
+    if (!el) return;
+    const observer = new ResizeObserver(() => setScale(el.clientWidth / SCREEN_W));
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+  return (
+    <div ref={box} className="pointer-events-none relative w-full overflow-hidden rounded" style={{ aspectRatio: `${SCREEN_W} / ${SCREEN_H}` }}>
+      {scale > 0 && (
+        <div style={{ transform: `scale(${scale})`, transformOrigin: 'top left', width: SCREEN_W, height: SCREEN_H }}>
+          <HudPreview mode="sample" data={data} cfg={cfg} tiles={tiles} editing={false} onTilesChange={() => undefined} kind={kind} />
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** Leaflet sizes itself once; the card grows with the window, so it has to be told. */
+function FollowContainerSize() {
+  const map = useMap();
+  useEffect(() => {
+    const el = map.getContainer();
+    const observer = new ResizeObserver(() => map.invalidateSize());
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [map]);
   return null;
 }
 
@@ -451,11 +327,28 @@ function TileFrame({ t, caption, children }: { t: TileDef; caption: string; chil
   );
 }
 
-function NumericBody({ t, value, sub, color }: { t: TileDef; value: string; sub?: React.ReactNode; color?: string }) {
+const FIT_ORDER: FontKey[] = ['dbl', 'mid', 'std', 'sml'];
+/** Mirrors the widget's fitFont: the largest font from the one picked that keeps the text inside maxW. */
+function fitFont(text: string, start: FontKey, maxW: number): FontKey {
+  measureCtx ??= document.createElement('canvas').getContext('2d');
+  if (!measureCtx) return start;
+  for (const f of FIT_ORDER.slice(FIT_ORDER.indexOf(start))) {
+    measureCtx.font = `700 ${FONT[f].px}px Roboto, system-ui, sans-serif`;
+    if (measureCtx.measureText(text).width <= maxW) return f;
+  }
+  return 'sml';
+}
+
+function NumericBody({ t, value, sub, color, reserve = 0 }: {
+  t: TileDef; value: string; sub?: React.ReactNode; color?: string;
+  /** Room the tile's graphic takes on the right; the value steps down a font rather than run into it. */
+  reserve?: number;
+}) {
   const L = stack(t.h, sub != null);
+  const f = fitFont(value, L.vf, t.w - 16 - reserve);
   return (
     <>
-      <div style={{ position: 'absolute', left: 8, top: L.vy, ...fontStyle(L.vf, 700), color: color ?? C.text }}>{value}</div>
+      <div style={{ position: 'absolute', left: 8, top: L.vy + Math.floor((FONT[L.vf].h - FONT[f].h) / 2), ...fontStyle(f, 700), color: color ?? C.text, whiteSpace: 'nowrap' }}>{value}</div>
       {sub != null && L.sy != null && (
         <div style={{ position: 'absolute', left: 8, top: L.sy, ...fontStyle(L.sf), color: C.text2, whiteSpace: 'nowrap' }}>{sub}</div>
       )}
@@ -463,12 +356,356 @@ function NumericBody({ t, value, sub, color }: { t: TileDef; value: string; sub?
   );
 }
 
+// Driving and diving instruments: same geometry as their loadable.lua counterparts.
+const polar = (cx: number, cy: number, r: number, deg: number) => {
+  const a = (deg * Math.PI) / 180;
+  return [cx + Math.sin(a) * r, cy - Math.cos(a) * r] as const;
+};
+const arcPath = (cx: number, cy: number, r: number, a0: number, a1: number) => {
+  const [x0, y0] = polar(cx, cy, r, a0);
+  const [x1, y1] = polar(cx, cy, r, a1);
+  return `M ${x0} ${y0} A ${r} ${r} 0 ${a1 - a0 > 180 ? 1 : 0} 1 ${x1} ${y1}`;
+};
+const SPEED_STEPS = [10, 20, 30, 40, 60, 80, 100, 150, 200, 300];
+
+function SpeedoTile({ t, data }: { t: TileDef; data: PreviewData }) {
+  const v = data.hspd * 3.6;
+  const max = Math.max(data.hspd, data.maxSpd ?? 0) * 3.6;
+  const top = SPEED_STEPS.find((s) => s >= max * 1.1) ?? 300;
+  const r = Math.floor(Math.min((t.w - 16) / 2, (t.h - 34) / 1.5));
+  if (r < 12) return <TileFrame t={t} caption="SPEED" />;
+  const thick = Math.max(3, Math.floor(r / 6));
+  const cx = t.w / 2;
+  const cy = 16 + r;
+  const frac = Math.max(0, Math.min(1, v / top));
+  const num = String(Math.round(v));
+  const big = FONT[fitFont(num, r >= 40 ? 'dbl' : 'mid', 2 * (r - thick) - 6)].px;
+  return (
+    <TileFrame t={t} caption="SPEED">{/* i18n-exempt: radio text */}
+      <svg width={t.w} height={t.h} style={{ position: 'absolute', left: 0, top: 0 }}>
+        <path d={arcPath(cx, cy, r - thick / 2, -120, 120)} fill="none" stroke={C.gaugeBezel} strokeWidth={thick} />
+        {frac > 0 && <path d={arcPath(cx, cy, r - thick / 2, -120, -120 + 240 * frac)} fill="none" stroke={frac > 0.9 ? C.warnStrong : C.success} strokeWidth={thick} />}
+        <text x={cx} y={cy + big * 0.3} textAnchor="middle" fontSize={big} fontWeight={700} fill={C.text}>{num}</text>
+        <text x={cx} y={cy + big * 0.3 + 14} textAnchor="middle" fontSize={11} fill={C.text3}>km/h</text>{/* i18n-exempt: radio text */}
+        {cy + big * 0.3 + 14 + 4 < t.h - 16 && (
+          <text x={cx} y={t.h - 5} textAnchor="middle" fontSize={11} fill={C.text3}>{`max ${Math.round(max)}  of ${top}`}</text>// i18n-exempt: radio text
+        )}
+      </svg>
+    </TileFrame>
+  );
+}
+
+const CARDINAL: Record<number, string> = { 0: 'N', 90: 'E', 180: 'S', 270: 'W' };
+
+function HeadingTile({ t, data }: { t: TileDef; data: PreviewData }) {
+  const hdg = data.yaw;
+  const cx = t.w / 2;
+  const ppd = t.w / 90;
+  const base = t.h - 3;
+  const d0 = Math.floor((hdg - 45) / 10) * 10;
+  const ticks = Array.from({ length: 11 }, (_, i) => d0 + i * 10);
+  const off = ((data.wpBearing - hdg + 540) % 360) - 180;
+  const wpX = cx + Math.max(-44, Math.min(44, off)) * ppd;
+  const label = String(Math.round(hdg) % 360).padStart(3, '0');
+  return (
+    <div style={{ position: 'absolute', left: t.x, top: t.y, width: t.w, height: t.h, background: C.surface, border: `1px solid ${C.gaugeEdge}`, overflow: 'hidden' }}>
+      <svg width={t.w} height={t.h}>
+        {ticks.map((d) => {
+          const x = cx + (d - hdg) * ppd;
+          if (x <= 2 || x >= t.w - 2) return null;
+          const dd = ((d % 360) + 360) % 360;
+          const major = dd % 30 === 0;
+          return (
+            <g key={d}>
+              <line x1={x} y1={base} x2={x} y2={base - (major ? 9 : 4)} stroke={C.gaugeTick} />
+              {major && Math.abs(x - cx) > 30 && <text x={x} y={base - 11} textAnchor="middle" fontSize={11} fill={CARDINAL[dd] ? C.text : C.text3}>{CARDINAL[dd] ?? dd}</text>}
+            </g>
+          );
+        })}
+        {data.wpNum > 0 && <polygon points={`${wpX - 6},2 ${wpX + 6},2 ${wpX},10`} fill={C.info} />}
+        <rect x={cx - 24} y={1} width={48} height={24} fill={C.surface} stroke={C.gaugeTick} />
+        <text x={cx} y={19} textAnchor="middle" fontSize={19} fontWeight={600} fill={C.text}>{label}</text>
+        <polygon points={`${cx - 5},${base + 2} ${cx + 5},${base + 2} ${cx},${base - 5}`} fill={C.gaugeTick} />
+      </svg>
+    </div>
+  );
+}
+
+/** Vehicle outlines for the tilt dials, same numbers as SHAPES in loadable.lua (units of the drawing size, y down). */
+type ShapePart = { fill: 'b' | 'd'; pts: number[] } | { fill: 'b' | 'd'; circle: [number, number, number] };
+const ellipsePts = (rx: number, ry: number, n: number) =>
+  Array.from({ length: n }, (_, i) => [Math.cos((2 * Math.PI * i) / n) * rx, Math.sin((2 * Math.PI * i) / n) * ry]).flat();
+const TILT_SHAPES: Record<'car' | 'boat' | 'sub', { rear: ShapePart[]; side: ShapePart[] }> = {
+  car: {
+    rear: [
+      { fill: 'b', pts: [-0.48, -0.05, 0.48, -0.05, 0.5, 0.25, -0.5, 0.25] },
+      { fill: 'b', pts: [-0.32, -0.34, 0.32, -0.34, 0.42, -0.05, -0.42, -0.05] },
+      { fill: 'd', pts: [-0.26, -0.29, 0.26, -0.29, 0.34, -0.09, -0.34, -0.09] },
+      { fill: 'd', pts: [-0.52, 0.12, -0.3, 0.12, -0.3, 0.44, -0.52, 0.44] },
+      { fill: 'd', pts: [0.3, 0.12, 0.52, 0.12, 0.52, 0.44, 0.3, 0.44] },
+    ],
+    side: [
+      { fill: 'b', pts: [-0.6, -0.04, 0.58, -0.04, 0.62, 0.2, -0.6, 0.2] },
+      { fill: 'b', pts: [-0.42, -0.3, 0.12, -0.3, 0.36, -0.04, -0.5, -0.04] },
+      { fill: 'd', pts: [-0.36, -0.25, 0.1, -0.25, 0.27, -0.08, -0.4, -0.08] },
+      { fill: 'd', circle: [-0.36, 0.22, 0.15] }, { fill: 'd', circle: [0.36, 0.22, 0.15] },
+      { fill: 'b', circle: [-0.36, 0.22, 0.06] }, { fill: 'b', circle: [0.36, 0.22, 0.06] },
+    ],
+  },
+  boat: {
+    rear: [
+      { fill: 'b', pts: [-0.52, -0.02, 0.52, -0.02, 0.24, 0.32, -0.24, 0.32] },
+      { fill: 'b', pts: [-0.26, -0.32, 0.26, -0.32, 0.32, -0.02, -0.32, -0.02] },
+      { fill: 'd', pts: [-0.2, -0.27, 0.2, -0.27, 0.25, -0.08, -0.25, -0.08] },
+    ],
+    side: [
+      { fill: 'b', pts: [-0.55, -0.04, 0.42, -0.04, 0.64, -0.14, 0.4, 0.24, -0.5, 0.24] },
+      { fill: 'b', pts: [-0.32, -0.32, 0.08, -0.32, 0.2, -0.04, -0.36, -0.04] },
+      { fill: 'd', pts: [-0.26, -0.27, 0.06, -0.27, 0.13, -0.09, -0.29, -0.09] },
+    ],
+  },
+  sub: {
+    rear: [
+      { fill: 'b', pts: [-0.56, -0.035, 0.56, -0.035, 0.56, 0.035, -0.56, 0.035] },
+      { fill: 'b', pts: [-0.08, -0.5, 0.08, -0.5, 0.1, -0.15, -0.1, -0.15] },
+      { fill: 'b', pts: [-0.035, 0.15, 0.035, 0.15, 0.035, 0.44, -0.035, 0.44] },
+      { fill: 'b', circle: [0, 0, 0.27] },
+      { fill: 'd', circle: [0, 0, 0.1] },
+    ],
+    side: [
+      { fill: 'b', pts: ellipsePts(0.56, 0.16, 20) },
+      { fill: 'b', pts: [-0.14, -0.4, 0.08, -0.4, 0.14, -0.12, -0.18, -0.12] },
+      { fill: 'b', pts: [-0.66, -0.22, -0.5, -0.05, -0.5, 0.05, -0.66, 0.22] },
+      { fill: 'd', pts: [0.3, -0.05, 0.42, -0.05, 0.42, 0.05, 0.3, 0.05] },
+    ],
+  },
+};
+
+/** One land-meter window, as meterWindow() in loadable.lua: upright vehicle, ground tilted by g, zoned scale. */
+function MeterWindow({ cx, cy, r, g, parts, state }: { cx: number; cy: number; r: number; g: number; parts: ShapePart[]; state: string }) {
+  const clip = useId();
+  const th = Math.max(2, Math.floor(r / 7));
+  const R = r + 2 + th;
+  const zones: [number, number, string][] = [[-40, -30, C.danger], [-30, -20, C.warnStrong], [-20, 20, C.success], [20, 30, C.warnStrong], [30, 40, C.danger]];
+  const s = r * 1.1;
+  const oy = cy + Math.floor(r * 0.05);
+  const rad = (g * Math.PI) / 180;
+  const [c, sn] = [Math.cos(rad), Math.sin(rad)];
+  return (
+    <g>
+      {[90, 270].flatMap((base) => zones.map(([a0, a1, color]) => (
+        <path key={`${base}${a0}`} d={arcPath(cx, cy, R - th / 2, base + a0, base + a1)} fill="none" stroke={color} strokeWidth={th} />
+      )))}
+      <clipPath id={clip}><circle cx={cx} cy={cy} r={r} /></clipPath>
+      <g clipPath={`url(#${clip})`}>
+        <rect x={cx - r} y={cy - r} width={2 * r} height={2 * r} fill={SKY} />
+        <rect x={cx - 2 * r} y={cy} width={4 * r} height={2 * r} fill={GROUND} transform={`rotate(${g} ${cx} ${cy})`} />
+        <line x1={cx - c * r} y1={cy - sn * r} x2={cx + c * r} y2={cy + sn * r} stroke={C.needle} />
+      </g>
+      <circle cx={cx} cy={cy} r={r} fill="none" stroke={C.gaugeEdge} />
+      {parts.map((p, i) => {
+        const fill = p.fill === 'd' ? C.surface : C.gaugeTick;
+        if ('circle' in p) return <circle key={i} cx={cx + p.circle[0] * s} cy={oy + p.circle[1] * s} r={Math.max(1, p.circle[2] * s)} fill={fill} />;
+        const pts = [];
+        for (let k = 0; k < p.pts.length; k += 2) pts.push(`${cx + p.pts[k]! * s},${oy + p.pts[k + 1]! * s}`);
+        return <polygon key={i} points={pts.join(' ')} fill={fill} />;
+      })}
+      {[90, 270].map((base) => {
+        const a = ((base + Math.max(-44, Math.min(44, g))) * Math.PI) / 180;
+        const [sa, ca] = [Math.sin(a), Math.cos(a)];
+        const tx = cx + sa * (R - th);
+        const ty = cy - ca * (R - th);
+        const ox = cx + sa * (R + 6);
+        const oyy = cy - ca * (R + 6);
+        return <polygon key={base} points={`${tx},${ty} ${ox + ca * 4},${oyy + sa * 4} ${ox - ca * 4},${oyy - sa * 4}`} fill={state} />;
+      })}
+    </g>
+  );
+}
+
+/** Roll or pitch as one land-meter window with the angle beside it, as attitudeTile() in loadable.lua. */
+function AttitudeTile({ t, caption, deg, ground, view, pos, neg }: {
+  t: TileDef; caption: string; deg: number; ground: number; view: 'rear' | 'side'; pos: string; neg: string;
+}) {
+  const c = Math.abs(deg) >= 30 ? C.danger : Math.abs(deg) >= 20 ? C.warnStrong : C.success;
+  const parts = TILT_SHAPES[KIND === 'sub' ? 'sub' : KIND === 'boat' ? 'boat' : 'car'][view];
+  const num = `${deg >= 0 ? pos : neg} ${Math.round(Math.abs(deg))}`;
+  const tall = t.h > t.w * 0.9;
+  if (tall) {
+    const r = Math.floor(Math.min(t.w / 2 - 17, (t.h - 30 - FONT.mid.h) / 2.3));
+    if (r < 8) {
+      return (
+        <TileFrame t={t} caption={caption}>
+          <NumericBody t={t} value={num} color={c} />
+        </TileFrame>
+      );
+    }
+    const f = fitFont(num, 'mid', t.w - 16);
+    return (
+      <TileFrame t={t} caption={caption}>
+        {r >= 8 && (
+          <svg width={t.w} height={t.h} style={{ position: 'absolute', left: 0, top: 0 }}>
+            <MeterWindow cx={t.w / 2} cy={18 + r + 10} r={r} g={ground} parts={parts} state={c} />
+            <text x={t.w / 2} y={t.h - 6} textAnchor="middle" fontSize={FONT[f].px} fontWeight={700} fill={c}>{num}</text>
+          </svg>
+        )}
+      </TileFrame>
+    );
+  }
+  // vertically the window only needs its ring (the markers stick out sideways)
+  const r = Math.floor(Math.min((t.h - 26) / 2.3, t.w * 0.25));
+  if (r < 8) {
+    return (
+      <TileFrame t={t} caption={caption}>
+        <NumericBody t={t} value={num} color={c} />
+      </TileFrame>
+    );
+  }
+  const cx = 8 + r + 10;
+  const cy = 18 + Math.floor((t.h - 18) / 2);
+  const tx = cx + r + 16;
+  const room = t.w - 6 - tx;
+  const f = fitFont(num, 'mid', room);
+  return (
+    <TileFrame t={t} caption={caption}>
+      {(
+        <svg width={t.w} height={t.h} style={{ position: 'absolute', left: 0, top: 0 }}>
+          <MeterWindow cx={cx} cy={cy} r={r} g={ground} parts={parts} state={c} />
+          {room >= 14 && <text x={tx} y={cy + FONT[f].px * 0.36} fontSize={FONT[f].px} fontWeight={700} fill={c}>{num}</text>}
+        </svg>
+      )}
+    </TileFrame>
+  );
+}
+
+/** Weak to strong echo, as ECHO_PAL in loadable.lua. */
+const ECHO_STOPS: [number, number, number, number][] = [[0, 0x10, 0x30, 0x90], [4, 0x00, 0x9c, 0xd8], [7, 0x22, 0xc5, 0x5e], [10, 0xfa, 0xcc, 0x15], [13, 0xf9, 0x73, 0x16], [15, 0xdc, 0x26, 0x26]];
+const ECHO_PAL = Array.from({ length: 16 }, (_, lv) => {
+  const i = Math.max(0, ECHO_STOPS.findIndex((s, k) => lv >= s[0] && lv <= (ECHO_STOPS[k + 1]?.[0] ?? 15)));
+  const a = ECHO_STOPS[i]!;
+  const b = ECHO_STOPS[Math.min(i + 1, ECHO_STOPS.length - 1)]!;
+  const f = b[0] > a[0] ? (lv - a[0]) / (b[0] - a[0]) : 0;
+  const mix = (k: 1 | 2 | 3) => Math.round(a[k] + (b[k] - a[k]) * f);
+  return `rgb(${mix(1)},${mix(2)},${mix(3)})`;
+});
+
+function DepthLabel({ x, y, text, size, color, bold }: { x: number; y: number; text: string; size: number; color: string; bold?: boolean }) {
+  return (
+    <div style={{ position: 'absolute', left: x, top: y, padding: '0 2px', background: C.surface, fontSize: size, fontWeight: bold ? 700 : 400, color, lineHeight: 1.15, whiteSpace: 'nowrap' }}>{text}</div>
+  );
+}
+
+// what the radio prints when there is nothing to draw yet (the widget is English only)
+const NO_ECHO = 'no echogram'; // i18n-exempt: radio text
+const NO_DEPTH = 'no depth yet'; // i18n-exempt: radio text
+
+function EchoTile({ t, data }: { t: TileDef; data: PreviewData }) {
+  const rh = Math.max(1, Math.floor((t.h - 22) / 32));
+  const ph = rh * 32;
+  const pw = t.w - 8;
+  const cols = data.echo ?? [];
+  const n = Math.min(cols.length, Math.floor(pw / 3));
+  return (
+    <TileFrame t={t} caption="ECHOGRAM">{/* i18n-exempt: radio text */}
+      <div style={{ position: 'absolute', right: 6, top: 3, padding: '0 3px', fontSize: 10, fontWeight: 700, color: C.bgBase, background: C.warnStrong }}>EXP</div>{/* i18n-exempt: radio text */}
+      <svg width={pw} height={ph} style={{ position: 'absolute', left: 4, top: 18, background: C.gaugeBezel }}>
+        {Array.from({ length: n }, (_, i) => {
+          const col = cols[cols.length - 1 - i]!;
+          const cx = pw - (i + 1) * 3;
+          return col.map((lv, r) => (lv > 0 ? <rect key={`${i}-${r}`} x={cx} y={r * rh} width={3} height={rh} fill={ECHO_PAL[lv]} /> : null));
+        })}
+      </svg>
+      {cols.length === 0 ? (
+        <div style={{ position: 'absolute', left: 0, right: 0, top: 18 + ph / 2 - 12, textAlign: 'center', fontSize: 11, color: C.text3 }}>{NO_ECHO}</div>
+      ) : (
+        <>
+          <DepthLabel x={6} y={19} text={`${Math.round(data.echoStartM ?? 0)}m`} size={11} color={C.text2} />
+          <DepthLabel x={6} y={18 + ph - 15} text={`${Math.round((data.echoStartM ?? 0) + (data.echoLenM ?? 0))}m`} size={11} color={C.text2} />
+          {data.range > 0 && <DepthLabel x={pw - 52} y={19} text={`${(data.depthHist?.at(-1) ?? data.range).toFixed(1)}m`} size={FONT.mid.px} color={C.text} bold />}
+        </>
+      )}
+    </TileFrame>
+  );
+}
+
+function BottomTile({ t, data }: { t: TileDef; data: PreviewData }) {
+  const pw = t.w - 8;
+  const ph = t.h - 22;
+  const hist = data.depthHist ?? [];
+  const n = Math.min(hist.length, pw);
+  const recent = hist.slice(hist.length - n);
+  const deepest = Math.max(0, ...recent);
+  const scale = Math.max(2, deepest * 1.2);
+  const line = recent.map((d, i) => `${pw - n + i},${(ph * d) / scale}`).join(' ');
+  return (
+    <TileFrame t={t} caption="BOTTOM">{/* i18n-exempt: radio text */}
+      <svg width={pw} height={ph} style={{ position: 'absolute', left: 4, top: 18, background: C.gaugeBezel }}>
+        {n >= 2 && (
+          <>
+            <polygon points={`${pw - n},${ph} ${line} ${pw - 1},${ph}`} fill={C.gaugeEdge} />
+            <polyline points={line} fill="none" stroke={C.warnStrong} strokeWidth={2} />
+          </>
+        )}
+      </svg>
+      {n < 2 ? (
+        <div style={{ position: 'absolute', left: 0, right: 0, top: 18 + ph / 2 - 7, textAlign: 'center', fontSize: 11, color: C.text3 }}>{NO_DEPTH}</div>
+      ) : (
+        <>
+          <DepthLabel x={t.w - 60} y={19} text={`${recent.at(-1)!.toFixed(1)}m`} size={FONT.mid.px} color={C.text} bold />
+          <DepthLabel x={6} y={18 + ph - 15} text={`max ${deepest.toFixed(1)}m`} size={11} color={C.text2} />{/* i18n-exempt: radio text */}
+        </>
+      )}
+    </TileFrame>
+  );
+}
+
+function DepthTile({ t, data }: { t: TileDef; data: PreviewData }) {
+  const sub = KIND === 'sub';
+  const depth = sub ? (data.depthM ?? Math.max(0, -data.altM)) : 0;
+  const below = data.range > 0 ? data.range : null;
+  const total = depth + (below ?? 0);
+  const scale = Math.max(5, total * 1.2);
+  const cw = Math.floor(t.w * 0.42);
+  const ch = t.h - 26;
+  const vy = 18 + (ch * depth) / scale;
+  const by = 18 + (ch * total) / scale;
+  const mid = 8 + cw / 2;
+  const room = t.w - cw - 22;
+  const value = sub ? `${depth.toFixed(1)}m` : below !== null ? `${below.toFixed(1)}m` : '--';
+  const big = FONT[fitFont(value, t.h >= 90 ? 'dbl' : 'mid', room)].px;
+  const subLine = sub
+    ? fitText(room, 'sml', below !== null ? [`bottom ${below.toFixed(1)}m`, `${below.toFixed(1)}m`] : ['no bottom', '']) // i18n-exempt: radio text
+    : fitText(room, 'sml', below !== null ? ['below the hull', 'below hull', ''] : ['no depth sensor', 'no sensor', '']); // i18n-exempt: radio text
+  return (
+    <TileFrame t={t} caption={sub ? 'DEPTH' : 'UNDER HULL'}>{/* i18n-exempt: radio text */}
+      <svg width={t.w} height={t.h} style={{ position: 'absolute', left: 0, top: 0 }}>
+        <rect x={8} y={18} width={cw} height={ch} fill={C.gaugeBezel} />
+        <line x1={8} y1={18} x2={8 + cw} y2={18} stroke={C.info} />
+        {below !== null && (
+          <>
+            <rect x={8} y={by} width={cw} height={Math.max(0, 18 + ch - by)} fill={C.gaugeEdge} />
+            <rect x={8} y={by} width={cw} height={3} fill={C.warnStrong} />
+            <line x1={mid} y1={vy + 4} x2={mid} y2={by - 1} stroke={C.text3} strokeDasharray="2 2" />
+          </>
+        )}
+        <rect x={mid - cw * 0.3} y={Math.max(21, vy) - 3} width={cw * 0.6} height={6} fill={C.text} />
+        <text x={cw + 16} y={18 + big} fontSize={big} fontWeight={700} fill={C.text}>{value}</text>
+        <text x={cw + 16} y={18 + big + 14} fontSize={11} fill={C.text2}>{subLine}</text>
+        {sub && Math.abs(data.vspd) >= 0.1 && (
+          <text x={cw + 16} y={18 + big + 28} fontSize={11} fill={C.text3}>
+            {`${data.vspd > 0 ? 'rising' : 'diving'} ${Math.abs(data.vspd).toFixed(1)}`}
+          </text>
+        )}
+      </svg>
+    </TileFrame>
+  );
+}
+
 function TileBody({ t, data, cfg }: { t: TileDef; data: PreviewData; cfg: HudCfg }) {
   // Mirrors the widget's vehicleKind() and isGround(): the preview has to read like the radio.
-  const mavType = useConnectionStore((s) => s.connectionState.mavType);
-  const vehicleClass = getVehicleClass(mavType);
-  const boat = mavType === MAV_TYPE_SURFACE_BOAT;
-  const groundVehicle = vehicleClass === 'rover' || vehicleClass === 'sub';
+  const boat = KIND === 'boat';
+  const vehicleClass = KIND === 'boat' ? 'rover' : KIND;
+  const groundVehicle = KIND === 'rover' || KIND === 'boat' || KIND === 'sub';
   switch (t.id) {
     case 'batt': {
       // cells: config first, else what the radio would auto-detect from
@@ -487,16 +724,46 @@ function TileBody({ t, data, cfg }: { t: TileDef; data: PreviewData; cfg: HudCfg
       const fillPct = pct != null ? pct : vfrac != null ? vfrac * 100 : null;
       const bigText = pct != null ? `${Math.round(pct)}%` : `${data.voltV.toFixed(1)}V`;
       if (t.variant === 'icon' && fillPct != null) {
+        // glyph grows with the tile, as the widget's icon variant
+        const subTxt = fitText(t.w - 12, 'sml', [
+          `${pct != null ? `${data.voltV.toFixed(1)}V  ` : ''}${cellV != null ? `${cellV.toFixed(2)}V/c  ` : ''}${data.currA.toFixed(0)}A`,
+          `${data.voltV.toFixed(1)}V`,
+        ]);
+        const glyph = (bx: number, by: number, bw: number, bh: number) => {
+          const th = Math.max(1, Math.floor(bh / 12));
+          const nub = Math.max(3, Math.floor(bw / 14));
+          const pad = th + 1;
+          return (
+            <>
+              <div style={{ position: 'absolute', left: bx, top: by, width: bw, height: bh, border: `${th}px solid ${C.gaugeTick}`, boxSizing: 'border-box' }}>
+                <div style={{ position: 'absolute', left: pad - th, top: pad - th, bottom: pad - th, width: ((bw - 2 * pad) * fillPct) / 100, background: vColor }} />
+              </div>
+              <div style={{ position: 'absolute', left: bx + bw, top: by + Math.floor(bh * 0.28), width: nub, height: bh - 2 * Math.floor(bh * 0.28), background: C.gaugeTick }} />
+            </>
+          );
+        };
+        if (t.h >= 110) {
+          const fb = fitFont(bigText, 'dbl', t.w - 16);
+          const room = t.h - 22 - FONT[fb].h - FONT.sml.h - 12;
+          const bw = Math.floor(Math.min(t.w - 40, room / 0.45));
+          const bh = Math.floor(bw * 0.45);
+          const top = 18 + Math.floor((t.h - 18 - bh - FONT[fb].h - FONT.sml.h - 12) / 2);
+          return (
+            <TileFrame t={t} caption="BATTERY">
+              {glyph(Math.floor((t.w - bw) / 2) - 2, top, bw, bh)}
+              <div style={{ position: 'absolute', left: 0, right: 0, top: top + bh + 6, textAlign: 'center', ...fontStyle(fb, 700), color: vColor }}>{bigText}</div>
+              <div style={{ position: 'absolute', left: 0, right: 0, top: top + bh + 12 + FONT[fb].h, textAlign: 'center', ...fontStyle('sml'), color: C.text2, whiteSpace: 'nowrap' }}>{subTxt}</div>
+            </TileFrame>
+          );
+        }
+        const fb = fitFont(bigText, 'dbl', t.w - 16 - 46 - 16);
+        const rowH = Math.max(22, FONT[fb].h);
+        const top = 18 + Math.floor((t.h - 18 - rowH - FONT.sml.h - 4) / 2);
         return (
           <TileFrame t={t} caption="BATTERY">
-            <div style={{ position: 'absolute', left: 8, top: 22, width: 46, height: 22, border: `1px solid ${C.gaugeTick}` }}>
-              <div style={{ position: 'absolute', left: 1, top: 1, bottom: 1, width: `${fillPct * 0.92}%`, background: vColor }} />
-            </div>
-            <div style={{ position: 'absolute', left: 56, top: 25, width: 4, height: 10, background: C.gaugeTick }} />
-            <div style={{ position: 'absolute', left: 68, top: 14, fontSize: 30, fontWeight: 700, color: vColor }}>{bigText}</div>
-            <div style={{ position: 'absolute', left: 8, top: 52, fontSize: 11, color: C.text2, whiteSpace: 'nowrap' }}>
-              {pct != null ? `${data.voltV.toFixed(1)}V  ` : ''}{cellV != null ? `${cellV.toFixed(2)}V/c  ` : ''}{data.currA.toFixed(0)}A
-            </div>
+            {glyph(8, top + Math.floor((rowH - 22) / 2), 46, 22)}
+            <div style={{ position: 'absolute', left: 66, top: top + Math.floor((rowH - FONT[fb].h) / 2), ...fontStyle(fb, 700), color: vColor }}>{bigText}</div>
+            <div style={{ position: 'absolute', left: 8, top: top + rowH + 4, ...fontStyle('sml'), color: C.text2, whiteSpace: 'nowrap' }}>{subTxt}</div>
           </TileFrame>
         );
       }
@@ -535,7 +802,7 @@ function TileBody({ t, data, cfg }: { t: TileDef; data: PreviewData; cfg: HudCfg
       const ar = Math.min(13, t.h / 2 - 8);
       return (
         <TileFrame t={t} caption="HOME">
-          <NumericBody t={t} value={`${Math.round(data.homeDist)}m`} sub={`brg ${Math.round(data.homeBearing)}`} />
+          <NumericBody t={t} reserve={40} value={`${Math.round(data.homeDist)}m`} sub={`brg ${Math.round(data.homeBearing)}`} />
           {data.homeDist > 0 && (
             <svg style={{ position: 'absolute', right: 9, top: t.h / 2 - ar }} width={ar * 2} height={ar * 2}>
               <line x1={ar - Math.sin(a) * ar} y1={ar + Math.cos(a) * ar} x2={ar + Math.sin(a) * ar} y2={ar - Math.cos(a) * ar} stroke={C.warnStrong} strokeWidth="2" />
@@ -560,7 +827,7 @@ function TileBody({ t, data, cfg }: { t: TileDef; data: PreviewData; cfg: HudCfg
       const fill = Math.abs(frac) * (barH / 2);
       return (
         <TileFrame t={t} caption={vehicleClass === 'sub' ? 'DEPTH / VSPD' : 'ALT / VSPD'}>{/* i18n-exempt */}
-          <NumericBody t={t} value={`${Math.round(vehicleClass === 'sub' ? Math.max(0, -data.altM) : data.altM)}m`}
+          <NumericBody t={t} reserve={20} value={`${Math.round(vehicleClass === 'sub' ? Math.max(0, -data.altM) : data.altM)}m`}
             sub={`${data.vspd >= 0 ? '+' : ''}${data.vspd.toFixed(1)}  ${data.hspd >= 10 ? Math.round(data.hspd) : data.hspd.toFixed(1)} spd`} />
           <div style={{ position: 'absolute', right: 8, top: 20, width: 8, height: barH, background: C.gaugeBezel, border: `1px solid ${C.gaugeEdge}` }}>
             <div style={{
@@ -578,7 +845,7 @@ function TileBody({ t, data, cfg }: { t: TileDef; data: PreviewData; cfg: HudCfg
       const lit = Math.min(8, Math.round(data.sats / 2));
       return (
         <TileFrame t={t} caption="GPS">
-          <NumericBody t={t} value={String(data.sats)} color={gpsColor} sub={`${fixLabel}  hdop ${data.hdop.toFixed(1)}`} />
+          <NumericBody t={t} reserve={72} value={String(data.sats)} color={gpsColor} sub={`${fixLabel}  hdop ${data.hdop.toFixed(1)}`} />
           <div style={{ position: 'absolute', right: 8, top: 24, display: 'flex', gap: 2 }}>
             {Array.from({ length: 8 }, (_, i) => (
               <div key={i} style={{
@@ -746,7 +1013,7 @@ function TileBody({ t, data, cfg }: { t: TileDef; data: PreviewData; cfg: HudCfg
       const acy = t.h / 2;
       return (
         <TileFrame t={t} caption="WIND">
-          <NumericBody t={t} value={`${data.windMs.toFixed(1)} m/s`} color={data.windMs > 8 ? C.warn : C.text}
+          <NumericBody t={t} reserve={30} value={`${data.windMs.toFixed(1)} m/s`} color={data.windMs > 8 ? C.warn : C.text}
             sub={`from ${String(Math.round(data.windDirDeg) % 360).padStart(3, '0')}`} />
           <svg style={{ position: 'absolute', left: acx - ar, top: acy - ar }} width={ar * 2} height={ar * 2}>
             <line x1={ar - Math.sin(a) * ar} y1={ar + Math.cos(a) * ar} x2={ar + Math.sin(a) * ar} y2={ar - Math.cos(a) * ar} stroke={C.info} strokeWidth="2" />
@@ -762,7 +1029,7 @@ function TileBody({ t, data, cfg }: { t: TileDef; data: PreviewData; cfg: HudCfg
       const baseY = Math.min(t.h - 30, 58);
       return (
         <TileFrame t={t} caption="SIGNAL">
-          <NumericBody t={t} value={`${lq}%`} color={lqC} sub={(
+          <NumericBody t={t} reserve={50} value={`${lq}%`} color={lqC} sub={(
             <>
               <span style={{ color: C.success }}>-58 dBm</span>{/* i18n-exempt */}
               <span style={{ color: C.warnStrong, marginLeft: 10 }}>250mW</span>
@@ -786,7 +1053,7 @@ function TileBody({ t, data, cfg }: { t: TileDef; data: PreviewData; cfg: HudCfg
       const pct = Math.max(0, Math.min(100, ((v - 6.6) / (8.4 - 6.6)) * 100));
       return (
         <TileFrame t={t} caption="TX BATTERY">{/* i18n-exempt */}
-          <NumericBody t={t} value={`${v.toFixed(1)}V`} sub={fitText(t.w - 36, stack(t.h, true).sf, [`${Math.round(pct)}% of 6.6-8.4V`, `${Math.round(pct)}%`])} />
+          <NumericBody t={t} reserve={20} value={`${v.toFixed(1)}V`} sub={fitText(t.w - 36, stack(t.h, true).sf, [`${Math.round(pct)}% of 6.6-8.4V`, `${Math.round(pct)}%`])} />
           <div style={{ position: 'absolute', right: 8, top: 18, width: 6, height: t.h - 30, background: C.gaugeBezel, border: `1px solid ${C.gaugeEdge}` }}>
             <div style={{ position: 'absolute', bottom: 0, width: '100%', height: `${pct}%`, background: C.success }} />
           </div>
@@ -794,22 +1061,49 @@ function TileBody({ t, data, cfg }: { t: TileDef; data: PreviewData; cfg: HudCfg
       );
     }
     case 'thr': {
-      const hot = data.throttle >= 80;
+      const thr = data.throttle;
+      const hot = Math.abs(thr) >= 80;
+      const fill = hot ? C.warnStrong : C.success;
+      const pct = Math.min(100, Math.abs(thr));
+      const numH = Math.max(14, t.h - 44);
       return (
-        <TileFrame t={t} caption="THROTTLE">
-          <NumericBody t={t} value={`${data.throttle}%`} color={hot ? C.warnStrong : C.text} />
-          <div style={{ position: 'absolute', left: 8, right: 8, bottom: 14, height: 8, background: C.gaugeBezel, border: `1px solid ${C.gaugeEdge}` }}>
-            <div style={{ width: `${Math.max(0, Math.min(100, data.throttle))}%`, height: '100%', background: hot ? C.warnStrong : C.success }} />
+        <TileFrame t={t} caption="THROTTLE">{/* i18n-exempt: radio text */}
+          <div style={{ position: 'absolute', left: 8, top: 18, height: numH, display: 'flex', alignItems: 'center', fontSize: Math.min(34, numH * 0.9), fontWeight: 700, color: hot ? C.warnStrong : C.text }}>
+            {groundVehicle && thr < 0 ? `R ${-thr}%` : `${thr}%`}
+          </div>
+          <div style={{ position: 'absolute', left: 8, right: 8, bottom: 8, height: 8, background: C.gaugeBezel, border: `1px solid ${C.gaugeEdge}` }}>
+            {groundVehicle ? (
+              <>
+                <div style={{ position: 'absolute', top: 0, bottom: 0, background: fill, width: `${pct / 2}%`, ...(thr < 0 ? { right: '50%' } : { left: '50%' }) }} />
+                <div style={{ position: 'absolute', left: '50%', top: -3, bottom: -3, width: 1, background: C.gaugeTick }} />
+              </>
+            ) : (
+              <div style={{ width: `${Math.max(0, pct)}%`, height: '100%', background: fill }} />
+            )}
           </div>
         </TileFrame>
       );
     }
+    case 'speedo':
+      return <SpeedoTile t={t} data={data} />;
+    case 'heading':
+      return <HeadingTile t={t} data={data} />;
+    case 'roll':
+      return <AttitudeTile t={t} caption="ROLL" deg={data.roll} ground={-data.roll} view="rear" pos="R" neg="L" />; // i18n-exempt: radio text
+    case 'pitch':
+      return <AttitudeTile t={t} caption="PITCH" deg={data.pitch} ground={data.pitch} view="side" pos="UP" neg="DN" />; // i18n-exempt: radio text
+    case 'depth':
+      return <DepthTile t={t} data={data} />;
+    case 'echo':
+      return <EchoTile t={t} data={data} />;
+    case 'bottom':
+      return <BottomTile t={t} data={data} />;
     case 'imu': {
       const c = data.imuTemp >= 70 ? C.danger : data.imuTemp >= 60 ? C.warnStrong : C.success;
       const frac = Math.max(0, Math.min(1, (data.imuTemp - 20) / 60));
       return (
         <TileFrame t={t} caption="IMU TEMP">{/* i18n-exempt */}
-          <NumericBody t={t} value={`${data.imuTemp}C`} color={c} />
+          <NumericBody t={t} reserve={20} value={`${data.imuTemp}C`} color={c} />
           <div style={{ position: 'absolute', right: 8, top: 18, width: 8, height: t.h - 30, background: C.gaugeBezel, border: `1px solid ${C.gaugeEdge}` }}>
             <div style={{ position: 'absolute', bottom: 0, width: '100%', height: `${frac * 100}%`, background: c }} />
           </div>
@@ -821,7 +1115,7 @@ function TileBody({ t, data, cfg }: { t: TileDef; data: PreviewData; cfg: HudCfg
       const frac = Math.max(0, Math.min(1, data.range / 5));
       return (
         <TileFrame t={t} caption={boat ? 'DEPTH' : 'RANGE'}>{/* i18n-exempt */}
-          <NumericBody t={t} value={`${data.range.toFixed(2)}m`} color={near ? C.warnStrong : C.text} />
+          <NumericBody t={t} reserve={20} value={`${data.range.toFixed(2)}m`} color={near ? C.warnStrong : C.text} />
           <div style={{ position: 'absolute', right: 8, top: 18, width: 8, height: t.h - 30, background: C.gaugeBezel, border: `1px solid ${C.gaugeEdge}` }}>
             <div style={{ position: 'absolute', bottom: 0, width: '100%', height: `${frac * 100}%`, background: C.info }} />
           </div>
@@ -846,7 +1140,7 @@ function TileBody({ t, data, cfg }: { t: TileDef; data: PreviewData; cfg: HudCfg
       const ar = Math.min(13, t.h / 2 - 8);
       return (
         <TileFrame t={t} caption="MISSION">
-          <NumericBody t={t} value={`WP ${data.wpNum}`} color={C.info} sub={`${Math.round(data.wpDist)}m to go`} />
+          <NumericBody t={t} reserve={40} value={`WP ${data.wpNum}`} color={C.info} sub={`${Math.round(data.wpDist)}m to go`} />
           <svg style={{ position: 'absolute', right: 9, top: t.h / 2 - ar }} width={ar * 2} height={ar * 2}>
             <line x1={ar - Math.sin(a) * ar} y1={ar + Math.cos(a) * ar} x2={ar + Math.sin(a) * ar} y2={ar - Math.cos(a) * ar} stroke={C.info} strokeWidth="2" />
             <circle cx={ar + Math.sin(a) * ar} cy={ar - Math.cos(a) * ar} r="3" fill={C.info} />
@@ -893,7 +1187,7 @@ interface DragState {
 }
 
 function HudPreview({
-  mode, data, cfg, tiles, editing, onTilesChange,
+  mode, data, cfg, tiles, editing, onTilesChange, selected = null, onSelect, kind = 'copter', snapping = true,
 }: {
   mode: PreviewMode;
   data: PreviewData;
@@ -901,18 +1195,28 @@ function HudPreview({
   tiles: TileDef[];
   editing: boolean;
   onTilesChange: (tiles: TileDef[]) => void;
+  /** Index of the tile picked for the inspector; only it shows a resize handle. */
+  selected?: number | null;
+  onSelect?: (index: number | null) => void;
+  kind?: HudVehicleKind;
+  /** Grid and neighbour-edge snapping while dragging; off moves by the pixel. */
+  snapping?: boolean;
 }) {
+  KIND = kind;
+  const { t: tr } = useTranslation();
+  const removeLabel = tr('common:remove');
   C = cfg.theme === 'light' ? LIGHT : DARK;
   const [drag, setDrag] = useState<DragState | null>(null);
   const rootRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!drag) return;
-    const snap = (v: number) => Math.round(v / SNAP) * SNAP;
+    const snap = (v: number) => (snapping ? Math.round(v / SNAP) * SNAP : Math.round(v));
     const MAGNET = 7;
     // After grid snap, magnetize to neighbor edges: exact edge alignment or
     // butting against a neighbor with the standard 8px gap.
     const magnetize = (value: number, targets: number[]) => {
+      if (!snapping) return value;
       let best = value;
       let bestDist = MAGNET + 1;
       for (const target of targets) {
@@ -954,7 +1258,7 @@ function HudPreview({
       document.removeEventListener('pointermove', onMove);
       document.removeEventListener('pointerup', onUp);
     };
-  }, [drag, tiles, onTilesChange]);
+  }, [drag, tiles, onTilesChange, snapping]);
 
   const gridBg = {
     background: C.bgBase,
@@ -978,7 +1282,7 @@ function HudPreview({
   }
 
   return (
-    <div ref={rootRef} style={{ position: 'relative', width: SCREEN_W, height: SCREEN_H, ...gridBg, fontFamily: 'Roboto, system-ui, sans-serif', overflow: 'hidden', userSelect: 'none' }}>
+    <div ref={rootRef} onPointerDown={() => onSelect?.(null)} style={{ position: 'relative', width: SCREEN_W, height: SCREEN_H, ...gridBg, fontFamily: 'Roboto, system-ui, sans-serif', overflow: 'hidden', userSelect: 'none' }}>
       {/* top bar (brand invariant) */}
       <div style={{ position: 'absolute', top: 0, width: '100%', height: 38, background: C.surface }}>
         {/* dim ghost of the EdgeTX corner affordance the radio draws there */}
@@ -1028,46 +1332,45 @@ function HudPreview({
             <div
               onPointerDown={(e) => {
                 e.preventDefault();
+                e.stopPropagation();
+                onSelect?.(i);
                 setDrag({ tileIdx: i, mode: 'move', startX: e.clientX, startY: e.clientY, orig: t });
               }}
+              className={selected === i ? '' : 'hover:outline hover:outline-1 hover:outline-offset-[-1px] hover:outline-teal-400/60'}
               style={{
                 position: 'absolute', left: t.x, top: t.y, width: t.w, height: t.h,
-                border: `1px dashed ${C.accent}`, cursor: 'move', zIndex: 5, touchAction: 'none',
+                border: selected === i ? `2px solid ${C.accent}` : 'none',
+                cursor: 'move', zIndex: 5, touchAction: 'none',
               }}
             >
-              <button
-                onPointerDown={(e) => e.stopPropagation()}
-                onClick={() => onTilesChange(tiles.filter((_, j) => j !== i))}
-                style={{
-                  position: 'absolute', right: 2, top: 2, width: 16, height: 16, lineHeight: '14px',
-                  fontSize: 11, color: C.text, background: C.danger, border: 'none', cursor: 'pointer', zIndex: 6,
-                }}
-              >×</button>
-              {TILE_META[t.id]?.variants && (
+              {selected === i && (
                 <button
+                  type="button"
+                  aria-label={removeLabel}
                   onPointerDown={(e) => e.stopPropagation()}
                   onClick={() => {
-                    const variants = TILE_META[t.id]!.variants!;
-                    const next = variants[(variants.indexOf(t.variant) + 1) % variants.length]!;
-                    onTilesChange(tiles.map((tt, j) => (j === i ? { ...tt, variant: next } : tt)));
+                    onTilesChange(tiles.filter((_, j) => j !== i));
+                    onSelect?.(null);
                   }}
                   style={{
-                    position: 'absolute', left: 2, top: 2, padding: '0 4px', height: 16, lineHeight: '14px',
-                    fontSize: 9, color: C.bgBase, background: C.accent, border: 'none', cursor: 'pointer', zIndex: 6,
+                    position: 'absolute', right: 2, top: 2, width: 18, height: 18, lineHeight: '16px',
+                    fontSize: 13, color: '#fff', background: C.danger, border: 'none', cursor: 'pointer', zIndex: 6,
                   }}
-                >{t.variant}</button>
+                >×</button>
               )}
-              <div
-                onPointerDown={(e) => {
-                  e.stopPropagation();
-                  e.preventDefault();
-                  setDrag({ tileIdx: i, mode: 'resize', startX: e.clientX, startY: e.clientY, orig: t });
-                }}
-                style={{
-                  position: 'absolute', right: -1, bottom: -1, width: 12, height: 12,
-                  background: C.accent, cursor: 'nwse-resize', zIndex: 6, touchAction: 'none',
-                }}
-              />
+              {selected === i && (
+                <div
+                  onPointerDown={(e) => {
+                    e.stopPropagation();
+                    e.preventDefault();
+                    setDrag({ tileIdx: i, mode: 'resize', startX: e.clientX, startY: e.clientY, orig: t });
+                  }}
+                  style={{
+                    position: 'absolute', right: -2, bottom: -2, width: 12, height: 12,
+                    background: C.accent, cursor: 'nwse-resize', zIndex: 6, touchAction: 'none',
+                  }}
+                />
+              )}
             </div>
           )}
         </div>
@@ -1607,6 +1910,8 @@ interface PersistedStudio {
   bw?: BwLayout;
   bwSlots?: string[];
   bwWslots?: string[];
+  /** Vehicle type picked while nothing was connected; null until the pilot picks one. */
+  vehicleKind?: HudVehicleKind | null;
 }
 
 function loadPersistedStudio(): PersistedStudio | null {
@@ -1641,7 +1946,10 @@ export function RadioHudView() {
   // A first-run studio starts on the set that matches whatever is connected,
   // so a rover owner never has to know the copter layout was the default.
   const [pages, setPages] = useState<TileDef[][]>(
-    persisted?.pages ?? [firstRunLayout(getVehicleClass(useConnectionStore.getState().connectionState.mavType))],
+    persisted?.pages ?? (() => {
+      const mavType = useConnectionStore.getState().connectionState.mavType;
+      return firstRunPages(hudVehicleKind(getVehicleClass(mavType), mavType));
+    })(),
   );
   // switching radio model rescales every page (same math as the widget);
   // B&W targets have a fixed script layout, so tiles pass through untouched
@@ -1657,14 +1965,24 @@ export function RadioHudView() {
   const setTiles = useCallback((next: TileDef[]) => {
     setPages((prev) => prev.map((p, i) => (i === activePage ? next : p)));
   }, [activePage]);
+  // B&W slot editing is a mode; colour tiles are always editable by clicking them
   const [editing, setEditing] = useState(false);
   const [guideOpen, setGuideOpen] = useState(false);
-  const [addPageOpen, setAddPageOpen] = useState(false);
+  const [tab, setTab] = useState<'editor' | 'guide'>('editor');
+  const [selectedTile, setSelectedTile] = useState<number | null>(null);
+  useEffect(() => { setSelectedTile(null); }, [activePage]);
+  const [gallery, setGallery] = useState<'replace' | 'add' | null>(null);
+  const [pickedKind, setPickedKind] = useState<HudVehicleKind | null>(persisted?.vehicleKind ?? null);
+  const [snapping, setSnapping] = useState(() => {
+    try { return localStorage.getItem('radio-hud.snapping') !== '0'; } catch { return true; }
+  });
+  const toggleSnapping = () => setSnapping((on) => {
+    try { localStorage.setItem('radio-hud.snapping', on ? '0' : '1'); } catch { /* per-viewer convenience only */ }
+    return !on;
+  });
   const addPage = (layout: TileDef[]) => {
     setPages((prev) => [...prev, layout]);
     setActivePage(pages.length);
-    setAddPageOpen(false);
-    setEditing(true);
   };
   const [previewMode, setPreviewMode] = useState<PreviewMode>('sample');
   const [scan, setScan] = useState<EdgeTxScanResult | null>(null);
@@ -1678,9 +1996,8 @@ export function RadioHudView() {
   // recognisably a copy and not a save.
   const [pagesFrom, setPagesFrom] = useState<string | null>(null);
   const [confirmApply, setConfirmApply] = useState(false);
+  // Saved screen sets, shown as "your templates" in the gallery
   const [layouts, setLayouts] = useState<SavedHudLayout[]>(() => loadLayouts());
-  const [layoutName, setLayoutName] = useState(() => loadLayouts()[0]?.name ?? t('radio-hud:radioHudView.myLayoutName'));
-  const [nameDraft, setNameDraft] = useState('');
   const [applyTarget, setApplyTarget] = useState<string>('');
   // Once the user picks a target themselves, a rescan must not move it back.
   const targetTouched = useRef(false);
@@ -1702,11 +2019,11 @@ export function RadioHudView() {
   // persist studio state (cfg, pages, field center) across view switches
   useEffect(() => {
     try {
-      localStorage.setItem(STUDIO_STORAGE_KEY, JSON.stringify({ cfg, pages, mapCenter, screen, bw } satisfies PersistedStudio));
+      localStorage.setItem(STUDIO_STORAGE_KEY, JSON.stringify({ cfg, pages, mapCenter, screen, bw, vehicleKind: pickedKind } satisfies PersistedStudio));
     } catch {
       // storage full/unavailable; state simply won't survive a reload
     }
-  }, [cfg, pages, mapCenter, screen, bw]);
+  }, [cfg, pages, mapCenter, screen, bw, pickedKind]);
 
   // default the field center to the vehicle's position when one appears
   useEffect(() => {
@@ -1714,40 +2031,6 @@ export function RadioHudView() {
       setMapCenter({ lat: telemetry.gps.lat, lon: telemetry.gps.lon });
     }
   }, [telemetry.gps.lat, telemetry.gps.lon, mapCenter]);
-
-  // The editor IS the layout: every change writes through to the library, the
-  // way the map cockpit persists itself. Debounced so a drag is one write.
-  useEffect(() => {
-    const name = layoutName.trim();
-    if (isBw || !name) return;
-    const t = setTimeout(() => {
-      setLayouts((prev) => {
-        const next = upsertLayout(prev, { name, screen, pages, savedAt: new Date().toISOString() });
-        persistLayouts(next);
-        return next;
-      });
-    }, 600);
-    return () => clearTimeout(t);
-  }, [pages, screen, layoutName, isBw]);
-
-  useEffect(() => { setNameDraft(layoutName); }, [layoutName]);
-
-  const commitRename = () => {
-    const to = nameDraft.trim();
-    if (!to || to === layoutName) {
-      setNameDraft(layoutName);
-      return;
-    }
-    const result = renameLayout(layouts, layoutName, to);
-    if (!result.renamed) {
-      setNameDraft(layoutName);
-      setApplyState(t('radio-hud:radioHudView.layoutExists', { name: to }));
-      return;
-    }
-    persistLayouts(result.layouts);
-    setLayouts(result.layouts);
-    setLayoutName(to);
-  };
 
   const handleGenerateMaps = async () => {
     if (!mapCenter.lat && !mapCenter.lon) {
@@ -1830,7 +2113,7 @@ export function RadioHudView() {
     const el = previewBoxRef.current;
     if (!el) return;
     const observer = new ResizeObserver(() => {
-      setPreviewScale(Math.min(1, el.clientWidth / SCREEN_W));
+      setPreviewScale(Math.min(2, el.clientWidth / SCREEN_W));
     });
     observer.observe(el);
     return () => observer.disconnect();
@@ -2031,10 +2314,16 @@ export function RadioHudView() {
     cfgOut.theme = cfg.theme;
     // With no vehicle on the link the class would default to copter and the radio would
     // read a rover's modes with copter names; left out, the widget goes by the live frame type.
-    if (connectionState.mavType !== undefined) {
+    if (connectionState.isConnected && connectionState.mavType !== undefined) {
       const vehicleClass = getVehicleClass(connectionState.mavType);
       // the radio labels a boat's rangefinder as depth; its modes are Rover's
       cfgOut.vehicle = connectionState.mavType === MAV_TYPE_SURFACE_BOAT ? 'boat' : vehicleClass;
+      cfgOut.modes = modeTableCfg(vehicleClass);
+      cfgOut.voice = modeVoiceCfg(vehicleClass);
+    } else if (pickedKind) {
+      // offline, only a type the pilot chose is written; the widget still trusts the live frame type
+      const vehicleClass: ArduPilotVehicleClass = pickedKind === 'boat' ? 'rover' : pickedKind;
+      cfgOut.vehicle = pickedKind;
       cfgOut.modes = modeTableCfg(vehicleClass);
       cfgOut.voice = modeVoiceCfg(vehicleClass);
     }
@@ -2129,25 +2418,384 @@ export function RadioHudView() {
     }
   };
 
-  // hint rides as a tooltip on the input, not a visible text row - density
-  const numField = (label: string, value: number, step: number, onChange: (v: number) => void, hint?: string, autoWhenEmpty?: boolean) => (
-    <label className="block">
+  // the vehicle on the link picks the template filter and the tiles offered first
+  const connectedKind: HudVehicleKind | null = connectionState.isConnected && connectionState.mavType !== undefined
+    ? hudVehicleKind(getVehicleClass(connectionState.mavType), connectionState.mavType)
+    : null;
+  const vehicleKind: HudVehicleKind = connectedKind ?? pickedKind ?? 'copter';
+
+  // A plugged-in radio names its own screen; follow it unless the pilot picked another for this card.
+  const autoScreenFor = useRef<string | null>(null);
+  useEffect(() => {
+    if (!detectedModel || !detectedCard) return;
+    if (autoScreenFor.current === detectedCard.volumePath) return;
+    autoScreenFor.current = detectedCard.volumePath;
+    if (detectedModel.w !== screen.w || detectedModel.h !== screen.h) changeScreen(detectedModel);
+    // changeScreen and screen only matter at the moment a card first appears
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [detectedModel, detectedCard]);
+
+  const applyTemplate = (fitted: TileDef[][], how: 'replace' | 'add', name: string) => {
+    if (how === 'replace') {
+      setPages(fitted.slice(0, MAX_PAGES));
+      setActivePage(0);
+    } else {
+      const room = MAX_PAGES - pages.length;
+      if (room <= 0) return;
+      setPages((prev) => [...prev, ...fitted.slice(0, 1)]);
+      setActivePage(pages.length);
+    }
+    setPagesFrom(t('radio-hud:radioHudView.pagesFromLayout', { name }));
+    setGallery(null);
+  };
+
+  const selected = selectedTile !== null ? tiles[selectedTile] ?? null : null;
+  const addTile = (id: string) => {
+    const meta = TILE_META[id]!;
+    const next = [...tiles, {
+      id, x: 8, y: TILE_TOP + 8,
+      w: Math.max(meta.minW, 120), h: Math.max(meta.minH, 72),
+      variant: meta.variants?.[0] ?? 'default',
+    }];
+    setTiles(next);
+    setSelectedTile(next.length - 1);
+  };
+
+  // what the widget would work out on its own, shown where the field is left on auto
+  const liveVolt = connectionState.isConnected ? telemetry.battery.voltage : 0;
+  const autoCells = liveVolt > 6 ? Math.floor(liveVolt / 4.3) + 1 : 0;
+
+  const unitField = (label: string, value: number, step: number, unit: string, onChange: (v: number) => void, autoHint?: string) => (
+    <label className="block space-y-1.5">
       <span className="text-xs text-content-secondary">{label}</span>
-      <input
-        type="number"
-        step={step}
-        value={value || ''}
-        placeholder={autoWhenEmpty ? t('radio-hud:radioHudView.autoPlaceholder') : undefined}
-        data-tip={hint}
-        onChange={(e) => onChange(Number(e.target.value))}
-        className="mt-1 w-full px-2 py-1.5 text-sm bg-surface-input border border-subtle rounded text-content placeholder:text-teal-500/60"
-      />
+      <span className="flex items-center rounded-lg border border-subtle bg-surface-input pr-2.5 focus-within:border-blue-500">
+        <input
+          type="number"
+          step={step}
+          value={value || ''}
+          placeholder={autoHint !== undefined ? t('radio-hud:radioHudView.autoPlaceholder') : undefined}
+          onChange={(e) => onChange(Number(e.target.value))}
+          className="min-w-0 flex-1 bg-transparent px-2.5 py-2 text-sm text-content placeholder:text-teal-400/80 focus:outline-none"
+        />
+        <span className="text-xs text-content-tertiary">{unit}</span>
+      </span>
+      {autoHint !== undefined && !value && <span className="block text-[11px] text-teal-400/80">{autoHint}</span>}
     </label>
   );
 
+  const cardHead = (icon: React.ReactNode, tone: string, title: string, sub: string, action?: React.ReactNode) => (
+    <div className="flex items-center gap-3">
+      <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border ${tone}`}>{icon}</div>
+      <div className="min-w-0 flex-1">
+        <h3 className="text-sm font-semibold text-content">{title}</h3>
+        <p className="truncate text-xs text-content-secondary">{sub}</p>
+      </div>
+      {action}
+    </div>
+  );
+
+  const modelSelect = (
+    <label className="block space-y-1.5">
+      <span className="text-xs text-content-secondary">{t('radio-hud:studio.radioModel')}</span>
+      <select
+        value={`${screen.w}x${screen.h}`}
+        onChange={(e) => {
+          const m = SCREEN_MODELS.find((sm) => `${sm.w}x${sm.h}` === e.target.value);
+          if (m) changeScreen(m);
+        }}
+        data-tour="hud-model"
+        data-tip={t('radio-hud:radioHudView.radioModelTip')}
+        className="w-full rounded-lg border border-subtle bg-surface-input px-2.5 py-2 text-sm text-content focus:border-blue-500 focus:outline-none"
+      >
+        {SCREEN_MODELS.map((m) => <option key={m.variant} value={`${m.w}x${m.h}`}>{m.label}</option>)}
+      </select>
+    </label>
+  );
+
+  const radioCard = (
+    <section className="space-y-4 rounded-xl border border-subtle bg-surface-input p-5">
+      {cardHead(
+        <Usb className="h-4 w-4 text-blue-400" />, 'border-blue-500/20 bg-blue-500/10',
+        t('radio-hud:studio.radio'),
+        card ? (detectedCard?.radioLabel ?? card.volumeName) : t('radio-hud:studio.noRadio'),
+      )}
+      {card ? (
+        <>
+          <div className="flex items-center gap-2.5 rounded-lg border border-emerald-500/25 bg-emerald-500/10 px-3 py-2.5 text-xs">
+            <span className="h-2 w-2 shrink-0 rounded-full bg-emerald-500" />
+            <span className="text-content-secondary">
+              <span className="font-medium text-emerald-400">{card.volumeName}</span>
+              {hudInstalled ? t('radio-hud:radioHudView.widgetInstalled') : t('radio-hud:radioHudView.widgetWillInstall')}
+            </span>
+          </div>
+          {modelSelect}
+          {!isBw && models.length > 0 && (
+            <div className="space-y-1.5" role="radiogroup" aria-label={t('radio-hud:studio.goesTo')}>
+              <span className="text-xs text-content-secondary" data-tip={t('radio-hud:radioHudView.layoutForTip')}>{t('radio-hud:studio.goesTo')}</span>
+              {[{ name: '', label: t('radio-hud:radioHudView.everyModelOnRadio'), note: t('radio-hud:studio.shared') },
+                ...models
+                  .filter((m, i) => models.findIndex((o) => o.name === m.name) === i)
+                  .map((m) => ({
+                    name: m.name,
+                    label: m.name,
+                    note: models.some((o) => o.name === m.name && o.current)
+                      ? t('radio-hud:studio.onRadioNow')
+                      : m.hasLayout ? t('radio-hud:studio.ownScreens') : t('radio-hud:studio.sharedScreens'),
+                  }))].map((m) => (
+                <button
+                  key={m.name || '__all'}
+                  type="button"
+                  role="radio"
+                  aria-checked={applyTarget === m.name}
+                  onClick={() => { targetTouched.current = true; setConfirmApply(false); setApplyTarget(m.name); }}
+                  className={`flex w-full items-center gap-2.5 rounded-lg border px-3 py-2 text-left transition-colors ${
+                    applyTarget === m.name ? 'border-teal-500/40 bg-teal-500/10' : 'border-subtle bg-surface-input hover:border-content-tertiary'
+                  }`}
+                >
+                  <span className={`h-3.5 w-3.5 shrink-0 rounded-full border ${applyTarget === m.name ? 'border-4 border-teal-400' : 'border-content-tertiary'}`} />
+                  <span className="flex-1 truncate text-sm text-content">{m.label}</span>
+                  <span className="shrink-0 text-[11px] text-content-tertiary">{m.note}</span>
+                </button>
+              ))}
+            </div>
+          )}
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={async () => {
+                setApplyError(null);
+                const ok = await loadFromCard(card.volumePath, applyTarget || undefined);
+                if (ok) setPagesFrom(loadedSourceRef.current === 'model' ? applyTarget : '');
+                setApplyState(ok
+                  ? loadedSourceRef.current === 'model'
+                    ? t('radio-hud:radioHudView.loadedOwnLayout', { model: applyTarget })
+                    : applyTarget
+                      ? t('radio-hud:radioHudView.noOwnLayout', { model: applyTarget })
+                      : t('radio-hud:radioHudView.loadedShared')
+                  : null);
+                if (!ok) setApplyError(t('radio-hud:radioHudView.noConfigOnCard'));
+              }}
+              disabled={busyWithCard}
+              data-tip={t('radio-hud:radioHudView.loadFromRadioTip')}
+              className="flex-1 rounded-lg border border-subtle bg-surface-raised px-3 py-1.5 text-xs text-content hover:bg-surface-inset disabled:opacity-50"
+            >
+              {t('radio-hud:studio.openFromRadio')}
+            </button>
+            <button
+              type="button"
+              onClick={handleEject}
+              disabled={busyWithCard}
+              data-tip={t('radio-hud:radioHudView.ejectTip')}
+              className="rounded-lg border border-subtle bg-surface-raised px-3 py-1.5 text-xs text-content hover:bg-surface-inset disabled:opacity-50"
+            >
+              {t('radio-hud:radioHudView.eject')}
+            </button>
+            {hudInstalled && (
+              <button
+                type="button"
+                onClick={handleRemoveWidget}
+                data-tip={t('radio-hud:radioHudView.removeTip')}
+                className="rounded-lg px-2.5 py-1.5 text-xs text-red-400 hover:bg-red-500/10"
+              >
+                {t('radio-hud:studio.removeWidget')}
+              </button>
+            )}
+          </div>
+        </>
+      ) : (
+        <>
+          <div className="flex flex-col items-center gap-3 rounded-xl border border-dashed border-content-tertiary/50 px-4 py-5 text-center">
+            <span className="h-5 w-5 animate-spin rounded-full border-2 border-content-tertiary/30 border-t-content-secondary" />
+            <span className="text-sm font-medium text-content">{t('radio-hud:studio.lookingTitle')}</span>
+            <ol className="list-decimal space-y-1 pl-5 text-left text-xs leading-relaxed text-content-secondary">
+              <li>{t('radio-hud:studio.lookingStep1')}</li>
+              <li>{t('radio-hud:studio.lookingStep2')}</li>
+              <li>{t('radio-hud:studio.lookingStep3')}</li>
+            </ol>
+            <button
+              type="button"
+              onClick={() => { void rescan(true); }}
+              disabled={busyWithCard}
+              className="rounded-lg border border-subtle bg-surface-raised px-3.5 py-1.5 text-xs text-content hover:bg-surface-inset disabled:opacity-50"
+            >
+              {isScanning ? t('common:scanning') : t('common:rescan')}
+            </button>
+          </div>
+          {modelSelect}
+        </>
+      )}
+      <details className="group border-t border-subtle pt-3">
+        <summary className="flex cursor-pointer list-none items-center gap-2 text-xs text-content-secondary hover:text-content">
+          <ChevronRight className="h-3.5 w-3.5 transition-transform group-open:rotate-90" />
+          {t('radio-hud:studio.advanced')}
+        </summary>
+        <div className="mt-3 space-y-2.5">
+          <label className="flex cursor-pointer items-center gap-2">
+            <input type="checkbox" checked={cfg.debugInput} onChange={(e) => setCfg({ ...cfg, debugInput: e.target.checked })} className="rounded border bg-surface-input" />
+            <span className="text-xs text-content-secondary" data-tip={t('radio-hud:radioHudView.inputDebugTip')}>{t('radio-hud:radioHudView.inputDebug')}</span>
+          </label>
+          <label className="flex cursor-pointer items-center gap-2">
+            <input type="checkbox" checked={cfg.demo} onChange={(e) => setCfg({ ...cfg, demo: e.target.checked })} className="rounded border bg-surface-input" />
+            <span className="text-xs text-content-secondary" data-tip={t('radio-hud:radioHudView.demoTip')}>{t('radio-hud:radioHudView.demo')}</span>
+          </label>
+        </div>
+      </details>
+    </section>
+  );
+
+  const batteryCard = (
+    <section className="space-y-4 rounded-xl border border-subtle bg-surface-input p-5">
+      {cardHead(
+        <BatteryMedium className="h-4 w-4 text-amber-400" />, 'border-amber-500/20 bg-amber-500/10',
+        t('radio-hud:studio.vehicleBattery'), t('radio-hud:studio.batteryHint'),
+        <button
+          type="button"
+          onClick={handleLoadFromVehicle}
+          data-tip={t('radio-hud:radioHudView.loadFromVehicleTip')}
+          className="shrink-0 rounded-lg border border-amber-500/30 bg-amber-500/10 px-2.5 py-1.5 text-xs text-amber-300 hover:bg-amber-500/20"
+        >
+          {t('radio-hud:studio.fromVehicle')}
+        </button>,
+      )}
+      <label className="block space-y-1.5">
+        <span className="text-xs text-content-secondary">{t('radio-hud:radioHudView.vehicleName')}</span>
+        <input
+          type="text"
+          value={cfg.name}
+          onChange={(e) => setCfg({ ...cfg, name: e.target.value })}
+          className="w-full rounded-lg border border-subtle bg-surface-input px-2.5 py-2 text-sm text-content focus:border-blue-500 focus:outline-none"
+        />
+      </label>
+      <div className="grid grid-cols-2 gap-3">
+        {unitField(t('radio-hud:studio.cells'), cfg.cells, 1, 'S', (v) => setCfg({ ...cfg, cells: v }),
+          autoCells > 0 ? t('radio-hud:studio.autoCells', { cells: autoCells, volts: liveVolt.toFixed(1) }) : t('radio-hud:studio.autoCellsIdle'))}
+        {unitField(t('radio-hud:studio.capacity'), cfg.capacity, 100, 'mAh', (v) => setCfg({ ...cfg, capacity: v }),
+          t('radio-hud:studio.autoCapacity'))}
+        {unitField(t('radio-hud:studio.lowWarning'), cfg.low_cell, 0.05, t('radio-hud:studio.perCell'), (v) => setCfg({ ...cfg, low_cell: v }))}
+        {unitField(t('radio-hud:studio.critical'), cfg.crit_cell, 0.05, t('radio-hud:studio.perCell'), (v) => setCfg({ ...cfg, crit_cell: v }))}
+      </div>
+    </section>
+  );
+
+  const previewChips = (
+    <div className="flex flex-wrap items-center gap-2">
+      <span className="text-xs text-content-tertiary" data-tip={t('radio-hud:radioHudView.previewTip')}>{t('radio-hud:studio.previewWith')}</span>
+      {([['sample', t('radio-hud:radioHudView.sampleFlight')], ['live', t('radio-hud:radioHudView.liveVehicle')]] as const).map(([m, label]) => (
+        <button
+          key={m}
+          type="button"
+          disabled={m === 'live' && !connectionState.isConnected}
+          data-tip={m === 'live' && !connectionState.isConnected ? t('radio-hud:radioHudView.liveVehicleConnectFirst') : undefined}
+          onClick={() => setPreviewMode(m)}
+          className={`rounded-full border px-3 py-1 text-xs transition-colors disabled:opacity-40 ${
+            previewMode === m ? 'border-teal-500/40 bg-teal-500/15 text-teal-300' : 'border-subtle text-content-secondary hover:text-content'
+          }`}
+        >
+          {label}
+        </button>
+      ))}
+      <button
+        type="button"
+        onClick={toggleSnapping}
+        aria-pressed={snapping}
+        data-tip={t('radio-hud:studio.snapTip')}
+        className={`ml-auto flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs transition-colors ${
+          snapping ? 'border-teal-500/40 bg-teal-500/15 text-teal-300' : 'border-subtle text-content-secondary hover:text-content'
+        }`}
+      >
+        <Magnet className="h-3.5 w-3.5" />
+        {t('radio-hud:studio.snap')}
+      </button>
+      <div role="group" aria-label={t('radio-hud:radioHudView.theme')} className="flex items-center gap-2">
+        <span className="text-xs text-content-tertiary">{t('radio-hud:radioHudView.theme')}</span>
+        <div className="flex gap-0.5 rounded-lg border border-subtle bg-surface-input p-0.5">
+          {(['dark', 'light'] as const).map((th) => (
+            <button
+              key={th}
+              type="button"
+              onClick={() => setCfg({ ...cfg, theme: th })}
+              className={`rounded-md px-3 py-0.5 text-xs transition-colors ${cfg.theme === th ? 'bg-surface-raised text-content' : 'text-content-secondary hover:text-content'}`}
+            >
+              {th === 'dark' ? t('radio-hud:radioHudView.dark') : t('radio-hud:radioHudView.light')}
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+
+  const radioFrame = (children: React.ReactNode) => (
+    <div className="rounded-2xl border border-subtle bg-[#111318] p-4 shadow-lg">{children}</div>
+  );
+
+  const fieldMapsCard = (
+    <section data-tour="hud-maps" className="basis-full space-y-4 rounded-xl border border-subtle bg-surface-input p-5">
+      {cardHead(
+        <MapIcon className="h-4 w-4 text-emerald-400" />, 'border-emerald-500/20 bg-emerald-500/10',
+        t('radio-hud:radioHudView.fieldMaps'), t('radio-hud:studio.fieldMapsHint'),
+        <div className="flex shrink-0 flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={() => { if (telemetry.gps.lat && telemetry.gps.lon) setMapCenter({ lat: telemetry.gps.lat, lon: telemetry.gps.lon }); }}
+            disabled={!telemetry.gps.lat}
+            data-tip={t('radio-hud:radioHudView.useVehiclePositionTip')}
+            className="rounded-lg border border-subtle bg-surface-raised px-3 py-1.5 text-xs text-content hover:bg-surface-inset disabled:opacity-50"
+          >
+            {t('radio-hud:radioHudView.useVehiclePosition')}
+          </button>
+          <button
+            type="button"
+            onClick={handleGenerateMaps}
+            disabled={mapCenter.lat === 0}
+            className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-1.5 text-xs text-emerald-300 hover:bg-emerald-500/20 disabled:opacity-50"
+          >
+            {t('radio-hud:studio.generateMaps')}
+          </button>
+        </div>,
+      )}
+      <div className="relative overflow-hidden rounded-lg border border-subtle" style={{ height: 'min(60vh, 560px)', minHeight: 320 }}>
+        <MapContainer
+          center={[mapCenter.lat || 45, mapCenter.lon || 15]}
+          zoom={mapCenter.lat ? 13 : 4}
+          zoomSnap={0}
+          zoomControl={false}
+          style={{ height: '100%', width: '100%' }}
+          attributionControl={false}
+        >
+          <SmoothWheelZoom />
+          <MapSearchControl />
+          <FollowContainerSize />
+          <TileLayer url="tile-cache://satellite/{z}/{x}/{y}.png" />
+          <FieldClickHandler onPick={(lat, lon) => setMapCenter({ lat, lon })} />
+          <FieldRecenter lat={mapCenter.lat} lon={mapCenter.lon} />
+          {mapCenter.lat !== 0 && (
+            <>
+              <CircleMarker center={[mapCenter.lat, mapCenter.lon]} radius={6}
+                pathOptions={{ color: '#ffffff', weight: 2, fillColor: '#2dd4bf', fillOpacity: 1 }} />
+              {FIELD_MAP_SPANS.map((s) => (
+                <Circle key={s} center={[mapCenter.lat, mapCenter.lon]} radius={s}
+                  pathOptions={{ color: '#2dd4bf', weight: 1, fillOpacity: 0.03 }} />
+              ))}
+            </>
+          )}
+        </MapContainer>
+        <div className="pointer-events-none absolute bottom-3 right-3 z-[400] flex gap-1.5">
+          {FIELD_MAP_SPANS.map((s) => (
+            <span key={s} className="rounded-md bg-black/70 px-2 py-0.5 text-[11px] text-white">
+              {s >= 1000 ? `${s / 1000} km` : `${s} m`}
+            </span>
+          ))}
+        </div>
+      </div>
+      {mapGenState && <p className="text-[11px] text-content-secondary">{mapGenState}</p>}
+    </section>
+  );
+
+  const guideScale = 360 / SCREEN_W;
+
   return (
     <div className="flex flex-col h-full bg-surface-base">
-      <div className="px-6 py-4 border-b border-subtle bg-surface-input">
+      <div className="border-b border-subtle bg-surface-input px-6 pt-4">
         <div className="flex items-center gap-3">
           <svg className="w-6 h-6 text-teal-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <rect x="4" y="7" width="16" height="11" rx="2" strokeWidth={1.5} />
@@ -2156,532 +2804,210 @@ export function RadioHudView() {
           <h1 className="text-xl font-semibold text-content">{t('radio-hud:radioHudView.title')}</h1>
           <span className="text-xs text-content-secondary">{t('radio-hud:radioHudView.subtitle')}</span>
         </div>
-      </div>
-
-      <div className="flex-1 overflow-auto">
-        <div className="max-w-6xl mx-auto p-4 flex flex-col lg:flex-row gap-4 items-center lg:items-start">
-          {/* left column: preview + field maps below it */}
-          <div className="space-y-2 w-full lg:w-auto max-w-[512px]">
-            <div className="flex items-center gap-2 flex-wrap">
-              <span className="text-xs text-content-secondary" data-tip={t('radio-hud:radioHudView.previewTip')}>{t('radio-hud:radioHudView.preview')}</span>
-              <select
-                value={previewMode}
-                onChange={(e) => setPreviewMode(e.target.value as PreviewMode)}
-                className="px-2 py-1 text-xs bg-surface-input border border-subtle rounded text-content"
-              >
-                <option value="sample">{t('radio-hud:radioHudView.sampleFlight')}</option>
-                <option value="live" disabled={!connectionState.isConnected}>
-                  {connectionState.isConnected ? t('radio-hud:radioHudView.liveVehicle') : t('radio-hud:radioHudView.liveVehicleConnectFirst')}
-                </option>
-                <option value="no-link">{t('radio-hud:radioHudView.stateNoLink')}</option>
-                <option value="no-mavlink">{t('radio-hud:radioHudView.stateNoMavlink')}</option>
-                <option value="streams-off">{t('radio-hud:radioHudView.stateStreamsOff')}</option>
-              </select>
-              <select
-                value={`${screen.w}x${screen.h}`}
-                onChange={(e) => {
-                  const m = SCREEN_MODELS.find((sm) => `${sm.w}x${sm.h}` === e.target.value);
-                  if (m) changeScreen(m);
-                }}
-                data-tour="hud-model"
-                data-tip={t('radio-hud:radioHudView.radioModelTip')}
-                className="px-2 py-1 text-xs bg-surface-input border border-subtle rounded text-content"
-              >
-                {SCREEN_MODELS.map((m) => (
-                  <option key={m.variant} value={`${m.w}x${m.h}`}>{m.label}</option>
-                ))}
-              </select>
-              {detectedModel && `${detectedModel.w}x${detectedModel.h}` !== `${screen.w}x${screen.h}` && (
-                <button
-                  onClick={() => changeScreen(detectedModel)}
-                  data-tip={t('radio-hud:radioHudView.detectedSwitchTip')}
-                  className="px-2 py-1 text-xs rounded border bg-amber-500/10 text-amber-400 border-amber-500/40 hover:bg-amber-500/20 transition-colors"
-                >
-                  {t('radio-hud:radioHudView.detectedSwitch', { radio: detectedCard?.radioLabel ?? t('radio-hud:radioHudView.radioFallback') })}
-                </button>
-              )}
-              {isBw && (
-                <button
-                  onClick={() => setGuideOpen(true)}
-                  data-tip={t('radio-hud:radioHudView.guideTip')}
-                  className="flex items-center gap-1.5 px-3 py-1 text-xs rounded border bg-surface-input text-content-secondary border-subtle hover:text-content transition-colors"
-                >
-                  <BookOpen className="w-3.5 h-3.5 text-teal-400" />
-                  {t('radio-hud:radioHudView.guide')}
-                </button>
-              )}
-              {!isBw && (
-                <>
-                  <select
-                    value={layoutName}
-                    onChange={(e) => {
-                      const saved = layouts.find((l) => l.name === e.target.value);
-                      if (!saved) return;
-                      setPages(saved.pages.map((p) => p.map((t) => fitTile(t, saved.screen, screen))));
-                      setActivePage(0);
-                      setLayoutName(saved.name);
-                      setPagesFrom(t('radio-hud:radioHudView.pagesFromLayout', { name: saved.name }));
-                    }}
-                    data-tip={t('radio-hud:radioHudView.layoutsTip')}
-                    className="px-2 py-1 text-xs bg-surface-input border border-subtle rounded text-content-secondary"
-                  >
-                    {layouts.length === 0 && <option value="">{t('radio-hud:radioHudView.layoutPlaceholder')}</option>}
-                    {layouts.map((l) => (
-                      <option key={l.name} value={l.name}>{t('radio-hud:radioHudView.layoutOption', { name: l.name, count: l.pages.length })}</option>
-                    ))}
-                  </select>
-                  <input
-                    value={nameDraft}
-                    onChange={(e) => setNameDraft(e.target.value)}
-                    onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur(); }}
-                    onBlur={() => commitRename()}
-                    placeholder={t('radio-hud:radioHudView.layoutNamePlaceholder')}
-                    data-tip={t('radio-hud:radioHudView.renameTip')}
-                    className="w-32 px-2 py-1 text-xs bg-surface-input border border-subtle rounded text-content placeholder:text-content-tertiary"
-                  />
-                  <button
-                    onClick={() => {
-                      const name = uniqueLayoutName(layouts, t('radio-hud:radioHudView.newLayoutName'));
-                      setLayoutName(name);
-                      setNameDraft(name);
-                      setPages([gridLayout(screen)]);
-                      setActivePage(0);
-                      setPagesFrom(t('radio-hud:radioHudView.pagesFromLayout', { name }));
-                    }}
-                    data-tip={t('radio-hud:radioHudView.newLayoutTip')}
-                    className="px-3 py-1 text-xs rounded border bg-surface-input text-content-secondary border-subtle hover:text-content transition-colors"
-                  >
-                    {t('common:new')}
-                  </button>
-                  {layouts.length > 1 && layouts.some((l) => l.name === layoutName) && (
-                    <button
-                      onClick={() => {
-                        const next = removeLayout(layouts, layoutName);
-                        persistLayouts(next);
-                        setLayouts(next);
-                        const fallback = next[0]!;
-                        setLayoutName(fallback.name);
-                        setNameDraft(fallback.name);
-                        setPages(fallback.pages.map((p) => p.map((t) => fitTile(t, fallback.screen, screen))));
-                        setActivePage(0);
-                      }}
-                      data-tip={t('radio-hud:radioHudView.deleteTip', { name: layoutName })}
-                      className="px-2.5 py-1 text-xs rounded border border-subtle text-red-400 hover:bg-red-500/10 transition-colors"
-                    >
-                      {t('radio-hud:radioHudView.delete')}
-                    </button>
-                  )}
-                </>
-              )}
-              <button
-                onClick={() => setEditing(!editing)}
-                data-tour="hud-edit"
-                className={`px-3 py-1 text-xs rounded border transition-colors ${editing
-                  ? 'bg-teal-500/20 text-teal-300 border-teal-500/40'
-                  : 'bg-surface-input text-content-secondary border-subtle hover:text-content'}`}
-              >
-                {editing ? t('radio-hud:radioHudView.doneEditing') : isBw ? t('radio-hud:radioHudView.editSlots') : t('radio-hud:radioHudView.editLayout')}
-              </button>
-              {editing && isBw && (
-                <button
-                  onClick={() => setBw(DEFAULT_BW_LAYOUT)}
-                  disabled={JSON.stringify(bw) === JSON.stringify(DEFAULT_BW_LAYOUT)}
-                  data-tip={t('radio-hud:radioHudView.resetTip')}
-                  className="px-3 py-1 text-xs rounded border bg-surface-input text-content-secondary border-subtle hover:text-content disabled:opacity-40 disabled:hover:text-content-secondary transition-colors"
-                >
-                  {t('radio-hud:radioHudView.resetToDefault')}
-                </button>
-              )}
-              {editing && !isBw && (
-                <select
-                  value=""
-                  onChange={(e) => {
-                    if (e.target.value === '__grid') {
-                      setTiles(gridLayout(screen));
-                      return;
-                    }
-                    const preset = LAYOUT_PRESETS[e.target.value];
-                    if (preset) setTiles(preset.map((t) => fitTile(t, REF_SCREEN, screen)));
-                  }}
-                  className="px-2 py-1 text-xs bg-surface-input border border-subtle rounded text-content-secondary"
-                >
-                  <option value="" disabled>{t('radio-hud:radioHudView.presetPlaceholder')}</option>
-                  <option value="__grid">{t('radio-hud:radioHudView.autoGrid')}</option>
-                  {Object.keys(LAYOUT_PRESETS).map((name) => (
-                    <option key={name} value={name}>{t(PRESET_LABEL_KEYS[name] ?? name)}</option>
-                  ))}
-                </select>
-              )}
-
-              {/* page tabs: the radio swipes between these (color only -
-                  the B&W script has its own 2 fixed pages) */}
-              {!isBw && (
-              <div className="flex items-center gap-1 ml-auto">
-                {pages.map((_, i) => (
-                  <button
-                    key={i}
-                    onClick={() => setActivePage(i)}
-                    data-tip={t('radio-hud:radioHudView.pageTip', { n: i + 1 })}
-                    className={`w-7 h-7 text-xs rounded border transition-colors ${i === activePage
-                      ? 'bg-teal-500/20 text-teal-300 border-teal-500/40'
-                      : 'bg-surface-input text-content-secondary border-subtle hover:text-content'}`}
-                  >
-                    {i + 1}
-                  </button>
-                ))}
-                {pages.length < MAX_PAGES && (
-                  <div className="relative">
-                    <button
-                      onClick={() => setAddPageOpen(!addPageOpen)}
-                      data-tip={t('radio-hud:radioHudView.addPageTip')}
-                      className="w-7 h-7 text-xs rounded border border-subtle bg-surface-input text-content-secondary hover:text-content"
-                    >
-                      +
-                    </button>
-                    {addPageOpen && (
-                      <div className="absolute right-0 top-8 z-20 w-44 bg-surface-raised border border-subtle rounded-lg shadow-lg p-1">
-                        <p className="px-2 py-1 text-[10px] uppercase text-content-tertiary">{t('radio-hud:radioHudView.newPageFrom')}</p>
-                        <button
-                          onClick={() => addPage(tiles.map((t) => ({ ...t })))}
-                          className="w-full text-left px-2 py-1.5 text-xs text-content hover:bg-surface-input rounded"
-                        >
-                          {t('radio-hud:radioHudView.duplicatePage')}
-                        </button>
-                        <button
-                          onClick={() => addPage([])}
-                          className="w-full text-left px-2 py-1.5 text-xs text-content hover:bg-surface-input rounded"
-                        >
-                          {t('radio-hud:radioHudView.emptyPage')}
-                        </button>
-                        <button
-                          onClick={() => addPage(gridLayout(screen))}
-                          className="w-full text-left px-2 py-1.5 text-xs text-content hover:bg-surface-input rounded"
-                        >
-                          {t('radio-hud:radioHudView.autoGrid')}
-                        </button>
-                        <div className="my-1 border-t border-subtle" />
-                        {Object.entries(LAYOUT_PRESETS).map(([name, preset]) => (
-                          <button
-                            key={name}
-                            onClick={() => addPage(preset.map((t) => fitTile(t, REF_SCREEN, screen)))}
-                            className="w-full text-left px-2 py-1.5 text-xs text-content-secondary hover:text-content hover:bg-surface-input rounded"
-                          >
-                            {t(PRESET_LABEL_KEYS[name] ?? name)}
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                )}
-                {pages.length > 1 && (
-                  <button
-                    onClick={() => {
-                      const next = pages.filter((_, i) => i !== activePage);
-                      setPages(next);
-                      setActivePage(Math.max(0, activePage - 1));
-                    }}
-                    data-tip={t('radio-hud:radioHudView.removePageTip')}
-                    className="w-7 h-7 text-xs rounded border border-subtle bg-surface-input text-red-400 hover:text-red-300"
-                  >
-                    ×
-                  </button>
-                )}
-              </div>
-              )}
-            </div>
-
-            {isBw ? (
-              <BwPreview mode={previewMode} data={previewData} cfg={previewCfg} screenW={screen.w}
-                editing={editing} layout={bw} onLayout={setBw} />
-            ) : (
-              /* scales the native canvas down to the available width */
-              <div ref={previewBoxRef} className="rounded-lg overflow-hidden border border-subtle shadow-lg"
-                style={{ width: '100%', maxWidth: SCREEN_W, height: SCREEN_H * previewScale }}>
-                <div style={{ transform: `scale(${previewScale})`, transformOrigin: 'top left', width: SCREEN_W, height: SCREEN_H }}>
-                  <HudPreview mode={previewMode} data={previewData} cfg={previewCfg} tiles={tiles} editing={editing} onTilesChange={setTiles} />
-                </div>
-              </div>
-            )}
-
-            {editing && !isBw && (
-              <div className="flex items-center gap-1.5 flex-wrap" style={{ maxWidth: SCREEN_W }}>
-                <span className="text-[11px] text-content-tertiary">{t('radio-hud:radioHudView.addTile')}</span>
-                {unplacedTiles.map((id) => (
-                  <button
-                    key={id}
-                    onClick={() => setTiles([...tiles, {
-                      id, x: 6, y: TILE_REGION_TOP + 20,
-                      w: Math.max(TILE_META[id]!.minW, 120), h: Math.max(TILE_META[id]!.minH, 72),
-                      variant: TILE_META[id]!.variants?.[0] ?? 'default',
-                    }])}
-                    className="px-2 py-0.5 text-[11px] text-content-secondary hover:text-content bg-surface-input hover:bg-surface-raised border border-subtle rounded"
-                  >
-                    + {t(TILE_META[id]!.labelKey)}
-                  </button>
-                ))}
-                <span className="text-[10px] text-content-tertiary w-full">
-                  {t('radio-hud:radioHudView.dragHint')}
-                </span>
-              </div>
-            )}
-
-            {/* field maps live under the preview - same width, no dead
-                space. B&W radios have no map tile, so no card. */}
-            {!isBw && (
-            <div data-tour="hud-maps" className="bg-surface-raised border border-subtle rounded-xl p-3 space-y-2" style={{ maxWidth: SCREEN_W }}>
-              <div className="flex items-center justify-between gap-2 flex-wrap">
-                <h3 className="text-sm font-medium text-content"
-                  data-tip={t('radio-hud:radioHudView.fieldMapsTip')}>
-                  {t('radio-hud:radioHudView.fieldMaps')}
-                </h3>
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => {
-                      if (telemetry.gps.lat && telemetry.gps.lon) {
-                        setMapCenter({ lat: telemetry.gps.lat, lon: telemetry.gps.lon });
-                      }
-                    }}
-                    disabled={!telemetry.gps.lat}
-                    data-tip={t('radio-hud:radioHudView.useVehiclePositionTip')}
-                    className="px-2.5 py-1 text-xs whitespace-nowrap text-content-secondary hover:text-content bg-surface-input hover:bg-surface-raised border border-subtle rounded transition-colors disabled:opacity-50"
-                  >
-                    {t('radio-hud:radioHudView.useVehiclePosition')}
-                  </button>
-                  <button
-                    onClick={handleGenerateMaps}
-                    disabled={mapCenter.lat === 0}
-                    className="px-2.5 py-1 text-xs whitespace-nowrap bg-teal-600/20 text-teal-300 hover:bg-teal-600/30 border border-teal-500/40 rounded transition-colors disabled:opacity-50"
-                  >
-                    {t('radio-hud:radioHudView.generate')}
-                  </button>
-                </div>
-              </div>
-              <div className="rounded-lg overflow-hidden border border-subtle" style={{ height: 190 }}>
-                <MapContainer
-                  center={[mapCenter.lat || 45, mapCenter.lon || 15]}
-                  zoom={mapCenter.lat ? 13 : 4}
-                  zoomSnap={0}
-                  zoomControl={false}
-                  style={{ height: '100%', width: '100%' }}
-                  attributionControl={false}
-                >
-                  <SmoothWheelZoom />
-                  <MapSearchControl />
-                  <TileLayer url="tile-cache://satellite/{z}/{x}/{y}.png" />
-                  <FieldClickHandler onPick={(lat, lon) => setMapCenter({ lat, lon })} />
-                  <FieldRecenter lat={mapCenter.lat} lon={mapCenter.lon} />
-                  {mapCenter.lat !== 0 && (
-                    <>
-                      <CircleMarker center={[mapCenter.lat, mapCenter.lon]} radius={6}
-                        pathOptions={{ color: '#ffffff', weight: 2, fillColor: '#2dd4bf', fillOpacity: 1 }} />
-                      {FIELD_MAP_SPANS.map((s) => (
-                        <Circle key={s} center={[mapCenter.lat, mapCenter.lon]} radius={s}
-                          pathOptions={{ color: '#2dd4bf', weight: 1, fillOpacity: 0.03 }} />
-                      ))}
-                    </>
-                  )}
-                </MapContainer>
-              </div>
-              {mapGenState && <p className="text-[11px] text-content-secondary">{mapGenState}</p>}
-            </div>
-            )}
-          </div>
-
-          {/* right column: dense config */}
-          <div className="w-full lg:flex-1 lg:min-w-[300px] max-w-[512px] lg:max-w-md">
-            <div data-tour="hud-config" className="bg-surface-raised border border-subtle rounded-xl p-3 space-y-2.5">
-              <div className="flex items-center justify-between">
-                <h3 className="text-sm font-medium text-content"
-                  data-tip={t('radio-hud:radioHudView.widgetConfigTip')}>
-                  {t('radio-hud:radioHudView.widgetConfig')}
-                </h3>
-                <button
-                  onClick={handleLoadFromVehicle}
-                  data-tip={t('radio-hud:radioHudView.loadFromVehicleTip')}
-                  className="px-2 py-1 text-[11px] text-content-secondary hover:text-content bg-surface-input hover:bg-surface-raised border border-subtle rounded transition-colors"
-                >
-                  {t('radio-hud:radioHudView.loadFromVehicle')}
-                </button>
-              </div>
-              <div className="grid grid-cols-2 gap-2">
-                <label className="block">
-                  <span className="text-xs text-content-secondary">{t('radio-hud:radioHudView.theme')}</span>
-                  <div className="mt-1 flex items-center bg-surface-input border border-subtle rounded p-0.5">
-                    {(['dark', 'light'] as const).map((th) => (
-                      <button
-                        key={th}
-                        onClick={() => setCfg({ ...cfg, theme: th })}
-                        className={`flex-1 px-2 py-1 text-xs rounded transition-colors ${cfg.theme === th ? 'bg-surface-raised text-content' : 'text-content-secondary hover:text-content'}`}
-                      >
-                        {th === 'dark' ? t('radio-hud:radioHudView.dark') : t('radio-hud:radioHudView.light')}
-                      </button>
-                    ))}
-                  </div>
-                </label>
-                <label className="block">
-                  <span className="text-xs text-content-secondary">{t('radio-hud:radioHudView.vehicleName')}</span>
-                  <input
-                    type="text"
-                    value={cfg.name}
-                    onChange={(e) => setCfg({ ...cfg, name: e.target.value })}
-                    className="mt-1 w-full px-2 py-1.5 text-sm bg-surface-input border border-subtle rounded text-content"
-                  />
-                </label>
-                {numField(t('radio-hud:radioHudView.cells'), cfg.cells, 1, (v) => setCfg({ ...cfg, cells: v }), t('radio-hud:radioHudView.cellsHint'), true)}
-                {numField(t('radio-hud:radioHudView.capacity'), cfg.capacity, 100, (v) => setCfg({ ...cfg, capacity: v }), t('radio-hud:radioHudView.capacityHint'), true)}
-                {numField(t('radio-hud:radioHudView.lowCell'), cfg.low_cell, 0.05, (v) => setCfg({ ...cfg, low_cell: v }), t('radio-hud:radioHudView.lowCellHint'))}
-                {numField(t('radio-hud:radioHudView.critCell'), cfg.crit_cell, 0.05, (v) => setCfg({ ...cfg, crit_cell: v }), t('radio-hud:radioHudView.critCellHint'))}
-              </div>
-              {pages.length > 1 && (
-                <label className="flex items-center gap-2 pt-1">
-                  <span className="text-xs text-content-secondary"
-                    data-tip={t('radio-hud:radioHudView.turnPagesTip')}>
-                    {t('radio-hud:radioHudView.turnPagesEvery')}
-                  </span>
-                  <input
-                    type="number"
-                    min={0}
-                    max={120}
-                    value={cfg.pageSecs}
-                    onChange={(e) => setCfg({ ...cfg, pageSecs: Math.max(0, Math.min(120, Number(e.target.value) || 0)) })}
-                    className="w-16 px-2 py-1 text-xs bg-surface-input border border-subtle rounded text-content"
-                  />
-                  <span className="text-xs text-content-tertiary">
-                    {cfg.pageSecs > 0 ? t('radio-hud:radioHudView.seconds') : t('radio-hud:radioHudView.secondsManual')}
-                  </span>
-                </label>
-              )}
-              <label className="flex items-center gap-2 pt-1 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={cfg.debugInput}
-                  onChange={(e) => setCfg({ ...cfg, debugInput: e.target.checked })}
-                  className="rounded border bg-surface-input"
-                />
-                <span className="text-xs text-content-secondary"
-                  data-tip={t('radio-hud:radioHudView.inputDebugTip')}>
-                  {t('radio-hud:radioHudView.inputDebug')}
-                </span>
-              </label>
-              <label className="flex items-center gap-2 pt-1 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={cfg.demo}
-                  onChange={(e) => setCfg({ ...cfg, demo: e.target.checked })}
-                  className="rounded border bg-surface-input"
-                />
-                <span className="text-xs text-content-secondary"
-                  data-tip={t('radio-hud:radioHudView.demoTip')}>
-                  {t('radio-hud:radioHudView.demo')}
-                </span>
-              </label>
-            </div>
-          </div>
+        <div role="tablist" className="mt-3 flex gap-1">
+          {(['editor', 'guide'] as const).map((id) => (
+            <button
+              key={id}
+              type="button"
+              role="tab"
+              aria-selected={tab === id}
+              onClick={() => (id === 'guide' && isBw ? setGuideOpen(true) : setTab(id))}
+              className={`border-b-2 px-3.5 py-2 text-sm transition-colors ${
+                tab === id ? 'border-teal-400 text-content' : 'border-transparent text-content-secondary hover:text-content'
+              }`}
+            >
+              {t(`radio-hud:studio.tab.${id}`)}
+            </button>
+          ))}
         </div>
       </div>
 
-      {/* fixed action footer: status left, actions right, always visible */}
-      <div className="shrink-0 border-t border-subtle bg-surface-input px-4 py-2.5 flex items-center gap-3 flex-wrap">
-        <div className="flex-1 min-w-[180px] text-xs">
+      <div className="flex-1 overflow-auto">
+        {tab === 'guide' && !isBw ? (
+          <HudGuide renderState={(state) => (
+            <div style={{ height: SCREEN_H * guideScale }}>
+              <div style={{ transform: `scale(${guideScale})`, transformOrigin: 'top left', width: SCREEN_W, height: SCREEN_H }}>
+                <HudPreview mode={state} data={SAMPLE} cfg={previewCfg} tiles={tiles} editing={false} onTilesChange={() => undefined} kind={vehicleKind} />
+              </div>
+            </div>
+          )} />
+        ) : (
+        <div className="mx-auto flex max-w-[1800px] flex-wrap items-start gap-5 p-6">
+          <section className="min-w-0 space-y-4 rounded-xl border border-subtle bg-surface-input p-5" style={{ flex: '999 1 640px' }}>
+            {cardHead(
+              <MonitorSmartphone className="h-4 w-4 text-teal-400" />, 'border-teal-500/20 bg-teal-500/10',
+              isBw ? t('radio-hud:studio.bwScreen') : t('radio-hud:studio.screens'),
+              isBw ? t('radio-hud:studio.bwScreenHint') : t('radio-hud:studio.screensHint'),
+              <div className="flex shrink-0 flex-wrap items-center gap-2">
+                {!isBw && (connectedKind ? (
+                  <span className="flex items-center gap-1.5 rounded-full border border-subtle bg-surface-input px-2.5 py-1 text-xs text-content-secondary">
+                    {t(`radio-hud:studio.kind.${connectedKind}`)}
+                    <span className="text-content-tertiary">{t('radio-hud:studio.fromVehicleChip')}</span>
+                  </span>
+                ) : (
+                  <label className="flex items-center gap-1.5 rounded-full border border-subtle bg-surface-input py-0.5 pl-2.5 pr-1 text-xs text-content-tertiary"
+                    data-tip={t('radio-hud:studio.pickVehicleTip')}>
+                    {t('radio-hud:studio.vehicle')}
+                    <select
+                      value={pickedKind ?? ''}
+                      onChange={(e) => setPickedKind((e.target.value || null) as HudVehicleKind | null)}
+                      className="rounded-full bg-transparent py-0.5 pr-1 text-xs text-content focus:outline-none"
+                    >
+                      <option value="">{t('radio-hud:studio.pickVehicle')}</option>
+                      {(['copter', 'plane', 'rover', 'boat', 'sub'] as const).map((k) => (
+                        <option key={k} value={k}>{t(`radio-hud:studio.kind.${k}`)}</option>
+                      ))}
+                    </select>
+                  </label>
+                ))}
+                {isBw ? (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => setEditing(!editing)}
+                      data-tour="hud-edit"
+                      className={`rounded-lg border px-3 py-1.5 text-xs transition-colors ${editing
+                        ? 'border-teal-500/40 bg-teal-500/20 text-teal-300'
+                        : 'border-subtle bg-surface-input text-content-secondary hover:text-content'}`}
+                    >
+                      {editing ? t('radio-hud:radioHudView.doneEditing') : t('radio-hud:radioHudView.editSlots')}
+                    </button>
+                    {editing && (
+                      <button
+                        type="button"
+                        onClick={() => setBw(DEFAULT_BW_LAYOUT)}
+                        disabled={JSON.stringify(bw) === JSON.stringify(DEFAULT_BW_LAYOUT)}
+                        data-tip={t('radio-hud:radioHudView.resetTip')}
+                        className="rounded-lg border border-subtle bg-surface-input px-3 py-1.5 text-xs text-content-secondary hover:text-content disabled:opacity-40"
+                      >
+                        {t('radio-hud:radioHudView.resetToDefault')}
+                      </button>
+                    )}
+                  </>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setGallery('replace')}
+                    data-tour="hud-edit"
+                    className="flex items-center gap-1.5 rounded-lg border border-teal-500/30 bg-teal-500/10 px-3 py-1.5 text-xs text-teal-300 hover:bg-teal-500/20"
+                  >
+                    <LayoutTemplate className="h-3.5 w-3.5" />
+                    {t('radio-hud:studio.templates')}
+                  </button>
+                )}
+              </div>,
+            )}
+
+            {isBw ? (
+              <>
+                {radioFrame(
+                  <BwPreview mode={previewMode} data={previewData} cfg={previewCfg} screenW={screen.w}
+                    editing={editing} layout={bw} onLayout={setBw} />,
+                )}
+                {previewChips}
+              </>
+            ) : (
+              <>
+                <ScreenStrip
+                  renderScreen={(tilesOf) => <ScaledScreen tiles={tilesOf} data={SAMPLE} cfg={previewCfg} kind={vehicleKind} />}
+                  pages={pages}
+                  active={activePage}
+                  screen={screen}
+                  maxPages={MAX_PAGES}
+                  onPick={setActivePage}
+                  onRemove={(i) => {
+                    setPages((prev) => prev.filter((_, j) => j !== i));
+                    setActivePage((a) => Math.max(0, a >= i ? a - 1 : a));
+                  }}
+                  onAddEmpty={() => addPage([])}
+                  onDuplicate={() => addPage(tiles.map((tile) => ({ ...tile })))}
+                  onAddFromTemplate={() => setGallery('add')}
+                />
+
+                {pages.some((p) => p.some((tile) => tile.id === 'echo')) && <SonarSetupCard connected={connectionState.isConnected} />}
+
+                {pages.length > 1 && (
+                  <div className="flex flex-wrap items-center gap-2.5 rounded-lg border border-blue-500/20 bg-blue-500/5 px-3 py-2.5 text-xs text-content-secondary">
+                    <RefreshCw className="h-3.5 w-3.5 shrink-0 text-blue-400" />
+                    <span className="text-content">{t('radio-hud:studio.switching')}</span>
+                    <span data-tip={t('radio-hud:radioHudView.turnPagesTip')}>{t('radio-hud:studio.switchingWhy')}</span>
+                    <select
+                      value={cfg.pageSecs}
+                      onChange={(e) => setCfg({ ...cfg, pageSecs: Number(e.target.value) })}
+                      aria-label={t('radio-hud:studio.switching')}
+                      className="rounded-md border border-subtle bg-surface-input px-2 py-1 text-xs text-content"
+                    >
+                      {[5, 8, 15, 30].map((sec) => <option key={sec} value={sec}>{t('radio-hud:studio.everySeconds', { count: sec })}</option>)}
+                      <option value={0}>{t('radio-hud:studio.onlySwipe')}</option>
+                    </select>
+                  </div>
+                )}
+
+                <div className="flex flex-wrap items-start gap-4">
+                  <div className="min-w-0 space-y-3" style={{ flex: '999 1 460px' }}>
+                    {radioFrame(
+                      /* scales the native canvas to the column width */
+                      <div ref={previewBoxRef} className="overflow-hidden rounded"
+                        style={{ width: '100%', height: SCREEN_H * previewScale }}>
+                        <div style={{ transform: `scale(${previewScale})`, transformOrigin: 'top left', width: SCREEN_W, height: SCREEN_H }}>
+                          <HudPreview mode={previewMode} data={previewData} cfg={previewCfg} tiles={tiles} editing kind={vehicleKind} snapping={snapping}
+                            onTilesChange={setTiles} selected={selectedTile} onSelect={setSelectedTile} />
+                        </div>
+                      </div>,
+                    )}
+                    {previewChips}
+                  </div>
+                  <div className="min-w-0" style={{ flex: '1 1 260px' }}>
+                    <TileInspector
+                      tile={selected}
+                      kind={vehicleKind}
+                      unplaced={unplacedTiles}
+                      onVariant={(variant) => setTiles(tiles.map((tile, i) => (i === selectedTile ? { ...tile, variant } : tile)))}
+                      onRemove={() => {
+                        setTiles(tiles.filter((_, i) => i !== selectedTile));
+                        setSelectedTile(null);
+                      }}
+                      onAdd={addTile}
+                    />
+                  </div>
+                </div>
+              </>
+            )}
+          </section>
+
+          <aside className="flex min-w-0 max-w-[420px] flex-col gap-4" style={{ flex: '1 1 340px' }}>
+            {radioCard}
+            {batteryCard}
+          </aside>
+
+          {!isBw && fieldMapsCard}
+        </div>
+        )}
+      </div>
+
+      {/* fixed action footer: status left, the one action right, clear of the cargo dock */}
+      <div className="flex shrink-0 flex-wrap items-center gap-3 border-t border-subtle bg-surface-input py-3 pl-6 pr-48">
+        <div className="min-w-[180px] flex-1 text-xs">
           {applyError ? (
             <span className="text-red-400">{applyError}</span>
           ) : applyState ? (
             <span className="text-content-secondary">{applyState}</span>
           ) : card ? (
             <span className="text-content-secondary">
-              <span className="text-emerald-400">{card.volumeName}</span>
-              {hudInstalled ? t('radio-hud:radioHudView.widgetInstalled') : t('radio-hud:radioHudView.widgetWillInstall')}
-              {!isBw && models.length > 0 && (
-                <span className="text-content-tertiary">
-                  {pagesFrom !== null && pagesFrom !== applyTarget
-                    ? t('radio-hud:radioHudView.pagesCameFrom', { from: pagesFrom || t('radio-hud:radioHudView.sharedLayout') }) + (applyTarget ? t('radio-hud:radioHudView.applyingPutsOn', { model: applyTarget }) : '')
-                    : applyTarget
-                      ? t('radio-hud:radioHudView.onlyModelUses', { model: applyTarget })
-                      : t('radio-hud:radioHudView.everyModelUses')}
-                </span>
-              )}
+              {!isBw && models.length > 0
+                ? pagesFrom !== null && pagesFrom !== applyTarget
+                  ? t('radio-hud:radioHudView.pagesCameFrom', { from: pagesFrom || t('radio-hud:radioHudView.sharedLayout') }) + (applyTarget ? t('radio-hud:radioHudView.applyingPutsOn', { model: applyTarget }) : '')
+                  : applyTarget
+                    ? t('radio-hud:radioHudView.onlyModelUses', { model: applyTarget })
+                    : t('radio-hud:radioHudView.everyModelUses')
+                : t('radio-hud:studio.readyToPut')}
             </span>
           ) : (
-            <span className="flex items-center gap-2 text-content-secondary">
-              <span className="h-3 w-3 shrink-0 animate-spin rounded-full border-2 border-content-tertiary/30 border-t-content-secondary" />
-              {t('radio-hud:radioHudView.lookingForRadioHint')}
-            </span>
+            <span className="text-content-tertiary">{t('radio-hud:studio.connectToPut')}</span>
           )}
         </div>
-        {hudInstalled && (
-          <button
-            onClick={handleRemoveWidget}
-            data-tip={t('radio-hud:radioHudView.removeTip')}
-            className="px-2.5 py-1.5 text-xs whitespace-nowrap text-red-400 hover:text-red-300 hover:bg-red-500/10 rounded transition-colors"
-          >
-            {t('common:remove')}
-          </button>
-        )}
         <button
-          onClick={async () => {
-            if (!card) return;
-            setApplyError(null);
-            const ok = await loadFromCard(card.volumePath, applyTarget || undefined);
-            if (ok) setPagesFrom(loadedSourceRef.current === 'model' ? applyTarget : '');
-            setApplyState(ok
-              ? loadedSourceRef.current === 'model'
-                ? t('radio-hud:radioHudView.loadedOwnLayout', { model: applyTarget })
-                : applyTarget
-                  ? t('radio-hud:radioHudView.noOwnLayout', { model: applyTarget })
-                  : t('radio-hud:radioHudView.loadedShared')
-              : null);
-            if (!ok) setApplyError(t('radio-hud:radioHudView.noConfigOnCard'));
-          }}
-          disabled={!card}
-          data-tip={t('radio-hud:radioHudView.loadFromRadioTip')}
-          className="px-3 py-1.5 text-xs whitespace-nowrap text-content-secondary hover:text-content bg-surface-raised hover:bg-surface-raised border border-subtle rounded-lg transition-colors disabled:opacity-50"
-        >
-          {t('radio-hud:radioHudView.loadFromRadio')}
-        </button>
-        <button
-          onClick={() => { void rescan(true); }}
-          disabled={busyWithCard}
-          className="px-3 py-1.5 text-xs whitespace-nowrap text-content-secondary hover:text-content bg-surface-raised border border-subtle rounded-lg transition-colors disabled:opacity-50"
-        >
-          {isScanning ? t('common:scanning') : t('common:rescan')}
-        </button>
-        <button
-          onClick={handleEject}
-          disabled={!card || busyWithCard}
-          data-tip={t('radio-hud:radioHudView.ejectTip')}
-          className="px-3 py-1.5 text-xs whitespace-nowrap text-content-secondary hover:text-content bg-surface-raised border border-subtle rounded-lg transition-colors disabled:opacity-50"
-        >
-          {t('radio-hud:radioHudView.eject')}
-        </button>
-        {!isBw && models.length > 0 && (
-          <label className="flex items-center gap-2 text-xs text-content-tertiary">
-            {t('radio-hud:radioHudView.layoutFor')}
-            <select
-              value={applyTarget}
-              onChange={(e) => {
-                targetTouched.current = true;
-                setConfirmApply(false);
-                setApplyTarget(e.target.value);
-              }}
-              data-tip={t('radio-hud:radioHudView.layoutForTip')}
-              className="px-2 py-1.5 text-xs bg-surface-input border border-subtle rounded-lg text-content-secondary"
-            >
-              <option value="">{t('radio-hud:radioHudView.everyModelOnRadio')}</option>
-              {/* The widget looks a layout up by model NAME, so two models
-                  sharing one name share one layout: list it once. */}
-              {models
-                .filter((m, i) => models.findIndex((o) => o.name === m.name) === i)
-                .map((m) => (
-                  <option key={m.file} value={m.name}>
-                    {m.name}
-                    {models.some((o) => o.name === m.name && o.current) ? t('radio-hud:radioHudView.onRadioNow') : ''}
-                    {m.hasLayout ? t('radio-hud:radioHudView.hasOwnLayout') : t('radio-hud:radioHudView.sharesLayout')}
-                  </option>
-                ))}
-            </select>
-          </label>
-        )}
-        <button
+          type="button"
           onClick={() => {
             if (applyNeedsConfirm && !confirmApply) {
               setConfirmApply(true);
@@ -2691,16 +3017,40 @@ export function RadioHudView() {
             void handleApply();
           }}
           onBlur={() => setConfirmApply(false)}
-          disabled={applyBusy}
+          disabled={applyBusy || !card}
           data-tour="hud-apply"
           data-tip={t('radio-hud:radioHudView.applyTip')}
-          className={`px-4 py-1.5 text-sm whitespace-nowrap disabled:opacity-60 text-white rounded-lg transition-colors ${
+          className={`whitespace-nowrap rounded-lg px-5 py-2 text-sm font-medium text-white transition-colors disabled:opacity-50 ${
             confirmApply ? 'bg-amber-600 hover:bg-amber-500' : 'bg-blue-600 hover:bg-blue-500'
           }`}
         >
           {confirmApply ? t('radio-hud:radioHudView.overwriteConfirm', { target: applyTarget || t('radio-hud:radioHudView.everyModel') }) : applyLabel}
         </button>
       </div>
+
+      {gallery && (
+        <TemplateGallery
+          renderScreen={(tilesOf, kindOf) => <ScaledScreen tiles={tilesOf} data={SAMPLE} cfg={{ ...previewCfg, name: '' }} kind={kindOf} />}
+          mode={gallery}
+          kind={vehicleKind}
+          connectedKind={connectedKind}
+          screen={screen}
+          saved={layouts}
+          roomForScreens={MAX_PAGES - pages.length}
+          onClose={() => setGallery(null)}
+          onUse={(fitted, how) => applyTemplate(fitted, how, t('radio-hud:studio.templateFallbackName'))}
+          onDeleteSaved={(name) => {
+            const next = removeLayout(layouts, name);
+            persistLayouts(next);
+            setLayouts(next);
+          }}
+          onSaveCurrent={(name) => {
+            const next = upsertLayout(layouts, { name, screen, pages, savedAt: new Date().toISOString() });
+            persistLayouts(next);
+            setLayouts(next);
+          }}
+        />
+      )}
       {guideOpen && <BwGuide onClose={() => setGuideOpen(false)} />}
     </div>
   );

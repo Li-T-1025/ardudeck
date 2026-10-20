@@ -353,7 +353,11 @@ local V = {
   windDirDeg = 0, windMs = 0,
   autoCapacity = 0, maxVolt = 0, frameType = 0,
   wpNum = 0, wpDistM = 0, wpBearingDeg = 0, tWp = 0,
-  odoM = 0, tOdo = -1,
+  odoM = 0, tOdo = -1, maxSpdMs = 0,
+  -- depth once a second for the bottom profile, newest last
+  depthHist = {}, tDepthHist = 0,
+  -- echogram columns from the ArduDeck sonar script (32 levels 0..15 each), newest last
+  echo = {}, echoSeq = -1, echoMask = 0, echoCur = {}, echoStartM = 0, echoLenM = 0, tEcho = 0,
   tAp = 0, tGps = 0, tBatt = 0, tHome = 0, tVel = 0, tAtt = 0, tWind = 0,
   armedAtT = nil, armedAccum = 0,
   msgs = {}, msgHead = 0, msgBuf = '', lastToneT = 0, muted = false,
@@ -476,6 +480,7 @@ decoders[0x5005] = function (d)
   V.vspdMs = dec_2_1(band(d, 0x1FF)) * 0.1
   V.hspdMs = dec_2_1(band(rshift(d, 9), 0x1FF)) * 0.1
   V.yawDeg = band(rshift(d, 17), 0x7FF) * 0.2
+  if V.hspdMs > V.maxSpdMs then V.maxSpdMs = V.hspdMs end
   local t = now()
   -- trip distance: ground speed over time while armed; a gap over 1s is a dropout, not travel
   if V.armed and V.tOdo >= 0 and t - V.tOdo <= 100 then V.odoM = V.odoM + V.hspdMs * (t - V.tOdo) / 100 end
@@ -487,6 +492,13 @@ decoders[0x5006] = function (d)
   V.rollDeg = band(d, 0x7FF) * 0.2 - 180
   V.pitchDeg = band(rshift(d, 11), 0x3FF) * 0.2 - 90
   V.rangeM = dec_3_1(band(rshift(d, 21), 0x7FF)) * 0.01
+  local t = now()
+  if V.rangeM > 0 and t - V.tDepthHist >= 100 then
+    local h = V.depthHist
+    h[#h + 1] = V.rangeM
+    if #h > 240 then table.remove(h, 1) end
+    V.tDepthHist = t
+  end
   V.tAtt = now(); V.lastStreamT = V.tAtt
 end
 
@@ -608,9 +620,33 @@ local function bytesToU32(data, ofs)
     + (data[ofs + 2] or 0) * 65536 + (data[ofs + 3] or 0) * 16777216
 end
 
+-- Echogram from the ArduDeck sonar script (src/main/lua-scripts/ardudeck_sonar.lua):
+-- column = 4 frames at 0x5200 | seq << 2 | segment, 8 nibbles each; range = 0x5240.
+local ECHO_MAX_COLS = 160
+local function decodeEcho(appid, d)
+  if appid == 0x5240 then
+    V.echoStartM = band(d, 0x3FFF) / 10
+    V.echoLenM = band(rshift(d, 14), 0xFFFF) / 10
+    return
+  end
+  local seq, segment = band(rshift(appid, 2), 0x0F), band(appid, 0x03)
+  if seq ~= V.echoSeq then
+    V.echoSeq, V.echoMask, V.echoCur = seq, 0, {}
+  end
+  for k = 0, 7 do V.echoCur[segment * 8 + k + 1] = band(rshift(d, 4 * k), 0x0F) end
+  V.echoMask = V.echoMask + (btest(V.echoMask, 2 ^ segment) and 0 or 2 ^ segment)
+  if V.echoMask == 15 then
+    local col = V.echoCur
+    V.echo[#V.echo + 1] = col
+    if #V.echo > ECHO_MAX_COLS then table.remove(V.echo, 1) end
+    V.echoMask, V.echoCur, V.tEcho = 16, {}, now() -- 16: this seq is done, wait for the next
+  end
+end
+
 local function handlePassthrough(appid, value)
   V.everFrame = true
   V.lastFrameT = now()
+  if appid >= 0x5200 and appid <= 0x5240 then decodeEcho(appid, value) return end
   local dec = decoders[appid]
   if dec then dec(value) end
 end
@@ -799,6 +835,24 @@ local function staleColor(t, liveColor)
   return (now() - t > STALE_AFTER) and T.STALE or liveColor
 end
 
+-- Largest font, from the one the layout picked, that keeps the text inside maxW:
+-- a long value (123.4m, 100%) steps down instead of running into the tile's graphic.
+local FIT_DOWN = { [DBLSIZE] = MIDSIZE, [MIDSIZE] = 0, [0] = SMLSIZE }
+local function fitFont(text, f, maxW)
+  for _ = 1, 3 do
+    local nxt = FIT_DOWN[f]
+    if nxt == nil or nxt == f or lcd.sizeText(text, f) <= maxW then break end
+    f = nxt
+  end
+  return f
+end
+
+-- A value line drawn at the largest font that fits, kept on the same centre line.
+local function valueText(x, vy, maxW, text, vf, color)
+  local f = fitFont(text, vf, maxW)
+  lcd.drawText(x, vy + math.floor((fontH(vf) - fontH(f)) / 2), text, f + color)
+end
+
 local function fmtSpeed(ms)
   if ms >= 10 then return string.format('%d', math.floor(ms + 0.5)) end
   return string.format('%.1f', ms)
@@ -826,18 +880,39 @@ TILE.batt = function (x, y, w, h, variant)
     else vColor = T.SUCCESS end
   end
   if pct and variant == 'icon' then
-    -- battery glyph: body + terminal nub, fill by remaining
+    -- battery glyph that grows with the tile: body + terminal nub, filled by what is left
+    local pctTxt = string.format('%d%%', math.floor(pct + 0.5))
+    local subTxt = string.format('%.1fV  %s%.0fA', V.voltV, cellV and string.format('%.2fV/c  ', cellV) or '', V.currA)
+    local function glyph(bx, by, bw, bh)
+      local t = math.max(1, math.floor(bh / 12))
+      for k = 0, t - 1 do lcd.drawRectangle(bx + k, by + k, bw - 2 * k, bh - 2 * k, T.GAUGE_TICK) end
+      local nub = math.max(3, math.floor(bw / 14))
+      lcd.drawFilledRectangle(bx + bw, by + math.floor(bh * 0.28), nub, bh - 2 * math.floor(bh * 0.28), T.GAUGE_TICK)
+      local pad = t + 1
+      local fill = math.floor((bw - 2 * pad) * pct / 100 + 0.5)
+      if fill > 0 then lcd.drawFilledRectangle(bx + pad, by + pad, fill, bh - 2 * pad, staleColor(V.tBatt, vColor)) end
+    end
+    if h >= 110 then
+      -- tall: glyph centred, the percentage large under it, the details under that
+      local fb = fitFont(pctTxt, DBLSIZE, w - 16)
+      local room = h - 22 - fontH(fb) - fontH(SMLSIZE) - 12
+      local bw = math.floor(math.min(w - 40, room / 0.45))
+      local bh = math.floor(bw * 0.45)
+      local top = y + 18 + math.floor((h - 18 - bh - fontH(fb) - fontH(SMLSIZE) - 12) / 2)
+      glyph(x + math.floor((w - bw) / 2) - 2, top, bw, bh)
+      lcd.drawText(x + math.floor(w / 2), top + bh + 6, pctTxt, fb + CENTER + staleColor(V.tBatt, vColor))
+      lcd.drawText(x + math.floor(w / 2), top + bh + 6 + fontH(fb) + 6, fitText(w - 12, SMLSIZE, { subTxt, string.format('%.1fV', V.voltV) }),
+        SMLSIZE + CENTER + staleColor(V.tBatt, T.TEXT_2))
+      return
+    end
+    -- compact: glyph and percentage side by side, details under, block centred in the tile
     local bw, bh = 46, 22
-    local bx, by = x + 8, y + 22
-    lcd.drawRectangle(bx, by, bw, bh, T.GAUGE_TICK)
-    lcd.drawFilledRectangle(bx + bw, by + 6, 4, bh - 12, T.GAUGE_TICK)
-    local fill = math.floor((bw - 4) * pct / 100 + 0.5)
-    if fill > 0 then lcd.drawFilledRectangle(bx + 2, by + 2, fill, bh - 4, vColor) end
-    lcd.drawText(bx + bw + 12, by - 6, string.format('%d%%', math.floor(pct + 0.5)),
-      DBLSIZE + staleColor(V.tBatt, vColor))
-    lcd.drawText(x + 8, by + bh + 6, string.format('%.1fV  %s%.0fA',
-      V.voltV, cellV and string.format('%.2fV/c  ', cellV) or '', V.currA),
-      SMLSIZE + staleColor(V.tBatt, T.TEXT_2))
+    local fb = fitFont(pctTxt, DBLSIZE, w - 16 - bw - 16)
+    local rowH = math.max(bh, fontH(fb))
+    local top = y + 18 + math.floor((h - 18 - rowH - fontH(SMLSIZE) - 4) / 2)
+    glyph(x + 8, top + math.floor((rowH - bh) / 2), bw, bh)
+    lcd.drawText(x + 8 + bw + 12, top + math.floor((rowH - fontH(fb)) / 2), pctTxt, fb + staleColor(V.tBatt, vColor))
+    lcd.drawText(x + 8, top + rowH + 4, fitText(w - 16, SMLSIZE, { subTxt, string.format('%.1fV', V.voltV) }), SMLSIZE + staleColor(V.tBatt, T.TEXT_2))
     return
   end
   if pct then
@@ -906,8 +981,7 @@ end
 TILE.home = function (x, y, w, h)
   tileFrame(x, y, w, h, 'HOME')
   local vy, vf, sy, sf = stack(y, h, true)
-  lcd.drawText(x + 8, vy, string.format('%dm', V.homeDistM),
-    vf + staleColor(V.tHome, T.TEXT))
+  valueText(x + 8, vy, w - 16 - 40, string.format('%dm', V.homeDistM), vf, staleColor(V.tHome, T.TEXT))
   if sy then
     lcd.drawText(x + 8, sy, string.format('brg %d', V.homeBearingDeg),
       sf + staleColor(V.tHome, T.TEXT_2))
@@ -934,7 +1008,7 @@ TILE.alt = function (x, y, w, h)
   if kind == 'rover' or kind == 'boat' then
     tileFrame(x, y, w, h, 'TRIP')
     local vy, vf, sy, sf = stack(y, h, true)
-    lcd.drawText(x + 8, vy, fmtDist(V.odoM), vf + staleColor(V.tVel, T.TEXT))
+    valueText(x + 8, vy, w - 16 - 20, fmtDist(V.odoM), vf, staleColor(V.tVel, T.TEXT))
     if sy then
       lcd.drawText(x + 8, sy, string.format('home %s', fmtDist(V.homeDistM)), sf + staleColor(V.tHome, T.TEXT_2))
     end
@@ -943,8 +1017,7 @@ TILE.alt = function (x, y, w, h)
   local sub = kind == 'sub'
   tileFrame(x, y, w, h, sub and 'DEPTH / VSPD' or 'ALT / VSPD')
   local vy, vf, sy, sf = stack(y, h, true)
-  lcd.drawText(x + 8, vy, string.format('%.0fm', sub and math.max(0, -V.homeAltM) or V.homeAltM),
-    vf + staleColor(V.tHome, T.TEXT))
+  valueText(x + 8, vy, w - 16 - 20, string.format('%.0fm', sub and math.max(0, -V.homeAltM) or V.homeAltM), vf, staleColor(V.tHome, T.TEXT))
   local vsColor = math.abs(V.vspdMs) > 3 and T.WARN_STRONG or T.SUCCESS
   if sy then
     lcd.drawText(x + 8, sy, string.format('%+.1f  %s spd', V.vspdMs, fmtSpeed(V.hspdMs)),
@@ -973,8 +1046,7 @@ TILE.gps = function (x, y, w, h)
   local FIX_LABEL = { [0] = 'NO GPS', 'NO FIX', '2D', '3D', 'DGPS', 'RTK FLT', 'RTK FIX' }
   local gpsColor = V.fix >= 3 and T.SUCCESS or (V.fix == 2 and T.WARN_STRONG or T.DANGER)
   local vy, vf, sy, sf = stack(y, h, true)
-  lcd.drawText(x + 8, vy, string.format('%d', V.sats),
-    vf + staleColor(V.tGps, gpsColor))
+  valueText(x + 8, vy, w - 16 - 72, string.format('%d', V.sats), vf, staleColor(V.tGps, gpsColor))
   if sy then
     lcd.drawText(x + 8, sy, string.format('%s  hdop %.1f', FIX_LABEL[V.fix] or '?', V.hdop),
       sf + staleColor(V.tGps, T.TEXT_2))
@@ -1166,8 +1238,7 @@ TILE.spd = function (x, y, w, h)
   local vsColor = math.abs(V.vspdMs) > 3 and T.WARN or T.TEXT_2
   tileFrame(x, y, w, h, 'SPEED')
   local vy, vf, sy, sf = stack(y, h, true)
-  lcd.drawText(x + 8, vy, fmtSpeed(V.hspdMs) .. ' m/s',
-    vf + staleColor(V.tVel, T.TEXT))
+  valueText(x + 8, vy, w - 16, fmtSpeed(V.hspdMs) .. ' m/s', vf, staleColor(V.tVel, T.TEXT))
   if sy then
     lcd.drawText(x + 8, sy, string.format('vspd %+.1f', V.vspdMs),
       sf + staleColor(V.tVel, vsColor))
@@ -1197,8 +1268,7 @@ end
 TILE.wind = function (x, y, w, h)
   tileFrame(x, y, w, h, 'WIND')
   local vy, vf, sy, sf = stack(y, h, true)
-  lcd.drawText(x + 8, vy, string.format('%.1f m/s', V.windMs),
-    vf + staleColor(V.tWind, V.windMs > 8 and T.WARN or T.TEXT))
+  valueText(x + 8, vy, w - 16 - 30, string.format('%.1f m/s', V.windMs), vf, staleColor(V.tWind, V.windMs > 8 and T.WARN or T.TEXT))
   if sy then
     lcd.drawText(x + 8, sy, string.format('from %03d', V.windDirDeg % 360),
       sf + staleColor(V.tWind, T.TEXT_2))
@@ -1213,23 +1283,453 @@ end
 
 TILE.thr = function (x, y, w, h)
   tileFrame(x, y, w, h, 'THROTTLE')
-  local c = V.throttle >= 80 and T.WARN_STRONG or T.TEXT
-  lcd.drawText(x + 8, y + 18, string.format('%d%%', V.throttle), DBLSIZE + staleColor(V.tAp, c))
-  local bx, by, bw2 = x + 8, y + h - 22, w - 16
-  lcd.drawFilledRectangle(bx, by, bw2, 8, T.GAUGE_BEZEL_2)
-  local fill = math.floor(bw2 * math.max(0, math.min(100, V.throttle)) / 100 + 0.5)
-  if fill > 0 then
-    lcd.drawFilledRectangle(bx, by, fill, 8, staleColor(V.tAp, V.throttle >= 80 and T.WARN_STRONG or T.SUCCESS))
+  local thr = V.throttle
+  local ground = isGround()
+  local c = math.abs(thr) >= 80 and T.WARN_STRONG or T.TEXT
+  -- the number gets the room above the bar, so the two never overlap
+  local barH = 8
+  local bx, by, bw2 = x + 8, y + h - barH - 8, w - 16
+  local vy, vf = stack(y, h - barH - 10, false)
+  local label = (ground and thr < 0) and string.format('R %d%%', -thr) or string.format('%d%%', thr)
+  valueText(x + 8, vy, w - 16, label, vf, staleColor(V.tAp, c))
+  lcd.drawFilledRectangle(bx, by, bw2, barH, T.GAUGE_BEZEL_2)
+  local fc = staleColor(V.tAp, math.abs(thr) >= 80 and T.WARN_STRONG or T.SUCCESS)
+  if ground then
+    -- reverse grows left of centre, forward right
+    local mid = bx + math.floor(bw2 / 2)
+    local len = math.floor((bw2 / 2) * math.min(100, math.abs(thr)) / 100 + 0.5)
+    if len > 0 then lcd.drawFilledRectangle(thr < 0 and mid - len or mid, by, len, barH, fc) end
+    lcd.drawLine(mid, by - 3, mid, by + barH + 2, SOLID, T.GAUGE_TICK)
+  else
+    local fill = math.floor(bw2 * math.max(0, math.min(100, thr)) / 100 + 0.5)
+    if fill > 0 then lcd.drawFilledRectangle(bx, by, fill, barH, fc) end
   end
-  lcd.drawRectangle(bx, by, bw2, 8, T.GAUGE_EDGE)
+  lcd.drawRectangle(bx, by, bw2, barH, T.GAUGE_EDGE)
+end
+
+-- ===================== driving and diving instruments =====================
+local function kmh(ms) return ms * 3.6 end
+
+-- Arc made of short segments (0 deg = up, clockwise); no arc call on every EdgeTX build.
+local function arc(cx, cy, r, a0, a1, thick, color)
+  if a1 <= a0 then return end
+  local step = 6
+  for k = 0, thick - 1 do
+    local rr = r - k
+    local px, py
+    local a = a0
+    while true do
+      local rad = math.rad(a)
+      local qx, qy = cx + math.sin(rad) * rr, cy - math.cos(rad) * rr
+      if px then lcd.drawLine(px, py, qx, qy, SOLID, color) end
+      px, py = qx, qy
+      if a >= a1 then break end
+      a = math.min(a1, a + step)
+    end
+  end
+end
+
+-- Rectangle in a rotated frame, as two filled triangles.
+local function quad(cx, cy, ang, x0, y0, x1, y1, color)
+  local s, c = math.sin(ang), math.cos(ang)
+  local function p(px, py) return cx + px * c - py * s, cy + px * s + py * c end
+  local ax, ay = p(x0, y0)
+  local bx, by = p(x1, y0)
+  local qx, qy = p(x1, y1)
+  local dx, dy = p(x0, y1)
+  lcd.drawFilledTriangle(ax, ay, bx, by, qx, qy, color)
+  lcd.drawFilledTriangle(ax, ay, qx, qy, dx, dy, color)
+end
+
+local SPEED_STEPS = { 10, 20, 30, 40, 60, 80, 100, 150, 200, 300 }
+local function speedScale(maxKmh)
+  for _, v in ipairs(SPEED_STEPS) do
+    if v >= maxKmh * 1.1 then return v end
+  end
+  return SPEED_STEPS[#SPEED_STEPS]
+end
+
+TILE.speedo = function (x, y, w, h)
+  tileFrame(x, y, w, h, 'SPEED')
+  local v = kmh(V.hspdMs)
+  local top = speedScale(kmh(V.maxSpdMs))
+  -- a 240 deg arc is 1.5 radii tall; caption above, max line below
+  local r = math.floor(math.min((w - 16) / 2, (h - 34) / 1.5))
+  if r < 12 then return end
+  local cx, cy = x + math.floor(w / 2), y + 16 + r
+  local thick = math.max(3, math.floor(r / 6))
+  arc(cx, cy, r, -120, 120, thick, T.GAUGE_BEZEL_2)
+  local frac = math.max(0, math.min(1, v / top))
+  if frac > 0 then arc(cx, cy, r, -120, -120 + 240 * frac, thick, staleColor(V.tVel, frac > 0.9 and T.WARN_STRONG or T.SUCCESS)) end
+  local num = string.format('%d', math.floor(v + 0.5))
+  local f = fitFont(num, r >= 40 and DBLSIZE or MIDSIZE, 2 * (r - thick) - 6)
+  lcd.drawText(cx, cy - math.floor(fontH(f) / 2) - 2, num, f + CENTER + staleColor(V.tVel, T.TEXT))
+  local unitY = cy + math.floor(fontH(f) / 2) - 2
+  lcd.drawText(cx, unitY, 'km/h', SMLSIZE + CENTER + T.TEXT_3)
+  -- the max line only where it clears the unit; small tiles keep the gauge readable instead
+  if unitY + fontH(SMLSIZE) + 2 <= y + h - 16 then
+    lcd.drawText(cx, y + h - 16, string.format('max %d  of %d', math.floor(kmh(V.maxSpdMs) + 0.5), top), SMLSIZE + CENTER + T.TEXT_3)
+  end
+end
+
+local CARDINAL = { [0] = 'N', [90] = 'E', [180] = 'S', [270] = 'W' }
+
+TILE.heading = function (x, y, w, h)
+  lcd.drawFilledRectangle(x, y, w, h, T.SURFACE)
+  lcd.drawRectangle(x, y, w, h, T.GAUGE_EDGE)
+  local hdg = V.yawDeg
+  local cx = x + math.floor(w / 2)
+  local ppd = w / 90 -- 90 degrees across the tile
+  local base = y + h - 3
+  local boxHalf = math.floor(lcd.sizeText('000', MIDSIZE) / 2) + 8
+  local d0 = math.floor((hdg - 45) / 10) * 10
+  for d = d0, d0 + 100, 10 do
+    local px = math.floor(cx + (d - hdg) * ppd + 0.5)
+    if px > x + 2 and px < x + w - 2 then
+      local dd = d % 360
+      local major = dd % 30 == 0
+      lcd.drawLine(px, base, px, base - (major and 9 or 4), SOLID, T.GAUGE_TICK)
+      if major and math.abs(px - cx) > boxHalf + 6 then
+        local lbl = CARDINAL[dd] or tostring(dd)
+        lcd.drawText(px, base - 9 - fontH(SMLSIZE), lbl, SMLSIZE + CENTER + (CARDINAL[dd] and T.TEXT or T.TEXT_3))
+      end
+    end
+  end
+  -- next waypoint: a mark on the tape, pinned to the edge when it is behind
+  if V.wpNum > 0 and now() - V.tWp <= STALE_AFTER then
+    local off = ((V.wpBearingDeg - hdg + 540) % 360) - 180
+    local px = math.floor(cx + math.max(-44, math.min(44, off)) * ppd + 0.5)
+    lcd.drawFilledTriangle(px - 6, y + 2, px + 6, y + 2, px, y + 10, T.INFO)
+  end
+  local txt = string.format('%03d', math.floor(hdg + 0.5) % 360)
+  local tw = lcd.sizeText(txt, MIDSIZE)
+  local fh = fontH(MIDSIZE)
+  lcd.drawFilledRectangle(cx - math.floor(tw / 2) - 5, y + 1, tw + 10, fh + 2, T.SURFACE)
+  lcd.drawRectangle(cx - math.floor(tw / 2) - 5, y + 1, tw + 10, fh + 2, T.GAUGE_TICK)
+  lcd.drawText(cx, y + 2, txt, MIDSIZE + CENTER + staleColor(V.tAtt, T.TEXT))
+  lcd.drawFilledTriangle(cx - 5, base + 2, cx + 5, base + 2, cx, base - 5, T.GAUGE_TICK)
+end
+
+-- Vehicle outlines for the tilt tile, in units of the drawing size, y down.
+-- Each part is a convex polygon {x1,y1,x2,y2,...}, or a circle {'c',x,y,r};
+-- the third field picks the colour: 'b' body, 'd' dark detail.
+local function ellipse(rx, ry, n)
+  local pts = {}
+  for i = 0, n - 1 do
+    local a = 2 * math.pi * i / n
+    pts[#pts + 1] = math.cos(a) * rx
+    pts[#pts + 1] = math.sin(a) * ry
+  end
+  return pts
+end
+-- the sub's long hull, as the first part of its side view
+local SUB_HULL = ellipse(0.56, 0.16, 20)
+table.insert(SUB_HULL, 1, 'b')
+local SHAPES = {
+  car = {
+    rear = {
+      { 'b', -0.48, -0.05, 0.48, -0.05, 0.5, 0.25, -0.5, 0.25 },
+      { 'b', -0.32, -0.34, 0.32, -0.34, 0.42, -0.05, -0.42, -0.05 },
+      { 'd', -0.26, -0.29, 0.26, -0.29, 0.34, -0.09, -0.34, -0.09 },
+      { 'd', -0.52, 0.12, -0.3, 0.12, -0.3, 0.44, -0.52, 0.44 },
+      { 'd', 0.3, 0.12, 0.52, 0.12, 0.52, 0.44, 0.3, 0.44 },
+    },
+    side = {
+      { 'b', -0.6, -0.04, 0.58, -0.04, 0.62, 0.2, -0.6, 0.2 },
+      { 'b', -0.42, -0.3, 0.12, -0.3, 0.36, -0.04, -0.5, -0.04 },
+      { 'd', -0.36, -0.25, 0.1, -0.25, 0.27, -0.08, -0.4, -0.08 },
+      { 'c', 'd', -0.36, 0.22, 0.15 }, { 'c', 'd', 0.36, 0.22, 0.15 },
+      { 'c', 'b', -0.36, 0.22, 0.06 }, { 'c', 'b', 0.36, 0.22, 0.06 },
+    },
+  },
+  boat = {
+    rear = {
+      { 'b', -0.52, -0.02, 0.52, -0.02, 0.24, 0.32, -0.24, 0.32 },
+      { 'b', -0.26, -0.32, 0.26, -0.32, 0.32, -0.02, -0.32, -0.02 },
+      { 'd', -0.2, -0.27, 0.2, -0.27, 0.25, -0.08, -0.25, -0.08 },
+    },
+    side = {
+      { 'b', -0.55, -0.04, 0.42, -0.04, 0.64, -0.14, 0.4, 0.24, -0.5, 0.24 },
+      { 'b', -0.32, -0.32, 0.08, -0.32, 0.2, -0.04, -0.36, -0.04 },
+      { 'd', -0.26, -0.27, 0.06, -0.27, 0.13, -0.09, -0.29, -0.09 },
+    },
+  },
+  sub = {
+    rear = {
+      { 'b', -0.56, -0.035, 0.56, -0.035, 0.56, 0.035, -0.56, 0.035 },
+      { 'b', -0.08, -0.5, 0.08, -0.5, 0.1, -0.15, -0.1, -0.15 },
+      { 'b', -0.035, 0.15, 0.035, 0.15, 0.035, 0.44, -0.035, 0.44 },
+      { 'c', 'b', 0, 0, 0.27 },
+      { 'c', 'd', 0, 0, 0.1 },
+    },
+    side = {
+      SUB_HULL,
+      { 'b', -0.14, -0.4, 0.08, -0.4, 0.14, -0.12, -0.18, -0.12 },
+      { 'b', -0.66, -0.22, -0.5, -0.05, -0.5, 0.05, -0.66, 0.22 },
+      { 'd', 0.3, -0.05, 0.42, -0.05, 0.42, 0.05, 0.3, 0.05 },
+    },
+  },
+}
+
+-- Convex polygon rotated by ang about (cx, cy), filled as a triangle fan.
+local function poly(cx, cy, s, ang, part, first, color)
+  local sn, cs = math.sin(ang), math.cos(ang)
+  local px, py = {}, {}
+  for i = first, #part, 2 do
+    local x, y = part[i] * s, part[i + 1] * s
+    px[#px + 1] = cx + x * cs - y * sn
+    py[#py + 1] = cy + x * sn + y * cs
+  end
+  for i = 2, #px - 1 do
+    lcd.drawFilledTriangle(px[1], py[1], px[i], py[i], px[i + 1], py[i + 1], color)
+  end
+end
+
+local function drawShape(parts, cx, cy, s, ang, body)
+  for _, part in ipairs(parts) do
+    if part[1] == 'c' then
+      local sn, cs = math.sin(ang), math.cos(ang)
+      local x, y = part[3] * s, part[4] * s
+      lcd.drawFilledCircle(cx + x * cs - y * sn, cy + x * sn + y * cs, math.max(1, part[5] * s), part[2] == 'd' and T.SURFACE or body)
+    else
+      poly(cx, cy, s, ang, part, 2, part[1] == 'd' and T.SURFACE or body)
+    end
+  end
+end
+
+-- Land-meter window face: sky over ground, the ground line turned by g degrees (y down,
+-- positive = right end lower), filled by rows like the attitude ball.
+local function meterFace(cx, cy, r, g)
+  local rad = math.rad(g)
+  local s, c = math.sin(rad), math.cos(rad)
+  for dy = -r, r do
+    local half = math.floor(math.sqrt(r * r - dy * dy) + 0.5)
+    local yy = cy + dy
+    if math.abs(s) < 0.02 then
+      lcd.drawLine(cx - half, yy, cx + half, yy, SOLID, (dy * c >= 0) and GROUND or SKY)
+    else
+      -- ground where x * sin <= dy * cos
+      local bound = math.max(-half, math.min(half, math.floor(dy * c / s + 0.5)))
+      if s > 0 then
+        if bound > -half then lcd.drawLine(cx - half, yy, cx + bound, yy, SOLID, GROUND) end
+        if bound < half then lcd.drawLine(cx + bound, yy, cx + half, yy, SOLID, SKY) end
+      else
+        if bound > -half then lcd.drawLine(cx - half, yy, cx + bound, yy, SOLID, SKY) end
+        if bound < half then lcd.drawLine(cx + bound, yy, cx + half, yy, SOLID, GROUND) end
+      end
+    end
+  end
+  lcd.drawLine(cx - c * r, cy - s * r, cx + c * r, cy + s * r, SOLID, T.GAUGE_NEEDLE)
+end
+
+-- One land-meter window: the vehicle stays upright, the ground tilts by g, the ends of the
+-- ground line point into a green/amber/red scale on both sides.
+local function meterWindow(cx, cy, r, g, parts, state)
+  local th = math.max(2, math.floor(r / 7))
+  local R = r + 2 + th
+  for _, base in ipairs({ 90, 270 }) do
+    arc(cx, cy, R, base - 40, base - 30, th, T.DANGER)
+    arc(cx, cy, R, base - 30, base - 20, th, T.WARN_STRONG)
+    arc(cx, cy, R, base - 20, base + 20, th, T.SUCCESS)
+    arc(cx, cy, R, base + 20, base + 30, th, T.WARN_STRONG)
+    arc(cx, cy, R, base + 30, base + 40, th, T.DANGER)
+  end
+  meterFace(cx, cy, r, g)
+  lcd.drawCircle(cx, cy, r, T.GAUGE_EDGE)
+  drawShape(parts, cx, cy + math.floor(r * 0.05), r * 1.1, 0, T.GAUGE_TICK)
+  -- pointers just outside the scale where the ground line ends
+  for _, base in ipairs({ 90, 270 }) do
+    local a = math.rad(base + math.max(-44, math.min(44, g)))
+    local sa, ca = math.sin(a), math.cos(a)
+    local tx, ty = cx + sa * (R - th), cy - ca * (R - th)
+    local ox, oy = cx + sa * (R + 6), cy - ca * (R + 6)
+    lcd.drawFilledTriangle(tx, ty, ox + ca * 4, oy + sa * 4, ox - ca * 4, oy - sa * 4, state)
+  end
+end
+
+-- Roll and pitch as one land-meter window each, the angle large beside it (or under it on a
+-- tall tile). Colour follows the angle: green, amber from 20 deg, red from 30.
+local function attitudeTile(x, y, w, h, caption, deg, ground, view, pos, neg)
+  tileFrame(x, y, w, h, caption)
+  local c = staleColor(V.tAtt, math.abs(deg) >= 30 and T.DANGER or (math.abs(deg) >= 20 and T.WARN_STRONG or T.SUCCESS))
+  local kind = vehicleKind()
+  local parts = SHAPES[kind == 'sub' and 'sub' or (kind == 'boat' and 'boat' or 'car')][view]
+  -- direction in words rather than a sign: R 8, L 8, UP 4, DN 4
+  local num = string.format('%s %d', deg >= 0 and pos or neg, math.floor(math.abs(deg) + 0.5))
+  local tall = h > w * 0.9
+  if tall then
+    local r = math.floor(math.min(w / 2 - 17, (h - 30 - fontH(MIDSIZE)) / 2.3))
+    if r < 8 then
+      local vy, vf = stack(y, h, false)
+      valueText(x + 8, vy, w - 16, num, vf, c)
+      return
+    end
+    local cx, cy = x + math.floor(w / 2), y + 18 + r + 10
+    meterWindow(cx, cy, r, ground, parts, c)
+    local f = fitFont(num, MIDSIZE, w - 16)
+    lcd.drawText(cx, y + h - 4 - fontH(f), num, f + CENTER + c)
+    return
+  end
+  -- vertically the window only needs its ring (the markers stick out sideways): r * 2.3 + 4
+  local r = math.floor(math.min((h - 26) / 2.3, w * 0.25))
+  if r < 8 then
+    -- no room for a window: the angle alone, as large as fits
+    local vy, vf = stack(y, h, false)
+    valueText(x + 8, vy, w - 16, num, vf, c)
+    return
+  end
+  local cx, cy = x + 8 + r + 10, y + 18 + math.floor((h - 18) / 2)
+  meterWindow(cx, cy, r, ground, parts, c)
+  local tx = cx + r + 16
+  local room = x + w - 6 - tx
+  if room >= 14 then
+    local f = fitFont(num, MIDSIZE, room)
+    lcd.drawText(tx, cy - math.floor(fontH(f) / 2), num, f + c)
+  end
+end
+
+-- a right roll lifts the ground on the right; nose up drops the ground ahead
+TILE.roll = function (x, y, w, h) attitudeTile(x, y, w, h, 'ROLL', V.rollDeg, -V.rollDeg, 'rear', 'R', 'L') end
+TILE.pitch = function (x, y, w, h) attitudeTile(x, y, w, h, 'PITCH', V.pitchDeg, V.pitchDeg, 'side', 'UP', 'DN') end
+
+-- weak to strong echo, the fish-finder way: deep blue, cyan, green, yellow, red
+local ECHO_PAL = {}
+do
+  local stops = { { 0, 0x10, 0x30, 0x90 }, { 4, 0x00, 0x9c, 0xd8 }, { 7, 0x22, 0xc5, 0x5e },
+    { 10, 0xfa, 0xcc, 0x15 }, { 13, 0xf9, 0x73, 0x16 }, { 15, 0xdc, 0x26, 0x26 } }
+  for lv = 1, 15 do
+    local a, b = stops[1], stops[#stops]
+    for i = 1, #stops - 1 do
+      if lv >= stops[i][1] and lv <= stops[i + 1][1] then a, b = stops[i], stops[i + 1] break end
+    end
+    local f = b[1] > a[1] and (lv - a[1]) / (b[1] - a[1]) or 0
+    local function mix(i) return math.floor(a[i] + (b[i] - a[i]) * f + 0.5) end
+    ECHO_PAL[lv] = lcd.RGB(mix(2), mix(3), mix(4))
+  end
+end
+
+local function depthLabel(x, y, text, flags)
+  local tw = lcd.sizeText(text, flags)
+  lcd.drawFilledRectangle(x - 2, y, tw + 4, fontH(flags), T.SURFACE)
+  lcd.drawText(x, y, text, flags)
+end
+
+-- Fish-finder waterfall: newest column on the right, surface of the scan at the top.
+TILE.echo = function (x, y, w, h)
+  tileFrame(x, y, w, h, 'ECHOGRAM')
+  -- experimental until it has run on real boats
+  local tag = 'EXP'
+  local tw = lcd.sizeText(tag, SMLSIZE)
+  lcd.drawFilledRectangle(x + w - tw - 10, y + 3, tw + 4, fontH(SMLSIZE), T.WARN_STRONG)
+  lcd.drawText(x + w - tw - 8, y + 3, tag, SMLSIZE + T.BG_BASE)
+  local px, py = x + 4, y + 18
+  local pw, rh = w - 8, math.max(1, math.floor((h - 22) / 32))
+  local ph = rh * 32
+  lcd.drawFilledRectangle(px, py, pw, ph, T.GAUGE_BEZEL_2)
+  local cols = V.echo
+  if #cols == 0 then
+    lcd.drawText(x + math.floor(w / 2), py + math.floor(ph / 2) - fontH(SMLSIZE), fitText(w - 12, SMLSIZE, { 'no echogram', 'none' }), SMLSIZE + CENTER + T.TEXT_3)
+    lcd.drawText(x + math.floor(w / 2), py + math.floor(ph / 2) + 2, fitText(w - 12, SMLSIZE, { 'needs the ArduDeck sonar script', 'needs sonar script', '' }), SMLSIZE + CENTER + T.TEXT_3)
+    return
+  end
+  local cw = 3
+  local n = math.min(#cols, math.floor(pw / cw))
+  local stale = now() - V.tEcho > STALE_AFTER * 3
+  for i = 0, n - 1 do
+    local col = cols[#cols - i]
+    local cx = px + pw - (i + 1) * cw
+    for r = 1, 32 do
+      local lv = col[r]
+      if lv and lv > 0 then lcd.drawFilledRectangle(cx, py + (r - 1) * rh, cw, rh, stale and T.STALE or ECHO_PAL[lv]) end
+    end
+  end
+  if V.echoLenM > 0 then
+    depthLabel(px + 2, py + 1, string.format('%.0fm', V.echoStartM), SMLSIZE + T.TEXT_2)
+    depthLabel(px + 2, py + ph - fontH(SMLSIZE) - 1, string.format('%.0fm', V.echoStartM + V.echoLenM), SMLSIZE + T.TEXT_2)
+  end
+  if V.rangeM > 0 then
+    local txt = string.format('%.1fm', V.rangeM)
+    local f = fitFont(txt, MIDSIZE, math.floor(pw / 2))
+    local tw = lcd.sizeText(txt, f)
+    depthLabel(px + pw - tw - 3, py + 1, txt, f + staleColor(V.tAtt, T.TEXT))
+  end
+end
+
+-- Depth over the last minutes as a seabed line: what a sounding run looks like, no sonar script needed.
+TILE.bottom = function (x, y, w, h)
+  tileFrame(x, y, w, h, 'BOTTOM')
+  local px, py, pw, ph = x + 4, y + 18, w - 8, h - 22
+  lcd.drawFilledRectangle(px, py, pw, ph, T.GAUGE_BEZEL_2)
+  local hist = V.depthHist
+  if #hist < 2 then
+    lcd.drawText(x + math.floor(w / 2), py + math.floor(ph / 2) - math.floor(fontH(SMLSIZE) / 2), fitText(w - 12, SMLSIZE, { 'no depth yet', 'no depth' }), SMLSIZE + CENTER + T.TEXT_3)
+    return
+  end
+  local n = math.min(#hist, pw)
+  local deepest = 0
+  for i = #hist - n + 1, #hist do if hist[i] > deepest then deepest = hist[i] end end
+  local scale = math.max(2, deepest * 1.2)
+  for i = 0, n - 1 do
+    local d = hist[#hist - i]
+    local lx = px + pw - 1 - i
+    local by = py + math.floor(ph * d / scale)
+    lcd.drawLine(lx, by, lx, py + ph - 1, SOLID, T.GAUGE_EDGE)
+    lcd.drawLine(lx, by, lx, by + 1, SOLID, T.WARN_STRONG)
+  end
+  local txt = string.format('%.1fm', hist[#hist])
+  local f = fitFont(txt, MIDSIZE, math.floor(pw / 2))
+  depthLabel(px + pw - lcd.sizeText(txt, f) - 3, py + 1, txt, f + staleColor(V.tAtt, T.TEXT))
+  depthLabel(px + 2, py + ph - fontH(SMLSIZE) - 1, string.format('max %.1fm', deepest), SMLSIZE + T.TEXT_2)
+end
+
+-- Water column: surface at the top, the vehicle at its depth, the bottom from the rangefinder.
+TILE.depth = function (x, y, w, h)
+  local kind = vehicleKind()
+  local sub = kind == 'sub'
+  tileFrame(x, y, w, h, sub and 'DEPTH' or 'UNDER HULL')
+  local depth = sub and math.max(0, -V.homeAltM) or 0
+  local below = V.rangeM > 0 and V.rangeM or nil
+  local total = depth + (below or 0)
+  local scale = math.max(5, total * 1.2)
+  local cx0, cy0 = x + 8, y + 18
+  local cw, ch = math.floor(w * 0.42), h - 26
+  lcd.drawFilledRectangle(cx0, cy0, cw, ch, T.GAUGE_BEZEL_2)
+  lcd.drawLine(cx0, cy0, cx0 + cw - 1, cy0, SOLID, T.INFO)
+  local vy = cy0 + math.floor(ch * depth / scale)
+  local mid = cx0 + math.floor(cw / 2)
+  if below then
+    local by = cy0 + math.floor(ch * total / scale)
+    lcd.drawFilledRectangle(cx0, by, cw, cy0 + ch - by, T.GAUGE_EDGE)
+    lcd.drawFilledRectangle(cx0, by, cw, 3, T.WARN_STRONG)
+    lcd.drawLine(mid, vy + 4, mid, by - 1, DOTTED, T.TEXT_3)
+  end
+  local vc = staleColor(V.tHome, T.TEXT)
+  quad(mid, math.max(cy0 + 3, vy), 0, -cw * 0.3, -3, cw * 0.3, 3, vc)
+  -- numbers to the right of the column
+  local tx = cx0 + cw + 8
+  local room = x + w - 6 - tx
+  local value = sub and string.format('%.1fm', depth) or (below and string.format('%.1fm', below) or '--')
+  local vf = fitFont(value, h >= 90 and DBLSIZE or MIDSIZE, room)
+  lcd.drawText(tx, y + 18, value, vf + vc)
+  local line = y + 18 + fontH(vf)
+  if sub then
+    lcd.drawText(tx, line, fitText(room, SMLSIZE, below and { string.format('bottom %.1fm', below), string.format('%.1fm', below) } or { 'no bottom', '' }), SMLSIZE + T.TEXT_2)
+    local vs = V.vspdMs
+    if math.abs(vs) >= 0.1 then
+      lcd.drawText(tx, line + fontH(SMLSIZE), fitText(room, SMLSIZE, { string.format(vs > 0 and 'rising %.1f' or 'diving %.1f', math.abs(vs)), string.format('%+.1f', vs) }), SMLSIZE + T.TEXT_3)
+    end
+  else
+    -- no reading means no sounder fitted (or not facing down), not a depth of zero
+    lcd.drawText(tx, line, fitText(room, SMLSIZE, below and { 'below the hull', 'below hull', '' } or { 'no depth sensor', 'no sensor', '' }),
+      SMLSIZE + (below and T.TEXT_2 or T.TEXT_3))
+  end
 end
 
 TILE.imu = function (x, y, w, h)
   tileFrame(x, y, w, h, 'IMU TEMP')
   local c = V.imuTemp >= 70 and T.DANGER or (V.imuTemp >= 60 and T.WARN_STRONG or T.SUCCESS)
   local vy, vf, sy, sf = stack(y, h, false)
-  lcd.drawText(x + 8, vy, string.format('%dC', V.imuTemp),
-    vf + staleColor(V.tAp, c))
+  valueText(x + 8, vy, w - 16 - 20, string.format('%dC', V.imuTemp), vf, staleColor(V.tAp, c))
   -- thermometer strip: 20..80C
   local bx, bh2 = x + w - 16, h - 30
   local by = y + 18
@@ -1246,8 +1746,7 @@ TILE.rng = function (x, y, w, h)
   -- near-ground is what a rangefinder is for: amber inside 1m
   local c = (V.rangeM > 0 and V.rangeM < 1) and T.WARN_STRONG or T.TEXT
   local vy, vf, sy, sf = stack(y, h, false)
-  lcd.drawText(x + 8, vy, string.format('%.2fm', V.rangeM),
-    vf + staleColor(V.tAtt, c))
+  valueText(x + 8, vy, w - 16 - 20, string.format('%.2fm', V.rangeM), vf, staleColor(V.tAtt, c))
   local bx, bh2 = x + w - 16, h - 30
   local by = y + 18
   lcd.drawFilledRectangle(bx, by, 8, bh2, T.GAUGE_BEZEL_2)
@@ -1444,7 +1943,7 @@ TILE.link = function (x, y, w, h)
   local lqC = not hasLq and T.TEXT_3
     or (lq >= 70 and T.SUCCESS or (lq >= 40 and T.WARN_STRONG or T.DANGER))
   local vy, vf, sy, sf = stack(y, h, true)
-  lcd.drawText(x + 8, vy, hasLq and string.format('%d%%', lq) or '--', vf + lqC)
+  valueText(x + 8, vy, w - 16 - 50, hasLq and string.format('%d%%', lq) or '--', vf, lqC)
   if sy and not hasLq then
     lcd.drawText(x + 8, sy, 'no link sensor', sf + T.TEXT_3)
   elseif sy and fromRadio then
@@ -1488,7 +1987,7 @@ TILE.txbat = function (x, y, w, h)
   local pct = vMax > vMin and math.max(0, math.min(100, (v - vMin) / (vMax - vMin) * 100)) or 0
   local c = pct > 30 and T.TEXT or (pct > 15 and T.WARN or T.DANGER)
   local vy, vf, sy, sf = stack(y, h, true)
-  lcd.drawText(x + 8, vy, string.format('%.1fV', v), vf + c)
+  valueText(x + 8, vy, w - 16 - 20, string.format('%.1fV', v), vf, c)
   if sy then
     -- clear of the level strip on the right
     lcd.drawText(x + 8, sy, fitText(w - 36, sf, {
@@ -1506,11 +2005,10 @@ TILE.wp = function (x, y, w, h)
   tileFrame(x, y, w, h, 'MISSION')
   local vy, vf, sy, sf = stack(y, h, true)
   if V.wpNum <= 0 then
-    lcd.drawText(x + 8, vy, 'no mission', 0 + T.STALE)
+    valueText(x + 8, vy, w - 16 - 40, 'no mission', 0 + T.STALE)
     return
   end
-  lcd.drawText(x + 8, vy, string.format('WP %d', V.wpNum),
-    vf + staleColor(V.tWp, T.INFO))
+  lcd.drawText(x + 8, vy, string.format('WP %d', V.wpNum), vf, staleColor(V.tWp, T.INFO))
   if sy then
     lcd.drawText(x + 8, sy, string.format('%dm to go', math.floor(V.wpDistM + 0.5)),
       sf + staleColor(V.tWp, T.TEXT_2))

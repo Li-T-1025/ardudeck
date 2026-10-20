@@ -10,7 +10,8 @@ const ring = [{ lat: 0, lng: 0 }, { lat: 0, lng: 1 }, { lat: 1, lng: 1 }];
 describe('proposal registry with exclusions', () => {
   it('accepts an exclusion-only proposal', async () => {
     const p = proposeFence('com.x', 'X', { name: 'Obstacles', exclusions: [{ name: 'a', points: ring }], reason: 'r' }, existing);
-    expect(getPendingProposal()?.proposal.exclusions?.length).toBe(1);
+    const pending = getPendingProposal();
+    expect(pending?.kind === 'fence' ? pending.proposal.exclusions?.length : 0).toBe(1);
     cancelProposalsFor('com.x');
     expect((await p).accepted).toBe(false);
   });
@@ -23,7 +24,8 @@ describe('proposal registry with exclusions', () => {
 
   it('still accepts a plain inclusion proposal', async () => {
     const p = proposeFence('com.x', 'X', { name: 'Box', inclusion: ring, reason: 'r' }, existing);
-    expect(getPendingProposal()?.proposal.inclusion?.length).toBe(3);
+    const pendingBox = getPendingProposal();
+    expect(pendingBox?.kind === 'fence' ? pendingBox.proposal.inclusion?.length : 0).toBe(3);
     cancelProposalsFor('com.x');
     expect((await p).accepted).toBe(false);
   });

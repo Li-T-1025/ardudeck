@@ -25,7 +25,7 @@ const CATEGORY_STYLE: Record<HardwareCategory | 'unknown', { Icon: ComponentType
   unknown: { Icon: Network, box: 'bg-indigo-500/20', icon: 'text-indigo-400' },
 };
 
-export default function HardwareTab() {
+export default function HardwareTab({ openSetupWith }: { openSetupWith?: string | null } = {}) {
   const { t } = useTranslation();
   const connection = useConnectionStore((s) => s.connectionState);
   const parameters = useParameterStore((s) => s.parameters);
@@ -47,11 +47,12 @@ export default function HardwareTab() {
     [catalogs, connection.isConnected, connection.boardId, connection.boardVersion, nodes, port?.fcNodeId],
   );
 
-  const [setupOpen, setSetupOpen] = useState(false);
+  // a deep link from another view opens the setup on a search, e.g. a depth sounder from the Radio HUD
+  const [setupOpen, setSetupOpen] = useState(openSetupWith != null);
 
   return (
     <div className="p-6 space-y-6">
-      {setupOpen && <HardwareSetupWizard onClose={() => setSetupOpen(false)} />}
+      {setupOpen && <HardwareSetupWizard initialQuery={openSetupWith ?? ''} onClose={() => setSetupOpen(false)} />}
       <div className="bg-surface rounded-xl border border-subtle p-5">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-lg bg-blue-500/20 flex items-center justify-center">

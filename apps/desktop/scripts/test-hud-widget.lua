@@ -279,6 +279,20 @@ check('boat range tile is DEPTH', caption('rng'):find('DEPTH') and 1 or 0, 1)
 check('boat mode 11 is RTL', modeNameOf(11) == 'RTL' and 1 or 0, 1)
 feed(0x5007, (1 << 24) | 12)
 check('sub alt tile is DEPTH', caption('alt'):find('DEPTH') and 1 or 0, 1)
+-- new driving and diving tiles draw without error for every vehicle, at small and large sizes
+for _, mav in ipairs({ 2, 10, 11, 12 }) do
+  feed(0x5007, (1 << 24) | mav)
+  for _, id in ipairs({ 'speedo', 'heading', 'roll', 'pitch', 'depth', 'thr' }) do
+    for _, size in ipairs({ { 144, 96 }, { 296, 200 }, { 120, 56 }, { 144, 72 }, { 128, 152 } }) do
+      local ok, err = pcall(TILE[id], 8, 48, size[1], size[2], 'default')
+      check(string.format('%s draws (mav %d, %dx%d)', id, mav, size[1], size[2]), ok and 1 or 0, 1)
+      if not ok then print(err) end
+    end
+  end
+end
+check('throttle reverse label', caption('thr'):find('%%') and 1 or 0, 1)
+check('sub depth caption', (function () feed(0x5007, (1 << 24) | 12); return caption('depth'):find('DEPTH') and 1 or 0 end)(), 1)
+check('boat depth caption', (function () feed(0x5007, (1 << 24) | 11); return caption('depth'):find('UNDER HULL') and 1 or 0 end)(), 1)
 feed(0x5007, (1 << 24) | 2)
 check('copter alt tile is ALT', caption('alt'):find('ALT / VSPD') and 1 or 0, 1)
 feed(0x5007, (1 << 24) | 2)
@@ -659,6 +673,60 @@ do
   check('mode pill clear of the arm word', worst.overlap, 0)
   lcd.sizeText, getValue = realSize, realGet
   SMLSIZE, MIDSIZE = 0, 0
+end
+
+-- echogram: the boat script's frames come back out of the widget as the same column
+do
+  ARDUDECK_SONAR_TEST = true
+  local S = assert(loadfile('src/main/lua-scripts/ardudeck_sonar.lua'))()
+  local levels = {}
+  for r = 1, 32 do levels[r] = (r * 7) % 16 end
+  levels[32] = 15 -- top nibble set: the value travels as a negative int32 on the autopilot side
+  V.echo = {}
+  local r = S.range_frame(0.5, 20.0)
+  feed(r[1], r[2] & 0xFFFFFFFF)
+  for _, f in ipairs(S.column_frames(levels, 9)) do feed(f[1], f[2] & 0xFFFFFFFF) end
+  check('echogram column assembled', #V.echo, 1)
+  local same = 1
+  for i = 1, 32 do if V.echo[1][i] ~= levels[i] then same = 0 end end
+  check('echogram column matches the script', same, 1)
+  check('echogram range start', V.echoStartM, 0.5)
+  check('echogram range length', V.echoLenM, 20)
+  -- a column missing a segment is not shown
+  local frames = S.column_frames(levels, 10)
+  for i = 1, 3 do feed(frames[i][1], frames[i][2] & 0xFFFFFFFF) end
+  for _, f in ipairs(S.column_frames(levels, 11)) do feed(f[1], f[2] & 0xFFFFFFFF) end
+  check('incomplete column dropped', #V.echo, 2)
+  for _, id in ipairs({ 'echo', 'bottom' }) do
+    for _, size in ipairs({ { 296, 200 }, { 144, 96 }, { 120, 56 } }) do
+      local ok, err = pcall(TILE[id], 8, 48, size[1], size[2], 'default')
+      check(string.format('%s draws %dx%d', id, size[1], size[2]), ok and 1 or 0, 1)
+      if not ok then print(err) end
+    end
+  end
+  V.echo, V.depthHist = {}, {}
+  for _, id in ipairs({ 'echo', 'bottom' }) do
+    local ok = pcall(TILE[id], 8, 48, 144, 96, 'default')
+    check(id .. ' draws with no data', ok and 1 or 0, 1)
+  end
+end
+
+-- values step down a font instead of running into the tile's graphic
+do
+  local saved = { SMLSIZE, MIDSIZE, DBLSIZE }
+  SMLSIZE, MIDSIZE, DBLSIZE = 0x100, 0x200, 0x300
+  local M2 = assert(loadfile('resources/edgetx/ardudeck-hud/SD/WIDGETS/ardudeck/loadable.lua'))()
+  local TILE2 = findUp(M2.refresh, 'TILE', 6)
+  local fitFont = TILE2 and findUp(TILE2.depth, 'fitFont', 2)
+  assert(fitFont, 'could not locate fitFont')
+  local realSize = lcd.sizeText
+  local per = { [0x300] = 16, [0x200] = 12, [0] = 9, [0x100] = 7 }
+  lcd.sizeText = function (text, f) return #tostring(text) * (per[f] or 7) end
+  check('short value keeps the big font', fitFont('15', 0x300, 60) == 0x300 and 1 or 0, 1)
+  check('long value steps down', fitFont('123.4m', 0x300, 60) ~= 0x300 and 1 or 0, 1)
+  check('it stops at the smallest font', fitFont('123456789.0m', 0x300, 10) == 0x100 and 1 or 0, 1)
+  lcd.sizeText = realSize
+  SMLSIZE, MIDSIZE, DBLSIZE = saved[1], saved[2], saved[3]
 end
 
 print(failures == 0 and 'ALL PASS' or (failures .. ' FAILURES'))

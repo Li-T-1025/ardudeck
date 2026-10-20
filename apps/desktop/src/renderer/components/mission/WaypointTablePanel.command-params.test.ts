@@ -27,4 +27,14 @@ describe('waypoint command parameter config', () => {
     expect(getCommandParams(MAV_CMD.NAV_VTOL_LAND).find(param => param.key === 'param3')?.max).toBe(200);
     expect(getCommandParams(MAV_CMD.NAV_PAYLOAD_PLACE).find(param => param.key === 'param1')?.max).toBe(50);
   });
+  it('offers each vehicle only the waypoint fields it reads', () => {
+    const keys = (v?: 'plane' | 'other') => getCommandParams(MAV_CMD.NAV_WAYPOINT, v).filter((p) => p.show).map((p) => p.key);
+    // Plane packs acceptance radius and pass-by where the others keep the hold time
+    expect(keys('plane')).toEqual(['altitude', 'param2', 'param3']);
+    expect(keys('other')).toEqual(['altitude', 'param1']);
+    // planning offline: everything, each marked for its vehicle
+    expect(keys()).toEqual(['altitude', 'param1', 'param2', 'param3']);
+    expect(getCommandParams(MAV_CMD.NAV_WAYPOINT).find((p) => p.key === 'param3')?.max).toBe(255);
+  });
 });
+

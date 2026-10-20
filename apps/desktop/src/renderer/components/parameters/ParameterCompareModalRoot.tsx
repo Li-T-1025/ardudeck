@@ -6,6 +6,8 @@ import { useNavigationStore } from '../../stores/navigation-store.js';
 import { useCompareModalHostStore } from './compare-modal-host.js';
 import { classifySitlUnsafeParam } from '../../../shared/sitl-unsafe-params.js';
 import { formatParamValue } from '../../../shared/parameter-types.js';
+import { wiringStepFor } from '../../lib/wiring-checks.js';
+import { detectSetupVehicle } from '../../../shared/vehicle-setup/plans.js';
 import { Trans, useTranslation } from 'react-i18next';
 
 /**
@@ -157,6 +159,14 @@ function CompareView({
     }
   }, [safeMode, diffs, unsafeMap, onToggle]);
 
+  const wiringSet = useMemo(() => {
+    const params = useParameterStore.getState().parameters;
+    const read = (n: string) => params.get(n)?.value;
+    const vehicle = detectSetupVehicle(useConnectionStore.getState().connectionState.mavType, read);
+    if (!vehicle) return new Set<string>();
+    return new Set(diffs.filter(d => wiringStepFor(d.paramId, d.currentValue, d.fileValue, vehicle, read)).map(d => d.paramId));
+  }, [diffs]);
+
   const visibleDiffs = safeMode ? diffs.filter(d => !unsafeMap.has(d.paramId)) : diffs;
   const hiddenUnsafeCount = diffs.length - visibleDiffs.length;
   const selectedCount = visibleDiffs.filter(d => d.selected).length;
@@ -257,6 +267,14 @@ function CompareView({
                             title={t('parameters:parameterCompareModal.sitlUnsafeTip', { reason: unsafeReason })}
                           >
                             {t('parameters:parameterCompareModal.hwOnly')}
+                          </span>
+                        )}
+                        {wiringSet.has(diff.paramId) && (
+                          <span
+                            className="ml-2 inline-flex items-center px-1.5 py-0.5 rounded text-[9px] uppercase tracking-wide font-medium bg-amber-500/15 text-amber-400 border border-amber-500/30"
+                            title={t('parameters:parameterCompareModal.wiringTip')}
+                          >
+                            {t('parameters:parameterCompareModal.wiring')}
                           </span>
                         )}
                       </td>

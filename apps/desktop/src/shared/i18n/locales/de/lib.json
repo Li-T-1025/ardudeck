@@ -13,8 +13,8 @@
     },
     "helpers": {
       "airspeedCruise": "Stall × 1,5 = {{speed}} m/s (effizienter Reiseflug)",
-      "airspeedMax": "Stall × 2,2 = {{speed}} m/s (sichere Obergrenze)",
-      "airspeedMin": "Stall × 1,15 = {{speed}} m/s (Reserve über Stall)",
+      "airspeedMax": "Doppelter Reiseflug = {{speed}} m/s (mindestens 50 % über dem Minimum, für die TECS-Höhenregelung)",
+      "airspeedMin": "Stall × 1,25 = {{speed}} m/s (mindestens 20 % über Stall, wie ArduPilot verlangt)",
       "armingCheck": "Alle Pre-Arm-Checks aktivieren",
       "battMonitor": "Analoge Spannungs- und Stromüberwachung",
       "capacity": "Kapazität aus Profil ({{capacity}} mAh)",
@@ -28,10 +28,11 @@
       "simEngine": "Skaliert aus Schub/Gewicht {{ratio}} (Motorleistungsfaktor)",
       "simServo": "Servo-Reaktionszeit aus {{speed}}°/s",
       "simVoltage": "Simulierte Spannung bei Vollladung ({{cells}}S × 4,20V)",
-      "trimAirspeed": "Trimm-Fluggeschwindigkeit in cm/s = Reiseflug × 100",
+      "trimAirspeed": "Reiseflug {{speed}} m/s in cm/s, der Name bei Firmware vor 4.5",
       "vtailGain": "Standard-V-Leitwerk-Mischfaktor",
       "vtailLeft": "V-Leitwerk links (Nick- + Giermischung)",
-      "vtailRight": "V-Leitwerk rechts (Nick- + Giermischung)"
+      "vtailRight": "V-Leitwerk rechts (Nick- + Giermischung)",
+      "airspeedStall": "Stall × 1,05 = {{speed}} m/s (knapp über dem echten Stall, für Stallschutz und Landung)"
     },
     "reason": {
       "aileron": "Querruder",

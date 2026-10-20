@@ -204,6 +204,7 @@
     "blurbPrimaryFlight": "The basic-T scan: attitude, speed, altitude, heading, vertical speed.",
     "blurbStatus": "Link, mode, warnings and vehicle messages.",
     "blurbSummary": "Wide cards that carry several values at once.",
+    "blurbCargo": "Instruments that cargo on board brings along. Configure each one from its gear.",
     "deleteTip": "Delete layout",
     "exportTip": "Export layout to share",
     "fromFile": "From file…",
@@ -237,6 +238,7 @@
     "rolePrimaryFlight": "Primary flight",
     "roleStatus": "Status",
     "roleSummary": "Summary",
+    "roleCargo": "From cargo",
     "saveCurrent": "Save current layout...",
     "savedLayouts": "Saved layouts",
     "searchPlaceholder": "Search instruments",
@@ -252,7 +254,8 @@
     "hideInstrument": "Hide instrument",
     "opacity": "Opacity",
     "settingsTip": "Instrument settings",
-    "useGlobalOpacity": "Use global opacity"
+    "useGlobalOpacity": "Use global opacity",
+    "cargoSettings": "{{name}} settings"
   },
   "instrumentsMenu": {
     "button": "Instruments",

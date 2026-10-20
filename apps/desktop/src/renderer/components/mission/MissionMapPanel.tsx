@@ -69,7 +69,7 @@ import { ApiKeyDialog } from '../map/overlays/ApiKeyDialog';
 import { useOverlayStore } from '../../stores/overlay-store';
 
 import { buildSegmentedPath } from './mission-path';
-import { computeCameraTriggerPoints } from './camera-triggers';
+import { computeCameraTriggerPoints, photographedSeqs } from './camera-triggers';
 
 // Shared map layer definitions (centralized)
 import { MAP_LAYERS, type LayerKey, type MapLayer } from '../../../shared/map-layers';
@@ -1002,29 +1002,30 @@ function MissionMapPanel2D({ readOnly = false }: MissionMapPanelProps) {
    * leg from the end of one survey to the start of the next, which is exactly
    * the flight the plan says it will not make.
    */
+  // each run keeps its waypoint seqs so a coverage gap can be held to corners the camera shoots
   const flownRuns = useMemo(() => {
-    if (draftPoints) return [draftPoints];
-    const runs: LatLng[][] = [];
+    if (draftPoints) return [{ points: draftPoints, seqs: null as number[] | null }];
+    const runs: Array<{ points: LatLng[]; seqs: number[] | null }> = [];
     let current: LatLng[] = [];
+    let seqs: number[] = [];
     let prevGroup: string | undefined;
+    const close = () => { if (current.length) runs.push({ points: current, seqs }); current = []; seqs = []; };
     for (const it of visibleMissionItems) {
       if (isReturnCommand(it.command) || isTakeoffCommand(it.command)) {
-        if (current.length) runs.push(current);
-        current = [];
+        close();
         prevGroup = undefined;
         continue;
       }
       if (!commandHasLocation(it.command) || (it.latitude === 0 && it.longitude === 0)) continue;
-      if (current.length && prevGroup !== undefined && it.groupId !== prevGroup) {
-        runs.push(current);
-        current = [];
-      }
+      if (current.length && prevGroup !== undefined && it.groupId !== prevGroup) close();
       current.push({ lat: it.latitude, lng: it.longitude });
+      seqs.push(it.seq);
       prevGroup = it.groupId;
     }
-    if (current.length) runs.push(current);
-    return runs.filter((r) => r.length >= 3);
+    close();
+    return runs.filter((r) => r.points.length >= 3);
   }, [draftPoints, visibleMissionItems]);
+  const shootingSeqs = useMemo(() => photographedSeqs(visibleMissionItems), [visibleMissionItems]);
 
   const flown = useMemo(() => {
     if (!showFlownPath || flownRuns.length === 0) return null;
@@ -1037,12 +1038,14 @@ function MissionMapPanel2D({ readOnly = false }: MissionMapPanelProps) {
     const radius = turnRadiusFor(speed, flownPathBankDeg);
     const runs: Array<[number, number][]> = [];
     const gaps: Array<{ index: number; deviationM: number; turnDeg: number; at: LatLng }> = [];
-    flownRuns.forEach((run, r) => {
-      const result = predictFlownPath(run, radius);
+    flownRuns.forEach(({ points, seqs }, r) => {
+      const result = predictFlownPath(points, radius);
       runs.push(result.path.map((q) => [q.lat, q.lng] as [number, number]));
       for (const c of coverageGaps(result.cuts, surveySwathWidth)) {
-        const at = run[c.index];
-        if (at) gaps.push({ ...c, index: r * 100000 + c.index, at });
+        const at = points[c.index];
+        // a survey being drawn always shoots; a mission only where the camera triggers
+        const shooting = !seqs || shootingSeqs.has(seqs[c.index]!);
+        if (at && shooting) gaps.push({ ...c, index: r * 100000 + c.index, at });
       }
     });
     return {
@@ -1054,7 +1057,7 @@ function MissionMapPanel2D({ readOnly = false }: MissionMapPanelProps) {
       cruiseFromVehicle: plannedSpeed.fromVehicle,
       isDraft: !!draftPoints,
     };
-  }, [showFlownPath, flownRuns, draftPoints, visibleMissionItems, plannedSpeed, flownPathBankDeg, surveySwathWidth]);
+  }, [showFlownPath, flownRuns, draftPoints, visibleMissionItems, plannedSpeed, flownPathBankDeg, surveySwathWidth, shootingSeqs]);
 
 
   // Segment colors per item (for marker tinting)

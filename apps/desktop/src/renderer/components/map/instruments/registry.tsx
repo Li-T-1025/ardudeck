@@ -15,7 +15,8 @@
  */
 import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
-import { useEffect, useRef, useState, type CSSProperties } from 'react';
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
+import { useModuleMapInstrumentsStore } from '../../../modules/module-map-instruments';
 import { create } from 'zustand';
 import { useTelemetryStore } from '../../../stores/telemetry-store';
 import { useParameterStore } from '../../../stores/parameter-store';
@@ -65,6 +66,8 @@ export interface MapInstrumentVariant {
   Component: () => JSX.Element;
   /** This variant draws a round dial, so a docked group shapes around it. */
   round?: boolean;
+  /** Picker icon a cargo supplied; built-ins resolve theirs from the id. */
+  Glyph?: () => JSX.Element;
 }
 
 /** Which kind of vehicle an instrument is for. Untagged = both. */
@@ -92,6 +95,34 @@ export interface MapInstrumentDef {
   /** Vehicle profiles this instrument belongs to; absent means every one. The
    * catalog hides the others, but one already placed stays placed. */
   profiles?: InstrumentProfile[];
+  /** Cargo settings, opened in a dialog from the config popover. */
+  Settings?: () => JSX.Element;
+  /** Dialog width while Settings is present. */
+  settingsWidth?: number;
+  /** A cargo's name for its default face; built-ins say "Analog". */
+  defaultLabelKey?: string;
+  DefaultGlyph?: () => JSX.Element;
+}
+
+/** Label and glyph of the default display option, which built-ins call Analog and a cargo names itself. */
+export function defaultDisplayOption(def: MapInstrumentDef): { labelKey: string; Glyph?: () => JSX.Element } {
+  return { labelKey: def.defaultLabelKey ?? 'map:instrumentDisplay.analog', Glyph: def.DefaultGlyph };
+}
+
+/** Built-ins plus every instrument cargo has registered, in a stable order. */
+export function allMapInstruments(): MapInstrumentDef[] {
+  const extra = useModuleMapInstrumentsStore.getState().defs;
+  return extra.length === 0 ? MAP_INSTRUMENTS : [...MAP_INSTRUMENTS, ...extra];
+}
+
+/** Reactive variant of allMapInstruments for components. */
+export function useAllMapInstruments(): MapInstrumentDef[] {
+  const extra = useModuleMapInstrumentsStore((s) => s.defs);
+  return useMemo(() => (extra.length === 0 ? MAP_INSTRUMENTS : [...MAP_INSTRUMENTS, ...extra]), [extra]);
+}
+
+export function findMapInstrument(id: string): MapInstrumentDef | undefined {
+  return MAP_INSTRUMENTS.find((i) => i.id === id) ?? useModuleMapInstrumentsStore.getState().defs.find((i) => i.id === id);
 }
 
 /** Display name of an instrument in the current language. */

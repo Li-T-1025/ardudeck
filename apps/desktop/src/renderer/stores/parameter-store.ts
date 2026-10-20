@@ -100,6 +100,8 @@ interface ParameterStore {
     failedParams: string[];
     rebootRequired: string[];
     skippedParams: Array<{ id: string; value: number }>;
+    /** Confirmed writes with their previous value; drives the wiring-check prompt. */
+    changes?: Array<{ name: string; current: number; next: number }>;
   } | null;
 
   // Pending retry params for after reboot
@@ -1122,7 +1124,10 @@ export const useParameterStore = create<ParameterStore>((set, get) => ({
     // Collect params that require reboot
     const rebootRequired = appliedParamIds.filter(id => metadata?.[id]?.rebootRequired === true);
 
-    const outcome = { applied, failed, failedParams, rebootRequired, skippedParams: fileSkippedParams };
+    const changes = selected
+      .filter(d => !failedSet.has(d.paramId))
+      .map(d => ({ name: d.paramId, current: d.currentValue, next: d.fileValue }));
+    const outcome = { applied, failed, failedParams, rebootRequired, skippedParams: fileSkippedParams, changes };
 
     if (rebootRequired.length > 0 || fileSkippedParams.length > 0) {
       // Show summary dialog instead of closing

@@ -1,3 +1,8 @@
+// Theme colours are CSS variables, which Tailwind cannot fade on its own: without this, `bg-surface-raised/40`
+// and the like silently produce no colour at all.
+const withAlpha = (name) => ({ opacityValue }) =>
+  opacityValue === undefined ? `var(${name})` : `color-mix(in srgb, var(${name}) calc(${opacityValue} * 100%), transparent)`;
+
 /** @type {import('tailwindcss').Config} */
 export default {
   content: ['./src/renderer/**/*.{html,tsx,ts}'],
@@ -9,26 +14,26 @@ export default {
       colors: {
         // Divider color matching border-subtle so `bg-subtle` works for
         // w-px/h-px separator elements.
-        subtle: 'var(--border-subtle)',
+        subtle: withAlpha('--border-subtle'),
         surface: {
-          base: 'var(--bg-base)',
-          DEFAULT: 'var(--bg-surface)',
-          solid: 'var(--bg-surface-solid)',
-          raised: 'var(--bg-surface-raised)',
-          inset: 'var(--bg-inset)',
-          input: 'var(--bg-input)',
-          nav: 'var(--bg-nav)',
-          tooltip: 'var(--bg-tooltip)',
-          overlay: 'var(--bg-overlay)',
-          'overlay-light': 'var(--bg-overlay-light)',
-          'overlay-subtle': 'var(--bg-overlay-subtle)',
-          solid: 'var(--bg-solid)',
+          base: withAlpha('--bg-base'),
+          DEFAULT: withAlpha('--bg-surface'),
+          solid: withAlpha('--bg-surface-solid'),
+          raised: withAlpha('--bg-surface-raised'),
+          inset: withAlpha('--bg-inset'),
+          input: withAlpha('--bg-input'),
+          nav: withAlpha('--bg-nav'),
+          tooltip: withAlpha('--bg-tooltip'),
+          overlay: withAlpha('--bg-overlay'),
+          'overlay-light': withAlpha('--bg-overlay-light'),
+          'overlay-subtle': withAlpha('--bg-overlay-subtle'),
+          solid: withAlpha('--bg-solid'),
         },
         content: {
-          DEFAULT: 'var(--text-primary)',
-          secondary: 'var(--text-secondary)',
-          tertiary: 'var(--text-tertiary)',
-          disabled: 'var(--text-disabled)',
+          DEFAULT: withAlpha('--text-primary'),
+          secondary: withAlpha('--text-secondary'),
+          tertiary: withAlpha('--text-tertiary'),
+          disabled: withAlpha('--text-disabled'),
         },
       },
       borderColor: {

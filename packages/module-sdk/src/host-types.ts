@@ -123,6 +123,33 @@ export interface FenceProposal {
   reason: string;
 }
 
+/** Waypoints a module asks the host to add to the planned mission. The pilot sees and applies them. */
+export interface MissionProposal {
+  /** Shown to the pilot, so they know what these legs are. */
+  name: string;
+  /** Why the module is asking, in the pilot's words. */
+  reason: string;
+  /** 'append' adds after the last item; 'replace' swaps the whole mission for these. Default 'append'. */
+  mode?: 'append' | 'replace';
+  items: Array<{
+    lat: number;
+    lng: number;
+    /** Metres, in `frame`. */
+    altitude: number;
+    /** 'relative' to home (default) or 'asl'. */
+    frame?: 'relative' | 'asl';
+  }>;
+}
+
+/** A place a module asks the aircraft to land at. The pilot confirms with the target on the map. */
+export interface LandingProposal {
+  name: string;
+  reason: string;
+  at: MapPoint;
+  /** Height above home to fly there at before descending. */
+  transitAltRelM: number;
+}
+
 export interface ProposalResult {
   /** False when the pilot declined, or when nothing could be written. */
   accepted: boolean;
@@ -306,6 +333,57 @@ export interface CoordinateFormatRegistration {
 }
 
 /** What the map currently shows, for layers that draw only what is in view (grids, labels). */
+/** A display form of a cargo map instrument, chosen per instrument from its config popover. */
+export interface MapInstrumentVariantRegistration {
+  /** Persisted key, unique within the instrument. */
+  id: string;
+  /** Key in this module's own i18n resources. */
+  labelKey: string;
+  component: ComponentType;
+  /** This variant draws a round dial, so a docked group shapes around it. */
+  round?: boolean;
+  /** Small icon for the display picker, 20 x 20 px. A dot when omitted. */
+  glyph?: ComponentType;
+}
+
+/**
+ * A floating instrument on the telemetry map, contributed by a cargo. It lives
+ * in the host's Instruments catalog, layer, docked groups and saved layouts
+ * exactly like a built-in: the pilot drags, resizes, dims, hides and docks it.
+ * Every label is a key in the module's own i18n resources (host.i18n), so it
+ * follows the app language.
+ */
+export interface MapInstrumentRegistration {
+  /** Stable id within this module; the host prefixes it with the module slug. */
+  id: string;
+  labelKey: string;
+  /** Shown on first use without the pilot adding it from the catalog. Default false. */
+  defaultVisible?: boolean;
+  /** The default face. Render your own card; the host adds the chrome (drag, gear, grip). */
+  component: ComponentType;
+  /** What the display picker calls the default face. The instrument's own label when omitted. */
+  defaultLabelKey?: string;
+  /** Icon of the default face in the display picker, 20 x 20 px. */
+  defaultGlyph?: ComponentType;
+  /** Optional numeric readout alternative. */
+  numericComponent?: ComponentType;
+  /** Further display forms offered beside the default and numeric ones. */
+  variants?: MapInstrumentVariantRegistration[];
+  /** The default face is a round dial. */
+  round?: boolean;
+  /** Vehicle kinds this instrument is for; absent means every one. */
+  profiles?: ('air' | 'ground')[];
+  /**
+   * The instrument's own settings: a data source, a range, a unit. The host
+   * opens it in a dialog of its own from a button in the gear popover (which
+   * stays about layout: display form, opacity, hide), and the cargo can open
+   * it itself with `host.map.openInstrumentSettings`, e.g. from an empty state.
+   */
+  settings?: ComponentType;
+  /** Dialog width in px. Default 440. */
+  settingsWidth?: number;
+}
+
 export interface MapView {
   north: number;
   south: number;
@@ -475,6 +553,21 @@ export interface ModulePanelRegistration {
    */
   size?: 'compact' | 'large';
   /** The panel BODY only - the host provides the chip, frame, header, close. */
+  component: ComponentType;
+}
+
+/**
+ * A panel in the pilot's workspace grid (the dockview layout the Map, Vision
+ * and Messages panels live in). It appears in the Workspace dialog's Add
+ * panel list, docks, splits, pops out and is saved in layouts like a built-in.
+ */
+export interface WorkspacePanelRegistration {
+  /** Stable id within this module; the host prefixes it with the module slug. */
+  id: string;
+  /** Tab title. Called when the grid renders, so it follows the app language. */
+  title(): string;
+  icon?: ComponentType<{ className?: string }>;
+  /** The panel body; it fills the tab. */
   component: ComponentType;
 }
 
@@ -750,7 +843,7 @@ export interface ConfigTabRegistration {
 
 /** Where a setup entry is listed in Add hardware. */
 export type HardwareSetupCategory =
-  | 'rangefinder' | 'airspeed' | 'proximity' | 'flow' | 'gps' | 'telemetry'
+  | 'rangefinder' | 'depth' | 'airspeed' | 'proximity' | 'flow' | 'gps' | 'telemetry'
   | 'compass' | 'esc' | 'power' | 'lighting' | 'receiver' | 'datalink' | 'autopilot' | 'other';
 
 /** A product in the host's Add hardware dialog that hands over to this module's own setup. */
@@ -935,6 +1028,37 @@ export interface ParamProposalResult {
   error?: string;
 }
 
+// --- Vehicle setup ---------------------------------------------------------
+// Mirrors apps/desktop/src/shared/vehicle-setup/types.ts (the SDK cannot import desktop code).
+
+export type SetupVehicle = 'copter' | 'heli' | 'plane' | 'vtol' | 'rover' | 'boat' | 'sub';
+/** found = already set on the board; needs-pilot = only the pilot can do it (calibration, direction checks). */
+export type SetupStepState = 'done' | 'found' | 'needs-pilot' | 'todo';
+
+export interface SetupStepStatus {
+  id: string;
+  state: SetupStepState;
+  titleKey: string;
+  blockers: string[];
+}
+
+export interface SetupStatus {
+  vehicle: SetupVehicle;
+  firmware: string;
+  steps: SetupStepStatus[];
+  /** Live PreArm refusals with the wizard step that fixes each, when known. */
+  prearm: { text: string; stepId: string | null }[];
+}
+
+export type SetupSuggestionKind = 'tune' | 'airspeed' | 'battery';
+
+export interface SetupSuggestion {
+  kind: SetupSuggestionKind;
+  inputs: Record<string, number | string>;
+  changes: { name: string; value: number; reason: string }[];
+  source: string;
+}
+
 // --- Firmware sources -----------------------------------------------------
 
 export interface FirmwareSourceRegistration {
@@ -997,6 +1121,32 @@ export interface RendererHostApi {
      * over `params.set`.
      */
     propose(changes: ParamChange[], reason: string): Promise<ParamProposalResult>;
+    /**
+     * Make sure the full parameter set is loaded, downloading it if needed.
+     * `getAll`/`get` only see what the host already has, which after connect
+     * can be a partial set until the Parameters screen fetched the rest.
+     * Resolves false when there is no vehicle or the download did not finish.
+     */
+    ensureLoaded(timeoutMs?: number): Promise<boolean>;
+  };
+  /**
+   * Quick setup wizard, for guiding a pilot through a new vehicle. Nothing here
+   * writes to the vehicle: suggestions go through `params.propose`. Missing on
+   * hosts older than the wizard, so feature-detect `host.setup`.
+   */
+  setup: {
+    /** Null when no ArduPilot vehicle is connected. */
+    getStatus(): Promise<SetupStatus | null>;
+    /** Opens Quick setup at a step id from `getStatus`; false for an unknown id. */
+    openStep(stepId: string): Promise<boolean>;
+    /**
+     * Starting values for this vehicle. Inputs default to the saved profile;
+     * `inputs` overrides them. Rejects naming what is missing (tune: propIn,
+     * cells, chemistry; airspeed: stall; battery: cells, chemistry).
+     */
+    suggest(kind: SetupSuggestionKind, inputs?: Record<string, number | string>): Promise<SetupSuggestion>;
+    /** The saved physical profile for the connected vehicle, else the active one; null if none. */
+    getProfile(): Promise<Record<string, unknown> | null>;
   };
   /**
    * Read-only access to the flight log open in the Log Explorer, for modules
@@ -1142,6 +1292,12 @@ export interface RendererHostApi {
     /** Remove a panel this module registered. Other modules' ids are ignored. */
     unregister(id: string): void;
   };
+  /** Panels for the pilot's workspace grid, next to Map, Vision and Messages. */
+  workspace: {
+    registerPanel(reg: WorkspacePanelRegistration): void;
+    /** Remove a panel this module registered. Other modules' ids are ignored. */
+    unregisterPanel(id: string): void;
+  };
   /** Fill the nav view this cargo unlocks. Throws for a view another cargo owns. */
   views: {
     register(reg: ModuleViewRegistration): void;
@@ -1230,6 +1386,17 @@ export interface RendererHostApi {
     proposeFence(proposal: FenceProposal): Promise<ProposalResult>;
     /** Fence storage on the connected vehicle, so a proposal can be cut to fit first. */
     fenceBudget(): Promise<FenceBudget>;
+    /** Add waypoints to the planned mission. The host shows them and writes nothing until the pilot applies. */
+    proposeMission(proposal: MissionProposal): Promise<ProposalResult>;
+    /**
+     * Fly to a point and land there. The host confirms with the pilot, flies there in Guided
+     * at `transitAltRelM`, then switches to Land on arrival. Copters only, armed and in the air.
+     */
+    proposeLanding(proposal: LandingProposal): Promise<ProposalResult>;
+  };
+  /** Host file dialogs. The pilot picks; the module gets a path or null. */
+  files: {
+    pickFolder(title?: string): Promise<string | null>;
   };
   /** Ground elevation, metres AMSL. Null where the host has no data. */
   terrain: {
@@ -1246,6 +1413,12 @@ export interface RendererHostApi {
     registerLayer(reg: MapLayerRegistration): void;
     /** Remove a layer this module registered. Other modules' ids are ignored. */
     unregisterLayer(id: string): void;
+    /** Put an instrument on the telemetry map, next to the built-in gauges. Re-registering an id replaces it. */
+    registerInstrument(reg: MapInstrumentRegistration): void;
+    /** Remove an instrument this module registered. Other modules' ids are ignored. */
+    unregisterInstrument(id: string): void;
+    /** Open the settings dialog of an instrument this module registered. */
+    openInstrumentSettings(id: string): void;
     /**
      * Ask the pilot to draw an area. The host owns the interaction: clicks
      * place corners, a double click closes the ring, Escape cancels.

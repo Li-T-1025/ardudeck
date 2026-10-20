@@ -20,7 +20,7 @@ import {
   INSTRUMENT_SCALE_STEP,
   type InstrumentDisplayMode,
 } from '../../../stores/map-instruments-store';
-import { MAP_INSTRUMENTS, instrumentLabel, resolveInstrumentComponent, isRoundInMode } from './registry';
+import { useAllMapInstruments, instrumentLabel, resolveInstrumentComponent, isRoundInMode } from './registry';
 import { variantGlyph } from './variant-glyphs';
 import { useGroupShapeStore } from '../../../stores/group-shape-store';
 import { GAUGE_COLORS } from './RoundGauge';
@@ -167,8 +167,9 @@ export function DockedGroup({ gid, group }: { gid: string; group: DockGroup }): 
   // half the width, so the drag ref waits for the first measurement.
   const sized = !cluster || cellSizes !== null;
 
+  const allInstruments = useAllMapInstruments();
   const members = group.members
-    .map((id) => MAP_INSTRUMENTS.find((d) => d.id === id))
+    .map((id) => allInstruments.find((d) => d.id === id))
     .filter((d): d is NonNullable<typeof d> => !!d);
   // Members that bulge the shared flat card, per groupShapeMode.
   const isRoundNow = (id: string): boolean => {

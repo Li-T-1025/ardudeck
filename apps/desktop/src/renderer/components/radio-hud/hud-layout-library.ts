@@ -5,7 +5,7 @@
  * was whichever config file happened to be on the card.
  */
 
-import type { TileDef } from './RadioHudView';
+import type { TileDef } from './hud-model';
 
 export interface SavedHudLayout {
   name: string;
