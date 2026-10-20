@@ -313,6 +313,7 @@ function OutputsTable({ rows, read }: { rows: { output: number; fn: number; role
               <tr key={`${r.output}-${r.fn}`} className="border-b border-subtle last:border-0">
                 <td className="px-3 py-1.5 text-content-secondary">{t(`${K}.output`, { n: r.output })}</td>
                 <td className="px-3 py-1.5 font-medium text-content">{roleLabel(t, r.role, r.n)}</td>
+                {/* i18n-exempt: param name */}
                 <td className="px-3 py-1.5 font-mono text-content-tertiary">SERVO{r.output}_FUNCTION = {r.fn}</td>
                 <td className="px-3 py-1.5 text-right">
                   {r.auto ? <span className="text-content-tertiary">{t(`${K}.autoByFirmware`)}</span>
@@ -433,6 +434,7 @@ export function PlaneSizeStep({ answers, setAnswers, read }: StepProps) {
       <div className="flex items-center gap-4 rounded-lg border border-subtle bg-surface p-3">
         <div>
           <div className="text-xs text-content-secondary">{t(`${K}.psize.stall`)}</div>
+          {/* i18n-exempt: unit */}
           <div className="text-2xl font-semibold tabular-nums text-content">{stall} m/s <span className="text-sm font-normal text-content-tertiary">{Math.round(stall * 3.6)} km/h</span></div>
           <div className="text-[11px] text-content-tertiary">{answers.stall ? t(`${K}.psize.own`, { estimate }) : t(`${K}.psize.from`, { area: Math.round((span / 1000) * ((root + tip) / 2 / 1000) * 10000) / 100, mass })}</div>
         </div>
@@ -479,6 +481,7 @@ export function BatteryStep({ vehicle, answers, setAnswers, read }: StepProps) {
           </div>
           <div className="flex flex-wrap items-center gap-1.5">
             <span className="w-20 text-xs text-content-secondary">{t(`${K}.battery.capacity`)}</span>
+            {/* i18n-exempt: unit */}
             {CAPS.map((n) => <Chip key={n} label={n >= 10000 ? `${n / 1000} Ah` : `${n} mAh`} on={cap === n} onClick={() => setAnswers({ ...answers, capacity: n })} />)}
           </div>
           <div className="grid grid-cols-2 gap-2">

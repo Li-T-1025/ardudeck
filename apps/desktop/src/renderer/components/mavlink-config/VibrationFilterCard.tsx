@@ -135,6 +135,7 @@ function Spectrum({ r }: { r: SavedResult }) {
         {ticks.map((hz) => <line key={hz} x1={X(hz)} x2={X(hz)} y1={0} y2={H} stroke="var(--border-default)" strokeWidth={1} />)}
         {r.before && <path d={path(r.before)} fill="none" stroke="rgb(248,113,113)" strokeWidth={2} vectorEffect="non-scaling-stroke" />}
         {r.after && <path d={path(r.after)} fill="none" stroke="rgb(52,211,153)" strokeWidth={2} vectorEffect="non-scaling-stroke" />}
+        {/* i18n-exempt: unit */}
         {ticks.map((hz) => <text key={`t${hz}`} x={X(hz) + 4} y={H - 4} fontSize={18} fill="var(--text-tertiary)">{hz} Hz</text>)}
       </svg>
       <div className="flex flex-wrap gap-4 text-[11px] text-content-secondary">
@@ -369,6 +370,7 @@ export function VibrationFilterCard() {
               <div className="text-[11px] text-content-secondary">{t(`${k}.hover.liveEsc`)}</div>
               <div className="flex items-baseline gap-2">
                 <span className={`text-2xl font-semibold tabular-nums ${liveRpm > 0 ? 'text-sky-500 dark:text-sky-300' : 'text-content'}`}>{liveRpm > 0 ? (liveRpm / 60).toFixed(0) : '-'}</span>
+                {/* i18n-exempt: unit */}
                 <span className="text-xs text-content-secondary">Hz</span>
               </div>
               <p className="text-[11px] text-content-tertiary">{liveRpm > 0 ? t(`${k}.hover.liveEscBody`, { rpm: Math.round(liveRpm), n: escMotors }) : t(`${k}.hover.liveNone`)}</p>
@@ -458,7 +460,7 @@ export function VibrationFilterCard() {
           <p className="text-[11px] text-content-tertiary">{t(`${k}.result.next`)}</p>
           <div className="flex items-center justify-between gap-3">
             <div className="flex gap-3">
-              <button type="button" onClick={() => go('logs')} className="text-xs text-content-secondary hover:text-content">{t('mavlink-config:quickSetup.vibration.stages.result')} · Logs</button>
+              <button type="button" onClick={() => go('logs')} className="text-xs text-content-secondary hover:text-content">{t('mavlink-config:quickSetup.vibration.openInLogs')}</button>
               <button type="button" onClick={() => update({ stage: 0, result: null, stagedAt: null })} className="text-xs text-content-secondary hover:text-content">{t(`${k}.result.again`)}</button>
             </div>
             <SmallButton primary disabled={result.writes.every((w) => p.maybe(w.name) === w.value)} onClick={() => stageWrites(result.writes)}>

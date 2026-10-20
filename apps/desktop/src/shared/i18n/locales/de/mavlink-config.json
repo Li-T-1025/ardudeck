@@ -2473,7 +2473,8 @@
         "batOff": "Logging wieder aus, gibt RAM frei"
       },
       "escCount": "{{n}} von {{total}} Motoren melden Drehzahl",
-      "notCopter": "Die Filterkarte ist für Multikopter und QuadPlanes."
+      "notCopter": "Die Filterkarte ist für Multikopter und QuadPlanes.",
+      "openInLogs": "In Logs öffnen"
     }
   }
 }

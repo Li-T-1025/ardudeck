@@ -2473,7 +2473,8 @@
         "batOff": "logging off again, frees RAM"
       },
       "escCount": "{{n}} of {{total}} motors report speed",
-      "notCopter": "The filter card is for multirotors and QuadPlanes."
+      "notCopter": "The filter card is for multirotors and QuadPlanes.",
+      "openInLogs": "Open in Logs"
     }
   }
 }
