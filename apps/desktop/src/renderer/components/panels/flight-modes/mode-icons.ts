@@ -48,8 +48,8 @@ const MODE_ICON: Record<string, LucideIcon> = {
   FlowHold: Move,
   Brake: Octagon,
   Hold: Octagon,
-  FlyByWireA: Shield,
-  FlyByWireB: ShieldCheck,
+  FBWA: Shield,
+  FBWB: ShieldCheck,
   Cruise: Wind,
   Thermal: Flame,
   // autonomous / nav

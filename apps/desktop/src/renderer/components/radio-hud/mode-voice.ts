@@ -13,7 +13,7 @@ const CLIP_BY_NAME: Record<string, string> = {
   sport: 'mode_13', flip: 'mode_14', autotune: 'mode_15', poshold: 'mode_16', brake: 'mode_17',
   throw: 'mode_18', guidednogps: 'mode_20', smartrtl: 'mode_21', flowhold: 'mode_22',
   zigzag: 'mode_24', autortl: 'mode_27',
-  manual: 'mode_manual', training: 'mode_training', flybywirea: 'mode_fbwa', flybywireb: 'mode_fbwb',
+  manual: 'mode_manual', training: 'mode_training', fbwa: 'mode_fbwa', fbwb: 'mode_fbwb',
   cruise: 'mode_cruise', takeoff: 'mode_takeoff', thermal: 'mode_thermal',
   qstabilize: 'mode_qstabilize', qhover: 'mode_qhover', qloiter: 'mode_qloiter',
   qland: 'mode_qland', qrtl: 'mode_qrtl', qacro: 'mode_qacro',

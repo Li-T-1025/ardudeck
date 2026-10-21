@@ -479,7 +479,7 @@ export const ARDUPILOT_COMMON_MODES: Record<ArduPilotVehicleClass, { name: strin
   plane: [
     { name: 'Manual', modeNum: 0 },
     { name: 'Stabilize', modeNum: 2 },
-    { name: 'FlyByWireA', modeNum: 5 },
+    { name: 'FBWA', modeNum: 5 },
     { name: 'Loiter', modeNum: 12 },
     { name: 'Auto', modeNum: 10 },
     { name: 'Guided', modeNum: 15 },
