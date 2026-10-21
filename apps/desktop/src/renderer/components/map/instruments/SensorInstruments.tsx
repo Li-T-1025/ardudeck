@@ -11,9 +11,15 @@ import { SegmentBar, FillBehind, gaugeTint } from './ReadoutPrimitives';
 import { useTelemetryFresh } from './useTelemetryFresh';
 import { useLinkUp } from './useLinkUp';
 import { useInDock } from './dock-context';
+import {
+  SENSOR_STALE_MS,
+  resolveProximitySectors,
+  proximityObstacle,
+  proximityAnyLive,
+  proximityTone,
+  closestProximitySector,
+} from '../proximity-sectors';
 
-/** A distance reading older than this is a sensor that stopped, not a distance. */
-const SENSOR_STALE_MS = 2000;
 const mono = 'font-mono tabular-nums leading-none whitespace-nowrap';
 
 function useNow(intervalMs: number): number {
@@ -145,8 +151,9 @@ export function RangefinderInstrument(): JSX.Element {
   );
 }
 
-const PROX_RED_M = 2;
-const PROX_AMBER_M = 5;
+// Arcs slide from the rim towards the centre as the obstacle closes in.
+const PROX_RIM_R = 41;
+const PROX_NEAR_R = 20;
 
 export function ProximityInstrument(): JSX.Element {
   const { t } = useTranslation();
@@ -155,29 +162,41 @@ export function ProximityInstrument(): JSX.Element {
   const proximity = useTelemetryStore((s) => s.proximity);
   const distUnit = useSettingsStore((s) => s.unitPreferences.altitude);
   const fmt = (m: number) => String(Number(altitudeValueFromMeters(m, distUnit).toFixed(1)));
-  const sectors = Array.from({ length: 8 }, (_, k) => {
-    const d = proximity[k];
-    return linkUp && d && now - d.receivedAt < SENSOR_STALE_MS && d.distance < d.max - 0.01 ? d.distance : null;
-  });
-  const up = proximity[ORIENTATION_UP];
-  const upLive = linkUp && up && now - up.receivedAt < SENSOR_STALE_MS && up.distance < up.max - 0.01 ? up.distance : null;
-  const anyLive = Object.values(proximity).some((d) => linkUp && now - d.receivedAt < SENSOR_STALE_MS);
-  const closest = sectors.reduce<{ d: number; k: number } | null>((best, d, k) => (d !== null && (!best || d < best.d) ? { d, k } : best), null);
-  const colour = (d: number | null) => (d === null ? GAUGE_COLORS.bezelEdge : d <= PROX_RED_M ? GAUGE_COLORS.red : d <= PROX_AMBER_M ? GAUGE_COLORS.amber : GAUGE_COLORS.green);
+  const sectors = resolveProximitySectors(proximity, now, linkUp);
+  const upLive = proximityObstacle(proximity[ORIENTATION_UP], now, linkUp);
+  const anyLive = proximityAnyLive(proximity, now, linkUp);
+  const closest = closestProximitySector(sectors);
+  const colour = (d: number | null) => (d === null ? GAUGE_COLORS.bezelEdge : GAUGE_COLORS[proximityTone(d)]);
   return (
     <RoundGauge
       label={t('map:sensorInstruments.proximity')}
       svgContent={
         <>
-          {sectors.map((d, k) => (
-            <path key={k} d={gaugeArcPath(38, k * 45 - 19, k * 45 + 19)} fill="none" stroke={colour(d)} strokeWidth={d === null ? 2 : 5} strokeLinecap="round" />
-          ))}
+          <circle cx={52} cy={52} r={PROX_NEAR_R} fill="none" stroke={GAUGE_COLORS.bezelEdge} strokeWidth={0.5} strokeDasharray="2 3" />
+          {sectors.map((s) => {
+            const from = s.index * 45 - 19;
+            const to = s.index * 45 + 19;
+            return (
+              <g key={s.index}>
+                <path d={gaugeArcPath(PROX_RIM_R, from, to)} fill="none" stroke={GAUGE_COLORS.bezelEdge} strokeWidth={1.5} strokeLinecap="round" />
+                {s.fraction !== null && (
+                  <path
+                    d={gaugeArcPath(PROX_NEAR_R + (PROX_RIM_R - PROX_NEAR_R) * s.fraction, from, to)}
+                    fill="none"
+                    stroke={colour(s.distance)}
+                    strokeWidth={5}
+                    strokeLinecap="round"
+                  />
+                )}
+              </g>
+            );
+          })}
           <polygon points="52,44 48,53 52,51 56,53" fill={GAUGE_COLORS.tickMajor} />
         </>
       }
     >
-      <span className="mt-4 text-[12px] font-semibold leading-none text-[var(--gauge-text)]" style={{ color: closest ? colour(closest.d) : undefined }}>
-        {closest ? fmt(closest.d) : anyLive ? t('map:sensorInstruments.clear') : '--'}
+      <span className="mt-4 text-[12px] font-semibold leading-none text-[var(--gauge-text)]" style={{ color: closest ? colour(closest.distance) : undefined }}>
+        {closest ? fmt(closest.distance!) : anyLive ? t('map:sensorInstruments.clear') : '--'}
       </span>
       <span className="mt-1 text-[8px] leading-none text-[var(--gauge-text-dim)]">
         {upLive !== null ? t('map:sensorInstruments.up', { d: fmt(upLive) }) : closest ? UNIT_LABELS.altitude[distUnit] : ''}

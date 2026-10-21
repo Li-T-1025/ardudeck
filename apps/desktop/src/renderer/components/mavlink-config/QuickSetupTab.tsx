@@ -1,6 +1,6 @@
 import { useTranslation } from 'react-i18next';
 import type { ReactNode } from 'react';
-import { AlertTriangle, ArrowRight, CheckCircle2, Database, Home, Lightbulb, Mountain, Radar, Radio, Rocket, Satellite, Send, Waves, XCircle } from 'lucide-react';
+import { AlertTriangle, ArrowRight, CheckCircle2, Database, Lightbulb, Mountain, Radar, Radio, Rocket, Satellite, Send, Waves, XCircle } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { mavlinkLinks, paramLookup, RATE_GROUPS, rateGroupLabel, rateParamName, serialPortLabel } from '../../../shared/mavlink-channels';
 import { boardPortLabel, boardPortRegistry } from '../../modules/module-extension-registries';
@@ -24,7 +24,8 @@ import { hasNewVehicleWizard, openNewVehicleWizard, type WizardEntry } from './n
 import { GpsCompassCard, RangefinderCard, TelemetryRadioCard } from './quick-setup-hardware-cards';
 import { HardwareSetupWizard } from './hardware-setup/HardwareSetupWizard';
 import { VibrationFilterCard } from './VibrationFilterCard';
-import { Card, Chips, Toggle, TONE_DOT, TONE_TEXT, useParam, type Tone } from './quick-setup-ui';
+import { Card, Chips, EnumChips, Toggle, TONE_DOT, TONE_TEXT, useParam, type Tone } from './quick-setup-ui';
+import { ReturnHomeCard } from './ReturnHomeCard';
 
 function isPlaneType(mavType: number | undefined): boolean {
   return mavType === 1 || (mavType !== undefined && mavType >= 19 && mavType <= 25);
@@ -57,107 +58,6 @@ function BitChips({ name, label }: { name: string; label: string }) {
         })}
       </div>
     </div>
-  );
-}
-
-/** An enum parameter as a select of the firmware's own choices, as the Safety tab does. */
-function EnumChips({ name, label }: { name: string; label: string }) {
-  const p = useParam();
-  const values = p.meta(name)?.values;
-  if (!p.has(name)) return null;
-  const value = p.get(name);
-  return (
-    <div>
-      {label && <label className="text-xs text-content-secondary block mb-1.5">{label}</label>}
-      <select
-        value={value}
-        onChange={(e) => p.set(name, Number(e.target.value))}
-        className="w-full px-3 py-2 bg-surface-raised border rounded-lg text-sm text-content focus:outline-none focus:border-blue-500"
-      >
-        {values ? Object.entries(values).map(([v, text]) => <option key={v} value={Number(v)}>{text}</option>) : <option value={value}>{value}</option>}
-      </select>
-    </div>
-  );
-}
-
-function ReturnHomeCard({ plane, onGoTo }: { plane: boolean; onGoTo: (tab: string) => void }) {
-  const { t } = useTranslation();
-  const p = useParam();
-  const k = 'mavlink-config:quickSetup.rtl';
-
-  // Copter keeps the return height in cm (RTL_ALT) or, on newer firmware, in m (RTL_ALT_M); Plane in m, older in cm
-  const altParam = plane
-    ? (p.has('RTL_ALTITUDE') ? 'RTL_ALTITUDE' : p.has('ALT_HOLD_RTL') ? 'ALT_HOLD_RTL' : null)
-    : (p.has('RTL_ALT_M') ? 'RTL_ALT_M' : p.has('RTL_ALT') ? 'RTL_ALT' : null);
-  if (!altParam) return null;
-  const inCm = altParam === 'RTL_ALT' || altParam === 'ALT_HOLD_RTL';
-  const raw = p.get(altParam);
-  const keepCurrent = plane && raw < 0;
-  const altM = keepCurrent ? 0 : inCm ? raw / 100 : raw;
-  const setAltM = (m: number) => p.set(altParam, inCm ? Math.round(m * 100) : m);
-
-  const terrainType = p.has('RTL_ALT_TYPE') && p.get('RTL_ALT_TYPE') === 1;
-  const terrainOff = terrainType && p.has('TERRAIN_ENABLE') && p.get('TERRAIN_ENABLE') === 0;
-  const tone: Tone = terrainOff ? 'risk' : keepCurrent ? 'warn' : altM < 15 ? 'risk' : altM < 30 ? 'warn' : 'ok';
-  const statusText = terrainOff ? t(`${k}.terrainOff`) : keepCurrent ? t(`${k}.statusCurrent`) : altM < 15 ? t(`${k}.statusLow`) : t(`${k}.statusHeight`, { m: Math.round(altM) });
-
-  const finalParam = p.has('RTL_ALT_FINAL_M') ? 'RTL_ALT_FINAL_M' : p.has('RTL_ALT_FINAL') ? 'RTL_ALT_FINAL' : null;
-  const finalCm = finalParam === 'RTL_ALT_FINAL';
-
-  return (
-    <Card
-      icon={<Home className="w-5 h-5 text-sky-500 dark:text-sky-400" />}
-      iconTone="bg-sky-500/15"
-      title={t(`${k}.title`)}
-      hint={t(`${k}.hint`)}
-      status={tone}
-      statusText={statusText}
-      more={{ label: t(`${k}.more`), onClick: () => onGoTo('parameters') }}
-    >
-      {plane && (
-        <Chips
-          label={t(`${k}.heightMode`)}
-          value={keepCurrent ? 0 : 1}
-          onChange={(v) => (v === 0 ? p.set(altParam, -1) : setAltM(Math.max(altM, 100)))}
-          options={[{ value: 1, label: t(`${k}.fixedHeight`) }, { value: 0, label: t(`${k}.currentHeight`) }]}
-        />
-      )}
-      {!keepCurrent && (
-        <DraggableSlider label={t(`${k}.height`)} value={altM} onChange={setAltM} min={0} max={300} step={5} color="#0EA5E9" hint={t(`${k}.heightHint`)} />
-      )}
-      {p.has('RTL_ALT_TYPE') && (
-        <Chips
-          label={t(`${k}.heightRef`)}
-          value={p.get('RTL_ALT_TYPE')}
-          onChange={(v) => p.set('RTL_ALT_TYPE', v)}
-          options={[{ value: 0, label: t(`${k}.aboveHome`) }, { value: 1, label: t(`${k}.aboveTerrain`) }]}
-        />
-      )}
-      {terrainOff && <p className="text-[11px] text-red-600 dark:text-red-400">{t(`${k}.terrainOffHint`)}</p>}
-      {finalParam && (() => {
-        const final = finalCm ? p.get(finalParam) / 100 : p.get(finalParam);
-        return (
-          <>
-            <Chips
-              label={t(`${k}.atHome`)}
-              value={final > 0 ? 1 : 0}
-              onChange={(v) => p.set(finalParam, v === 0 ? 0 : finalCm ? 500 : 5)}
-              options={[{ value: 0, label: t(`${k}.land`) }, { value: 1, label: t(`${k}.hover`) }]}
-            />
-            {final > 0 && (
-              <DraggableSlider label={t(`${k}.hoverHeight`)} value={final} onChange={(m) => p.set(finalParam, finalCm ? Math.round(m * 100) : m)} min={1} max={50} step={1} color="#0EA5E9" />
-            )}
-          </>
-        );
-      })()}
-      {p.has('RTL_LOIT_TIME') && (
-        <DraggableSlider label={t(`${k}.wait`)} value={p.get('RTL_LOIT_TIME') / 1000} onChange={(s) => p.set('RTL_LOIT_TIME', Math.round(s * 1000))} min={0} max={60} step={1} color="#0EA5E9" hint={t(`${k}.waitHint`)} />
-      )}
-      {plane && <EnumChips name="RTL_AUTOLAND" label={t(`${k}.autoland`)} />}
-      {plane && p.has('RTL_RADIUS') && (
-        <DraggableSlider label={t(`${k}.radius`)} value={p.get('RTL_RADIUS')} onChange={(m) => p.set('RTL_RADIUS', m)} min={0} max={300} step={5} color="#0EA5E9" hint={t(`${k}.radiusHint`)} />
-      )}
-    </Card>
   );
 }
 

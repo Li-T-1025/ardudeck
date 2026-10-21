@@ -123,6 +123,11 @@ export const INSTRUMENT_SEMANTICS: Record<string, InstrumentSemantics> = {
     priority: 58,
     idealSectors: ['B3', 'A3'],
   },
+  proximity: {
+    role: 'primaryFlight',
+    priority: 59,
+    idealSectors: ['B3', 'A3'],
+  },
   ekf: {
     role: 'status',
     priority: 60,

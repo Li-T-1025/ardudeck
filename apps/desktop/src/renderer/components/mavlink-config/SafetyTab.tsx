@@ -35,6 +35,8 @@ import { DraggableSlider } from '../ui/DraggableSlider';
 import { InfoCard } from '../ui/InfoCard';
 import { SigningSection } from '../settings/SigningSection';
 import { FENCE_TYPES } from './presets/mavlink-presets';
+import { ReturnHomeCard } from './ReturnHomeCard';
+import { getVehicleClass } from '../../../shared/telemetry-types';
 
 type ConfirmAction = { type: 'no-checks' };
 
@@ -311,6 +313,10 @@ const SafetyTab: React.FC<SafetyTabProps> = ({ onGoTo }) => {
   const { parameters, setParameter, modifiedCount, fetchParameters, isLoading, downloadState } = useParameterStore();
   const getParameterMetadata = useParameterStore((s) => s.getParameterMetadata);
   const firmware = useConnectionStore((s) => s.connectionState.firmware);
+  const mavType = useConnectionStore((s) => s.connectionState.mavType);
+  // Return height is an aircraft setting: rover and sub have no RTL_ALT, so no card there
+  const vehicleClass = getVehicleClass(mavType);
+  const showReturnHome = vehicleClass === 'copter' || vehicleClass === 'plane' || vehicleClass === 'vtol';
 
   // A completed download, not just whatever parameters happen to be present:
   // connect-time batch reads leave a handful behind and the tab would render
@@ -758,6 +764,9 @@ const SafetyTab: React.FC<SafetyTabProps> = ({ onGoTo }) => {
             </div>
           )}
         </div>
+
+        {/* Most failsafes above end in RTL, so its height lives next to them (issue #98) */}
+        {showReturnHome && <ReturnHomeCard plane={vehicleClass !== 'copter'} onGoTo={onGoTo} />}
       </div>
 
       {/* Arming checks moved to their own page: this tab is failsafes and fence. */}

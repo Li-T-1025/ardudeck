@@ -132,3 +132,23 @@ export function SmallButton({ onClick, children, disabled, primary }: { onClick:
     </button>
   );
 }
+
+/** An enum parameter as a select of the firmware's own choices, as the Safety tab does. */
+export function EnumChips({ name, label }: { name: string; label: string }) {
+  const p = useParam();
+  const values = p.meta(name)?.values;
+  if (!p.has(name)) return null;
+  const value = p.get(name);
+  return (
+    <div>
+      {label && <label className="text-xs text-content-secondary block mb-1.5">{label}</label>}
+      <select
+        value={value}
+        onChange={(e) => p.set(name, Number(e.target.value))}
+        className="w-full px-3 py-2 bg-surface-raised border rounded-lg text-sm text-content focus:outline-none focus:border-blue-500"
+      >
+        {values ? Object.entries(values).map(([v, text]) => <option key={v} value={Number(v)}>{text}</option>) : <option value={value}>{value}</option>}
+      </select>
+    </div>
+  );
+}

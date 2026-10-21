@@ -96,6 +96,17 @@ export const OVERLAYS: Array<{ id: OverlayId; labelKey: string; icon: JSX.Elemen
       </svg>
     ),
   },
+  {
+    id: 'proximity',
+    labelKey: 'map:overlays.proximity',
+    icon: (
+      <svg className="w-3.5 h-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+        <circle cx="12" cy="12" r="2" fill="currentColor" stroke="none" />
+        <path strokeLinecap="round" d="M5.6 5.6A9 9 0 0 1 18.4 5.6M3.2 14.5A9 9 0 0 1 3.2 9.5M20.8 9.5a9 9 0 0 1 0 5M5.6 18.4a9 9 0 0 0 12.8 0" />
+        <path strokeLinecap="round" strokeWidth={3} d="M8.6 8.6A4.8 4.8 0 0 1 15.4 8.6" />
+      </svg>
+    ),
+  },
 ];
 
 export function OverlayToggles() {

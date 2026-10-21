@@ -1341,9 +1341,8 @@ export const MAP_INSTRUMENTS: MapInstrumentDef[] = [
     { id: 'bar', labelKey: 'map:instrumentDisplay.bar', Component: () => <FlightControlInstrument variant="bar" /> },
   ] },
   { id: 'wind', round: true, profiles: ['air'], labelKey: 'map:instrumentRegistry.wind', defaultClassName: 'absolute left-3 top-[736px] z-[1000]', defaultVisible: false, Component: WindInstrument, NumericComponent: WindNumeric },
-  { id: 'rangefinder', labelKey: 'map:instrumentRegistry.rangefinder', defaultClassName: 'absolute left-[124px] top-[680px] z-[1000]', defaultVisible: false, Component: RangefinderInstrument, variants: [
-    { id: 'proximity', labelKey: 'map:instrumentDisplay.proximity', Component: ProximityInstrument, round: true },
-  ] },
+  { id: 'rangefinder', labelKey: 'map:instrumentRegistry.rangefinder', defaultClassName: 'absolute left-[124px] top-[680px] z-[1000]', defaultVisible: false, Component: RangefinderInstrument },
+  { id: 'proximity', round: true, labelKey: 'map:instrumentRegistry.proximity', defaultClassName: 'absolute left-3 top-[848px] z-[1000]', defaultVisible: false, Component: ProximityInstrument },
   { id: 'ekf', labelKey: 'map:instrumentRegistry.ekf', defaultClassName: 'absolute left-[124px] top-[760px] z-[1000]', defaultVisible: false, Component: EkfInstrument, variants: [
     { id: 'compact', labelKey: 'map:instrumentDisplay.compact', Component: EkfCompact },
   ] },

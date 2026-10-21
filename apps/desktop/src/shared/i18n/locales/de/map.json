@@ -163,7 +163,6 @@
     "inline": "Inline",
     "numeric": "Numerisch",
     "strip": "Leiste",
-    "proximity": "Nähe",
     "latest": "Nur neueste"
   },
   "instrumentRegistry": {
@@ -191,6 +190,7 @@
     "sticks": "Sticks (Joystick)",
     "wind": "Wind",
     "rangefinder": "Entfernungsmesser",
+    "proximity": "Nähe",
     "ekf": "EKF-Zustand",
     "flightTimer": "Flugzeit"
   },
@@ -441,7 +441,14 @@
     "remoteid": "Remote ID",
     "traffic": "Verkehr",
     "waypointdots": "Wegpunkte",
+    "proximity": "Näherungsring",
     "wind": "Wind"
+  },
+  "proximityDiscovery": {
+    "add": "Anzeige hinzufügen",
+    "body": "Hindernisabstände werden jetzt auf der Karte um das Fahrzeug gezeichnet. Die Näherungsanzeige auch zu den Instrumenten hinzufügen?",
+    "dismiss": "Jetzt nicht",
+    "title": "Näherungssensor erkannt"
   },
   "presetLayouts": {
     "minimalDesc": "Nur die Kugel, Flugdaten und die Statusleisten.",

@@ -23,7 +23,7 @@ import type { StreamDiagnosis } from '../../../shared/link-doctor-types';
 import { hardwareCatalogRegistry, matchUsbProduct } from '../../modules/module-extension-registries';
 import { isPrimaryLinkUp } from '../../lib/primary-link';
 
-const BAUD_RATES = [1500000, 921600, 460800, 230400, 115200, 57600, 38400, 19200, 9600];
+const BAUD_RATES = [1500000, 921600, 460800, 230400, 115200, 57600, 38400, 19200, 9600, 4800];
 
 interface MavlinkForwardStatus {
   running: boolean;

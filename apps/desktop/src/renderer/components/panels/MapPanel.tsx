@@ -16,6 +16,8 @@ import { useSettingsStore } from '../../stores/settings-store';
 import { Mission3DPanel } from '../mission/Mission3DPanel';
 import { TAKEOFF_AT_HOME_ICON } from '../mission/takeoff-icon';
 import { createTacticalVehicleIcon, updateTacticalIconDOM } from '../map/TacticalVehicleIcon';
+import { ProximityRingOverlay } from '../map/ProximityRingOverlay';
+import { ProximityDiscovery } from '../map/ProximityDiscovery';
 import { FleetMarkers } from '../fleet/FleetMarkers';
 import { MissionPathsToggle } from '../fleet/MissionPathsToggle';
 import { OfflineCacheBox } from '../map/OfflineCacheBox';
@@ -2110,6 +2112,17 @@ function LiveHeadingLine({ homePosition, defaultPosition }: {
   return <HeadingLine position={position} heading={heading} groundspeed={groundspeed} armed={armed} />;
 }
 
+function LiveProximityRing({ homePosition, defaultPosition }: {
+  homePosition: [number, number] | null;
+  defaultPosition: [number, number];
+}): JSX.Element | null {
+  const on = useOverlayStore((s) => s.activeOverlays.has('proximity'));
+  const position = useLiveVehiclePosition(homePosition, defaultPosition);
+  const heading = useTelemetryStore((s) => s.vfrHud.heading);
+  if (!on) return null;
+  return <ProximityRingOverlay position={position} heading={heading} />;
+}
+
 function LiveVehicleMarker({ tacticalClass, isSelected, activeIsLeader, activeDesignation, activeBodyColor, homePosition, defaultPosition, altitudeUnit, speedUnit, onSelectToggle }: {
   tacticalClass: ReturnType<typeof mavTypeToTacticalClass>;
   isSelected: boolean;
@@ -2910,6 +2923,9 @@ const TelemetryMap2D = React.memo(function TelemetryMap2D() {
         {/* Map overlays (self-subscribed to avoid re-rendering terrain) */}
         <MapOverlayLayers baseLayer={currentLayer} />
 
+        {/* Obstacle ring in real metres, drawn under the vehicle marker. */}
+        <LiveProximityRing homePosition={homePosition} defaultPosition={defaultPosition} />
+
         {/* Vehicle marker - tactical icon. Hidden when nothing is selected in fleet mode
             (the deselected vehicle reverts to an ordinary fleet marker via FleetMarkers). */}
         {(connectionState.isConnected || activeVehicleKey !== null) && (
@@ -2957,6 +2973,7 @@ const TelemetryMap2D = React.memo(function TelemetryMap2D() {
               panel root: on split their anchors re-derive against the map's own
               box, so they stay off the second surface. */}
           <InstrumentsLayer />
+          <ProximityDiscovery />
       {/* Top toolbar: inside the map half, so on split it hugs the MAP's
           right edge instead of floating over the second surface. */}
       {controlsHidden ? (

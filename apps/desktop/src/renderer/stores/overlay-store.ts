@@ -13,6 +13,8 @@ interface OverlayStore {
   // Toggle state
   activeOverlays: Set<OverlayId>;
   toggleOverlay: (id: OverlayId) => void;
+  /** Proximity data started arriving: show the ring unless the user switched it off before. */
+  enableProximityDefault: () => void;
 
   // Radar
   radarMeta: RainViewerMeta | null;
@@ -59,6 +61,27 @@ function writeDipulPref(on: boolean): void {
   }
 }
 
+const PROXIMITY_PREF_KEY = 'proximity-ring-preference'; // '1' | '0' | absent
+
+function readProximityPref(): 'on' | 'off' | null {
+  try {
+    const v = localStorage.getItem(PROXIMITY_PREF_KEY);
+    if (v === '1') return 'on';
+    if (v === '0') return 'off';
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+function writeProximityPref(on: boolean): void {
+  try {
+    localStorage.setItem(PROXIMITY_PREF_KEY, on ? '1' : '0');
+  } catch {
+    // ignore
+  }
+}
+
 function bboxIntersects(a: ViewportBounds, b: ViewportBounds): boolean {
   return a.west <= b.east && a.east >= b.west && a.south <= b.north && a.north >= b.south;
 }
@@ -100,6 +123,7 @@ export const useOverlayStore = create<OverlayStore>((set, get) => ({
     if (current.has(id)) {
       current.delete(id);
       if (id === 'dipul') writeDipulPref(false);
+      if (id === 'proximity') writeProximityPref(false);
     } else {
       // If enabling an OpenAIP-dependent overlay, check for API key first
       if ((id === 'openaip' || id === 'airspace') && state.openaipKeyMissing) {
@@ -108,7 +132,16 @@ export const useOverlayStore = create<OverlayStore>((set, get) => ({
       }
       current.add(id);
       if (id === 'dipul') writeDipulPref(true);
+      if (id === 'proximity') writeProximityPref(true);
     }
+    set({ activeOverlays: current });
+  },
+
+  enableProximityDefault: () => {
+    const { activeOverlays } = get();
+    if (activeOverlays.has('proximity') || readProximityPref() === 'off') return;
+    const current = new Set(activeOverlays);
+    current.add('proximity');
     set({ activeOverlays: current });
   },
 

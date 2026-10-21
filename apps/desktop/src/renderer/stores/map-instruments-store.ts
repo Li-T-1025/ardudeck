@@ -168,6 +168,43 @@ function sanitizeDisplayMode(parsed: unknown): Record<string, InstrumentDisplayM
   return out;
 }
 
+// Proximity was a rangefinder display variant before it got its own id.
+export function migrateProximityVariant(parsed: Record<string, unknown>): Record<string, unknown> {
+  const modes = parsed.displayMode;
+  if (!modes || typeof modes !== 'object' || (modes as Record<string, unknown>).rangefinder !== 'proximity') return parsed;
+  const displayMode = { ...(modes as Record<string, unknown>) };
+  delete displayMode.rangefinder;
+  const moveKey = (obj: unknown, from: string, to: string): unknown => {
+    if (!obj || typeof obj !== 'object') return obj;
+    const rec = { ...(obj as Record<string, unknown>) };
+    if (from in rec) {
+      rec[to] = rec[from];
+      delete rec[from];
+    }
+    return rec;
+  };
+  const visible = { ...((parsed.visible && typeof parsed.visible === 'object' ? parsed.visible : {}) as Record<string, unknown>) };
+  if (visible.rangefinder === true) {
+    visible.proximity = true;
+    visible.rangefinder = false;
+  }
+  const groups = parsed.groups && typeof parsed.groups === 'object'
+    ? Object.fromEntries(Object.entries(parsed.groups as Record<string, unknown>).map(([gid, g]) => {
+        const raw = g as { members?: unknown } | null;
+        return [gid, raw && Array.isArray(raw.members) ? { ...raw, members: raw.members.map((m) => (m === 'rangefinder' ? 'proximity' : m)) } : g];
+      }))
+    : parsed.groups;
+  return {
+    ...parsed,
+    displayMode,
+    visible,
+    groups,
+    scale: moveKey(parsed.scale, 'rangefinder', 'proximity'),
+    instrumentOpacity: moveKey(parsed.instrumentOpacity, 'rangefinder', 'proximity'),
+    positions: moveKey(parsed.positions, 'instrument:rangefinder', 'instrument:proximity'),
+  };
+}
+
 interface PersistedMain {
   visible: Record<string, boolean>;
   scale: Record<string, number>;
@@ -184,9 +221,14 @@ function readStored(): PersistedMain {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return fallback;
-    const parsed = JSON.parse(raw) as Record<string, unknown>;
-    if (parsed && typeof parsed === 'object' && ('visible' in parsed || 'scale' in parsed)) {
-      return {
+    const stored = JSON.parse(raw) as Record<string, unknown>;
+    if (stored && typeof stored === 'object' && ('visible' in stored || 'scale' in stored)) {
+      const parsed = migrateProximityVariant(stored);
+      if (parsed !== stored) {
+        const pos = readOverlayPosPayload('instrument:rangefinder');
+        if (pos !== null && readOverlayPosPayload('instrument:proximity') === null) writeOverlayPosPayload('instrument:proximity', pos);
+      }
+      const main: PersistedMain = {
         visible: sanitizeVisible(parsed.visible),
         scale: sanitizeScale(parsed.scale),
         opacity: typeof parsed.opacity === 'number' && Number.isFinite(parsed.opacity) ? clampOpacity(parsed.opacity) : 1,
@@ -194,7 +236,10 @@ function readStored(): PersistedMain {
         displayMode: sanitizeDisplayMode(parsed.displayMode),
         groups: sanitizeGroups(parsed.groups, knownIdsPlusCargo(parsed.groups)),
       };
+      if (parsed !== stored) persist(main);
+      return main;
     }
+    const parsed = stored;
     return { ...fallback, visible: sanitizeVisible(parsed) };
   } catch {
     return fallback;
@@ -211,7 +256,7 @@ function persist(s: PersistedMain): void {
 
 export function sanitizeLayout(parsed: unknown): InstrumentLayoutSnapshot | null {
   if (!parsed || typeof parsed !== 'object') return null;
-  const p = parsed as Record<string, unknown>;
+  const p = migrateProximityVariant(parsed as Record<string, unknown>);
   return {
     visible: sanitizeVisible(p.visible),
     scale: sanitizeScale(p.scale),

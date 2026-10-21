@@ -163,7 +163,6 @@
     "inline": "Inline",
     "numeric": "Numeric",
     "strip": "Strip",
-    "proximity": "Proximity",
     "latest": "Latest only"
   },
   "instrumentRegistry": {
@@ -191,6 +190,7 @@
     "sticks": "Sticks (joystick)",
     "wind": "Wind",
     "rangefinder": "Rangefinder",
+    "proximity": "Proximity",
     "ekf": "EKF health",
     "flightTimer": "Flight timer"
   },
@@ -441,7 +441,14 @@
     "remoteid": "Remote ID",
     "traffic": "Traffic",
     "waypointdots": "Waypoints",
+    "proximity": "Proximity ring",
     "wind": "Wind"
+  },
+  "proximityDiscovery": {
+    "add": "Add gauge",
+    "body": "Obstacle distances are now drawn around the vehicle on the map. Add the proximity gauge to the instruments as well?",
+    "dismiss": "Not now",
+    "title": "Proximity sensor detected"
   },
   "presetLayouts": {
     "minimalDesc": "Just the ball, flight data and the status strips.",
