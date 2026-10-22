@@ -1,0 +1,98 @@
+{
+  "layoutDetails": {
+    "description": "說明",
+    "editTitle": "編輯版面",
+    "name": "名稱",
+    "nameTaken": "該名稱已被使用。",
+    "optional": "(選填)",
+    "replace": "取代",
+    "replaceContents": "以目前畫面取代內容",
+    "replaceContentsHint": "目前的面板、駕駛艙儀表、地圖分割與視覺模式。",
+    "replacesExisting": "已有名為「{{name}}」的版面。儲存時會將其取代。",
+    "saveTitle": "儲存版面"
+  },
+  "layouts": {
+    "fpvDescription": "地圖與視覺並排。",
+    "fpvLabel": "FPV",
+    "importInvalidJson": "該檔案不是有效的 JSON。",
+    "importNoPanels": "該檔案中的版面沒有面板配置。",
+    "importNotLayout": "該檔案不是 ArduDeck 工作區版面。",
+    "importedName": "匯入的版面",
+    "missionDescription": "地圖、航點、高度剖面。",
+    "missionLabel": "Mission",
+    "pilotDescription": "地圖搭配合成視覺分割。",
+    "pilotLabel": "Pilot"
+  },
+  "panelHeader": {
+    "hideInstrument": "隱藏地圖儀表",
+    "popOut": "彈出",
+    "popOutTitle": "在新視窗開啟 {{title}}",
+    "showInstrument": "在地圖上顯示為儀表"
+  },
+  "quickStats": {
+    "alt": "高度",
+    "armed": "已解鎖",
+    "bat": "電池",
+    "disarmed": "已上鎖",
+    "hdg": "航向",
+    "noLink": "無連結",
+    "notConnected": "未連線",
+    "sat": "衛星",
+    "spd": "速度",
+    "thr": "油門"
+  },
+  "savedLayout": {
+    "confirmDelete": "刪除?",
+    "copyToClipboard": "複製到剪貼簿",
+    "deleteTip": "刪除",
+    "renameTip": "重新命名或加上說明",
+    "saveAsFile": "另存為檔案…",
+    "share": "分享…",
+    "shareTip": "分享"
+  },
+  "sensorHealth": {
+    "unhealthyTitle": "異常:{{sensors}},詳情請查看「訊息」面板"
+  },
+  "share": {
+    "copied": "已複製",
+    "failed": "無法分享",
+    "saved": "已儲存"
+  },
+  "speed": {
+    "eco": "省電",
+    "ecoTip": "更新較慢:適合訊號弱或遠距離的遙測連結",
+    "fc": "FC",
+    "fcTip": "不介入:ArduDeck 不會要求變更資料速率。載具會依飛控上儲存的速率持續傳送。若你已自行調整過這些速率,請選此項。",
+    "max": "最高",
+    "maxTip": "最快更新,適合 USB 或 WiFi 等高速連結",
+    "normal": "一般",
+    "normalTip": "平衡的更新速度,適合大多數連結"
+  },
+  "workspace": {
+    "buttonTip": "工作區:面板版面、檢視與面板",
+    "title": "工作區"
+  },
+  "workspaceDialog": {
+    "addPanel": "新增面板",
+    "builtIn": "內建",
+    "clipboardReadFailed": "無法讀取剪貼簿。",
+    "fromFile": "從檔案…",
+    "import": "匯入",
+    "importTip": "匯入他人分享的版面",
+    "map2d": "2D 地圖",
+    "map3d": "3D 地形",
+    "mapView": "地圖檢視",
+    "offlineHint": "在地圖上框選範圍,即可快取其圖磚供無網路時飛行使用。",
+    "offlineMaps": "離線地圖",
+    "panelLayout": "面板版面",
+    "pasteFromClipboard": "從剪貼簿貼上",
+    "resetToPreset": "重設為預設",
+    "saveCurrentAs": "另存目前版面為…",
+    "saveOfflineArea": "儲存區域供離線使用",
+    "saved": "已儲存",
+    "selectingArea": "選取中… 請在地圖上框選範圍",
+    "telemetryRate": "遙測速率",
+    "telemetryRateHint": "載具串流遙測的頻率。選擇 FC 時不會更動飛控本身的速率。",
+    "cargoPanelMissing": "This panel comes from a cargo that is not loaded right now."
+  }
+}

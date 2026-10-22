@@ -1,0 +1,133 @@
+{
+  "applyHint": "寫入數值會立即套用到節點上。請使用「儲存到節點」,讓設定在重新啟動後仍然保留。",
+  "applyHintRestart": "你的部分變更需要在節點重新啟動後才會生效。請先寫入,再「儲存到節點」,然後重新啟動節點。",
+  "busHealth": {
+    "bitrate": "位元率",
+    "busOff": "Bus-off 事件",
+    "diagnosis": {
+      "bus-off": {
+        "hint": "CAN 控制器進入 bus-off:匯流排有電氣故障。請檢查 CAN_H/CAN_L 是否短路或鬆脫、是否缺少接地,或缺少終端電阻。",
+        "title": "匯流排錯誤"
+      },
+      "healthy": {
+        "hint": "",
+        "title": "匯流排正常"
+      },
+      "idle": {
+        "hint": "此匯流排上沒有任何傳送或接收。請確認有 CAN 連接埠使用 DroneCAN,且變更 CAN 設定後飛控已重新啟動。",
+        "title": "沒有流量"
+      },
+      "no-ack": {
+        "hint": "飛控有送出訊框,但沒有任何裝置回應確認。請檢查線材(CAN_H 與 CAN_L 是否接反)、裝置是否有供電、兩端是否都接上 120 Ω 終端電阻(多數自動駕駛儀內建一個),以及位元率是否與裝置一致(DroneCAN 預設為 1 Mbit/s)。",
+        "title": "匯流排上沒有任何回應"
+      },
+      "rx-errors": {
+        "hint": "訊框抵達時已損毀或被丟棄。請檢查每個裝置的終端電阻、線材長度與位元率。",
+        "title": "接收錯誤"
+      }
+    },
+    "measuring": "量測中…",
+    "received": "已接收",
+    "sent": "傳送成功",
+    "subtitle": "飛控所見的 CAN{{port}},每 5 秒量測一次",
+    "timeouts": "未獲確認",
+    "title": "匯流排健康狀態",
+    "unavailable": "此韌體不回報 CAN 統計資料(需要 MAVLink FTP 與 @SYS/can0_stats.txt)。"
+  },
+  "col": {
+    "default": "預設",
+    "name": "名稱",
+    "range": "範圍",
+    "value": "值"
+  },
+  "confirmRestart": "確認重新啟動",
+  "danger": "注意",
+  "dangerTip": "錯誤的值可能使此節點脫離 CAN 匯流排,或覆寫其 bootloader。之後要救回它,需要以 USB 或 SLCAN 連接該節點。",
+  "discard": "捨棄",
+  "docsSource": "說明來自 ArduPilot AP_Periph 文件",
+  "error": {
+    "failed": "飛控拒絕了此連接埠的 CAN 轉送。",
+    "noResponse": "飛控沒有回應。請檢查該連接埠的驅動程式是否已啟用,且變更 CAN 設定後飛控已重新啟動。",
+    "request": "請求失敗:{{error}}",
+    "start": "無法啟動 CAN 轉送:{{error}}",
+    "unsupported": "此韌體版本不支援透過 MAVLink 進行 CAN 轉送,因此 ArduDeck 看不到 DroneCAN 匯流排。"
+  },
+  "fcHint": "這是飛控本身。其設定位於一般的參數表中。",
+  "filterPlaceholder": "篩選參數",
+  "framesTip": "開啟此分頁期間從匯流排接收到的 CAN 訊框",
+  "frames_one": "{{count}} frame",
+  "frames_other": "{{count}} 個訊框",
+  "hardware": "硬體",
+  "health": {
+    "critical": "嚴重",
+    "error": "錯誤",
+    "ok": "正常",
+    "warning": "警告"
+  },
+  "loadingParams": "正在讀取參數… {{count}}",
+  "mode": {
+    "initialization": "初始化中",
+    "maintenance": "維護中",
+    "offline": "離線",
+    "operational": "運作中",
+    "softwareUpdate": "韌體更新中"
+  },
+  "noBitsSet": "未選取任何項目",
+  "noBus": {
+    "body": "沒有 CAN 連接埠使用 DroneCAN 通訊協定。請將 CAN_P1_DRIVER 設為 1、CAN_D1_PROTOCOL 設為 DroneCAN,然後重新啟動飛控。",
+    "title": "尚未設定 DroneCAN 匯流排"
+  },
+  "noParams": "此節點沒有回報任何參數。",
+  "nodeFallbackName": "節點 {{id}}",
+  "offline": "離線",
+  "paramsSubtitle_one": "Node {{id}} · {{count}} parameter",
+  "paramsSubtitle_other": "節點 {{id}} · {{count}} 個參數",
+  "port": "CAN{{port}}",
+  "reboot": "重新啟動",
+  "rebootTip": "節點重新啟動後生效。",
+  "reload": "重新載入",
+  "requestError": {
+    "not-active": "監控已停止",
+    "notConnected": "未連線",
+    "rejected": "節點拒絕了它",
+    "timeout": "節點沒有回應"
+  },
+  "restart": "重新啟動節點",
+  "restarted": "已送出重新啟動。節點會在幾秒後重新出現。",
+  "review": {
+    "asksToWrite": "{{from}} 要求變更節點參數",
+    "saveOnNode": "同時儲存到節點上,讓這些值在重新啟動後仍然保留",
+    "title": "檢視 DroneCAN 變更",
+    "write_one": "Write {{count}} change",
+    "write_other": "寫入 {{count}} 項變更"
+  },
+  "saveToNode": "儲存到節點",
+  "saveToNodeTip": "將目前的值存入節點的快閃記憶體,讓它們在重新啟動後仍然保留",
+  "saved": "已儲存到節點。",
+  "software": "軟體",
+  "start": "開始",
+  "status": {
+    "active": "監控中",
+    "failed": "已拒絕",
+    "idle": "已停止",
+    "noResponse": "沒有回應",
+    "starting": "連線中",
+    "unsupported": "不支援"
+  },
+  "stop": "停止",
+  "stoppedHint": "監控已停止。按「開始」以讀取匯流排。",
+  "subtitle": "CAN 匯流排上的裝置,透過飛控讀取",
+  "thisFc": "此飛控",
+  "title": "DroneCAN",
+  "uniqueId": "唯一 ID",
+  "uptime": "運行時間",
+  "valueNotListed": "{{value}}(不在清單中)",
+  "waitingForNodes": "正在監聽匯流排。節點在傳送狀態後一秒內就會出現。",
+  "writeChanges_one": "Write {{count}} change",
+  "writeChanges_other": "寫入 {{count}} 項變更",
+  "writeFailed": "未寫入:{{names}}",
+  "writtenAndSaved_one": "{{count}} value written and saved on the node.",
+  "writtenAndSaved_other": "已寫入 {{count}} 個值並儲存到節點上。",
+  "written_one": "{{count}} value written.",
+  "written_other": "已寫入 {{count}} 個值。"
+}

@@ -1,0 +1,24 @@
+{
+  "preArmParamFix": {
+    "openInParameters": "在參數中開啟",
+    "openParamTitle": "在參數中開啟 {{paramId}}"
+  },
+  "preflightCheckCard": {
+    "issues_one": "{{count}} issue",
+    "issues_other": "{{count}} 個問題",
+    "readyToArm": "可以解鎖",
+    "recheck": "重新檢查",
+    "title": "飛行前檢查"
+  },
+  "safetyConfigCard": {
+    "applied": "已套用",
+    "items_one": "{{count}} item",
+    "items_other": "{{count}} 個項目",
+    "setsParamTip": "將 {{param}} 設為 {{value}}",
+    "severityAdvisory": "值得留意",
+    "severityCritical": "請勿飛行",
+    "severityWarning": "請檢查",
+    "title": "安全設定",
+    "writeFailed": "無法寫入,請改為開啟該參數"
+  }
+}

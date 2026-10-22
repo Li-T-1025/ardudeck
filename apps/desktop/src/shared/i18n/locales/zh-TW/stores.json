@@ -1,0 +1,361 @@
+{
+  "appStore": {
+    "installFailed": "安裝失敗",
+    "uninstallFailed": "解除安裝失敗"
+  },
+  "ardupilotSitlStore": {
+    "browseFailed": "瀏覽失敗",
+    "downloadBinaryFailed": "下載 {{track}} 執行檔失敗",
+    "downloadFailed": "下載失敗",
+    "flightGearFailed": "啟動 FlightGear 失敗",
+    "model": {
+      "balancebot": "平衡車",
+      "coax": "共軸直升機",
+      "hexa": "六旋翼",
+      "plane": "飛機(預設)",
+      "quad": "四旋翼(預設)",
+      "quadPlus": "四旋翼 Plus (+)",
+      "rover": "地面車(預設)",
+      "sailboat": "帆船",
+      "single": "單旋翼直升機",
+      "skid": "滑移轉向",
+      "spoilers": "帶擾流板的飛機",
+      "vectored": "向量式(預設)",
+      "vectored6dof": "向量式 6DOF",
+      "vtail": "V 尾飛機"
+    },
+    "startFailed": "啟動 SITL 失敗"
+  },
+  "calibrationStore": {
+    "confirmPositionFailed": "確認位置失敗",
+    "finalizing": "正在於飛控上完成校準...",
+    "instructions": {
+      "compass": "請將你的載具朝所有方向旋轉",
+      "default": "請依照螢幕上的指示操作",
+      "gyro": "請讓你的載具完全保持靜止",
+      "level": "請將你的載具放在水平面上",
+      "opflow": "請將載具穩定地保持在有紋理的表面上方"
+    },
+    "loadFileFailed": "載入檔案失敗",
+    "loadSensorConfigFailed": "載入感測器設定失敗",
+    "noTrackedParams": "無法從飛控讀取任何追蹤的參數",
+    "noTypeSelected": "未選擇校準類型",
+    "readParamsFailed": "讀取校準參數失敗",
+    "saveDataFailed": "儲存校準資料失敗",
+    "savePersistentFailed": "儲存到永久儲存空間失敗",
+    "saving": "正在儲存校準...",
+    "sensorMissing": "{{name}} 需要 {{sensor}} 感測器,但目前不可用",
+    "silentFailure": "飛控回報成功,但校準參數沒有改變。校準其實靜默失敗了,請再試一次。",
+    "startFailed": "啟動校準失敗",
+    "unsupportedProtocol": "{{protocol}} 通訊協定不支援 {{name}}",
+    "verificationFailed": "驗證失敗",
+    "waitingForFc": "正在等待飛控..."
+  },
+  "cliStore": {
+    "rebooting": "機板正在重新啟動...",
+    "reconnecting": "正在重新連線到機板...",
+    "saveFailed": "儲存設定失敗",
+    "savedReconnected": "設定已儲存!機板已重新連線。",
+    "savedReconnecting": "設定已儲存!正在重新連線...",
+    "savingConfig": "正在將設定儲存到 EEPROM..."
+  },
+  "fenceStore": {
+    "clearFailed": "清除圍欄失敗",
+    "cleared": "已從飛控清除圍欄",
+    "downloadFailed": "下載圍欄失敗",
+    "downloaded": "已從飛控下載 {{count}} 個圍欄項目",
+    "nothingToUpload": "沒有可上傳的圍欄項目",
+    "uploadFailed": "上傳圍欄失敗",
+    "uploaded": "已將 {{count}} 個圍欄項目上傳到飛控"
+  },
+  "firmwareStore": {
+    "alreadyAirplane": "機板已設定為飛機",
+    "bootloaderFailed": "進入 bootloader 失敗",
+    "cannotIdentify": "無法辨識 {{port}} 上的機板。請手動選擇你的機板。",
+    "checkingPlatform": "正在檢查平台設定...",
+    "configurationFailed": "設定失敗",
+    "configuredAirplane": "機板已設定為飛機!準備好時請重新連線。",
+    "configuringAirplane": "正在將機板設定為飛機...",
+    "connectRetry": "連線失敗,{{seconds}} 秒後重試...",
+    "connectingAttempt": "正在連線到機板(第 {{attempt}}/{{max}} 次嘗試)...",
+    "detectionFailed": "偵測失敗",
+    "downloadFailed": "下載失敗",
+    "downloadingFirmware": "正在下載韌體...",
+    "fetchBoardsFailed": "取得機板清單失敗",
+    "fetchBoardsNoMessage": "取得機板清單失敗(沒有錯誤訊息)",
+    "fetchVersionsFailed": "取得版本清單失敗",
+    "fetchVersionsNoMessage": "取得版本清單失敗(沒有錯誤訊息)",
+    "noBoard": "沒有連線的機板。請先點擊「連線」。",
+    "noBootloader": "在 {{port}} 上找不到 STM32 bootloader。請確認機板處於 bootloader 模式。",
+    "noFile": "未選擇韌體檔案",
+    "noPortForReconnect": "找不到用於重新連線的連接埠",
+    "noUsbDevice": "未偵測到 USB 裝置。請確認你的飛控已連接。",
+    "noVersion": "未選擇韌體版本",
+    "probeFailed": "探測失敗",
+    "readMixerFailed": "讀取 iNav 混控設定失敗",
+    "reconnectAfterFlashFailed": "燒錄後無法連線。USB 序列晶片可能需要實體拔除再插上。請中斷機板連線、重新連接,然後使用伺服精靈將其設定為飛機。",
+    "savingEeprom": "正在儲存到 EEPROM...",
+    "setPlatformFailed": "將平台類型設為飛機失敗",
+    "startingFlash": "開始燒錄...",
+    "vehicleTypeMismatch": "載具類型不符:你選擇了 {{selected}},但所選版本是 {{version}}。請重新選擇載具與版本,然後再試一次。",
+    "waitingReboot": "正在等待機板重新啟動(6 秒)..."
+  },
+  "fleetRepoStore": {
+    "boundarySaved": "邊界已儲存到 {{site}}",
+    "boundaryUnchanged": "邊界自上次快照以來沒有變更",
+    "cannotIdentify": "無法辨識載具。請在保管庫的「正在處理」下選擇一個。",
+    "deleteFailed": "無法刪除載具",
+    "deleted": "載具已刪除。它的快照仍保留在歷史紀錄中。",
+    "firmwareMismatch": "該快照取自 {{snapshotFirmware}},但此載具正在執行 {{liveFirmware}}。其參數名稱無法跨飛行堆疊沿用。",
+    "linkFailed": "連結失敗",
+    "linked": "載具已連結;快照會繼續記錄在該單元中",
+    "missionSaved": "任務已儲存到 {{site}}",
+    "missionUnchanged": "任務自上次快照以來沒有變更",
+    "newVehicleSaved": "已儲存新載具「{{name}}」({{count}} 個參數)",
+    "noChanges": "自上次快照以來沒有變更",
+    "noMission": "沒有可建立快照的已載入任務。",
+    "noParams": "沒有可建立快照的已載入參數。",
+    "noSurveyPolygon": "地圖上沒有可建立快照的測繪多邊形。",
+    "readSnapshotFailed": "無法從保管庫讀取快照。",
+    "renameFailed": "重新命名失敗",
+    "restoredPartial": "已還原 {{applied}} 項,{{failed}} 項失敗",
+    "restored_one": "Restored {{count}} parameter",
+    "restored_other": "已還原 {{count}} 個參數",
+    "snapshotFailed": "快照失敗",
+    "snapshotSaved": "快照已儲存({{count}} 個參數)",
+    "syncFailed": "同步失敗",
+    "synced": "已與 GitHub 同步",
+    "vaultUnavailable": "保管庫無法使用",
+    "wrongOwner": "該快照屬於 {{owner}},而不是目前連線的載具。請從此載具的歷史紀錄開啟快照,或如果這就是該飛行器,請將「正在處理」設為 {{owner}}。"
+  },
+  "flightControlStore": {
+    "trainerActive": "Trainer 工作階段進行中,搖桿由 Trainer 掌控"
+  },
+  "groupShapeStore": {
+    "description": {
+      "edgesOnly": "只有整排的兩端會凸起,中間的儀表保持平整",
+      "roundedAll": "每個圓形儀表都有自己的圓形凸起",
+      "square": "平面卡片,沒有凸起,保留原本外觀"
+    },
+    "label": {
+      "edgesOnly": "圓角(僅兩端)",
+      "roundedAll": "圓角(每個儀表)",
+      "square": "方形"
+    }
+  },
+  "guideStore": {
+    "emptyFile": "空檔案",
+    "importUnavailable": "無法匯入",
+    "noShapes": "檔案中找不到多邊形或線條",
+    "noValidPoints": "沒有可新增的有效點。"
+  },
+  "legacyConfigStore": {
+    "loadFailed": "載入設定失敗",
+    "rebooting": "機板正在重新啟動...",
+    "reconnecting": "正在重新連線到機板...",
+    "saveFailed": "儲存設定失敗",
+    "savedReconnect": "設定已儲存!機板已重新啟動。請重新連線。",
+    "savingConfig": "正在將設定儲存到 EEPROM..."
+  },
+  "missionLibraryStore": {
+    "readFailed": "無法從備份讀取該任務",
+    "writeFailed": "無法寫入備份"
+  },
+  "missionStore": {
+    "clearFailed": "清除任務失敗",
+    "clearWaypointsFailed": "清除航點失敗",
+    "cleared": "已從飛控清除任務",
+    "clearedFromFc": "已從飛控清除任務",
+    "downloadFailed": "下載任務失敗",
+    "downloadedFromFcInto": "已從飛控下載 {{count}} 個航點到「{{group}}」",
+    "downloadedInto": "已從飛控下載 {{count}} 個航點到「{{group}}」",
+    "groupEmptySave": "此群組中沒有可儲存的航點",
+    "groupEmptyUpload": "此群組中沒有可上傳的航點",
+    "mspNotSupported": "下載航點失敗:不支援 MSP",
+    "noWaypointsOnFc": "飛控上沒有航點",
+    "noWaypointsToUpload": "沒有可上傳的航點(是否已取消選取所有群組?)",
+    "recovered": "已從你上次的工作階段復原 {{count}} 個航點",
+    "savedToFile": "已將 {{count}} 個航點儲存到檔案",
+    "uploadFailed": "上傳任務失敗",
+    "uploadToVehicleFailed": "上傳任務到載具失敗",
+    "uploadWaypointsFailed": "上傳航點失敗",
+    "uploadedToFc": "已將 {{count}} 個航點上傳到飛控",
+    "uploadedToFlightController": "已將 {{count}} 個航點上傳到飛控",
+    "uploadedToVehicle": "已將 {{count}} 個航點上傳到載具",
+    "vehicleMissionLabel": "載具任務 @ {{stamp}}",
+    "fromVehicleGroup": "來自載具 @ {{stamp}}",
+    "downloadedGroup": "下載於 @ {{stamp}}"
+  },
+  "modesWizardStore": {
+    "clearSlotFailed": "清除模式欄位 {{i}} 失敗",
+    "eepromSaveFailed": "模式已送出,但 EEPROM 儲存失敗",
+    "loadFailed": "載入模式失敗",
+    "loadFromFcFailed": "從飛控載入模式失敗",
+    "saveFailed": "儲存模式失敗",
+    "setModeFailed": "設定模式 {{i}} 失敗"
+  },
+  "moduleStore": {
+    "activationFailed": "啟用失敗",
+    "installFailed": "安裝失敗",
+    "toggleFailed": "切換失敗",
+    "updateFailed": "更新失敗",
+    "updateFailedFor": "{{slug}} 更新失敗"
+  },
+  "orchestratorEngineStore": {
+    "addSourceFailed": "新增來源失敗",
+    "startFailed": "啟動多載具失敗"
+  },
+  "osdStore": {
+    "ardupilotFont": "ArduPilot 透過 OSD_FONT 參數選擇字型,而非透過上傳",
+    "connectFcFirst": "請先連線到飛控",
+    "connectFirst": "請先連線到 ArduPilot 或 Betaflight/iNav 飛控",
+    "connectForFont": "請連接 Betaflight/iNAV 機板以上傳類比字型",
+    "downloadingParams": "正在下載參數…",
+    "fontUploadFailed": "字型上傳失敗:{{msg}}",
+    "fontUploaded": "字型已上傳({{count}} 個字元),請重新啟動飛控以套用",
+    "loadFontFailed": "載入字型失敗",
+    "loadedFromFc": "已從飛控載入 {{count}} 個元素",
+    "loadedFromScreen": "已從螢幕 {{screen}} 載入 {{resolved}} 個元素",
+    "noConfig": "飛控沒有回傳 OSD 設定",
+    "noFont": "尚未載入字型",
+    "noOsdParams": "此機板沒有 OSD 參數(要設定 OSD_TYPE 嗎?)",
+    "readFailed": "讀取失敗:{{msg}}",
+    "reading": "正在從飛控讀取...",
+    "unknownError": "未知錯誤",
+    "unknownFont": "未知的內建字型:{{name}}",
+    "uploadFailed": "上傳失敗:{{msg}}",
+    "uploadedPartial": "已上傳 {{confirmed}}/{{total}};{{failed}} 個未確認",
+    "uploadedSaved": "已上傳 {{count}} 個元素並儲存到飛控",
+    "uploadedToScreen": "已將 {{count}} 個參數上傳到螢幕 {{screen}}",
+    "uploadingFont": "正在將字型上傳到飛控 NVM…",
+    "uploadingLayout": "正在上傳 OSD 版面...",
+    "uploadingParams": "正在上傳 {{count}} 個參數..."
+  },
+  "parameterStore": {
+    "requestFailed": "請求參數失敗",
+    "setFailed": "設定參數失敗"
+  },
+  "pseudoTxStore": {
+    "enableFirst": "請先開啟 USB 發射機",
+    "linkLost": "載具連結中斷,搖桿控制已釋放",
+    "needsMavlink": "需要已連線的 MAVLink 載具",
+    "noBridge": "此視窗中沒有 SITL RC 橋接,影格無處可去",
+    "overrideRejected": "覆寫被連結拒絕"
+  },
+  "px4SitlStore": {
+    "disconnecting": "正在中斷與已停止的 SITL 的連線。",
+    "downloadFailed": "下載失敗",
+    "startFailed": "啟動 SITL 失敗"
+  },
+  "quickSetupStore": {
+    "applyFailed": "套用失敗",
+    "applyPresetFailed": "套用預設失敗",
+    "changePlatformFailed": "變更平台類型失敗",
+    "connectionLost": "設定期間連線中斷。請重新連線後再試一次。",
+    "noPreset": "未選擇預設",
+    "notConnected": "未連線到飛控。請先連線。",
+    "platformChangeUnknown": "變更平台時發生未知錯誤",
+    "reconnectFailed": "變更平台後重新連線失敗。請手動重新連線後再試一次。",
+    "saveEepromFailed": "儲存到 EEPROM 失敗",
+    "setPidsFailed": "設定 PID 失敗",
+    "setRatesFailed": "設定速率失敗",
+    "task": {
+      "checkPlatform": "正在檢查平台",
+      "clearModes": "正在清除舊模式",
+      "clearServoMixer": "正在清除伺服混控",
+      "exitCli": "正在離開 CLI 模式",
+      "failsafe": "正在設定 Failsafe",
+      "modes": "正在設定飛行模式",
+      "motorMixer": "正在設定馬達混控",
+      "pids": "正在設定 PID",
+      "rates": "正在設定速率",
+      "saveEeprom": "正在儲存到 EEPROM",
+      "saveReboot": "正在儲存並重新啟動",
+      "sendCli": "正在送出 CLI 指令",
+      "servoMixer": "正在設定伺服混控"
+    }
+  },
+  "rallyStore": {
+    "clearFailed": "清除集結點失敗",
+    "cleared": "已從飛控清除集結點",
+    "downloadFailed": "下載集結點失敗",
+    "downloaded": "已從飛控下載 {{count}} 個集結點",
+    "nothingToUpload": "沒有可上傳的集結點",
+    "uploadFailed": "上傳集結點失敗",
+    "uploaded": "已將 {{count}} 個集結點上傳到飛控"
+  },
+  "servoWizardStore": {
+    "changePlatformFailed": "無法將平台變更為 {{platform}}。對於 iNav 2.0.0,你可能需要使用 iNav Configurator 變更混控類型,然後重新連線。",
+    "checkSupportFailed": "檢查伺服支援失敗。請再試一次。",
+    "firmwareTooOld": "此韌體不支援伺服設定。iNav 2.0.0 可能太舊,請嘗試更新到較新的版本。",
+    "multirotorNoServos": "此機板在多旋翼模式下無法使用伺服輸出。這是硬體限制,並非所有飛控機板在設定為四軸/六軸時都能輸出伺服訊號。",
+    "noServos": "未偵測到伺服輸出。請確認你的機板支援伺服。",
+    "noServosGimbal": "此機板沒有可用於雲台控制的伺服輸出。",
+    "platformChangeError": "變更平台時發生錯誤:{{error}}。請嘗試使用 iNav Configurator 變更混控類型。",
+    "saveEepromFailed": "儲存到 EEPROM 失敗",
+    "setServoFailed": "設定伺服 {{index}} 失敗",
+    "step": {
+      "aircraft": "飛行器",
+      "aircraftDesc": "選擇你的飛行器類型",
+      "assign": "指派",
+      "assignDesc": "將伺服對應到控制舵面",
+      "endpoints": "校準",
+      "endpointsDesc": "調整伺服限制",
+      "review": "儲存",
+      "reviewDesc": "檢視並儲存",
+      "test": "測試",
+      "testDesc": "驗證伺服動作"
+    },
+    "timeout": "逾時"
+  },
+  "signingStore": {
+    "enableFailed": "啟用簽章失敗",
+    "sendFailed": "傳送到飛控失敗",
+    "setKeyFailed": "設定金鑰失敗"
+  },
+  "sitlStore": {
+    "bridgeStopped": "通訊協定橋接已停止。",
+    "cannotDeleteStandard": "無法刪除標準設定檔",
+    "flightGearFailed": "啟動 FlightGear 失敗",
+    "nameExists": "設定檔名稱已存在",
+    "noProfile": "未選擇設定檔",
+    "profileDescription": {
+      "Airplane": "已預先設定為搭配飛機混控的固定翼測試。",
+      "Default": "全新的 iNav 安裝,採用原廠預設值。用於一般測試。",
+      "Quadcopter": "已預先設定為搭配 X 混控的四軸測試。"
+    },
+    "startFailed": "啟動 SITL 失敗",
+    "startingBridge": "正在啟動通訊協定橋接...",
+    "startingInav": "正在啟動 iNav SITL...",
+    "stoppingBridge": "正在停止通訊協定橋接...",
+    "waitingFlightGear": "正在等待 FlightGear 初始化(15-30 秒)...",
+    "waitingXPlane": "正在等待 X-Plane 初始化(10 秒)...",
+    "xplaneFailed": "啟動 X-Plane 失敗"
+  },
+  "surveyAreaStore": {
+    "readFailed": "無法從保管庫讀取該區域",
+    "writeFailed": "無法寫入保管庫"
+  },
+  "surveyStore": {
+    "emptyFile": "空檔案",
+    "generateFailed": "無法從匯入的區域產生測繪",
+    "generating": "正在產生航點...",
+    "generatorFailed": "產生器失敗:{{message}}",
+    "importUnavailable": "無法匯入",
+    "importing": "正在匯入測繪,產生航點中...",
+    "loading": "正在載入測繪...",
+    "noShapes": "檔案中找不到多邊形邊界或線條",
+    "recomputing": "正在重新計算 {{count}} 個航點...",
+    "reloadingArea": "正在重新載入已儲存的區域..."
+  },
+  "swarmSitlStore": {
+    "startFailed": "啟動群飛失敗"
+  },
+  "weatherStore": {
+    "unavailable": "無法取得天氣資料。請檢查你的網路連線後再試一次。"
+  },
+  "windStore": {
+    "fetchFailed": "取得風資料失敗",
+    "unavailable": "無法取得風資料"
+  }
+}

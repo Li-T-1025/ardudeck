@@ -1,0 +1,50 @@
+{
+  "appShell": {
+    "about": "關於 ArduDeck",
+    "clickToDisconnect": "點擊以中斷連線",
+    "disconnected": "未連線",
+    "fleetCount": "機隊 ({{count}})",
+    "fleetTitle": "透過多載具連結連線的機隊。點擊以開啟遙測。",
+    "noneSelected": " · 未選取",
+    "staleDisconnect": "已 {{seconds}} 秒無資料。點擊以中斷連線",
+    "staleShort": "已 {{seconds}} 秒無資料",
+    "voiceMuted": "語音警示已靜音。點擊以取消靜音",
+    "voiceOn": "語音警示已開啟。點擊以靜音",
+    "waiting": "等待中...",
+    "osBadge": "OS",
+    "osBadgeTitle": "正在 {{osName}} 上執行。載具連結與參數快取由系統提供。"
+  },
+  "armDisarm": {
+    "arm": "解鎖",
+    "armNotConfigured": "飛控上未設定解鎖模式。請在「模式」分頁為解鎖指定一個 AUX 通道。",
+    "armTitle": "解鎖",
+    "armingBlocked": "解鎖被阻擋",
+    "disarm": "上鎖",
+    "disarmTitle": "上鎖",
+    "forceArm": "強制解鎖",
+    "forceArmHint": "略過解鎖前安全檢查",
+    "forceArmLabel": "強制解鎖",
+    "forceArmTitle": "強制解鎖(略過檢查)",
+    "mspUnknown": "未知",
+    "preArmFailed": "解鎖前檢查未通過",
+    "title": "{{action}},按右鍵可開啟選項"
+  },
+  "quickLaunch": {
+    "areaEditorDesc": "繪製任務區域:多區域、挖洞、KML",
+    "button": "快速啟動",
+    "buttonTitle": "快速啟動:在獨立視窗開啟工具",
+    "inspectorDesc": "即時查看訊息與圖表",
+    "simWorldDesc": "在持久的 3D 世界中飛行 SITL:障礙物、圍欄、任務",
+    "telemetryDashboard": "遙測儀表板",
+    "telemetryDashboardDesc": "在獨立畫面顯示即時遙測",
+    "locusDesc": "開啟 ArduDeck Locus:PPK、攝影測量與 LiDAR"
+  },
+  "updateBanner": {
+    "available": "<b>ArduDeck {{version}}</b> 已可使用{{name}}",
+    "downloading": "正在下載 <b>ArduDeck {{version}}</b>",
+    "newVersion": "新版本",
+    "ready": "<b>ArduDeck {{version}}</b> 已可安裝",
+    "restartToUpdate": "重新啟動以更新",
+    "viewRelease": "檢視發行說明"
+  }
+}

@@ -1,0 +1,19 @@
+{
+  "dashboard": {
+    "accCalStarted": "加速度計校準已開始。請保持機板靜止!",
+    "armedBadge": "已解鎖",
+    "calibrateAcc": "校準加速度計",
+    "connectedOn": "{{board}} 上的 {{variant}} {{version}}",
+    "cpuLoad": "CPU 負載",
+    "cycleTime": "週期時間",
+    "disarmedBadge": "已上鎖",
+    "fix": "修正",
+    "lastUpdate": "上次更新:{{time}}",
+    "rebootConfirm": "要重新啟動飛控嗎?",
+    "refreshPorts": "重新整理連接埠",
+    "startTelemetry": "開始遙測",
+    "stopTelemetry": "停止遙測",
+    "subtitle": "連線到 Betaflight、iNav 或 Cleanflight 機板",
+    "used": "已使用"
+  }
+}

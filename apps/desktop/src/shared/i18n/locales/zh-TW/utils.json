@@ -1,0 +1,386 @@
+{
+  "flightBriefing": {
+    "batteries": "電池",
+    "ceiling": "上限 {{altitude}} AGL",
+    "distance": "距離",
+    "flightTime": "飛行時間",
+    "flightTimeDetail": "依巡航速度估算",
+    "gusts": "陣風 {{speed}}",
+    "maxAltitude": "最大高度",
+    "maxFromHome": "距 Home 最遠",
+    "reserve": "保留",
+    "reserveDetail": "在最後一顆電池上",
+    "setProfile": "請設定載具設定檔以取得續航資訊",
+    "unknown": "未知",
+    "usableEach": "每顆約可用 {{duration}}",
+    "wind": "風"
+  },
+  "joystickSafety": {
+    "assign": "請先指派 {{names}}",
+    "offTarget": "{{name}} (CH{{ch}}) 為 {{pwm}},需要 {{want}}",
+    "channel": "CH{{n}}",
+    "role": {
+      "roll": "橫滾",
+      "pitch": "俯仰",
+      "throttle": "油門",
+      "yaw": "偏航"
+    },
+    "want": {
+      "centre": "約 {{pwm}}(中立)",
+      "idle": "{{pwm}} 或以下(怠速)",
+      "zeroThrust": "約 {{pwm}}(零推力)",
+      "radio": "約 {{pwm}}(依你的遙控器)",
+      "low": "{{pwm}} 或以下(低)",
+      "high": "{{pwm}} 或以上(高)"
+    }
+  },
+  "osdCategories": {
+    "altitude": {
+      "description": "高度、海平面高度、升降速度計",
+      "name": "高度與升降速度"
+    },
+    "attitude": {
+      "description": "十字準線、地平線、俯仰、橫滾、航向",
+      "name": "姿態"
+    },
+    "battery": {
+      "description": "電壓、電流、容量、效率",
+      "name": "電池與電源"
+    },
+    "general": {
+      "description": "飛行模式、警告、機體資訊",
+      "name": "一般"
+    },
+    "gps": {
+      "description": "衛星數、HDOP、座標",
+      "name": "GPS"
+    },
+    "mission": {
+      "description": "VTX、風向指示",
+      "name": "任務"
+    },
+    "radio": {
+      "description": "RSSI、油門位置",
+      "name": "無線電與控制"
+    },
+    "sensors": {
+      "description": "溫度、G 值、ESC 資料",
+      "name": "感測器"
+    },
+    "speed": {
+      "description": "地速、空速、距離",
+      "name": "速度與距離"
+    },
+    "timers": {
+      "description": "飛行時間、開機時間、剩餘時間",
+      "name": "計時器"
+    }
+  },
+  "osdElements": {
+    "airspeed": {
+      "description": "來自皮托管的指示空速",
+      "name": "空速"
+    },
+    "altitude": {
+      "description": "距地面/Home 的高度",
+      "name": "高度 (AGL)"
+    },
+    "armed_status": {
+      "description": "顯示已解鎖或已上鎖狀態",
+      "name": "解鎖狀態"
+    },
+    "artificial_horizon": {
+      "description": "姿態地平線指示線",
+      "name": "人工地平線"
+    },
+    "baro_temp": {
+      "description": "氣壓計感測器溫度",
+      "name": "氣壓計溫度"
+    },
+    "battery_cell_voltage": {
+      "description": "每顆電芯的平均電壓",
+      "name": "電芯電壓"
+    },
+    "battery_percent": {
+      "description": "電池剩餘電量百分比",
+      "name": "電池百分比"
+    },
+    "battery_voltage": {
+      "description": "電池組總電壓",
+      "name": "電池電壓"
+    },
+    "coordinates": {
+      "description": "以兩行顯示緯度與經度",
+      "name": "座標"
+    },
+    "craft_name": {
+      "description": "使用者設定的飛行器名稱",
+      "name": "機體名稱"
+    },
+    "crosshairs": {
+      "description": "螢幕中央的飛行器指示",
+      "name": "十字準線"
+    },
+    "current_draw": {
+      "description": "瞬時電流消耗(安培)",
+      "name": "電流消耗"
+    },
+    "distance": {
+      "description": "距 Home 點的距離",
+      "name": "Home 距離"
+    },
+    "efficiency": {
+      "description": "每公里 mAh 的效率指標",
+      "name": "效率"
+    },
+    "esc_rpm": {
+      "description": "來自 ESC 遙測的馬達轉速",
+      "name": "ESC 轉速"
+    },
+    "esc_temp": {
+      "description": "電子變速器溫度",
+      "name": "ESC 溫度"
+    },
+    "flight_time": {
+      "description": "自解鎖起算的時間",
+      "name": "飛行時間"
+    },
+    "flymode": {
+      "description": "目前飛行模式名稱(ANGLE、HORIZON 等)",
+      "name": "飛行模式"
+    },
+    "g_force": {
+      "description": "目前的 G 值負荷",
+      "name": "G 值"
+    },
+    "gps_hdop": {
+      "description": "水平精度因子",
+      "name": "GPS HDOP"
+    },
+    "gps_sats": {
+      "description": "可見的 GPS 衛星數量",
+      "name": "GPS 衛星"
+    },
+    "heading": {
+      "description": "羅盤航向(度)",
+      "name": "航向"
+    },
+    "heading_graph": {
+      "description": "圖形化的羅盤航向帶",
+      "name": "航向圖"
+    },
+    "home_direction": {
+      "description": "指向 Home 的箭頭",
+      "name": "Home 方向"
+    },
+    "horizon_sidebars": {
+      "description": "人工地平線的側邊標記",
+      "name": "地平線側邊欄"
+    },
+    "imu_temp": {
+      "description": "IMU/陀螺儀感測器溫度",
+      "name": "IMU 溫度"
+    },
+    "latitude": {
+      "description": "目前的緯度座標",
+      "name": "緯度"
+    },
+    "longitude": {
+      "description": "目前的經度座標",
+      "name": "經度"
+    },
+    "mah_drawn": {
+      "description": "累計消耗的毫安培小時",
+      "name": "已用 mAh"
+    },
+    "max_speed": {
+      "description": "飛行中達到的最大速度",
+      "name": "最大速度"
+    },
+    "messages": {
+      "description": "飛控狀態訊息與通知",
+      "name": "訊息"
+    },
+    "msl_altitude": {
+      "description": "平均海平面以上的高度",
+      "name": "海平面高度"
+    },
+    "on_time": {
+      "description": "自開機起算的時間",
+      "name": "開機時間"
+    },
+    "pitch": {
+      "description": "飛行器俯仰角(度)",
+      "name": "俯仰角"
+    },
+    "power_watts": {
+      "description": "瞬時耗電量",
+      "name": "功率(瓦特)"
+    },
+    "remaining_flight_time": {
+      "description": "預估剩餘飛行時間",
+      "name": "剩餘時間"
+    },
+    "roll": {
+      "description": "飛行器橫滾/傾斜角(度)",
+      "name": "橫滾角"
+    },
+    "rssi": {
+      "description": "接收訊號強度指示 (%)",
+      "name": "RSSI"
+    },
+    "rssi_dbm": {
+      "description": "訊號強度,單位 dBm(ELRS、Crossfire)",
+      "name": "RSSI (dBm)"
+    },
+    "rtc_time": {
+      "description": "即時時鐘(目前時間)",
+      "name": "RTC 時間"
+    },
+    "speed": {
+      "description": "對地速度",
+      "name": "地速"
+    },
+    "throttle": {
+      "description": "目前油門位置百分比",
+      "name": "油門"
+    },
+    "throttle_gauge": {
+      "description": "視覺化油門長條量表",
+      "name": "油門量表"
+    },
+    "vario": {
+      "description": "垂直速度指示(爬升/下降)",
+      "name": "升降速度計"
+    },
+    "vtx_channel": {
+      "description": "影像發射機頻段/頻道/功率",
+      "name": "VTX 頻道"
+    },
+    "warnings": {
+      "description": "系統警告(電量低、GPS 遺失等)",
+      "name": "警告"
+    },
+    "wind_horizontal": {
+      "description": "水平風速與風向",
+      "name": "風(水平)"
+    },
+    "wind_vertical": {
+      "description": "垂直風分量",
+      "name": "風(垂直)"
+    }
+  },
+  "radioPreflight": {
+    "firmwareFail": "ArduPilot {{major}}.{{minor}} 太舊,無法透過 MAVLink 進行搖桿控制,請將飛控更新到 4.6 或更新版本。遙測仍可使用。",
+    "firmwarePass": "ArduPilot {{major}}.{{minor}} 支援透過 MAVLink 無線電進行搖桿控制。",
+    "firmwareUnknown": "尚無法判斷韌體版本。",
+    "firmwareVersion": "韌體支援透過無線電傳送 RC",
+    "rcOverMavlink": "透過無線電連結進行搖桿控制",
+    "rcOverMavlinkFail": "載具被設定為忽略從無線電連結傳入的 RC,因此你的搖桿不會有任何作用(無線電 Failsafe)。此修正會保留你現有已啟用的接收機通訊協定。",
+    "rcOverMavlinkPass": "載具接受透過 MAVLink 無線電傳送的 RC。",
+    "rssiSource": "連結訊號強度讀數",
+    "rssiSourceFail": "訊號強度並非取自無線電連結,因此 RSSI 會顯示為空或不正確。",
+    "rssiSourcePass": "載具從連結本身回報無線電訊號強度。",
+    "waitingParams": "正在等待參數載入完成。"
+  },
+  "rcSourceArbiter": {
+    "joystickOwns": "RC 連結由搖桿控制接管",
+    "slidersOwn": "RC 連結由虛擬 RC 滑桿接管",
+    "trainerOwnsSticks": "Trainer 工作階段進行中,搖桿由 Trainer 掌控"
+  },
+  "receiverConstants": {
+    "hint": {
+      "CRSF": "低延遲數位連結。用於 TBS Crossfire 與 ExpressLRS 接收機。",
+      "FPORT": "FrSky F.Port 將 SBUS 與遙測合併在單一條線上。",
+      "GHST": "ImmersionRC Ghost 超低延遲通訊協定。",
+      "IBUS": "FlySky 數位通訊協定。請連接到空閒的 UART RX 焊墊。",
+      "MSP": "僅供地面站/SITL 控制使用。請勿搭配實體接收機使用。",
+      "SBUS": "反相序列通訊協定。常見於 FrSky 與 RadioLink 接收機。部分機板需要硬體反相器。",
+      "SBUS_SHORT": "反相序列通訊協定。常見於 FrSky 與 RadioLink 接收機。",
+      "SPEK2048": "Spektrum 衛星接收機。請先與發射機對頻,再連接到 UART。",
+      "SPEK2048_SHORT": "Spektrum 衛星接收機。請先與發射機對頻。",
+      "SRXL2": "Spektrum SRXL2 雙向序列通訊協定。"
+    },
+    "receiverType": {
+      "NONE": "無",
+      "SERIAL": "序列"
+    }
+  },
+  "rssiState": {
+    "noLink": "沒有遙測連結",
+    "off": "載具上的 RSSI 回報已關閉(RSSI_TYPE = 0)",
+    "unconfigured": "接收機已連線,但沒有回報訊號強度。RSSI_TYPE 需要與接收機相符(CRSF/ELRS 為 3)。"
+  },
+  "rubyOsd": {
+    "category": {
+      "Flight": "飛行",
+      "GPS": "GPS",
+      "Grid": "網格",
+      "Instruments": "儀表",
+      "Link": "連結",
+      "Navigation": "導航",
+      "Power": "電源",
+      "System": "系統",
+      "Video": "影像"
+    },
+    "element": {
+      "ahi_heading": "AHI 航向",
+      "air_speed": "空速",
+      "alt_graph": "高度圖",
+      "altitude": "高度",
+      "battery": "電池",
+      "battery_cells": "電池電芯",
+      "cpu_info": "CPU 資訊",
+      "distance": "距離",
+      "efficiency": "效率",
+      "fc_temperature": "飛控溫度",
+      "flight_mode": "飛行模式",
+      "flight_mode_change": "飛行模式變更",
+      "gps_info": "GPS 資訊",
+      "gps_position": "GPS 位置",
+      "grid_crosshair": "十字準線",
+      "grid_diagonal": "對角網格",
+      "grid_squares": "方形網格",
+      "grid_thirds": "三分法",
+      "ground_speed": "地速",
+      "heading": "航向",
+      "home": "Home",
+      "horizon": "地平線",
+      "instruments": "儀表",
+      "link_quality_bars": "連結品質長條",
+      "link_quality_numbers": "連結品質數字",
+      "pitch": "俯仰",
+      "radio_interfaces": "無線電介面",
+      "radio_links": "無線電連結",
+      "rc_rssi": "RC RSSI",
+      "signal_bars": "訊號長條",
+      "speed_alt": "速度與高度",
+      "speed_to_sides": "速度置於兩側",
+      "throttle": "油門",
+      "time": "時間",
+      "time_lower": "時間(較低)",
+      "total_distance": "總距離",
+      "tx_power": "發射功率",
+      "vehicle_radio_links": "載具無線電連結",
+      "vertical_speed": "垂直速度",
+      "video_bitrate_history": "影像位元率歷史",
+      "video_mbps": "影像 Mbps",
+      "video_mode": "影像模式",
+      "wind": "風"
+    }
+  },
+  "stickAssign": {
+    "air": {
+      "pitch": "俯仰",
+      "roll": "橫滾",
+      "throttle": "油門",
+      "yaw": "偏航"
+    },
+    "ground": {
+      "pitch": "俯仰(未使用)",
+      "roll": "轉向",
+      "throttle": "油門",
+      "yaw": "偏航(未使用)"
+    }
+  }
+}

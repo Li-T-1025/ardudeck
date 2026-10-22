@@ -1,0 +1,36 @@
+{
+  "guideHost": {
+    "dontShowAgain": "不要再自動顯示指南",
+    "gotIt": "知道了",
+    "stepOf": "第 {{step}} 步,共 {{total}} 步"
+  },
+  "guidesAndTours": {
+    "allMarkedUnseen": "已全部標記為未讀",
+    "guides": "指南",
+    "offerWalkthroughs": "首次開啟檢視畫面時提供導覽",
+    "resetAll": "全部重設",
+    "title": "指南與導覽",
+    "tours": "導覽"
+  },
+  "layoutsDemo": {
+    "workspace": "工作區 · {{name}}"
+  },
+  "registry": {
+    "grouping": {
+      "blurb": "將一個地圖儀表拖曳到另一個上方,即可停靠成共用卡片。把成員拖出來即可解除,也可一次縮放整個群組。",
+      "title": "儀表分組"
+    },
+    "mapSplit": {
+      "blurb": "地圖上的「分割」按鈕會與視覺畫面共用面板。拖曳分隔線調整大小;Pilot 版面預設即以此方式搭配合成視覺。",
+      "title": "地圖與視覺並排"
+    },
+    "workspaceLayouts": {
+      "blurb": "「工作區」按鈕可在 Pilot、FPV 與 Mission 之間切換,各自擁有專屬的面板、駕駛艙儀表與分割設定。你也可以儲存自己的版面並以檔案分享。",
+      "title": "工作區版面"
+    }
+  },
+  "splitDemo": {
+    "split": "分割",
+    "synthetic": "合成"
+  }
+}

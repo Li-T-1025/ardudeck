@@ -1,0 +1,246 @@
+{
+  "vehicleTemplates": {
+    "apply": {
+      "armed": "載具已解鎖,請先上鎖再套用",
+      "expectedFc": "預期為真實飛控,但目前連線的是 SITL",
+      "expectedSitl": "預期為 SITL,但目前連線的是真實飛控",
+      "noParams": "參數尚未載入,請先取得參數",
+      "noTemplate": "此設定檔找不到對應的範本",
+      "notConnected": "沒有連線的載具",
+      "nothingToApply": "載具已符合設定檔,沒有需要變更的項目",
+      "restoreNote": "從 {{date}} 的快照還原",
+      "snapshotReason": "套用 {{name}}"
+    },
+    "helpers": {
+      "airspeedCruise": "失速速度 × 1.5 = {{speed}} m/s(高效巡航)",
+      "airspeedMax": "失速速度 × 2.2 = {{speed}} m/s(安全上限)",
+      "airspeedMin": "失速速度 × 1.15 = {{speed}} m/s(高於失速的裕度)",
+      "armingCheck": "啟用所有解鎖前檢查",
+      "battMonitor": "類比電壓與電流監測",
+      "capacity": "來自設定檔的容量({{capacity}} mAh)",
+      "critVolt": "{{cells}}S × {{volts}}V({{chem}} 臨界門檻)",
+      "elevonGain": "標準升降副翼混控增益",
+      "elevonLeft": "左升降副翼輸出(三角翼)",
+      "elevonRight": "右升降副翼輸出(三角翼)",
+      "lowVolt": "{{cells}}S × {{volts}}V({{chem}} 低電量門檻)",
+      "simCapacity": "模擬容量({{capacity}} mAh)",
+      "simDrag": "來自設定檔的阻力係數",
+      "simEngine": "依推重比 {{ratio}} 縮放(引擎動力倍率)",
+      "simServo": "依 {{speed}}°/s 計算的伺服響應時間",
+      "simVoltage": "模擬滿電電壓({{cells}}S × 4.20V)",
+      "trimAirspeed": "巡航速度 {{speed}} m/s 換算為 cm/s，4.5 以前舊版韌體使用的參數名稱",
+      "vtailGain": "標準 V 尾混控增益",
+      "vtailLeft": "V 尾左側(俯仰+偏航混控)",
+      "vtailRight": "V 尾右側(俯仰+偏航混控)",
+      "airspeedStall": "Stall × 1.05 = {{speed}} m/s (slightly above the true stall, for stall prevention and landing)"
+    },
+    "reason": {
+      "aileron": "副翼",
+      "all4MotorsTiltWithWing": "4 顆馬達隨機翼傾轉",
+      "belowThisVTOLMotorsAssistFixed": "低於此值時,VTOL 馬達會輔助固定翼",
+      "bicopter2MotorTiltrotor": "雙旋翼(2 馬達傾轉旋翼)",
+      "boat": "船",
+      "boatRoverFrameClass": "船(地面車機架類別)",
+      "bodyFrameControlInput": "機體座標系控制輸入",
+      "bodyFrameStickInput": "機體座標系搖桿輸入",
+      "continuousTilt": "連續傾轉",
+      "cruiseSpeed60OfMax": "巡航速度 = 最大速度的 60%",
+      "differential": "差動",
+      "elevator": "升降舵",
+      "elevonLeft": "左升降副翼",
+      "elevonLeftDeltaWing": "左升降副翼(三角翼)",
+      "elevonMixGain": "升降副翼混控增益",
+      "elevonRight": "右升降副翼",
+      "elevonRightDeltaWing": "右升降副翼(三角翼)",
+      "enableTailsitterMode": "啟用尾座式模式",
+      "enableTiltServos": "啟用傾轉伺服",
+      "enableVTOL": "啟用 VTOL",
+      "enableVTOLQuadplane": "啟用 VTOL(四旋翼 quadplane)",
+      "enableVTOLQuadplaneHex": "啟用 VTOL(六旋翼 quadplane)",
+      "fixedWingAssistThreshold": "固定翼輔助門檻",
+      "forwardThrottle": "前進油門",
+      "groundSteering": "地面轉向",
+      "hArrangement": "H 型配置",
+      "hexacopter": "六旋翼",
+      "hexacopterLiftFrame": "六旋翼升力機架",
+      "motor1": "馬達 1",
+      "motor1ForwardRightVec": "馬達 1(右前向量)",
+      "motor1HoverForward": "馬達 1(懸停+前進)",
+      "motor1Left": "馬達 1 左",
+      "motor1Lift": "馬達 1(升力)",
+      "motor1Tilt": "馬達 1 傾轉",
+      "motor2": "馬達 2",
+      "motor2ForwardLeftVec": "馬達 2(左前向量)",
+      "motor2HoverForward": "馬達 2(懸停+前進)",
+      "motor2Lift": "馬達 2(升力)",
+      "motor2Right": "馬達 2 右",
+      "motor2Tilt": "馬達 2 傾轉",
+      "motor3": "馬達 3",
+      "motor3Lift": "馬達 3(升力)",
+      "motor3RearRightVec": "馬達 3(右後向量)",
+      "motor4": "馬達 4",
+      "motor4Lift": "馬達 4(升力)",
+      "motor4RearLeftVec": "馬達 4(左後向量)",
+      "motor5Lift": "馬達 5(升力)",
+      "motor5VerticalRight": "馬達 5(垂直右)",
+      "motor6Lift": "馬達 6(升力)",
+      "motor6VerticalLeft": "馬達 6(垂直左)",
+      "motors12ActiveInHover": "懸停時馬達 1+2 啟動",
+      "motors12Tilt": "馬達 1+2 傾轉",
+      "notATailsitter": "不是尾座式",
+      "notATiltrotor": "不是傾轉旋翼",
+      "octaquadCoaxialX8": "八旋翼共軸(同軸 X8)",
+      "octaquadY6": "八旋翼 / Y6",
+      "octocopter": "八旋翼",
+      "omniRoverFrame": "全向地面車機架",
+      "plusArrangement": "+ 型配置",
+      "quadcopter": "四旋翼",
+      "quadcopterLiftFrame": "四旋翼升力機架",
+      "r4WheelOmniX": "4 輪全向 (X)",
+      "roverFrame": "地面車機架",
+      "rudder": "方向舵",
+      "rudderGroundSteering": "方向舵(地面轉向)",
+      "singleCoaxCopterLiftFrame": "單旋翼/共軸升力機架",
+      "singleCoaxFor2MotorTailsitter": "用於 2 馬達尾座式的單旋翼/共軸",
+      "tailsitterMode": "尾座式模式",
+      "throttle": "油門",
+      "throttleFrontLeft": "左前油門",
+      "throttleFrontRight": "右前油門",
+      "throttleL": "左油門",
+      "throttleLeft": "左側油門",
+      "throttleLeftHull": "左船體油門",
+      "throttleRTwinMotor": "右油門(雙馬達)",
+      "throttleRearLeft": "左後油門",
+      "throttleRearRight": "右後油門",
+      "throttleRight": "右側油門",
+      "throttleRightHull": "右船體油門",
+      "tiltServoSharedWingTilt": "傾轉伺服(共用機翼傾轉)",
+      "tiltwingWholeWingTilts": "傾轉翼(整個機翼傾轉)",
+      "transitionDuration5S": "轉換時間(5 秒)",
+      "tricopter": "三旋翼",
+      "undefinedAckermannUsesSteering": "未定義(Ackermann 使用轉向)",
+      "useVTOLForRTLLanding": "返航降落時使用 VTOL",
+      "vectored6Frame": "向量式 6 機架",
+      "vectoredThrustHoverGain": "向量推力懸停增益",
+      "vectoredThrustYawGain": "向量推力偏航增益",
+      "vectoredYawNoRudder": "向量偏航(無方向舵)",
+      "vectoredYawTailsitter": "向量偏航尾座式",
+      "vtolAssistBelowThisSpeed": "低於此速度時由 VTOL 輔助",
+      "waypointSpeed": "航點速度",
+      "waypointSpeedFromMaxSpeed": "由最大速度換算的航點速度",
+      "xArrangement": "X 型配置",
+      "y6bCoaxial": "Y6B(共軸)",
+      "yArrangement": "Y 型配置"
+    },
+    "template": {
+      "boat-catamaran": {
+        "description": "雙船體、雙螺旋槳,穩定平台",
+        "name": "雙體船"
+      },
+      "boat-single-prop": {
+        "description": "方向舵加一顆馬達",
+        "name": "單螺旋槳船"
+      },
+      "boat-twin-prop": {
+        "description": "兩顆馬達,以差動推力轉向(無方向舵)",
+        "name": "雙螺旋槳船"
+      },
+      "copter-coaxial": {
+        "description": "八顆馬達組成 4 組共軸對,工業主力機型",
+        "name": "共軸四旋翼 (X8)"
+      },
+      "copter-hex-plus": {
+        "description": "六顆馬達呈 +,經典重載配置",
+        "name": "六旋翼 (+)"
+      },
+      "copter-hex-x": {
+        "description": "六顆馬達:冗餘、重載",
+        "name": "六旋翼 (X)"
+      },
+      "copter-octo-plus": {
+        "description": "八顆馬達呈 +,對稱重載",
+        "name": "八旋翼 (+)"
+      },
+      "copter-octo-x": {
+        "description": "八顆馬達:最大冗餘、重型電影機",
+        "name": "八旋翼 (X)"
+      },
+      "copter-quad-h": {
+        "description": "四顆馬達呈 H 形,適合需要剛性的相機平台",
+        "name": "四旋翼 (H)"
+      },
+      "copter-quad-plus": {
+        "description": "四顆馬達呈 + 形,馬達 1 朝前",
+        "name": "四旋翼 (+)"
+      },
+      "copter-quad-x": {
+        "description": "四顆馬達呈 X 形,經典多旋翼",
+        "name": "四旋翼 (X)"
+      },
+      "copter-tri": {
+        "description": "三顆馬達加偏航伺服,效率高又有個性",
+        "name": "三旋翼"
+      },
+      "copter-y6": {
+        "description": "三支機臂,每臂兩顆馬達(共軸),精巧的冗餘設計",
+        "name": "Y6(共軸三臂)"
+      },
+      "plane-flying-wing": {
+        "description": "無尾翼,升降副翼位於後緣",
+        "name": "飛翼 / 三角翼"
+      },
+      "plane-standard": {
+        "description": "傳統機身,配有獨立的升降舵、方向舵與副翼",
+        "name": "標準飛機"
+      },
+      "plane-twin-boom": {
+        "description": "兩支尾桁,適合推進式與相機機型",
+        "name": "雙尾桁飛機"
+      },
+      "plane-v-tail": {
+        "description": "兩片合併俯仰/偏航的舵面,阻力輪廓更乾淨",
+        "name": "V 尾飛機"
+      },
+      "rover-ackermann": {
+        "description": "汽車式:單一油門,轉向伺服",
+        "name": "Ackermann 地面車"
+      },
+      "rover-omni": {
+        "description": "全向輪,可橫向平移",
+        "name": "全向地面車"
+      },
+      "rover-skid": {
+        "description": "差速驅動:坦克式,無轉向伺服",
+        "name": "滑移轉向地面車"
+      },
+      "sub-vectored-6": {
+        "description": "BlueROV2 式:4 個向量推進器加 2 個垂直推進器",
+        "name": "向量式 6 推進器"
+      },
+      "vtol-quadplane-hex": {
+        "description": "固定翼飛機搭配 6 個垂直升力馬達,重載 VTOL",
+        "name": "六旋翼 quadplane(6 升力)"
+      },
+      "vtol-quadplane-quad": {
+        "description": "固定翼飛機搭配 4 個垂直升力馬達",
+        "name": "經典 Quadplane(四旋翼升力)"
+      },
+      "vtol-tailsitter-conventional": {
+        "description": "以尾部著地,傾轉後向前飛行,以升降副翼控制懸停",
+        "name": "尾座式(傳統)"
+      },
+      "vtol-tailsitter-delta-duo": {
+        "description": "2 馬達三角翼尾座式,精巧高效",
+        "name": "尾座式雙馬達三角翼"
+      },
+      "vtol-tiltrotor-dual": {
+        "description": "兩顆馬達從懸停傾轉至巡航,Osprey 式",
+        "name": "傾轉旋翼(雙)"
+      },
+      "vtol-tiltwing": {
+        "description": "整個機翼從懸停轉動至巡航",
+        "name": "傾轉翼"
+      }
+    }
+  }
+}

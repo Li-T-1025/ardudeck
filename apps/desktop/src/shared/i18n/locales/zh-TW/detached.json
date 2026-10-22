@@ -1,0 +1,16 @@
+{
+  "detachedRoot": {
+    "closeTitle": "關閉此視窗並返回 ArduDeck",
+    "dockBack": "停靠回主視窗",
+    "keepOnTop": "讓此視窗保持在 ArduDeck 上方",
+    "missing": "(缺少)",
+    "notRegistered": "componentId <code>{{id}}</code> 尚未註冊。",
+    "pinned": "已釘選在最上層,點擊以取消釘選",
+    "toggleOnTop": "切換永遠置頂",
+    "unknownComponent": "未知元件"
+  },
+  "surface": {
+    "linkServiceOff": "ArduDeck OS 連結服務未執行",
+    "searching": "正在尋找載具…"
+  }
+}

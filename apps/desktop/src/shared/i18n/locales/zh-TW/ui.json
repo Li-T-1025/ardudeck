@@ -1,0 +1,35 @@
+{
+  "detachable": {
+    "dockBackHere": "停靠回此處",
+    "openInNewWindow": "在新視窗開啟 {{title}}",
+    "openInSeparateWindow": "在獨立視窗開啟"
+  },
+  "errorBoundary": {
+    "labelHitError": "{{label}} 發生錯誤",
+    "somethingWentWrong": "發生了一些問題"
+  },
+  "experienceLevelDialog": {
+    "advancedDescription": "簡潔的介面,不提供引導。隱藏教學卡片與行內提示。",
+    "beginnerDescription": "在整個介面中顯示提示、說明與教學,幫助你學習。",
+    "changeAnytime": "你隨時可以在設定中更改",
+    "subtitle": "選擇你的使用經驗等級,以調整介面",
+    "title": "歡迎使用 ArduDeck"
+  },
+  "infoCard": {
+    "tip": "提示:"
+  },
+  "presetSelector": {
+    "hint": "點擊以套用調校風格"
+  },
+  "profileManager": {
+    "namePlaceholder": "名稱...",
+    "resetToFactoryDefaults": "重設為原廠預設值",
+    "saveAsProfile": "將目前設定儲存為設定檔"
+  },
+  "rateCurve": {
+    "maxRate": "最大:<v>{{maxRate}}°/s</v>"
+  },
+  "tagInput": {
+    "addTags": "新增標籤..."
+  }
+}
