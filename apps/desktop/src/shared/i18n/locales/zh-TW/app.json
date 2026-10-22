@@ -1,0 +1,78 @@
+{
+  "altFrameReset": "預設高度參考已重設為 Home(載具拒絕了相對地形的設定)。",
+  "cliExit": {
+    "body": "離開 CLI 分頁會送出 exit 指令,導致飛控重新啟動(2 至 4 秒)。",
+    "leave": "離開並重新啟動",
+    "reconnect": "機板重新啟動後,應用程式會自動重新連線。",
+    "stay": "留在 CLI",
+    "title": "要離開 CLI 終端機嗎?"
+  },
+  "legacyStream": {
+    "allow": "請求資料串流並儲存到此載具",
+    "body": "{{label}} 對新式的逐訊息請求沒有任何回應。舊式請求通常可行,但在這架飛行器上,ArduPilot<b> 會將這些速率儲存到其 SR*_ 參數中</b>,這些設定在本次飛行後仍會保留,並且會出現在其他每一個地面站。",
+    "conservative": "若你允許,所請求的是保守的速率(姿態 10 Hz),而非你所選的遙測速度,這樣速度慢的無線電連結也能保持可用。",
+    "decline": "別動我的載具",
+    "declineHint": "拒絕後會保留載具目前已有的速率。你可以自行在「參數」中提高其 SR*_ 參數。",
+    "fleetLink": "這是機隊連結,因此每次連線都會發生。",
+    "notWithoutAsking": "ArduDeck 不會在未詢問的情況下更改你的載具。",
+    "title": "{{label}} 沒有遙測"
+  },
+  "mismatch": {
+    "body": "你的載具設定檔設為 <profile>{{profile}}</profile>,但已連線的飛控是 <fc>{{fc}}</fc>。",
+    "dontAskAgain": "不要再詢問",
+    "hint": "效能估算與設定可能與你的實際載具不符。",
+    "ignoreOnce": "忽略這一次",
+    "title": "載具類型不符",
+    "updateProfile": "將設定檔更新為 {{type}}"
+  },
+  "pseudoTx": {
+    "assignHint": "按下<b>指派</b>,然後移動你要用在該通道的搖桿或撥動開關。未指派的通道保持 1500。",
+    "detailConnected": "{{device}},已送出 {{frames}} 個 RC 影格",
+    "detailOff": "關閉,由下方滑桿驅動 RC",
+    "detailWaiting": "等待遙控器:請將 EdgeTX 設為 USB Joystick 模式",
+    "framesToVehicle": "傳送給載具 {{fps}} 影格/秒",
+    "gamepadWarning": ",看起來是遊戲手把,不是遙控器",
+    "monitorCounts": "{{axes}} 軸,{{buttons}} 按鈕",
+    "monitorMapping": ",對應「{{mode}}」",
+    "monitorRawHid": ",原始 HID",
+    "moveIt": "請移動它",
+    "overrideTip": "會向已連線的載具送出 RC_CHANNELS_OVERRIDE。搖桿「將會」控制飛行器。",
+    "reversedRestore": "此通道已反向,點擊以還原",
+    "source": {
+      "axis": "軸 {{index}}",
+      "button": "按鈕 {{index}}",
+      "buttons": "按鈕 {{low}}/{{high}}",
+      "unassigned": "未指派"
+    },
+    "standardLayoutWarning": "瀏覽器已對此裝置套用其標準遊戲手把配置,只保留四個軸並捨棄其餘,因此開關訊號永遠不會送達。請在遙控器已處於 USB Joystick 模式時重新插拔,或改用 USB 描述元不會被辨識為遊戲控制器的機型。",
+    "title": "使用 USB 發射機飛行",
+    "trainerActive": "Trainer 工作階段進行中,搖桿由 Trainer 掌控",
+    "unavailable": "無法使用",
+    "vehicleOff": "關閉,不會向飛行器送出任何訊號"
+  },
+  "sidebar": {
+    "collapse": "收合側邊欄",
+    "expand": "展開側邊欄"
+  },
+  "vehicleType": {
+    "boat": "船",
+    "copter": "多旋翼",
+    "plane": "固定翼",
+    "rover": "地面車",
+    "sub": "潛艇",
+    "vtol": "VTOL"
+  },
+  "welcome": {
+    "drawMissionAreas": "在即時地圖上繪製任務區域",
+    "firmwareFlashDesc": "透過 USB 或 DFU 燒錄韌體",
+    "flightLogAnalysis": "飛行紀錄分析",
+    "flightLogAnalysisDesc": "AI 驅動的飛行紀錄檢視",
+    "intro": "使用左側面板連線到你的飛控,或直接進入下方的工具。",
+    "missionLibraryDesc": "瀏覽與管理已儲存的計畫",
+    "radioHudDesc": "在你的 EdgeTX 遙控器上顯示 ArduDeck 遙測畫面",
+    "simWorldDesc": "在持久的 3D 世界中飛行 SITL",
+    "sitlDesc": "不需硬體即可測試韌體",
+    "title": "歡迎使用 ArduDeck",
+    "waypointsSurveysGeofences": "航點、測繪與地理圍欄"
+  }
+}

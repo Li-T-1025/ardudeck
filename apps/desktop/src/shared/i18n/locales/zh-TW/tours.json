@@ -1,0 +1,36 @@
+{
+  "activeTour": {
+    "nextFeature": "下一個功能",
+    "nextTitle": "下一個:{{title}}"
+  },
+  "tourLaunchGate": {
+    "apNotInstalled": "尚未安裝 ArduPilot SITL。請前往 SITL 檢視畫面下載執行檔,連線後導覽會自動接續。",
+    "apNotSupported": "此平台不支援 ArduPilot SITL。",
+    "connectOwnFc": "我要連接自己的飛控",
+    "connectOwnToContinue": "請連接你自己的飛控以繼續導覽。",
+    "failedToStartSitl": "SITL 啟動失敗",
+    "goToSitlInstall": "前往 SITL 安裝",
+    "intro": "此導覽將示範需要即時飛控的功能。你可以啟動安全的 <b>{{sitl}}</b> 模擬來試用,或連接你自己的飛控。",
+    "launch": "啟動 {{sitl}}",
+    "needsVehicle": "導覽需要載具",
+    "notNow": "暫時不要",
+    "startingSitl": "正在啟動 SITL...",
+    "tcpConnectionFailed": "SITL 已啟動,但 TCP 連線失敗"
+  },
+  "tourPanelsGate": {
+    "layoutAdjustment": "調整版面",
+    "missing": "缺少:<b>{{panels}}</b>",
+    "panelsNotInLayout": "此導覽會介紹目前版面中沒有的面板:",
+    "recommendedLayout": "建議版面",
+    "skipTour": "略過此導覽",
+    "switchPrompt": "要切換到 <b>{{preset}}</b> 版面來觀看導覽嗎?你目前的版面仍會保留,隨時可從版面下拉選單切換回來。",
+    "switchTo": "切換到 {{preset}}"
+  },
+  "tourPrompt": {
+    "dontOfferAgain": "不要再提供導覽",
+    "noThanks": "不用了",
+    "quickTour": "快速導覽",
+    "remindLater": "稍後提醒我",
+    "showMe": "帶我看看"
+  }
+}

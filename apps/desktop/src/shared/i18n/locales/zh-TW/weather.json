@@ -1,0 +1,100 @@
+{
+  "briefing": {
+    "clouds": "雲量",
+    "context": "背景資訊",
+    "fetching": "正在取得預報...",
+    "flightConditions": "飛行條件",
+    "forecastValid": "預報有效時間:{{clock}}(場地當地時間)· Open-Meteo",
+    "launchGates": "起飛門檻",
+    "limits": "限制:陣風 {{gustC}} / {{gustN}} m/s,風速 {{windC}} / {{windN}} m/s,降水機率 {{probC}} / {{probN}}%,降水量 {{mmC}} / {{mmN}} mm,能見度低於 {{visC}} / {{visN}} km。",
+    "locationAt": "{{location}} · 當地時間 {{clock}}",
+    "noPosition": "沒有可簡報的位置",
+    "noPositionHint": "請連接載具、設定 Home 位置,或開啟任務地圖,讓簡報知道要查詢哪裡的天氣。",
+    "precip": "降水",
+    "precipChance": "降水機率",
+    "precipChanceTip": "注意 {{caution}}%,禁飛 {{nogo}}%",
+    "precipTip": "注意 {{caution}} mm,禁飛 {{nogo}} mm",
+    "pressure": "氣壓",
+    "refreshTip": "重新整理預報",
+    "temp": "氣溫",
+    "title": "飛行前氣象簡報",
+    "unavailable": "無法取得預報",
+    "updated": "已於 {{time}} 更新",
+    "visibility": "能見度",
+    "visibilityTip": "低於 {{caution}} km 注意,低於 {{nogo}} km 禁飛",
+    "windLimitTip": "注意 {{caution}},禁飛 {{nogo}} {{unit}}"
+  },
+  "condition": {
+    "clear": "晴",
+    "fog": "霧",
+    "overcast": "陰",
+    "partlyCloudy": "多雲時晴",
+    "rain": "雨"
+  },
+  "geomag": {
+    "activity": "地磁活動",
+    "calm": "平靜",
+    "declination": "磁偏角",
+    "fieldStrength": "磁場強度",
+    "forecastKp": "預測 Kp(72 小時)",
+    "forecastPeak": "72 小時預測峰值",
+    "inHours": "{{hours}} 小時後",
+    "inclination": "磁傾角",
+    "kpBarTip": "Kp {{kp}} ({{gScale}}),當地時間 {{clock}}",
+    "kpThresholdTip": "注意 Kp {{caution}},禁飛 Kp {{nogo}}(G1 風暴)",
+    "noStorm": "72 小時內無風暴預報",
+    "peakKp": "峰值 Kp {{kp}}",
+    "peakTip": "未來 72 小時內預測的最高 Kp",
+    "sources": "Kp 來自 NOAA SWPC · 磁場來自 WMM2025(離線)",
+    "title": "地磁",
+    "unavailable": "無法取得太空天氣",
+    "unavailableHint": "無法連到 NOAA Kp 服務。天氣判定不受影響。",
+    "within72h": "72 小時內",
+    "wmmInvalid": "WMM2025 已超出其有效期間;磁偏角與磁場數值僅為近似值。"
+  },
+  "locationDialog": {
+    "clickToSet": "點擊地圖以設定簡報位置",
+    "enterCoords": "輸入座標",
+    "noMatches": "沒有符合的結果。",
+    "noPoint": "未選取任何位置",
+    "resetAuto": "重設為自動",
+    "resetTip": "自動跟隨載具/Home/地圖位置",
+    "searchPlaceholder": "搜尋地點(城市、機場、地標)...",
+    "subtitle": "點擊地圖放置標記,拖曳圖釘微調,或搜尋地點。",
+    "title": "簡報位置",
+    "typeCoordsTip": "輸入精確座標",
+    "useLocation": "使用此位置"
+  },
+  "locationPicker": {
+    "change": "變更位置",
+    "noPosition": "無位置",
+    "pickTip": "在地圖上選擇簡報位置",
+    "planned": "計畫位置"
+  },
+  "reason": {
+    "gustsCaution": "陣風 {{value}} 已接近限制({{limit}})。請密切監控。",
+    "gustsNogo": "陣風 {{value}} 已超過安全限制({{limit}})。有失控風險。",
+    "precipCaution": "偵測到 {{value}} mm 的小量降水。請保護機身。",
+    "precipNogo": "降水量 {{value}} mm。電子設備有風險,請勿起飛。",
+    "precipProbCaution": "降水機率上升({{value}}%)。請留意天空。",
+    "precipProbNogo": "降水機率高({{value}}%)。預期一小時內會下雨。",
+    "visibilityCaution": "能見度降低至 {{value}} km。請保持目視視線。",
+    "visibilityNogo": "能見度低,僅 {{value}} km,低於 {{limit}} km 的最低標準。",
+    "windCaution": "持續風速 {{value}} 已接近限制({{limit}})。",
+    "windNogo": "持續風速 {{value}} 已超過安全限制({{limit}})。"
+  },
+  "source": {
+    "home": "Home 位置",
+    "map": "地圖中心",
+    "override": "選取的位置",
+    "vehicle": "載具位置"
+  },
+  "status": {
+    "caution": "注意",
+    "cautionSummary": "條件處於臨界。起飛前請檢視被標示的參數。",
+    "go": "GO",
+    "goSummary": "條件在起飛限制內。",
+    "nogoPill": "NO GO",
+    "nogoSummary": "有一個或多個參數超過安全限制。請勿起飛。"
+  }
+}

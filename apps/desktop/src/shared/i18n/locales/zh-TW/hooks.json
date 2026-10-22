@@ -1,0 +1,9 @@
+{
+  "useFleet": {
+    "fleetCount": "機隊 ({{count}})"
+  },
+  "useModeRequest": {
+    "noResponse": "無回應",
+    "notSent": "未送出"
+  }
+}

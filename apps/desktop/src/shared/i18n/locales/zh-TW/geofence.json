@@ -1,0 +1,32 @@
+{
+  "fenceListPanel": {
+    "aboveMaxAlt": "高於最大高度",
+    "alt": "高度:{{value}}",
+    "belowMinAlt": "低於最低高度",
+    "breachCount_one": "{{count}} breach",
+    "breachCount_other": "{{count}} 次越界",
+    "circleCount_one": "{{count}} circle",
+    "circleCount_other": "{{count}} 個圓形",
+    "circleRadius": "圓形({{radius}}m)",
+    "editHint": "點擊區域(此處或地圖上)即可移動、調整形狀或刪除。",
+    "exclusionZones": "禁入區 ({{count}})",
+    "fenceBreached": "已越過圍欄",
+    "inclusionZones": "允許區 ({{count}})",
+    "mspUnsupported": "iNav/Betaflight 機板不支援地理圍欄。你仍可規劃圍欄並儲存成檔案供參考。",
+    "noExclusionZones": "沒有禁入區",
+    "noInclusionZones": "沒有允許區",
+    "noReturnPoint": "未設定返航點",
+    "outsideBoundary": "在邊界之外",
+    "polygonCount_one": "{{count}} polygon",
+    "polygonCount_other": "{{count}} 個多邊形",
+    "polygonPts": "多邊形({{count}} 點)",
+    "returnPoint": "返航點"
+  },
+  "fenceMapOverlay": {
+    "clickToEdit": "點擊以編輯或刪除此區域",
+    "delete": "刪除",
+    "deleteZone": "刪除此區域 (Del)",
+    "dragToMove": "拖曳以移動整個區域",
+    "rightClickDelete": "按右鍵刪除"
+  }
+}

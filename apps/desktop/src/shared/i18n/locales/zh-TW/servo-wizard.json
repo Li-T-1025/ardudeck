@@ -1,0 +1,296 @@
+{
+  "diagrams": {
+    "camera": "相機",
+    "deltaHint": "帶垂直尾翼的三角翼",
+    "elevator": "升降舵",
+    "flyingWingHint": "升降副翼 = 副翼加升降舵合併",
+    "front": "前",
+    "gimbalHint": "Pan = 水平,Tilt = 垂直",
+    "leftAileron": "左副翼",
+    "leftElevon": "左升降副翼",
+    "leftVTail": "左 V 尾",
+    "motor1": "馬達 1",
+    "motor2": "馬達 2",
+    "panServo": "Pan 伺服",
+    "rightAileron": "右副翼",
+    "rightElevon": "右升降副翼",
+    "rightVTail": "右 V 尾",
+    "rudder": "方向舵",
+    "tiltServo": "Tilt 伺服",
+    "tricopterHint": "只有偏航伺服需要設定",
+    "yawServo": "偏航伺服"
+  },
+  "planeTypeStep": {
+    "continue": "繼續 →",
+    "gimbalSubtitle": "你的機板已設定為多旋翼。你可以設定雲台伺服來控制相機。",
+    "gimbalTip": "雲台使用 RC 搖桿輸入來控制 Pan/Tilt 伺服,以達到相機穩定。",
+    "gimbalTitle": "雲台伺服設定",
+    "noServos": "無伺服",
+    "quadHex": "四軸/六軸",
+    "servoCount_one": "{{count}} servo",
+    "servoCount_other": "{{count}} 個伺服",
+    "subtitle": "請選擇你的飛行器類型,以取得正確的伺服設定。",
+    "tip": "<b>四軸加相機?</b>請選雲台。<b2>固定翼?</b2>大多數是傳統型。",
+    "title": "你的飛行器是哪一種類型?"
+  },
+  "servoAssignmentStep": {
+    "clickToHighlight": "點擊一個控制舵面以將其醒目標示",
+    "continue": "繼續:測試伺服 →",
+    "duplicateWarning": "警告:多個舵面被指派到同一個伺服!",
+    "noAircraft": "尚未選擇飛行器類型",
+    "subtitle": "請將每個控制舵面對應到它在飛控上所連接的伺服輸出。",
+    "tip": "<b>提示:</b>請檢查飛控的接線。伺服輸出通常標示為 S1-S8 或 SERVO1-8。在 iNav 中 S1 = 伺服 0。",
+    "title": "將伺服指派給控制舵面"
+  },
+  "servoEndpointSlider": {
+    "centerHandle": "中心",
+    "centerUs": "中心 (µs)",
+    "maxHandle": "最大",
+    "maxUs": "最大 (µs)",
+    "minHandle": "最小",
+    "minUs": "最小 (µs)",
+    "testCenter": "測試中心",
+    "testMax": "測試最大",
+    "testMin": "測試最小"
+  },
+  "servoEndpointsStep": {
+    "continue": "繼續:檢視 →",
+    "enableFeedback": "啟用即時伺服回饋",
+    "feedbackEnabled": "● 已啟用即時伺服回饋",
+    "livePosition": "即時位置",
+    "quickTips": "快速提示:",
+    "rate": "速率:",
+    "rateHint": "縮小行程範圍。100% = 全行程,50% = 半行程。",
+    "subtitle": "設定每個伺服能移動多遠。如果你的伺服在搖桿推到底時發出摩擦聲,請在這裡降低限制。",
+    "testingPosition": "正在測試伺服位置...",
+    "tipGrinding": "<b>有摩擦聲?</b>請降低最小或最大值",
+    "tipNotLevel": "<b>搖桿置中時不水平?</b>請調整中心值",
+    "tipSensitive": "<b>太敏感?</b>請降低速率百分比",
+    "title": "微調伺服行程"
+  },
+  "servoPresets": {
+    "aircraft": {
+      "delta": {
+        "description": "帶升降副翼與方向舵的三角翼",
+        "name": "三角翼",
+        "tip": "類似飛翼,但多了一個垂直尾翼作為方向舵。"
+      },
+      "flyingWing": {
+        "description": "帶 2 個升降副翼的三角翼/飛翼",
+        "name": "飛翼",
+        "tip": "升降副翼結合副翼與升降舵的功能。沒有尾翼舵面。"
+      },
+      "gimbal": {
+        "description": "2 軸相機雲台 (Pan/Tilt)",
+        "name": "雲台",
+        "tip": "用於相機穩定。使用 RC 輸入,而非穩定後的輸出。"
+      },
+      "traditional": {
+        "description": "標準飛機,具備副翼、升降舵、方向舵",
+        "name": "傳統型",
+        "tip": "飛機最常見的配置。每個軸各有獨立的控制舵面。"
+      },
+      "tricopter": {
+        "description": "帶偏航伺服的三旋翼",
+        "name": "三旋翼",
+        "tip": "只有後方的偏航伺服需要設定。馬達另行處理。"
+      },
+      "vtail": {
+        "description": "帶 V 尾的飛機(方向升降舵)",
+        "name": "V 尾",
+        "tip": "V 尾舵面結合升降舵與方向舵。副翼為標準型。"
+      }
+    },
+    "inputSource": {
+      "gimbalPitch": "雲台俯仰",
+      "gimbalRoll": "雲台橫滾",
+      "pitch": "俯仰",
+      "rcPitch": "RC 俯仰(手動)",
+      "rcRoll": "RC 橫滾(手動)",
+      "rcThrottle": "RC 油門(手動)",
+      "rcYaw": "RC 偏航(手動)",
+      "roll": "橫滾",
+      "throttle": "油門",
+      "yaw": "偏航"
+    },
+    "surface": {
+      "aileronLeft": {
+        "description": "下壓時使飛機向左橫滾",
+        "name": "左副翼",
+        "shortName": "左副翼"
+      },
+      "aileronRight": {
+        "description": "下壓時使飛機向右橫滾",
+        "name": "右副翼",
+        "shortName": "右副翼"
+      },
+      "elevator": {
+        "description": "後緣上升時使機頭上仰",
+        "name": "升降舵",
+        "shortName": "升降舵"
+      },
+      "elevonLeft": {
+        "description": "飛翼:結合橫滾與俯仰",
+        "name": "左升降副翼",
+        "shortName": "左升降"
+      },
+      "elevonRight": {
+        "description": "飛翼:結合橫滾與俯仰",
+        "name": "右升降副翼",
+        "shortName": "右升降"
+      },
+      "gimbalPan": {
+        "description": "雲台水平旋轉",
+        "name": "雲台 Pan",
+        "shortName": "Pan"
+      },
+      "gimbalTilt": {
+        "description": "雲台垂直旋轉",
+        "name": "雲台 Tilt",
+        "shortName": "Tilt"
+      },
+      "rudder": {
+        "description": "使飛機向左/向右偏航",
+        "name": "方向舵",
+        "shortName": "方向舵"
+      },
+      "vtailLeft": {
+        "description": "V 尾:結合升降舵與方向舵",
+        "name": "左 V 尾",
+        "shortName": "左 V 尾"
+      },
+      "vtailRight": {
+        "description": "V 尾:結合升降舵與方向舵",
+        "name": "右 V 尾",
+        "shortName": "右 V 尾"
+      },
+      "yawServo": {
+        "description": "三旋翼的尾部伺服,用於偏航控制",
+        "name": "偏航伺服",
+        "shortName": "偏航"
+      }
+    }
+  },
+  "servoReviewStep": {
+    "beforeSaving": "儲存之前:",
+    "controlSurface": "控制舵面",
+    "input": "輸入",
+    "mixerPreview": "混控規則預覽",
+    "noteConnected": "確認你的飛控已連線",
+    "noteEeprom": "設定會儲存在 EEPROM(斷電後仍會保留)",
+    "notePropellers": "為了安全,請拆下螺旋槳",
+    "noteTest": "儲存後,請在飛行前測試所有控制",
+    "nothingToReview": "沒有可檢視的設定",
+    "rev": "反向",
+    "saveFailed": "儲存設定失敗",
+    "saveToFc": "儲存到飛控",
+    "saved": "設定儲存成功!",
+    "savedHint": "設定已寫入飛控。你現在可以關閉此精靈。",
+    "source": "來源 {{source}}",
+    "subtitle": "在儲存到飛控之前,請先確認你的伺服設定。",
+    "title": "檢視你的設定"
+  },
+  "servoTestStep": {
+    "checkAilerons": "<b>副翼:</b>橫滾搖桿往右 → 右副翼應向上,左副翼應向下",
+    "checkElevator": "<b>升降舵:</b>搖桿向後拉 → 後緣應向上",
+    "checkElevons": "<b>升降副翼:</b>請同時測試橫滾與俯仰動作",
+    "checkRudder": "<b>方向舵:</b>偏航搖桿往右 → 方向舵應向右偏",
+    "continue": "繼續:校準 →",
+    "enablePolling": "啟用即時伺服輪詢",
+    "howToCheck": "如何檢查方向:",
+    "instruction": {
+      "aileronLeft": "橫滾搖桿往右 → 此伺服應向下移動",
+      "aileronRight": "橫滾搖桿往右 → 此伺服應向上移動",
+      "default": "移動對應的搖桿",
+      "elevator": "俯仰搖桿向後拉 → 後緣應向上",
+      "elevonLeft": "橫滾往右 → 下。俯仰往後 → 上(後緣)",
+      "elevonRight": "橫滾往右 → 上。俯仰往後 → 上(後緣)",
+      "gimbalPan": "移動偏航搖桿 → 相機應水平旋轉",
+      "gimbalTilt": "移動俯仰搖桿 → 相機應上下傾斜",
+      "rudder": "偏航搖桿往右 → 方向舵應向右偏轉",
+      "vtailLeft": "俯仰往後且偏航往右 → 測試兩種動作",
+      "vtailRight": "俯仰往後且偏航往右 → 測試兩種動作",
+      "yawServo": "移動偏航搖桿 → 馬達應傾轉"
+    },
+    "moveStick": "移動搖桿以測試",
+    "pollingEnabled": "● 已啟用即時伺服輪詢",
+    "responding": "伺服有回應",
+    "reverseHint": "如果伺服<b>方向相反</b>,請點擊<rev>反向</rev>。",
+    "servoIndex": "伺服 {{index}}",
+    "subtitle": "移動你的發射機搖桿,並確認每個伺服都正確回應。",
+    "title": "測試你的伺服",
+    "undoReverse": "取消反向"
+  },
+  "servoTuningCard": {
+    "clickToReverse": "點擊以反向",
+    "fwd": "正向",
+    "reversedTip": "伺服已反向",
+    "testMax": "最大 →",
+    "testMin": "← 最小"
+  },
+  "servoTuningView": {
+    "clickToSelect": "點擊舵面以選取",
+    "noConfig": "沒有伺服設定",
+    "saveFailed": "儲存失敗:{{error}}",
+    "saveToFc": "儲存到飛控",
+    "saved": "已儲存到飛控",
+    "useWizard": "請先使用精靈來設定你的伺服。"
+  },
+  "servoWizard": {
+    "boardIsMultirotor": "機板已設定為多旋翼",
+    "changeMixerHint": "這會將混控類型變更為 AIRPLANE、儲存到 EEPROM,並重新啟動機板。",
+    "checkingSupport": "正在檢查伺服支援...",
+    "completeWizardFirst": "請先完成精靈",
+    "configureAsAirplane": "設定為飛機",
+    "configureAsPlaneQuestion": "要將此機板設定為飛機嗎?",
+    "configuring": "設定中...",
+    "disconnecting": "中斷連線中...",
+    "failedWithMessage": "失敗:{{message}}。請嘗試 iNav Configurator 的 CLI。",
+    "fineTuneServos": "微調伺服",
+    "notAvailable": "無法使用伺服設定",
+    "oldFirmwareNote": "<b>注意:</b>iNav 2.0.0 非常舊。若此方法無效,你可能需要使用 iNav Configurator 的 CLI:<code>mixer AIRPLANE</code>,然後 <code>save</code>",
+    "platformChangeFailed": "變更平台失敗。若為 iNav 2.0.0,請嘗試使用 iNav Configurator CLI:mixer AIRPLANE,然後 save",
+    "platformChanged": "平台已變更為 AIRPLANE!請重新連線以確認。",
+    "rebooting": "正在重新啟動機板...",
+    "reconnectHint": "請使用頂端的連線面板重新連線。",
+    "reconnecting": "重新連線中...",
+    "savingEeprom": "已送出平台變更。正在儲存到 EEPROM...",
+    "sendingPlatform": "正在送出平台設定(MSP2 + CLI 備援)...",
+    "servoCount": "- {{count}} 個伺服",
+    "settingPlatform": "正在將平台類型設為 AIRPLANE...",
+    "steps": {
+      "aircraft": {
+        "description": "選擇你的飛行器類型",
+        "label": "飛行器"
+      },
+      "assign": {
+        "description": "將伺服對應到控制舵面",
+        "label": "指派"
+      },
+      "endpoints": {
+        "description": "調整伺服限制",
+        "label": "校準"
+      },
+      "review": {
+        "description": "檢視並儲存",
+        "label": "儲存"
+      },
+      "test": {
+        "description": "驗證伺服動作",
+        "label": "測試"
+      }
+    },
+    "tune": "調整",
+    "unknownError": "未知錯誤",
+    "useConnectionPanel": "請使用連線面板重新連線到你的機板。",
+    "usedFor": "伺服設定用於:",
+    "usedForFixedWing": "<b>固定翼飛機</b> - 副翼、升降舵、方向舵",
+    "usedForFlyingWing": "<b>飛翼</b> - 升降副翼混控",
+    "usedForGimbal": "<b>雲台伺服</b> - 相機 Pan/Tilt(需要相容的機板)",
+    "waitingReboot": "正在等待機板重新啟動(5 秒)...",
+    "wizard": "精靈"
+  },
+  "wizardNav": {
+    "back": "← 返回"
+  }
+}

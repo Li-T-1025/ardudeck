@@ -1,0 +1,209 @@
+{
+  "legacyConfigView": {
+    "badge": "舊版 CLI",
+    "configError": "設定錯誤",
+    "howItWorks": "<b>運作方式:</b>變更會立即以 CLI 指令送出。可在 CLI 終端機查看送出的指令。完成後,請點擊「儲存到 EEPROM」以保存變更(機板會重新啟動)。",
+    "loading": "正在從 CLI 載入設定...",
+    "notConnected": "連線到舊版機板以進行設定",
+    "reboot": {
+      "done": "儲存完成",
+      "error": "儲存失敗",
+      "rebooting": "正在重新啟動機板",
+      "reconnecting": "重新連線中",
+      "saving": "正在儲存設定"
+    },
+    "runningDump": "正在執行 dump 指令",
+    "saveAndReboot": "儲存並重新啟動",
+    "saveConfirmBody": "這會將所有變更儲存到飛控,並<b>重新啟動機板</b>。重新啟動完成後,你需要重新連線。",
+    "saveConfirmTitle": "要儲存到 EEPROM 嗎?",
+    "saveToEeprom": "儲存到 EEPROM",
+    "subtitle": "透過 CLI 指令進行設定(F3 機板)",
+    "tabs": {
+      "mixer": "混控",
+      "modes": "模式",
+      "pid": "PID",
+      "rates": "速率",
+      "servo": "伺服"
+    },
+    "unsavedChanges": "未儲存的變更"
+  },
+  "legacyMixerTab": {
+    "addMotor": "新增馬達 ({{count}}/{{max}})",
+    "addServoRule": "新增伺服規則 ({{count}}/{{max}})",
+    "description": "定義馬達與伺服如何回應飛控輸出。數值範圍為 -1.0 至 1.0。變更會立即送出。",
+    "inputSource": "輸入來源",
+    "mixStrength": "混控強度:",
+    "motorMixerTab": "馬達混控 ({{count}})",
+    "motorN": "馬達 {{index}}",
+    "noMotorRules": "找不到馬達混控規則。",
+    "noMotorRulesHint": "這對固定翼飛機是正常的。",
+    "noServoRules": "找不到伺服混控規則。",
+    "noServoRulesHint": "新增規則,以飛控輸出來控制伺服。",
+    "outputChannel": "輸出通道",
+    "pitch": "俯仰",
+    "rateLabel": "速率:",
+    "ratePercent": "速率 (%)",
+    "removeMotor": "移除馬達混控",
+    "removeServoRule": "移除伺服混控規則",
+    "roll": "橫滾",
+    "ruleN": "規則 #{{index}}",
+    "servoMixerTab": "伺服混控 ({{count}})",
+    "servoN": "伺服 {{index}}",
+    "sourceN": "來源 {{index}}",
+    "sources": {
+      "rcAux1": "RC AUX 1",
+      "rcAux2": "RC AUX 2",
+      "rcAux3": "RC AUX 3",
+      "rcAux4": "RC AUX 4",
+      "rcPitch": "RC 俯仰",
+      "rcRoll": "RC 橫滾",
+      "rcThrottle": "RC 油門",
+      "rcYaw": "RC 偏航",
+      "stabPitch": "穩定俯仰",
+      "stabRoll": "穩定橫滾",
+      "stabThrottle": "穩定油門",
+      "stabYaw": "穩定偏航"
+    },
+    "speed": "速度",
+    "targetServo": "目標伺服",
+    "throttle": "油門",
+    "title": "混控設定",
+    "yaw": "偏航"
+  },
+  "legacyModesTab": {
+    "activationRange": "啟動範圍",
+    "activeModes": "已啟用模式 ({{count}})",
+    "clickToEnable": "#{{index}},點擊以啟用",
+    "description": "設定哪些 AUX 開關位置會啟動各個飛行模式。拖曳範圍握把或直接輸入數值。兩者都設為 900 即停用。",
+    "disableMode": "停用模式",
+    "disabledModes": "已停用 ({{count}})",
+    "mode": "模式",
+    "modeDescriptions": {
+      "m0": "啟用馬達",
+      "m1": "自穩模式",
+      "m10": "返航",
+      "m11": "保持 GPS 位置",
+      "m12": "直通",
+      "m13": "尋找我的四軸",
+      "m19": "切換 OSD",
+      "m2": "混合自穩加特技",
+      "m20": "啟用遙測",
+      "m26": "記錄飛行資料",
+      "m27": "緊急 Failsafe",
+      "m28": "航點任務",
+      "m3": "保持高度",
+      "m35": "副翼襟翼控制",
+      "m36": "協調轉彎",
+      "m38": "自動修正伺服中立點",
+      "m39": "相機控制 1",
+      "m40": "相機控制 2",
+      "m41": "相機控制 3",
+      "m45": "定速巡航",
+      "m46": "多旋翼煞車",
+      "m5": "保持羅盤航向",
+      "m6": "無頭模式",
+      "m7": "調整無頭基準"
+    },
+    "modeN": "模式 {{id}}",
+    "noRules": "找不到 AUX 模式規則。",
+    "switchChannel": "切換通道",
+    "title": "飛行模式設定",
+    "unknownMode": "未知模式"
+  },
+  "legacyPidTab": {
+    "axis": {
+      "pitch": "俯仰",
+      "roll": "橫滾",
+      "yaw": "偏航"
+    },
+    "dHint": "抑制過衝",
+    "dLabel": "D - 微分",
+    "ffHint": "預判搖桿動作",
+    "ffLabel": "FF - 前饋",
+    "iHint": "隨時間修正漂移",
+    "iLabel": "I - 積分",
+    "infoFixedWing": "<b>舊版 CLI 模式(固定翼):</b>變更會立即透過 CLI 指令送出。完成後請點擊「儲存到 EEPROM」以保存變更。",
+    "infoMultirotor": "<b>舊版 CLI 模式(多旋翼):</b>變更會立即透過 CLI 指令送出。完成後請點擊「儲存到 EEPROM」以保存變更。",
+    "levelDHint": "減少震盪",
+    "levelDLabel": "D - 阻尼",
+    "levelIHint": "隨時間保持水平",
+    "levelPHint": "自穩的力道",
+    "levelPLabel": "P - 強度",
+    "levelTitle": "水平(Angle 模式)",
+    "noData": "未載入任何 PID 資料。請先執行 dump 指令。",
+    "pHint": "對搖桿輸入的反應靈敏度",
+    "pLabel": "P - 比例",
+    "presets": {
+      "beginner": {
+        "description": "平滑且寬容,很適合學習",
+        "name": "初學者"
+      },
+      "cinematic": {
+        "description": "極致平滑,適合影片",
+        "name": "電影感"
+      },
+      "freestyle": {
+        "description": "靈敏且平順,適合特技",
+        "name": "自由式"
+      },
+      "racing": {
+        "description": "俐落精準,適合速度",
+        "name": "競速"
+      }
+    },
+    "profileNamePlaceholder": "設定檔名稱...",
+    "quickPresets": "快速預設",
+    "saveAsProfile": "+ 將目前儲存為設定檔",
+    "saveDialogTitle": "將目前的 PID 儲存為設定檔",
+    "yourProfiles": "你的設定檔"
+  },
+  "legacyRatesTab": {
+    "expoHint": "搖桿中心靈敏度",
+    "globalSettings": "全域設定",
+    "info": "<b>舊版 CLI 模式:</b>變更會立即透過 CLI 指令送出。完成後請點擊「儲存到 EEPROM」以保存變更。",
+    "maxRate": "最大:<v>{{rate}}°/s</v>",
+    "noData": "未載入任何速率資料。請先執行 dump 指令。",
+    "presets": {
+      "beginner": {
+        "description": "緩慢且可預測,很適合學習"
+      },
+      "cinematic": {
+        "description": "極致平滑,適合拍攝"
+      },
+      "freestyle": {
+        "description": "兼顧特技與流暢"
+      },
+      "racing": {
+        "description": "快速且靈敏,適合速度"
+      }
+    },
+    "rateHint": "最大旋轉速度",
+    "rcRate": "RC Rate",
+    "rcRateHint": "整體搖桿靈敏度倍率",
+    "responseCurve": "響應曲線",
+    "saveDialogTitle": "將目前的速率儲存為設定檔",
+    "stick": "搖桿",
+    "throttleExpo": "油門 Expo",
+    "throttleExpoHint": "油門曲線",
+    "throttleMid": "油門中點",
+    "throttleMidHint": "懸停點",
+    "tpaBreakpoint": "TPA 斷點",
+    "tpaBreakpointHint": "TPA 開始作用的油門位置",
+    "tpaDescription": "在高油門時降低 PID 強度,以防止快速飛行時產生震盪。",
+    "tpaRate": "TPA 比率",
+    "tpaRateHint": "全油門時要降低多少 PID",
+    "tpaTitle": "油門 PID 衰減"
+  },
+  "legacyServoTab": {
+    "description": "設定每個伺服的最小/最大/中心位置與速率。範圍:舊版 F3 機板為 750-2250μs。變更會立即送出。",
+    "fullRange": "全行程",
+    "maximum": "最大",
+    "minimum": "最小",
+    "noConfigs": "找不到伺服設定。",
+    "noConfigsHint": "請執行 dump 指令以載入設定。",
+    "resetDefault": "重設為預設",
+    "safeRange": "安全範圍",
+    "title": "伺服端點設定",
+    "travel": "行程:{{range}}μs"
+  }
+}
