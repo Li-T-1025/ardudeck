@@ -164,7 +164,8 @@ export async function checkUpdates(
  * Download a module bundle ZIP to disk.
  * Returns the local file path, the server-declared SHA256 (x-bundle-hash),
  * the SHA256 computed locally over the received bytes, and the Ed25519
- * bundle signature (x-bundle-sig, empty on servers that predate it).
+ * bundle signature (x-bundle-sig2 from the 2026-10 key, else x-bundle-sig; empty on
+ * servers that predate both).
  */
 export async function downloadBundle(
   slug: string,
@@ -188,7 +189,7 @@ export async function downloadBundle(
   }
 
   const hash = res.headers.get('x-bundle-hash') || '';
-  const sig = res.headers.get('x-bundle-sig') || '';
+  const sig = res.headers.get('x-bundle-sig2') || res.headers.get('x-bundle-sig') || '';
   const totalSize = parseInt(res.headers.get('content-length') || '0', 10);
 
   // Save to userData/modules/{slug}/

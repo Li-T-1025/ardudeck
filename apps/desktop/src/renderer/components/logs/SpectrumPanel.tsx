@@ -3,10 +3,10 @@ import uPlot from 'uplot';
 import { useLogStore } from '../../stores/log-store';
 import { useNavigationStore } from '../../stores/navigation-store';
 import { useResolvedTheme } from '../../hooks/useTheme';
-import { SERIES_COLORS } from './log-chart-stats';
+import { SERIES_COLORS, chartCsv } from './log-chart-stats';
 import { peakIndex } from './log-fft';
 import {
-  BATCH_AXES, batchSpectra, listSources, messageFields, messageSpectra, parseSourceKey, sourceKey,
+  BATCH_AXES, axisTriplet, batchSpectra, listSources, messageFields, messageSpectra, parseSourceKey, sourceKey,
   type InstanceSpectrum, type SpectrumSource,
 } from './spectrum-sources';
 import type { BatchAxis } from '../mavlink-config/notch-analysis';
@@ -47,6 +47,7 @@ export function SpectrumPanel() {
   const [axis, setAxis] = useState<BatchAxis>('x');
   const [followZoom, setFollowZoom] = useState(true);
   const [dbScale, setDbScale] = useState(false);
+  const [allAxes, setAllAxes] = useState(false);
 
   const sources = useMemo(() => (currentLog ? listSources(currentLog) : []), [currentLog]);
   const hasBatch = sources.some((s) => s.kind === 'batch');
@@ -73,19 +74,27 @@ export function SpectrumPanel() {
 
   const xWindow = followZoom && syncZoomEnabled ? syncedXRange : null;
 
-  const spectra = useMemo<InstanceSpectrum[]>(() => {
+  const triplet = effectiveField ? axisTriplet(effectiveField, fieldsForType) : null;
+  const canAllAxes = source?.kind === 'batch' || triplet !== null;
+  const showAllAxes = allAxes && canAllAxes;
+
+  // One series per instance and axis, labelled the way the charts name fields.
+  const spectra = useMemo<{ label: string; s: InstanceSpectrum }[]>(() => {
     if (!currentLog || !source) return [];
-    if (source.kind === 'batch') return batchSpectra(currentLog, source.sensor, axis, xWindow);
+    const label = (base: string, s: InstanceSpectrum, suffix: string) =>
+      (s.inst !== null ? `${base}[${s.inst}].${suffix}` : `${base}.${suffix}`);
+    if (source.kind === 'batch') {
+      return (showAllAxes ? BATCH_AXES : [axis]).flatMap((a) =>
+        batchSpectra(currentLog, source.sensor, a, xWindow).map((s) => ({ label: label(`ISBD ${source.sensor}`, s, a.toUpperCase()), s })));
+    }
     const cols = currentLog.messages[source.type];
     if (!cols || cols.count === 0 || !effectiveField) return [];
-    return messageSpectra(cols, effectiveField, xWindow);
-  }, [currentLog, source, axis, effectiveField, xWindow]);
+    return (showAllAxes && triplet ? triplet : [effectiveField]).flatMap((f) =>
+      messageSpectra(cols, f, xWindow).map((s) => ({ label: label(source.type, s, f), s })));
+  }, [currentLog, source, axis, effectiveField, triplet, showAllAxes, xWindow]);
 
-  const seriesLabel = (s: InstanceSpectrum) => {
-    const base = source?.kind === 'batch' ? `ISBD ${source.sensor}` : msgType ?? '';
-    const suffix = source?.kind === 'batch' ? axis.toUpperCase() : effectiveField ?? '';
-    return s.inst !== null ? `${base}[${s.inst}].${suffix}` : `${base}.${suffix}`;
-  };
+  // What the chart currently plots, kept for the CSV export.
+  const plotted = useRef<{ data: ArrayLike<number>[]; labels: string[] } | null>(null);
 
   const chartRef = useRef<HTMLDivElement>(null);
   const plotRef = useRef<uPlot | null>(null);
@@ -100,13 +109,17 @@ export function SpectrumPanel() {
     // Align all instances onto the first spectrum's frequency axis. Instances
     // of one sensor type log at (near-)identical rates; a mismatch just
     // truncates to the shortest.
-    const minLen = Math.min(...spectra.map((s) => s.spec.freqHz.length));
-    const xFreq = spectra[0]!.spec.freqHz.slice(0, minLen);
+    const minLen = Math.min(...spectra.map(({ s }) => s.spec.freqHz.length));
+    const xFreq = spectra[0]!.s.spec.freqHz.slice(0, minLen);
     const toY = (amp: number) => (dbScale ? 20 * Math.log10(amp + 1e-9) : amp);
     const data = [
       xFreq,
-      ...spectra.map((s) => Float64Array.from(s.spec.amplitude.slice(0, minLen), toY)),
+      ...spectra.map(({ s }) => Float64Array.from(s.spec.amplitude.slice(0, minLen), toY)),
     ] as uPlot.AlignedData;
+    plotted.current = {
+      data: data as unknown as ArrayLike<number>[],
+      labels: spectra.map(({ label }) => (dbScale ? `${label} (dB)` : label)),
+    };
 
     const axisTheme = {
       stroke: isLight ? '#4b5563' : '#9ca3af',
@@ -128,8 +141,8 @@ export function SpectrumPanel() {
       ],
       series: [
         { label: 'Hz' }, // i18n-exempt: unit
-        ...spectra.map((s, i) => ({
-          label: seriesLabel(s),
+        ...spectra.map(({ label }, i) => ({
+          label,
           stroke: SERIES_COLORS[i % SERIES_COLORS.length]!,
           width: 1.5,
           points: { show: false },
@@ -138,7 +151,7 @@ export function SpectrumPanel() {
       hooks: {
         // Mark the dominant peak: this is the number that goes into notch tuning.
         draw: [(u) => {
-          const first = spectra[0]!.spec;
+          const first = spectra[0]!.s.spec;
           const pk = peakIndex(first, 5);
           if (pk < 0 || pk >= minLen) return;
           const fx = first.freqHz[pk]!;
@@ -174,16 +187,29 @@ export function SpectrumPanel() {
       observer.disconnect();
       if (plotRef.current) { plotRef.current.destroy(); plotRef.current = null; }
     };
-    // seriesLabel only feeds series labels and always changes together with
-    // `spectra`, which IS a dep - listing it would just force a second identical rebuild.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- t only changes with the language, which re-renders anyway
   }, [spectra, dbScale, isLight]);
 
   if (!currentLog) {
     return <div className="h-full flex items-center justify-center text-content-tertiary text-xs">{t('logs:noLogLoaded')}</div>;
   }
 
-  const first = spectra[0];
+  const first = spectra[0]?.s;
+
+  // Same CSV writer as the chart export; the spectrum already covers the visible window.
+  const exportCsv = () => {
+    const p = plotted.current;
+    if (!p || p.data[0]!.length === 0) return;
+    const csv = chartCsv(p.data, p.labels, 0, p.data[0]!.length - 1, 'freq_hz');
+    const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = xWindow
+      ? `spectrum-${xWindow.min.toFixed(1)}s-${xWindow.max.toFixed(1)}s.csv`
+      : 'spectrum-full.csv';
+    a.click();
+    URL.revokeObjectURL(url);
+  };
   const selectCls = 'text-[11px] px-1.5 py-0.5 rounded bg-input text-content border border-subtle focus:outline-none focus:border-blue-500/50';
   const sourceLabel = (s: SpectrumSource) => (s.kind === 'batch' ? t(s.sensor === 'gyro' ? 'logs:spectrum.batchGyro' : 'logs:spectrum.batchAccel') : s.type);
   const openVibrationCard = () => useNavigationStore.getState().setView('parameters', 'tab:quick-setup?focus=vibration');
@@ -195,7 +221,7 @@ export function SpectrumPanel() {
           {sources.map((s) => <option key={sourceKey(s)} value={sourceKey(s)}>{sourceLabel(s)}</option>)}
         </select>
         {source?.kind === 'batch' ? (
-          <select value={axis} onChange={(e) => setAxis(e.target.value as BatchAxis)} className={selectCls}>
+          <select value={axis} onChange={(e) => setAxis(e.target.value as BatchAxis)} disabled={showAllAxes} className={`${selectCls} disabled:opacity-50`}>
             {BATCH_AXES.map((a) => <option key={a} value={a}>{a.toUpperCase()}</option>)}
           </select>
         ) : (
@@ -218,6 +244,20 @@ export function SpectrumPanel() {
           {t('logs:spectrum.followZoom')}
         </button>
         <button
+          onClick={() => setAllAxes(!allAxes)}
+          disabled={!canAllAxes}
+          className={`text-[10px] px-2 py-0.5 rounded border transition-colors ${
+            !canAllAxes
+              ? 'bg-surface text-content-tertiary border-subtle opacity-50 cursor-not-allowed'
+              : showAllAxes
+                ? 'bg-blue-500/15 text-blue-400 border-blue-500/30'
+                : 'bg-surface text-content-tertiary border-subtle hover:text-content-secondary'
+          }`}
+          data-tip={canAllAxes ? t('logs:spectrum.allAxesTip') : t('logs:spectrum.allAxesUnavailable')}
+        >
+          {t('logs:spectrum.allAxes')}
+        </button>
+        <button
           onClick={() => setDbScale(!dbScale)}
           className={`text-[10px] px-2 py-0.5 rounded border transition-colors ${
             dbScale
@@ -227,6 +267,16 @@ export function SpectrumPanel() {
           data-tip={t('logs:spectrum.dbTip')}
         >
           dB
+        </button>
+        <button
+          onClick={exportCsv}
+          disabled={!first}
+          className="px-1.5 py-0.5 rounded border bg-surface hover:bg-surface-raised text-content-secondary hover:text-content border-subtle transition-colors disabled:opacity-50"
+          data-tip={t('logs:spectrum.exportCsv')}
+        >
+          <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M12 4v12m0 0l-4-4m4 4l4-4" />
+          </svg>
         </button>
         {first && (
           <span className="text-[10px] text-content-tertiary ml-auto tabular-nums">

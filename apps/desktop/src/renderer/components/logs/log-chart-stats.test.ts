@@ -108,6 +108,10 @@ describe('chartCsv', () => {
     expect(csv.split('\n')[0]).toBe('time_s,"a,""b"""');
   });
 
+  it('names the x column when it is not time', () => {
+    expect(chartCsv([[0, 1.5], [3, 4]], ['ISBD gyro[0].X'], 0, 1, 'freq_hz')).toBe('freq_hz,ISBD gyro[0].X\n0,3\n1.5,4');
+  });
+
   it('clamps the window to the data length', () => {
     const csv = chartCsv([[0, 1], [5, 6]], ['x'], -5, 99);
     expect(csv.split('\n')).toHaveLength(3);

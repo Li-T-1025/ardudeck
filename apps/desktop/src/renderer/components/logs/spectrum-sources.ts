@@ -52,6 +52,26 @@ export function messageFields(cols: LogColumns | undefined): string[] {
   return cols ? numericFieldNames(cols).filter((k) => !META_FIELDS.has(k)) : [];
 }
 
+/**
+ * The X/Y/Z siblings of an axis field (GyrX, AccZ, x[3], gyro_rad[1]), or null when it
+ * is not one axis of a triplet the message actually logs.
+ */
+export function axisTriplet(field: string, fields: readonly string[]): [string, string, string] | null {
+  const has = (f: string) => fields.includes(f);
+  const letter = /^(.*?)([xyzXYZ])(\[\d+\])?$/.exec(field);
+  if (letter) {
+    const [, pre, l, idx = ''] = letter;
+    const axes = (l === l!.toUpperCase() ? ['X', 'Y', 'Z'] : ['x', 'y', 'z']).map((a) => `${pre}${a}${idx}`);
+    if (axes.every(has)) return axes as [string, string, string];
+  }
+  const index = /^(.*)\[[012]\]$/.exec(field);
+  if (index) {
+    const axes = [0, 1, 2].map((i) => `${index[1]}[${i}]`);
+    if (axes.every(has)) return axes as [string, string, string];
+  }
+  return null;
+}
+
 /** One spectrum per IMU instance of a batch sensor, Welch over the batches inside the window. */
 export function batchSpectra(log: LogLike, sensor: BatchSensor, axis: BatchAxis, window: { min: number; max: number } | null): InstanceSpectrum[] {
   const out: InstanceSpectrum[] = [];

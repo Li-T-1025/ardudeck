@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { batchSpectra, listSources, messageSpectra, parseSourceKey, sourceKey } from './spectrum-sources';
+import { axisTriplet, batchSpectra, listSources, messageSpectra, parseSourceKey, sourceKey } from './spectrum-sources';
 import { peakIndex } from './log-fft';
 import type { LogColumns } from '../../utils/log-columns';
 
@@ -97,5 +97,24 @@ describe('regular message spectra', () => {
     expect(s!.rateHz).toBeCloseTo(25, 0);
     expect(s!.spec.freqHz[s!.spec.freqHz.length - 1]!).toBeLessThanOrEqual(12.5);
     expect(s!.spec.freqHz[peakIndex(s!.spec, 1)]).toBeCloseTo(5, 0);
+  });
+});
+
+describe('axisTriplet', () => {
+  it('finds the X/Y/Z siblings of ArduPilot axis fields', () => {
+    const imu = ['GyrX', 'GyrY', 'GyrZ', 'AccX', 'AccY', 'AccZ', 'T'];
+    expect(axisTriplet('GyrY', imu)).toEqual(['GyrX', 'GyrY', 'GyrZ']);
+    expect(axisTriplet('AccZ', imu)).toEqual(['AccX', 'AccY', 'AccZ']);
+  });
+
+  it('handles PX4 lowercase axes and indexed vectors', () => {
+    expect(axisTriplet('x[3]', ['x[3]', 'y[3]', 'z[3]', 'x[4]'])).toEqual(['x[3]', 'y[3]', 'z[3]']);
+    expect(axisTriplet('gyro_rad[1]', ['gyro_rad[0]', 'gyro_rad[1]', 'gyro_rad[2]'])).toEqual(['gyro_rad[0]', 'gyro_rad[1]', 'gyro_rad[2]']);
+    expect(axisTriplet('xyz[0]', ['xyz[0]', 'xyz[1]', 'xyz[2]'])).toEqual(['xyz[0]', 'xyz[1]', 'xyz[2]']);
+  });
+
+  it('returns null when the field is not part of a logged triplet', () => {
+    expect(axisTriplet('R', ['R', 'P', 'Y'])).toBeNull();
+    expect(axisTriplet('GyrX', ['GyrX', 'GyrY'])).toBeNull();
   });
 });

@@ -99,17 +99,18 @@ export function parseAxisRange(minText: string, maxText: string): { min: number;
 }
 
 /**
- * CSV of chart columns over an inclusive index window. First column is time,
- * NaN cells (union-time gaps between different sample rates) become empty.
+ * CSV of chart columns over an inclusive index window. First column is the x axis
+ * (time unless named otherwise), NaN cells (union-time gaps between different sample rates) become empty.
  */
 export function chartCsv(
   data: ArrayLike<number>[],
   labels: string[],
   i0: number,
   i1: number,
+  xLabel = 'time_s',
 ): string {
   const esc = (s: string) => (/[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s);
-  const lines: string[] = [['time_s', ...labels].map(esc).join(',')];
+  const lines: string[] = [[xLabel, ...labels].map(esc).join(',')];
   const time = data[0]!;
   for (let i = Math.max(0, i0); i <= Math.min(i1, time.length - 1); i++) {
     const row: string[] = [String(time[i]!)];

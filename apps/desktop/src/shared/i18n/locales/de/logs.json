@@ -478,6 +478,9 @@
     "warnings_other": "{{count}} Warnungen"
   },
   "spectrum": {
+    "allAxes": "X+Y+Z",
+    "allAxesTip": "X-, Y- und Z-Achse zusammen in einem Diagramm zeigen",
+    "allAxesUnavailable": "Dieses Feld gehört zu keinem X/Y/Z-Satz",
     "amplitude": "Amplitude",
     "amplitudeDb": "Amplitude (dB)",
     "batchAccel": "Batch-Sampler: Beschleunigung",
@@ -485,6 +488,7 @@
     "batchHint": "Für den vollen Sensorbereich beim nächsten Flug den Batch-Sampler einschalten: INS_LOG_BAT_MASK = 1 (erste IMU) und INS_LOG_BAT_OPT = 4 (vor und nach dem Filter, die Einstellung der Batch-Sampler-Anleitung für den ersten Flug; 2 = nur nach dem Filter, um eine Notch zu prüfen). INS_LOG_BAT_MASK danach wieder auf 0 setzen.",
     "dbTip": "Logarithmische Amplitude (dB)",
     "enableSyncTip": "Diagrammsynchronisierung aktivieren, um dem Zoom zu folgen",
+    "exportCsv": "Spektrum als CSV exportieren (folgt dem gezoomten Fenster)",
     "followZoom": "Zoom folgen",
     "followZoomTip": "Nur das Zeitfenster analysieren, auf das die Diagramme gezoomt sind",
     "frequency": "Frequenz (Hz)",

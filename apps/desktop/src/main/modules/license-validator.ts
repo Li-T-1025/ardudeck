@@ -9,20 +9,33 @@ import type { LicensePayload, ReceiptPayload } from '../../shared/module-types.j
 import { t } from '../../shared/i18n/index.js';
 
 /**
- * Ed25519 public key in SPKI PEM format - the production Hangar signing key.
- * Rotating it invalidates every issued license.
+ * Trusted Hangar Ed25519 public keys (SPKI PEM). A signature from any of them is accepted,
+ * so the Hangar can move to the 2026-10 key while existing signatures keep verifying.
  */
-const PUBLIC_KEY_PEM = `-----BEGIN PUBLIC KEY-----
+const PUBLIC_KEY_PEMS = [
+  `-----BEGIN PUBLIC KEY-----
 MCowBQYDK2VwAyEA+JX7ieaqUzi1WMTzPrWb3vAeUJOj8cbmFaYuZT5rnZ0=
------END PUBLIC KEY-----`;
+-----END PUBLIC KEY-----`,
+  `-----BEGIN PUBLIC KEY-----
+MCowBQYDK2VwAyEA3z0sAoB7J05Jnd2zGcjWXmG7aGPiauBqcC5Q3B4inzI=
+-----END PUBLIC KEY-----`,
+];
 
-let cachedPublicKey: ReturnType<typeof createPublicKey> | null = null;
+let cachedPublicKeys: ReturnType<typeof createPublicKey>[] | null = null;
 
-function getPublicKey() {
-  if (!cachedPublicKey) {
-    cachedPublicKey = createPublicKey(PUBLIC_KEY_PEM);
+function getPublicKeys() {
+  if (!cachedPublicKeys) {
+    cachedPublicKeys = PUBLIC_KEY_PEMS.map((pem) => createPublicKey(pem));
   }
-  return cachedPublicKey;
+  return cachedPublicKeys;
+}
+
+export function verifyWithAnyKey(
+  data: Buffer,
+  signature: Buffer,
+  keys = getPublicKeys(),
+): boolean {
+  return keys.some((key) => verify(null, data, key, signature));
 }
 
 /**
@@ -53,9 +66,8 @@ export function verifyLicenseKey(
   const sigB64 = parts[2]!;
 
   try {
-    const publicKey = getPublicKey();
     const signature = Buffer.from(sigB64, 'base64url');
-    const isValid = verify(null, Buffer.from(payloadB64, 'utf-8'), publicKey, signature);
+    const isValid = verifyWithAnyKey(Buffer.from(payloadB64, 'utf-8'), signature);
 
     if (!isValid) {
       return { valid: false, error: t('main:licenseValidator.invalidSignature') };
@@ -87,11 +99,9 @@ export function verifyBundleSignature(
   signature: string,
 ): boolean {
   try {
-    const publicKey = getPublicKey();
     const bundleData = readFileSync(bundlePath);
     const hash = createHash('sha256').update(bundleData).digest();
-    const sigBuf = Buffer.from(signature, 'base64url');
-    return verify(null, hash, publicKey, sigBuf);
+    return verifyWithAnyKey(hash, Buffer.from(signature, 'base64url'));
   } catch {
     return false;
   }
@@ -105,7 +115,7 @@ export function verifyReceipt(
   opts: { now?: Date; publicKeyPem?: string } = {},
 ): { valid: boolean; payload?: ReceiptPayload; error?: string } {
   const now = opts.now ?? new Date();
-  const publicKey = opts.publicKeyPem ? createPublicKey(opts.publicKeyPem) : getPublicKey();
+  const publicKeys = opts.publicKeyPem ? [createPublicKey(opts.publicKeyPem)] : getPublicKeys();
   const parts = receipt.split('.');
   if (parts.length !== 3 || parts[0] !== RECEIPT_PREFIX) {
     return { valid: false, error: 'Not a receipt' }; // i18n-exempt
@@ -114,11 +124,10 @@ export function verifyReceipt(
   const sigB64 = parts[2]!;
 
   try {
-    const ok = verify(
-      null,
+    const ok = verifyWithAnyKey(
       Buffer.from(`receipt.v1.${payloadB64}`, 'utf-8'),
-      publicKey,
       Buffer.from(sigB64, 'base64url'),
+      publicKeys,
     );
     if (!ok) return { valid: false, error: 'Invalid signature' }; // i18n-exempt
 

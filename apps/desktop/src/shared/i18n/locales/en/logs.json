@@ -478,6 +478,9 @@
     "warnings_other": "{{count}} warnings"
   },
   "spectrum": {
+    "allAxes": "X+Y+Z",
+    "allAxesTip": "Show the X, Y and Z axes together on one graph",
+    "allAxesUnavailable": "This field is not one axis of an X/Y/Z set",
     "amplitude": "Amplitude",
     "amplitudeDb": "Amplitude (dB)",
     "batchAccel": "Batch sampler: Accel",
@@ -485,6 +488,7 @@
     "batchHint": "For the full sensor range on the next flight enable the batch sampler: INS_LOG_BAT_MASK = 1 (first IMU) and INS_LOG_BAT_OPT = 4 (pre- and post-filter, the batch sampler guide's setting for the first flight; 2 = post-filter only to check a notch). Set INS_LOG_BAT_MASK back to 0 afterwards.",
     "dbTip": "Logarithmic amplitude (dB)",
     "enableSyncTip": "Enable chart sync to follow zoom",
+    "exportCsv": "Export the spectrum as CSV (follows the zoomed window)",
     "followZoom": "Follow zoom",
     "followZoomTip": "Analyse only the time window the charts are zoomed to",
     "frequency": "Frequency (Hz)",
