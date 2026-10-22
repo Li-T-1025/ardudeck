@@ -22,6 +22,17 @@ import type {
   ArduPilotFrameInfo,
 } from '../../shared/ipc-channels.js';
 
+export interface ExternalStartRequest {
+  vehicleType: ArduPilotVehicleType;
+  model?: string;
+  physics: { kind: 'json'; host: string; port?: number };
+  extraDefaultsFiles?: string[];
+  extraParams?: Record<string, number>;
+  home?: { lat: number; lng: number; alt: number; heading: number };
+}
+
+const EXTERNAL_DEFAULT_MODEL: Record<ArduPilotVehicleType, string> = { copter: 'quad', plane: 'plane', rover: 'rover', sub: 'vectored' };
+
 // =============================================================================
 // Types
 // =============================================================================
@@ -120,6 +131,8 @@ export interface ArduPilotSitlStore {
 
   // Errors
   lastError: string | null;
+  /** Set while the running SITL takes its physics from a cargo's simulator. Not persisted. */
+  externalPhysics: { kind: 'json'; host: string; port?: number } | null;
 
   // Frame catalog (fetched from upstream vehicleinfo.py via IPC)
   framesLoading: boolean;
@@ -166,6 +179,8 @@ export interface ArduPilotSitlStore {
   // Actions
   start: () => Promise<boolean>;
   stop: () => Promise<boolean>;
+  /** Start with physics from outside (a cargo driving Gazebo); stops a running SITL first. */
+  startExternal: (req: ExternalStartRequest) => Promise<{ success: boolean; command?: string; error?: string }>;
   download: () => Promise<boolean>;
   checkBinary: () => Promise<void>;
   checkPlatform: () => Promise<void>;
@@ -330,6 +345,7 @@ export const useArduPilotSitlStore = create<ArduPilotSitlStore>()(
       flightGearCustomPath: undefined,
 
       lastError: null,
+      externalPhysics: null,
 
       framesLoading: false,
       framesCatalog: null,
@@ -459,6 +475,41 @@ export const useArduPilotSitlStore = create<ArduPilotSitlStore>()(
       },
 
       // Stop SITL
+      startExternal: async (req) => {
+        const { appendOutput } = get();
+        if (get().isStarting) return { success: false, error: i18nT('stores:ardupilotSitlStore.startFailed') };
+        if (get().isRunning) await get().stop();
+        set({ isStarting: true, lastError: null });
+        appendOutput(`\n--- Starting ArduPilot SITL (${req.vehicleType}) with external physics at ${req.physics.host} ---\n`);
+        const config: ArduPilotSitlConfig = {
+          vehicleType: req.vehicleType,
+          model: req.model ?? EXTERNAL_DEFAULT_MODEL[req.vehicleType],
+          releaseTrack: get().releaseTrack,
+          homeLocation: req.home ?? get().homeLocation,
+          speedup: 1,
+          wipeOnStart: get().wipeOnStart,
+          externalPhysics: req.physics,
+          extraDefaultsFiles: req.extraDefaultsFiles,
+          extraParams: req.extraParams,
+        };
+        try {
+          const result = await window.electronAPI.ardupilotSitlStart(config);
+          if (result.success) {
+            set({ isRunning: true, isStarting: false, lastCommand: result.command ?? null, wipeOnStart: false, externalPhysics: req.physics, vehicleType: req.vehicleType });
+            if (result.command) appendOutput(`Command: ${result.command}`);
+          } else {
+            set({ isStarting: false, lastError: result.error ?? i18nT('stores:ardupilotSitlStore.startFailed') });
+            appendOutput(`Error: ${result.error}\n`, true);
+          }
+          return result;
+        } catch (error) {
+          const message = error instanceof Error ? error.message : i18nT('common:unknownError');
+          set({ isStarting: false, lastError: message });
+          appendOutput(`Error: ${message}\n`, true);
+          return { success: false, error: message };
+        }
+      },
+
       stop: async () => {
         const { isRunning, isStopping, appendOutput, stopRcSender } = get();
 
@@ -479,7 +530,7 @@ export const useArduPilotSitlStore = create<ArduPilotSitlStore>()(
           }
 
           await window.electronAPI.ardupilotSitlStop();
-          set({ isRunning: false, isStopping: false, runningHome: null });
+          set({ isRunning: false, isStopping: false, runningHome: null, externalPhysics: null });
           appendOutput('SITL stopped.\n');
           return true;
         } catch (error) {

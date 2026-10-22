@@ -276,6 +276,7 @@ import { detectFlightGear } from './simulators/simulator-detector.js';
 import type { SitlConfig, SitlStatus, ArduPilotSitlConfig, ArduPilotSitlStatus, ArduPilotVehicleType, ArduPilotReleaseTrack, ArduPilotSitlBinaryInfo, SwarmSitlConfig, SwarmSitlStatus, ArduPilotFlightGearConfig, Px4SitlConfig, Px4SitlStatus, Px4SitlBinaryInfo, Px4ReleaseTrack } from '../shared/ipc-channels.js';
 import { openAreaEditorWindow, setMainMapViewport } from './area-editor-window.js';
 import { t } from '../shared/i18n/index.js';
+import { DEFAULT_STICK_MAP, overrideChannels, overrideFields, stickMapFrom, type StickChannelMap } from '../shared/rc-map.js';
 
 // =============================================================================
 // Legacy Board Detection
@@ -2225,6 +2226,12 @@ let connectedViaOs = false;
 // Parameter download state
 let expectedParamCount = 0;
 let receivedParams = new Map<string, ParamValue>();
+
+/** RCMAP_* of the vehicle whose parameters are cached; ArduPilot defaults for any other or before they load. */
+function stickMapFor(sysid: number): StickChannelMap {
+  if (focusedVehicle()?.sysid !== sysid) return DEFAULT_STICK_MAP;
+  return stickMapFrom((n) => receivedParams.get(n)?.paramValue);
+}
 let paramDownloadTimeout: NodeJS.Timeout | null = null;
 let paramDownloadActive = false; // True only during bulk PARAM_REQUEST_LIST download
 let paramDownloadStartTime = 0; // Timestamp for measuring download duration
@@ -8674,18 +8681,10 @@ export function setupIpcHandlers(mainWindow: BrowserWindow): void {
       // Only stand in for a missing transmitter. With a handset actually driving RC, this
       // override would OUTRANK it and freeze the sticks at centre/idle the moment we armed.
       if (arm && !ardupilotRcSender.hasExternalSource) {
-        const IGNORE = 65535;
         const rcPayload = serializeRcChannelsOverride({
           targetSystem: target.sysid,
           targetComponent: 1,
-          chan1Raw: 1500, // Roll center
-          chan2Raw: 1500, // Pitch center
-          chan3Raw: 1000, // Throttle low
-          chan4Raw: 1500, // Yaw center
-          chan5Raw: IGNORE, chan6Raw: IGNORE, chan7Raw: IGNORE, chan8Raw: IGNORE,
-          chan9Raw: IGNORE, chan10Raw: IGNORE, chan11Raw: IGNORE, chan12Raw: IGNORE,
-          chan13Raw: IGNORE, chan14Raw: IGNORE, chan15Raw: IGNORE, chan16Raw: IGNORE,
-          chan17Raw: IGNORE, chan18Raw: IGNORE,
+          ...overrideFields(overrideChannels({ roll: 1500, pitch: 1500, throttle: 1000, yaw: 1500 }, stickMapFor(target.sysid))),
         });
         const rcPacket = await sendMavlinkPacket(RC_CHANNELS_OVERRIDE_ID, rcPayload, RC_CHANNELS_OVERRIDE_CRC_EXTRA, { link: target.transport });
         await target.transport.write(rcPacket);
@@ -10100,7 +10099,7 @@ export function setupIpcHandlers(mainWindow: BrowserWindow): void {
   // RC Override stick test — drives RC1..RC4 with synthetic stick positions.
   // Unlike DO_SET_SERVO, this goes through the autopilot's mixer so it works
   // for outputs assigned to mixer functions (Aileron/Elevator/Throttle/etc).
-  // Assumes default RCMAP (Roll=RC1, Pitch=RC2, Throttle=RC3, Yaw=RC4).
+  // Sticks land on the vehicle's RCMAP_* channels, not RC1..4.
   ipcMain.handle(IPC_CHANNELS.RC_OVERRIDE_SET, async (_, request: { roll: number; pitch: number; throttle: number; yaw: number; modeChannel?: number; modePwm?: number }) => {
     if (isTrainerSessionActive()) {
       return { success: false, error: 'Trainer session active - the Trainer owns the sticks' };
@@ -10118,22 +10117,15 @@ export function setupIpcHandlers(mainWindow: BrowserWindow): void {
       // functions with stale values. If the caller asks us to pin a specific
       // channel (typically FLTMODE_CH so the test stays in MANUAL while RX is
       // detached) we override that single aux slot.
-      const IGNORE = 65535;
-      const aux: number[] = new Array(14).fill(IGNORE); // chan5-18
+      const pins: Record<number, number> = {};
       if (request.modeChannel && request.modePwm && request.modeChannel >= 5 && request.modeChannel <= 18) {
-        aux[request.modeChannel - 5] = request.modePwm;
+        pins[request.modeChannel] = request.modePwm;
       }
+      const sticks = { roll: request.roll, pitch: request.pitch, throttle: request.throttle, yaw: request.yaw };
       const payload = serializeRcChannelsOverride({
         targetSystem: focus.sysid,
         targetComponent: 1,
-        chan1Raw: request.roll,
-        chan2Raw: request.pitch,
-        chan3Raw: request.throttle,
-        chan4Raw: request.yaw,
-        chan5Raw: aux[0]!, chan6Raw: aux[1]!, chan7Raw: aux[2]!, chan8Raw: aux[3]!,
-        chan9Raw: aux[4]!, chan10Raw: aux[5]!, chan11Raw: aux[6]!, chan12Raw: aux[7]!,
-        chan13Raw: aux[8]!, chan14Raw: aux[9]!, chan15Raw: aux[10]!, chan16Raw: aux[11]!,
-        chan17Raw: aux[12]!, chan18Raw: aux[13]!,
+        ...overrideFields(overrideChannels(sticks, stickMapFor(focus.sysid), pins)),
       });
       await sendToFocusedVehicle(focus, RC_CHANNELS_OVERRIDE_ID, payload, RC_CHANNELS_OVERRIDE_CRC_EXTRA);
       return { success: true };
@@ -13874,6 +13866,8 @@ export function setupIpcHandlers(mainWindow: BrowserWindow): void {
     }),
     releasePhysics: async () => {
       if (lastReportedArmed === true) return false;
+      // A cargo's simulator (Gazebo) already owns UDP 9002: nothing to hand over.
+      if (ardupilotSitlProcess.externalPhysics) return false;
       // Marked externally owned BEFORE stopping, so nothing in the SITL lifecycle can race in
       // and respawn the engine onto UDP 9002. Same order as the hand over, for the same reason.
       ardupilotSitlProcess.setEngineManaged(false);

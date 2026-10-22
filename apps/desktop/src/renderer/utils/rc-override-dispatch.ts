@@ -3,7 +3,7 @@
  * use completely different messages, so the flight-control store must dispatch
  * on the connection protocol rather than assuming MSP.
  *
- *  - MAVLink -> RC_CHANNELS_OVERRIDE, driving RC1..RC4 (Roll/Pitch/Throttle/Yaw).
+ *  - MAVLink -> RC_CHANNELS_OVERRIDE; main places Roll/Pitch/Throttle/Yaw on the RCMAP_* channels.
  *    Aux channels are left "ignore" by the main handler so we never hijack
  *    FLTMODE_CH.
  *  - anything else (MSP/Betaflight/iNAV) -> MSP_SET_RAW_RC with the full array.

@@ -444,7 +444,10 @@ export const MavlinkConfigView: React.FC = () => {
       // tab:hardware?setup=ping opens the hardware setup on that search
       const [tabPart, query] = scrollTarget.slice(4).split('?');
       const tab = tabPart as TabId;
-      setHardwareSetupQuery(tab === 'hardware' ? new URLSearchParams(query ?? '').get('setup') : null);
+      const params = new URLSearchParams(query ?? '');
+      setHardwareSetupQuery(tab === 'hardware' ? params.get('setup') : null);
+      // tab:quick-setup?focus=vibration scrolls to that card and lights it
+      if (tab === 'quick-setup') setQuickFocus(params.get('focus'));
       // A tab this vehicle or firmware does not have falls back to the full table.
       if (tabIds.includes(tab)) setActiveTab(tab);
       else if (tabIds.includes('parameters')) setActiveTab('parameters');

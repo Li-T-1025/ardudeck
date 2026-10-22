@@ -10,6 +10,7 @@
  */
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { stickMapFrom } from '../../../../shared/rc-map';
 import { Gamepad2, Square, AlertTriangle } from 'lucide-react';
 import { Trans, useTranslation } from 'react-i18next';
 import { useParameterStore } from '../../../stores/parameter-store';
@@ -98,8 +99,9 @@ export const StickTestPanel: React.FC = () => {
   // switch the FC out of MANUAL mid-test. Plane: FLTMODE_CH, Rover: MODE_CH.
   const num = (name: string): number | undefined => parameters.get(name)?.value as number | undefined;
   const modeChannel = isRover ? num('MODE_CH') : num('FLTMODE_CH');
-  const steerCh = num('RCMAP_ROLL') ?? 1;
-  const thrCh = num('RCMAP_THROTTLE') ?? 3;
+  const map = stickMapFrom(num);
+  const steerCh = map.roll;
+  const thrCh = map.throttle;
 
   const valuesRef = useRef({ roll, pitch, throttle, yaw });
   valuesRef.current = { roll, pitch, throttle, yaw };
@@ -297,16 +299,16 @@ export const StickTestPanel: React.FC = () => {
           </>
         ) : (
           <>
-            <SliderRow label={t('common:roll')} value={roll}     min={1100} max={1900} center={1500} onChange={setRoll}     fcValue={fcCh(0)} />
-            <SliderRow label={t('common:pitch')} value={pitch}    min={1100} max={1900} center={1500} onChange={setPitch}    fcValue={fcCh(1)} />
-            <SliderRow label={t('common:throttle')} value={throttle} min={1100} max={1900} center={1100} onChange={setThrottle} fcValue={fcCh(2)} />
-            <SliderRow label={t('common:yaw')} value={yaw}      min={1100} max={1900} center={1500} onChange={setYaw}      fcValue={fcCh(3)} />
+            <SliderRow label={t('common:roll')} value={roll}     min={1100} max={1900} center={1500} onChange={setRoll}     fcValue={fcCh(map.roll - 1)} />
+            <SliderRow label={t('common:pitch')} value={pitch}    min={1100} max={1900} center={1500} onChange={setPitch}    fcValue={fcCh(map.pitch - 1)} />
+            <SliderRow label={t('common:throttle')} value={throttle} min={1100} max={1900} center={1100} onChange={setThrottle} fcValue={fcCh(map.throttle - 1)} />
+            <SliderRow label={t('common:yaw')} value={yaw}      min={1100} max={1900} center={1500} onChange={setYaw}      fcValue={fcCh(map.yaw - 1)} />
           </>
         )}
       </div>
 
       <div className="mt-2 text-[11px] text-content-tertiary">
-        {t('mavlink-config:stickTestPanel.fcColumnHint', { channels: isRover ? `RC${steerCh}/RC${thrCh}` : 'RC1-4' })}
+        {t('mavlink-config:stickTestPanel.fcColumnHint', { channels: isRover ? `RC${steerCh}/RC${thrCh}` : `RC${map.roll}/RC${map.pitch}/RC${map.throttle}/RC${map.yaw}` })}
       </div>
 
       {active && (

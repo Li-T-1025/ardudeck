@@ -1901,6 +1901,15 @@ export interface ArduPilotSitlConfig {
   simBatterySag?: boolean;
   /** Level top speed (km/h) for quadplanes with a forward motor; built-in physics only. */
   topSpeedKmh?: number;
+  /**
+   * Physics from an external process over ArduPilot's JSON FDM link (a cargo driving Gazebo).
+   * SITL launches with `-MJSON:<host>`; the in-app engine and custom frames are left out.
+   */
+  externalPhysics?: { kind: 'json'; host: string; port?: number };
+  /** Parameter files appended after the host's own defaults stack, later files win. */
+  extraDefaultsFiles?: string[];
+  /** Single parameters written on top of everything else. */
+  extraParams?: Record<string, number>;
   /** Set by the launcher once the matching aero file is staged in SITL's folder. */
   topSpeedAeroFile?: string;
 }
@@ -1911,6 +1920,8 @@ export interface ArduPilotSitlConfig {
 export interface ArduPilotSitlStatus {
   isRunning: boolean;
   pid?: number;
+  /** Set while the running SITL takes its physics from outside. */
+  externalPhysics?: { kind: 'json'; host: string; port?: number };
   /** Command line used to start */
   command?: string;
   /** Vehicle type of running instance */

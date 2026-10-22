@@ -453,6 +453,13 @@
     "unsupportedCommand": "Unsupported command",
     "unsupportedFrame": "Unsupported frame"
   },
+  "moduleProcess": {
+    "allowAlways": "Always allow this command",
+    "allowOnce": "Start once",
+    "declined": "The pilot declined to start the program",
+    "message": "{{name}}: {{reason}}",
+    "title": "{{name}} wants to start a program"
+  },
   "moduleManager": {
     "activated_one": "Activated {{count}} module(s)",
     "activated_other": "Activated {{count}} module(s)",
@@ -566,6 +573,8 @@
     "xplaneRunning": "X-Plane is already running"
   },
   "sitl": {
+    "externalPortOnly": "External physics must use UDP port {{port}}: ArduPilot SITL instance 0 listens on nothing else",
+    "physicsPortOwned": "The Trainer holds the physics port; close it before starting an external simulator",
     "bundleMissingPx4": "Downloaded bundle is missing bin/px4",
     "exportFrameTitle": "Export SITL Frame JSON",
     "frameNotFound": "Frame not found",

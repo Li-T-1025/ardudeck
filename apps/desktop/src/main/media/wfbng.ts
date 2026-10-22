@@ -89,3 +89,10 @@ export function wfbngShouldTranscode(codec: WfbCodec, explicit: boolean | undefi
   if (explicit !== undefined) return explicit;
   return codec === 'h265';
 }
+
+/** Whether a udp source carries RTP and so needs the SDP route rather than a plain `-i udp://` read. */
+export function udpSourceRtpCodec(source: { kind: string; rtpCodec?: WfbCodec; wfbCodec?: WfbCodec }): WfbCodec | null {
+  if (source.kind === 'wfbng') return source.wfbCodec ?? 'h265';
+  if (source.kind === 'rtp-udp' && source.rtpCodec) return source.rtpCodec;
+  return null;
+}

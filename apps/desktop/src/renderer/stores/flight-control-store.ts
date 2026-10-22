@@ -18,7 +18,7 @@ import { claimRcOverride, releaseRcOverride, onTrainerActive } from '../utils/rc
 
 /**
  * Transmit one RC-override frame over the correct protocol. MAVLink links use
- * RC_CHANNELS_OVERRIDE (RC1..RC4); MSP links use MSP_SET_RAW_RC. Fire-and-forget.
+ * RC_CHANNELS_OVERRIDE (on the RCMAP_* channels); MSP links use MSP_SET_RAW_RC. Fire-and-forget.
  */
 /**
  * Send one override frame, and REPORT what happened.

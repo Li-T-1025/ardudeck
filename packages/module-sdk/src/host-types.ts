@@ -1398,6 +1398,29 @@ export interface RendererHostApi {
   files: {
     pickFolder(title?: string): Promise<string | null>;
   };
+  /**
+   * The host's built-in ArduPilot SITL, driven by a cargo that brings the physics (Gazebo). Missing
+   * on hosts older than the Gazebo cargo, so feature-detect `host.sitl`.
+   */
+  sitl: {
+    /**
+     * Start SITL with its physics coming from an external process over the JSON FDM link.
+     * Refused while the Trainer holds the physics port or a vehicle is armed.
+     */
+    startExternal(req: SitlExternalStartRequest): Promise<SitlStartResult>;
+    stop(): Promise<void>;
+    getStatus(): SitlHostStatus;
+    subscribe(listener: (s: SitlHostStatus) => void): () => void;
+  };
+  /**
+   * Video feeds a cargo adds to the host's camera views, under the vehicle the pilot has selected.
+   * Missing on older hosts, so feature-detect `host.camera`.
+   */
+  camera: {
+    registerStream(reg: CameraStreamRegistration): void;
+    /** Remove a stream this cargo registered. Other cargos' ids are ignored. */
+    unregisterStream(id: string): void;
+  };
   /** Ground elevation, metres AMSL. Null where the host has no data. */
   terrain: {
     elevationAt(lat: number, lng: number): Promise<number | null>;
@@ -1593,6 +1616,78 @@ export interface CameraStreamInfo {
   rtspUrl: string;
 }
 
+// --- External physics, camera streams and programs (Gazebo cargo) ----------
+
+/** Where the built-in ArduPilot SITL takes its flight physics from instead of simulating them itself. */
+export interface ExternalPhysics {
+  /** ArduPilot's JSON FDM link: SITL sends servo outputs to `host` and reads the state back. */
+  kind: 'json';
+  host: string;
+  /** UDP 9002 is the only port ArduPilot's JSON backend uses for instance 0; anything else is refused. */
+  port?: number;
+}
+
+export interface SitlExternalStartRequest {
+  vehicleType: 'copter' | 'plane' | 'rover' | 'sub';
+  /** SITL frame name the parameters are written for (quad, plane, rover...). Defaults per vehicle type. */
+  model?: string;
+  physics: ExternalPhysics;
+  /** Parameter files loaded after the host's own frame defaults, later files win. */
+  extraDefaultsFiles?: string[];
+  /** Single parameters written on top of everything else. */
+  extraParams?: Record<string, number>;
+  /** Take-off point; the pilot's saved SITL home when omitted. */
+  home?: { lat: number; lng: number; alt: number; heading: number };
+}
+
+export interface SitlStartResult {
+  success: boolean;
+  /** The SITL command line, for the cargo's own log. */
+  command?: string;
+  error?: string;
+}
+
+export interface SitlHostStatus {
+  running: boolean;
+  starting: boolean;
+  /** Set while the running SITL takes its physics from outside; null for built-in or ArduDeck physics. */
+  external: ExternalPhysics | null;
+  vehicleType: string | null;
+  error: string | null;
+}
+
+/** A live video feed a cargo adds to the host's camera views. */
+export interface CameraStreamRegistration {
+  /** Unique within the cargo; the host prefixes the slug. */
+  id: string;
+  label: string;
+  /** `udp://host:port` the feed arrives on. */
+  url: string;
+  /** Set when the feed is RTP (payload 96..98) rather than an MPEG-TS or raw elementary stream. */
+  rtpCodec?: 'h264' | 'h265';
+  hfovDeg?: number;
+  vfovDeg?: number;
+}
+
+export interface ProcessRunRequest {
+  /** Absolute path or a name on the PATH. */
+  command: string;
+  args: string[];
+  cwd?: string;
+  /** Merged over the host's environment. */
+  env?: Record<string, string>;
+  /** One line shown to the pilot in the prompt, saying why the cargo starts this program. */
+  reason: string;
+}
+
+export interface ProcessHandle {
+  pid: number;
+  onOutput(cb: (line: string, stream: 'stdout' | 'stderr') => void): () => void;
+  onExit(cb: (code: number | null, signal: string | null) => void): () => void;
+  /** SIGTERM by default; the process tree on Windows. */
+  kill(signal?: 'SIGTERM' | 'SIGKILL'): void;
+}
+
 // --- Lua scripts on the flight controller ----------------------------------
 
 export interface ScriptInstallRequest {
@@ -1656,6 +1751,14 @@ export interface MainHostApi {
   /** Live video feeds the host is relaying. */
   camera: {
     listStreams(): Promise<CameraStreamInfo[]>;
+  };
+  /**
+   * Start a program on this computer (a simulator, a bridge). Needs the 'pty' permission, the one
+   * that already lets a cargo open a terminal. The pilot is asked before the first start of each
+   * command line and can allow it for good; a refusal rejects. Missing on older hosts.
+   */
+  process: {
+    run(req: ProcessRunRequest): Promise<ProcessHandle>;
   };
   /** Map tiles this module serves (DEM override or raster overlay). */
   tiles: {

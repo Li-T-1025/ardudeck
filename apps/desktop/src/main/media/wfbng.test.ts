@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { bridgeFailureReason, buildWfbngSdp, buildWfbngFfmpegArgs, wfbngPort, wfbngShouldTranscode } from './wfbng.js';
+import { bridgeFailureReason, buildWfbngSdp, buildWfbngFfmpegArgs, udpSourceRtpCodec, wfbngPort, wfbngShouldTranscode } from './wfbng.js';
 
 describe('wfbng ingest helpers', () => {
   it('parses the listen port from udp urls, defaulting to 5600', () => {
@@ -54,5 +54,12 @@ describe('wfbng ingest helpers', () => {
   it('stays quiet when the output has no known cause', () => {
     expect(bridgeFailureReason('Input #0, sdp, from cam.sdp', 5600, 'h265')).toBeNull();
   });
-});
 
+  it('sends RTP udp sources through the SDP route, plain udp straight to ffmpeg', () => {
+    expect(udpSourceRtpCodec({ kind: 'wfbng' })).toBe('h265');
+    expect(udpSourceRtpCodec({ kind: 'wfbng', wfbCodec: 'h264' })).toBe('h264');
+    expect(udpSourceRtpCodec({ kind: 'rtp-udp', rtpCodec: 'h264' })).toBe('h264');
+    expect(udpSourceRtpCodec({ kind: 'rtp-udp' })).toBeNull();
+    expect(udpSourceRtpCodec({ kind: 'rtsp', rtpCodec: 'h264' })).toBeNull();
+  });
+});

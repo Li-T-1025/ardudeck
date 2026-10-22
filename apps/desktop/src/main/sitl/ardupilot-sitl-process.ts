@@ -132,6 +132,9 @@ async function writeObstaclesFileForSite(home: { lat: number; lng: number }): Pr
   return filePath;
 }
 
+/** UDP port ArduPilot's JSON FDM backend uses for SITL instance 0. */
+export const EXTERNAL_PHYSICS_PORT = 9002;
+
 const DEFAULT_MODELS: Record<ArduPilotVehicleType, string> = {
   copter: 'quad',
   plane: 'plane',
@@ -154,6 +157,8 @@ export function sitlFrameIsVtol(config: ArduPilotSitlConfig): boolean {
 }
 
 export function simModelFor(config: ArduPilotSitlConfig): string {
+  // A cargo's simulator (Gazebo) owns the JSON FDM link; nothing of ours competes for it.
+  if (config.externalPhysics) return `JSON:${config.externalPhysics.host}`;
   // ArduDeck's engine models copters, planes and rovers. A quadplane's lift
   // rotors live on outputs the fixed-wing model never reads, so under the
   // engine a QHover takeoff gets no lift and flips. ArduPilot's own quadplane
@@ -222,6 +227,11 @@ class ArduPilotSitlProcessManager {
 
   get engineManaged(): boolean {
     return this._engineManaged;
+  }
+
+  /** The external physics the running SITL was started with, or null. */
+  get externalPhysics(): ArduPilotSitlConfig['externalPhysics'] | null {
+    return this._currentConfig?.externalPhysics ?? null;
   }
 
   setEngineManaged(managed: boolean): void {
@@ -390,6 +400,17 @@ class ArduPilotSitlProcessManager {
       return { success: false, error: platformCheck.error };
     }
 
+    if (config.externalPhysics) {
+      // Instance 0 of ArduPilot's JSON backend talks on 9002 and nothing else; say so instead of hanging.
+      if (config.externalPhysics.port !== undefined && config.externalPhysics.port !== EXTERNAL_PHYSICS_PORT) {
+        return { success: false, error: t('main:sitl.externalPortOnly', { port: EXTERNAL_PHYSICS_PORT }) };
+      }
+      // The Trainer holds UDP 9002 while it flies; two physics sources on one port is a vehicle that never answers.
+      if (!this._engineManaged) return { success: false, error: t('main:sitl.physicsPortOwned') };
+      config = { ...config, useArduDeckSim: false, customFramePath: undefined, customFrameMotors: undefined, topSpeedKmh: undefined };
+      simEngineProcess.stop();
+    }
+
     try {
       const binaryPath = this.getBinaryPath(config.vehicleType, config.releaseTrack);
 
@@ -513,6 +534,17 @@ class ArduPilotSitlProcessManager {
         const overlayPath = path.join(path.dirname(binaryPath), 'ardudeck-defaults.parm');
         await writeFile(overlayPath, overlay, 'utf-8');
         defaultsStack.push(overlayPath);
+      }
+
+      // A cargo's frame files (the ardupilot_gazebo parm for the model) and single values go last, so they win.
+      if (!config.defaultsFile) {
+        for (const extra of config.extraDefaultsFiles ?? []) defaultsStack.push(extra);
+        const extraLines = Object.entries(config.extraParams ?? {}).map(([name, value]) => `${name} ${value}`);
+        if (extraLines.length > 0) {
+          const extraPath = path.join(path.dirname(binaryPath), 'ardudeck-cargo.parm');
+          await writeFile(extraPath, `${extraLines.join('\n')}\n`, 'utf-8');
+          defaultsStack.push(extraPath);
+        }
       }
 
       if (defaultsStack.length > 0 && !config.defaultsFile) {
@@ -775,6 +807,7 @@ class ArduPilotSitlProcessManager {
       pid: this.process?.pid,
       vehicleType: this._currentConfig?.vehicleType,
       tcpPort: 5760,
+      externalPhysics: this._currentConfig?.externalPhysics,
       simStateWsPort: simEngineProcess.wsPort ?? undefined,
     };
   }

@@ -145,21 +145,46 @@ function parseBatch(s: string, mul: number): number[] {
   return nums;
 }
 
-/**
- * Gyro X batches of the first IMU from the batch sampler (ISBH + ISBD), as
- * separate uniformly sampled runs. Pre or post filter depends on
- * INS_LOG_BAT_OPT at the time of the flight; the caller reads that from the
- * log's PARM messages.
- */
-export function batchGyroRuns(isbh: LogColumns | undefined, isbd: LogColumns | undefined, axis: 'x' | 'y' | 'z' = 'x'): GyroSeries[] {
+/** ISBH.type values (AP_InertialSensor IMU_SENSOR_TYPE_ACCEL / _GYRO). */
+export const BATCH_TYPE_ACCEL = 0;
+export const BATCH_TYPE_GYRO = 1;
+export type BatchSensor = 'accel' | 'gyro';
+export type BatchAxis = 'x' | 'y' | 'z';
+
+/** Which sensor and instance pairs the batch sampler recorded, in header order. */
+export function batchSources(isbh: LogColumns | undefined): Array<{ sensor: BatchSensor; instance: number }> {
+  const type = isbh?.num.type; const inst = isbh?.num.instance;
+  if (!isbh || !type || !inst) return [];
+  const seen = new Set<string>();
+  const out: Array<{ sensor: BatchSensor; instance: number }> = [];
+  for (let i = 0; i < isbh.count; i++) {
+    const sensor: BatchSensor | null = type[i] === BATCH_TYPE_GYRO ? 'gyro' : type[i] === BATCH_TYPE_ACCEL ? 'accel' : null;
+    if (!sensor) continue;
+    const key = `${sensor}:${inst[i]}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push({ sensor, instance: inst[i]! });
+  }
+  return out.sort((a, b) => (a.sensor === b.sensor ? a.instance - b.instance : a.sensor === 'gyro' ? -1 : 1));
+}
+
+/** Gyro X batches of the first IMU, the notch card's input. */
+export function batchGyroRuns(isbh: LogColumns | undefined, isbd: LogColumns | undefined, axis: BatchAxis = 'x'): GyroSeries[] {
+  return batchRuns(isbh, isbd, { sensor: 'gyro', instance: 0, axis });
+}
+
+/** Batches of one sensor, instance and axis as separate uniform runs at ISBH.smp_rate. Pre or post filter is INS_LOG_BAT_OPT's call. */
+export function batchRuns(isbh: LogColumns | undefined, isbd: LogColumns | undefined, pick: { sensor: BatchSensor; instance: number; axis: BatchAxis }): GyroSeries[] {
   if (!isbh || !isbd) return [];
   const type = isbh.num.type; const inst = isbh.num.instance; const n = isbh.num.N; const mul = isbh.num.mul; const rate = isbh.num.smp_rate;
   if (!type || !inst || !n || !mul || !rate) return [];
+  const wantType = pick.sensor === 'gyro' ? BATCH_TYPE_GYRO : BATCH_TYPE_ACCEL;
   const headers = new Map<number, { t0: number; mul: number; rate: number }>();
   for (let i = 0; i < isbh.count; i++) {
-    if (type[i] !== 1 || inst[i] !== 0) continue;
+    if (type[i] !== wantType || inst[i] !== pick.instance) continue;
     headers.set(n[i]!, { t0: isbh.timeUs[i]! / 1e6, mul: mul[i]! || 1, rate: rate[i]! });
   }
+  const axis = pick.axis;
   const dn = isbd.num.N; const seq = isbd.num.seqno; const data = isbd.txt[axis];
   if (!dn || !seq || !data) return [];
   const samples = new Map<number, Array<[number, number[]]>>();

@@ -18,3 +18,16 @@ describe('host-types additions', () => {
     expect(tilesApi).toBeUndefined();
   });
 });
+
+describe('Gazebo seams', () => {
+  it('type the external physics start, a cargo camera stream and a program start', async () => {
+    const mod = await import('../host-types');
+    const req: import('../host-types').SitlExternalStartRequest = { vehicleType: 'copter', physics: { kind: 'json', host: '127.0.0.1', port: 9002 }, extraDefaultsFiles: ['/p/gazebo-iris.parm'] };
+    const cam: import('../host-types').CameraStreamRegistration = { id: 'gimbal', label: 'Gazebo gimbal', url: 'udp://127.0.0.1:5600', rtpCodec: 'h264' };
+    const run: import('../host-types').ProcessRunRequest = { command: 'gz', args: ['sim', '-g'], reason: 'Gazebo GUI' };
+    expect(mod).toBeDefined();
+    expect(req.physics.kind).toBe('json');
+    expect(cam.rtpCodec).toBe('h264');
+    expect(run.args).toHaveLength(2);
+  });
+});

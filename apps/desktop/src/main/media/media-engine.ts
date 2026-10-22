@@ -495,6 +495,13 @@ export class MediaEngine {
         const sdpPath = join(sdpDir, `${name}.sdp`);
         writeFileSync(sdpPath, buildWfbngSdp(wfbngPort(url), codec));
         args = buildWfbngFfmpegArgs(sdpPath, wfbngShouldTranscode(codec, source.wfbTranscode), this.rtspUrl(name));
+      } else if (source.kind === 'rtp-udp' && source.rtpCodec) {
+        // RTP without a ground station in front (Gazebo's camera plugin): same SDP route as wfbng.
+        const sdpDir = join(app.getPath('userData'), 'media-sdp');
+        mkdirSync(sdpDir, { recursive: true });
+        const sdpPath = join(sdpDir, `${name}.sdp`);
+        writeFileSync(sdpPath, buildWfbngSdp(wfbngPort(url), source.rtpCodec));
+        args = buildWfbngFfmpegArgs(sdpPath, wfbngShouldTranscode(source.rtpCodec, undefined), this.rtspUrl(name));
       } else {
         // Raw H.264/UDP -> publish into the hub over RTSP, copy only.
         args = [

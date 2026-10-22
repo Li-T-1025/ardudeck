@@ -1,10 +1,15 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import uPlot from 'uplot';
 import { useLogStore } from '../../stores/log-store';
+import { useNavigationStore } from '../../stores/navigation-store';
 import { useResolvedTheme } from '../../hooks/useTheme';
 import { SERIES_COLORS } from './log-chart-stats';
-import { computeSpectrum, estimateSampleRate, resampleUniform, peakIndex, type Spectrum } from './log-fft';
-import { numericFieldNames } from '../../utils/log-columns';
+import { peakIndex } from './log-fft';
+import {
+  BATCH_AXES, batchSpectra, listSources, messageFields, messageSpectra, parseSourceKey, sourceKey,
+  type InstanceSpectrum, type SpectrumSource,
+} from './spectrum-sources';
+import type { BatchAxis } from '../mavlink-config/notch-analysis';
 import { useTranslation } from 'react-i18next';
 
 // Sensible defaults per message type: what a tuner actually wants to see first.
@@ -22,17 +27,11 @@ const TYPE_PREFERENCE: { type: string; field: string }[] = [
   { type: 'vehicle_angular_velocity', field: 'xyz[0]' },
 ];
 
-interface InstanceSpectrum {
-  inst: number | null;
-  rateHz: number;
-  sampleCount: number;
-  spec: Spectrum;
-}
-
 /**
  * FFT spectrum of any log signal - the vibration / harmonic-notch tuning view
  * (MP hides this in a separate FFT tool; here it lives next to the charts and
  * follows their zoom). Welch-averaged, Hann-windowed, amplitude-calibrated.
+ * The batch sampler (ISBH/ISBD) is the default source: full sensor rate.
  * Multi-instance types (per-IMU) render one series per instance so a bad
  * sensor stands out immediately.
  */
@@ -43,74 +42,50 @@ export function SpectrumPanel() {
   const syncZoomEnabled = useLogStore((s) => s.syncZoomEnabled);
   const isLight = useResolvedTheme() === 'light';
 
-  const [msgType, setMsgType] = useState<string | null>(null);
+  const [sourceSel, setSourceSel] = useState<string | null>(null);
   const [field, setField] = useState<string | null>(null);
+  const [axis, setAxis] = useState<BatchAxis>('x');
   const [followZoom, setFollowZoom] = useState(true);
   const [dbScale, setDbScale] = useState(false);
 
-  // Message types that have at least one numeric field to transform.
-  const numericTypes = useMemo(() => {
-    if (!currentLog) return [];
-    return currentLog.messageTypes.filter((t) => {
-      const cols = currentLog.messages[t];
-      if (!cols || cols.count < 64) return false;
-      return numericFieldNames(cols).some((k) => k !== 'TimeUS' && k !== 'Instance' && k !== 'I');
-    });
-  }, [currentLog]);
+  const sources = useMemo(() => (currentLog ? listSources(currentLog) : []), [currentLog]);
+  const hasBatch = sources.some((s) => s.kind === 'batch');
 
-  // Auto-pick the most useful source when a log loads.
-  const effectiveType = msgType && numericTypes.includes(msgType)
-    ? msgType
-    : (TYPE_PREFERENCE.find((p) => numericTypes.includes(p.type))?.type ?? numericTypes[0] ?? null);
+  // Batch gyro first, then the preferred regular message, when nothing is chosen.
+  const source: SpectrumSource | null = useMemo(() => {
+    const chosen = sourceSel ? parseSourceKey(sourceSel) : null;
+    if (chosen && sources.some((s) => sourceKey(s) === sourceKey(chosen))) return chosen;
+    const batch = sources.find((s) => s.kind === 'batch');
+    if (batch) return batch;
+    const preferred = TYPE_PREFERENCE.find((p) => sources.some((s) => s.kind === 'msg' && s.type === p.type));
+    return preferred ? { kind: 'msg', type: preferred.type } : sources[0] ?? null;
+  }, [sourceSel, sources]);
 
-  const fieldsForType = useMemo(() => {
-    if (!currentLog || !effectiveType) return [];
-    const cols = currentLog.messages[effectiveType];
-    if (!cols || cols.count === 0) return [];
-    return numericFieldNames(cols).filter((k) => k !== 'TimeUS' && k !== 'Instance' && k !== 'I');
-  }, [currentLog, effectiveType]);
+  const msgType = source?.kind === 'msg' ? source.type : null;
+  const fieldsForType = useMemo(
+    () => (currentLog && msgType ? messageFields(currentLog.messages[msgType]) : []),
+    [currentLog, msgType],
+  );
 
   const effectiveField = field && fieldsForType.includes(field)
     ? field
-    : (TYPE_PREFERENCE.find((p) => p.type === effectiveType && fieldsForType.includes(p.field))?.field ?? fieldsForType[0] ?? null);
+    : (TYPE_PREFERENCE.find((p) => p.type === msgType && fieldsForType.includes(p.field))?.field ?? fieldsForType[0] ?? null);
 
   const xWindow = followZoom && syncZoomEnabled ? syncedXRange : null;
 
   const spectra = useMemo<InstanceSpectrum[]>(() => {
-    if (!currentLog || !effectiveType || !effectiveField) return [];
-    const cols = currentLog.messages[effectiveType];
-    if (!cols || cols.count === 0) return [];
+    if (!currentLog || !source) return [];
+    if (source.kind === 'batch') return batchSpectra(currentLog, source.sensor, axis, xWindow);
+    const cols = currentLog.messages[source.type];
+    if (!cols || cols.count === 0 || !effectiveField) return [];
+    return messageSpectra(cols, effectiveField, xWindow);
+  }, [currentLog, source, axis, effectiveField, xWindow]);
 
-    const instKey = ['Instance', 'I'].find((k) => cols.num[k] !== undefined) ?? null;
-    const instCol = instKey ? cols.num[instKey] : undefined;
-    const valueCol = cols.num[effectiveField];
-    if (!valueCol) return [];
-    const instances: (number | null)[] = instCol
-      ? [...new Set(Array.from(instCol))].sort((a, b) => a - b)
-      : [null];
-
-    const out: InstanceSpectrum[] = [];
-    for (const inst of instances) {
-      const times: number[] = [];
-      const values: number[] = [];
-      for (let i = 0; i < cols.count; i++) {
-        if (inst !== null && instCol && instCol[i] !== inst) continue;
-        const t = (cols.timeUs[i] ?? 0) / 1_000_000;
-        if (xWindow && (t < xWindow.min || t > xWindow.max)) continue;
-        const v = valueCol[i];
-        if (v === undefined || !Number.isFinite(v)) continue;
-        times.push(t);
-        values.push(v);
-      }
-      if (times.length < 128) continue;
-      const rateHz = estimateSampleRate(times);
-      if (!rateHz) continue;
-      const uniform = resampleUniform(times, values, rateHz);
-      const spec = computeSpectrum(uniform, rateHz);
-      if (spec) out.push({ inst, rateHz, sampleCount: times.length, spec });
-    }
-    return out;
-  }, [currentLog, effectiveType, effectiveField, xWindow]);
+  const seriesLabel = (s: InstanceSpectrum) => {
+    const base = source?.kind === 'batch' ? `ISBD ${source.sensor}` : msgType ?? '';
+    const suffix = source?.kind === 'batch' ? axis.toUpperCase() : effectiveField ?? '';
+    return s.inst !== null ? `${base}[${s.inst}].${suffix}` : `${base}.${suffix}`;
+  };
 
   const chartRef = useRef<HTMLDivElement>(null);
   const plotRef = useRef<uPlot | null>(null);
@@ -154,7 +129,7 @@ export function SpectrumPanel() {
       series: [
         { label: 'Hz' }, // i18n-exempt: unit
         ...spectra.map((s, i) => ({
-          label: s.inst !== null ? `${effectiveType}[${s.inst}].${effectiveField}` : `${effectiveType}.${effectiveField}`,
+          label: seriesLabel(s),
           stroke: SERIES_COLORS[i % SERIES_COLORS.length]!,
           width: 1.5,
           points: { show: false },
@@ -199,9 +174,8 @@ export function SpectrumPanel() {
       observer.disconnect();
       if (plotRef.current) { plotRef.current.destroy(); plotRef.current = null; }
     };
-    // effectiveType/effectiveField only feed series labels and always change
-    // together with `spectra`, which IS a dep - listing them would just force
-    // a second identical rebuild.
+    // seriesLabel only feeds series labels and always changes together with
+    // `spectra`, which IS a dep - listing it would just force a second identical rebuild.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [spectra, dbScale, isLight]);
 
@@ -211,16 +185,24 @@ export function SpectrumPanel() {
 
   const first = spectra[0];
   const selectCls = 'text-[11px] px-1.5 py-0.5 rounded bg-input text-content border border-subtle focus:outline-none focus:border-blue-500/50';
+  const sourceLabel = (s: SpectrumSource) => (s.kind === 'batch' ? t(s.sensor === 'gyro' ? 'logs:spectrum.batchGyro' : 'logs:spectrum.batchAccel') : s.type);
+  const openVibrationCard = () => useNavigationStore.getState().setView('parameters', 'tab:quick-setup?focus=vibration');
 
   return (
     <div className="h-full flex flex-col">
       <div className="flex-shrink-0 px-3 pt-2 pb-1.5 border-b border-subtle flex items-center gap-2 flex-wrap">
-        <select value={effectiveType ?? ''} onChange={(e) => { setMsgType(e.target.value); setField(null); }} className={selectCls}>
-          {numericTypes.map((t) => <option key={t} value={t}>{t}</option>)}
+        <select value={source ? sourceKey(source) : ''} onChange={(e) => { setSourceSel(e.target.value); setField(null); }} className={selectCls}>
+          {sources.map((s) => <option key={sourceKey(s)} value={sourceKey(s)}>{sourceLabel(s)}</option>)}
         </select>
-        <select value={effectiveField ?? ''} onChange={(e) => setField(e.target.value)} className={selectCls}>
-          {fieldsForType.map((f) => <option key={f} value={f}>{f}</option>)}
-        </select>
+        {source?.kind === 'batch' ? (
+          <select value={axis} onChange={(e) => setAxis(e.target.value as BatchAxis)} className={selectCls}>
+            {BATCH_AXES.map((a) => <option key={a} value={a}>{a.toUpperCase()}</option>)}
+          </select>
+        ) : (
+          <select value={effectiveField ?? ''} onChange={(e) => setField(e.target.value)} className={selectCls}>
+            {fieldsForType.map((f) => <option key={f} value={f}>{f}</option>)}
+          </select>
+        )}
         <button
           onClick={() => setFollowZoom(!followZoom)}
           disabled={!syncZoomEnabled}
@@ -252,6 +234,19 @@ export function SpectrumPanel() {
           </span>
         )}
       </div>
+      {first && source?.kind === 'msg' && (
+        <div className="flex-shrink-0 px-3 py-1 border-b border-subtle text-[10px] text-content-tertiary flex items-center gap-2 flex-wrap">
+          <span>{t('logs:spectrum.lowRange', { type: source.type, rate: first.rateHz.toFixed(0), nyquist: (first.rateHz / 2).toFixed(0) })}</span>
+          {!hasBatch && (
+            <>
+              <span>{t('logs:spectrum.batchHint')}</span>
+              <button onClick={openVibrationCard} className="text-blue-400 hover:text-blue-300 underline">
+                {t('logs:spectrum.openVibrationCard')}
+              </button>
+            </>
+          )}
+        </div>
+      )}
       {spectra.length === 0 ? (
         <div className="flex-1 flex items-center justify-center text-content-tertiary text-xs px-6 text-center">
           {t('logs:spectrum.notEnough')}

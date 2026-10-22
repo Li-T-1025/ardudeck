@@ -15,6 +15,7 @@ describe('loadModuleMain', () => {
     },
     mavlink: { subscribe: () => () => {} },
     camera: { listStreams: async () => [] },
+    process: { run: async () => { throw new Error('no'); } },
     scripts: { install: async () => ({ status: 'installed' as const }), saveCopy: async () => null },
     tiles: { register: () => {}, unregister: () => {} },
     scene: { registerMesh: () => {}, unregisterMesh: () => {} },

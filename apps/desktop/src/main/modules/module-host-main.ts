@@ -8,6 +8,7 @@ import { installScript } from '../script-installer/install-script.js';
 import { t } from '../../shared/i18n/index.js';
 import { registerTileSource, unregisterTileSource } from '../terrain/tile-source-registry.js';
 import { registerSceneMesh, unregisterSceneMesh } from '../terrain/scene-mesh-registry.js';
+import { runModuleProcess } from './module-process.js';
 
 export function createMainHostApi(manifest: ModuleManifest): MainHostApi {
   const dataDir = join(app.getPath('userData'), 'modules', manifest.slug, 'data');
@@ -86,6 +87,9 @@ export function createMainHostApi(manifest: ModuleManifest): MainHostApi {
     },
     camera: {
       listStreams: () => mediaEngine.liveStreams(),
+    },
+    process: {
+      run: (req) => runModuleProcess(manifest, dataDir, req),
     },
     tiles: {
       register: (reg) => { registerTileSource(manifest.slug, reg); },

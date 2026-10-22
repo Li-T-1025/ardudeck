@@ -52,6 +52,11 @@ export interface CameraSourceConfig {
    */
   rtspTransport?: 'automatic' | 'tcp' | 'udp';
   /**
+   * rtp-udp sources that carry RTP (payload 96..98) rather than MPEG-TS: ffmpeg then reads the
+   * feed through an SDP, the way wfbng does. Gazebo's camera plugin sends H.264 RTP this way.
+   */
+  rtpCodec?: 'h264' | 'h265';
+  /**
    * wfbng sources: codec the ground station forwards (WiFiLink 2 defaults to
    * H.265) and whether to transcode to H.264 for WebRTC playback. Transcode
    * defaults to on for H.265 - Electron's WebRTC cannot decode H.265.

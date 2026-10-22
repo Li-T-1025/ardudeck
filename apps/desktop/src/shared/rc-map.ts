@@ -37,10 +37,7 @@ export function stickMapFrom(read: (name: string) => number | undefined): StickC
   };
 }
 
-/**
- * The 18 RC_CHANNELS_OVERRIDE values with each stick on the channel the vehicle reads it from.
- * `pins` sets other channels (1-based, e.g. the mode channel); a pin never overwrites a stick channel.
- */
+/** 18 override values, sticks on the vehicle's RCMAP channels; `pins` (1-based) never overwrite a stick channel. */
 export function overrideChannels(sticks: StickValues, map: StickChannelMap = DEFAULT_STICK_MAP, pins: Record<number, number> = {}): number[] {
   const out = new Array<number>(RC_OVERRIDE_CHANNELS).fill(RC_OVERRIDE_IGNORE);
   const stickChannels = new Set([map.roll, map.pitch, map.throttle, map.yaw]);
@@ -56,9 +53,12 @@ export function overrideChannels(sticks: StickValues, map: StickChannelMap = DEF
   return out;
 }
 
+type ChanField = 'chan1Raw' | 'chan2Raw' | 'chan3Raw' | 'chan4Raw' | 'chan5Raw' | 'chan6Raw' | 'chan7Raw' | 'chan8Raw' | 'chan9Raw'
+  | 'chan10Raw' | 'chan11Raw' | 'chan12Raw' | 'chan13Raw' | 'chan14Raw' | 'chan15Raw' | 'chan16Raw' | 'chan17Raw' | 'chan18Raw';
+
 /** chan1Raw..chan18Raw fields for serializeRcChannelsOverride. */
-export function overrideFields(channels: number[]): Record<`chan${number}Raw`, number> {
-  const f = {} as Record<`chan${number}Raw`, number>;
-  for (let i = 0; i < RC_OVERRIDE_CHANNELS; i++) f[`chan${i + 1}Raw`] = channels[i] ?? RC_OVERRIDE_IGNORE;
+export function overrideFields(channels: number[]): Record<ChanField, number> {
+  const f = {} as Record<ChanField, number>;
+  for (let i = 0; i < RC_OVERRIDE_CHANNELS; i++) f[`chan${i + 1}Raw` as ChanField] = channels[i] ?? RC_OVERRIDE_IGNORE;
   return f;
 }

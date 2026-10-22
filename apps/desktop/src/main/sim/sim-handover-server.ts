@@ -113,6 +113,8 @@ export interface SitlControl {
   /** The custom frame JSON, which is where the mass and the power actually live. */
   readonly simFramePath: string | null;
   readonly currentConfig: { homeLocation: { lat: number; lng: number; alt: number; heading: number } } | null;
+  /** Set while a cargo's simulator already drives the physics; the port is not ours to hand over. */
+  readonly externalPhysics?: { host: string } | null;
   setEngineManaged(managed: boolean): void;
   relaunchWithHome(home: { lat: number; lng: number; alt: number; heading: number }): Promise<{ success: boolean; error?: string }>;
 }
@@ -224,6 +226,9 @@ export class SimHandoverService {
   async release(): Promise<{ ok: boolean; error?: string }> {
     if (this.deps.isVehicleArmed()) {
       return { ok: false, error: 'refused: vehicle is armed, disarm before releasing the physics engine' };
+    }
+    if (this.sitl.externalPhysics) {
+      return { ok: false, error: 'refused: an external simulator already drives the physics' };
     }
     // Mark the engine externally owned BEFORE stopping it, so nothing in the
     // SITL lifecycle can race in and respawn it onto UDP 9002.

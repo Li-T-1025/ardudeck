@@ -480,12 +480,17 @@
   "spectrum": {
     "amplitude": "Amplitude",
     "amplitudeDb": "Amplitude (dB)",
+    "batchAccel": "Batch sampler: Accel",
+    "batchGyro": "Batch sampler: Gyro",
+    "batchHint": "For the full sensor range on the next flight enable the batch sampler: INS_LOG_BAT_MASK = 1 (first IMU) and INS_LOG_BAT_OPT = 4 (pre- and post-filter, the batch sampler guide's setting for the first flight; 2 = post-filter only to check a notch). Set INS_LOG_BAT_MASK back to 0 afterwards.",
     "dbTip": "Logarithmic amplitude (dB)",
     "enableSyncTip": "Enable chart sync to follow zoom",
     "followZoom": "Follow zoom",
     "followZoomTip": "Analyse only the time window the charts are zoomed to",
     "frequency": "Frequency (Hz)",
+    "lowRange": "{{type}} is logged at {{rate}} Hz, so this spectrum stops at {{nyquist}} Hz.",
     "notEnough": "Not enough samples in this window - zoom out or pick a higher-rate message (IMU, ACC, GYR on ArduPilot; sensor_combined or sensor_gyro_fifo on PX4)",
+    "openVibrationCard": "Open the vibration filter card",
     "stats": "{{rate}} Hz sample rate · Δf {{df}} Hz · {{seg}} seg"
   },
   "view": {

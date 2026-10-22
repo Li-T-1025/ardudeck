@@ -10,6 +10,9 @@ import { useTelemetryStore } from '../stores/telemetry-store';
 import { useConnectionStore } from '../stores/connection-store';
 import { useNavigationStore } from '../stores/navigation-store';
 import { useParameterStore } from '../stores/parameter-store';
+import { useArduPilotSitlStore } from '../stores/ardupilot-sitl-store';
+import { useCameraStore } from '../stores/camera-store';
+import { useActiveVehicleStore } from '../stores/active-vehicle-store';
 import { useLogStore } from '../stores/log-store';
 import { CLAUDE_LOG_TOOLS, executeLogTool, listMessageTypes } from '../components/logs/log-ai-tools';
 import { useMissionStore } from '../stores/mission-store';
@@ -191,6 +194,7 @@ const cargoNamespace = (slug: string) => `cargo.${slug}`;
 
 export function unregisterModuleExtensionsForSlug(slug: string): void {
   for (const lang of Object.keys(i18n.store.data)) i18n.removeResourceBundle(lang, cargoNamespace(slug));
+  unregisterCargoStreamsForSlug(slug);
   configCardRegistry.unregisterAll(slug);
   coordinateFormatRegistry.unregisterAll(slug);
   configTabRegistry.unregisterAll(slug);
@@ -618,6 +622,18 @@ export function createRendererHostApi(
       pickFolder: (title) => window.electronAPI.pickFolder(title),
     },
 
+    sitl: {
+      startExternal: (req) => useArduPilotSitlStore.getState().startExternal(req),
+      stop: async () => { await useArduPilotSitlStore.getState().stop(); },
+      getStatus: () => sitlHostStatus(),
+      subscribe: (listener) => useArduPilotSitlStore.subscribe(() => listener(sitlHostStatus())),
+    },
+
+    camera: {
+      registerStream: (reg) => registerCargoStream(slug, reg),
+      unregisterStream: (id) => unregisterCargoStream(slug, id),
+    },
+
     terrain: {
       elevationAt: (lat, lng) => getElevation(lat, lng),
       elevationsAt: (points) => getElevations(points.map((p) => ({ lat: p.lat, lon: p.lng }))),
@@ -863,4 +879,55 @@ export function createRendererHostApi(
 
     registerMountPoint: (name, component) => register(slug, name, component),
   };
+}
+
+function sitlHostStatus() {
+  const s = useArduPilotSitlStore.getState();
+  return { running: s.isRunning, starting: s.isStarting, external: s.isRunning ? s.externalPhysics : null, vehicleType: s.isRunning ? s.vehicleType : null, error: s.lastError };
+}
+
+const cargoStreamId = (slug: string, id: string) => `${slug}:${id}`;
+/** Streams registered before a vehicle is selected wait here until one is, then land under it. */
+const pendingStreams = new Map<string, { slug: string; reg: Parameters<RendererHostApi['camera']['registerStream']>[0] }>();
+let pendingWatch: (() => void) | null = null;
+
+function placeStream(slug: string, reg: Parameters<RendererHostApi['camera']['registerStream']>[0], vehicleKey: string): void {
+  useCameraStore.getState().addSource({
+    id: cargoStreamId(slug, reg.id),
+    vehicleKey,
+    kind: 'rtp-udp',
+    label: reg.label,
+    url: reg.url,
+    rtpCodec: reg.rtpCodec,
+    hfovDeg: reg.hfovDeg,
+    vfovDeg: reg.vfovDeg,
+    lowLatency: true,
+    preset: `cargo:${slug}`,
+  });
+}
+
+function flushPendingStreams(): void {
+  const key = useActiveVehicleStore.getState().activeVehicleKey;
+  if (!key) return;
+  for (const [id, p] of pendingStreams) { placeStream(p.slug, p.reg, key); pendingStreams.delete(id); }
+  if (pendingStreams.size === 0 && pendingWatch) { pendingWatch(); pendingWatch = null; }
+}
+
+function registerCargoStream(slug: string, reg: Parameters<RendererHostApi['camera']['registerStream']>[0]): void {
+  const key = useActiveVehicleStore.getState().activeVehicleKey;
+  if (key) { placeStream(slug, reg, key); return; }
+  pendingStreams.set(cargoStreamId(slug, reg.id), { slug, reg });
+  pendingWatch ??= useActiveVehicleStore.subscribe(flushPendingStreams);
+}
+
+function unregisterCargoStream(slug: string, id: string): void {
+  const full = cargoStreamId(slug, id);
+  pendingStreams.delete(full);
+  if (useCameraStore.getState().sources[full]) useCameraStore.getState().removeSource(full);
+}
+
+/** Every stream a cargo registered, for when it is deactivated. */
+export function unregisterCargoStreamsForSlug(slug: string): void {
+  for (const id of Object.keys(useCameraStore.getState().sources)) if (id.startsWith(`${slug}:`)) useCameraStore.getState().removeSource(id);
+  for (const id of [...pendingStreams.keys()]) if (id.startsWith(`${slug}:`)) pendingStreams.delete(id);
 }
