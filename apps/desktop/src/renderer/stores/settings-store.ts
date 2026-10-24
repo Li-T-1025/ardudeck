@@ -264,6 +264,7 @@ export interface ConnectionMemory {
   lastBaudRate?: number;
   /** Hardware flow control on the last serial connection. */
   lastFlowControl?: boolean;
+  lastHoldLinesHigh?: boolean;
   lastTcpHost?: string;
   lastTcpPort?: number;
   lastTcpProtocol?: 'mavlink' | 'msp' | 'crsf';

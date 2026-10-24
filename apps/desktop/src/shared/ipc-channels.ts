@@ -1121,6 +1121,8 @@ export interface ConnectOptions {
   baudRate?: number;
   /** Serial only: hardware flow control (RTS/CTS), for radios such as RFD900/868 set to RTSCTS. */
   flowControl?: boolean;
+  /** Serial only: hold DTR and RTS high, for devices that stay silent until DTR is up. Resets ESP32-based modules such as ELRS. */
+  holdLinesHigh?: boolean;
   host?: string;
   tcpPort?: number;
   udpPort?: number;

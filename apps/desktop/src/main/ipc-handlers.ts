@@ -6105,6 +6105,8 @@ export function setupIpcHandlers(mainWindow: BrowserWindow): void {
         // Port is back - attempt connection
         const transport = new SerialTransport(pendingReconnect.portPath, {
           baudRate: pendingReconnect.baudRate || 115200,
+          dtrEnable: pendingReconnect.options?.holdLinesHigh === true,
+          rtsEnable: pendingReconnect.options?.holdLinesHigh === true,
           rtscts: pendingReconnect.options?.flowControl === true,
         });
 
@@ -6567,10 +6569,12 @@ export function setupIpcHandlers(mainWindow: BrowserWindow): void {
       switch (options.type) {
         case 'serial':
           if (!options.port) throw new Error(t('main:ipc.portRequired'));
-          // DTR and RTS stay low, as Mission Planner leaves them: either line resets ESP32 wiring
+          // DTR and RTS stay low unless the user holds them high: either line resets ESP32 wiring
           // (ELRS TX modules). Radios on RTS/CTS use the flow-control option, where the driver owns RTS.
           currentTransport = new SerialTransport(options.port, {
             baudRate: options.baudRate ?? 115200,
+            dtrEnable: options.holdLinesHigh === true,
+            rtsEnable: options.holdLinesHigh === true,
             rtscts: options.flowControl === true,
           });
           transportName = `${options.port} @ ${options.baudRate ?? 115200}${options.flowControl ? ' RTS/CTS' : ''}`;
