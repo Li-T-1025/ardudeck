@@ -72,6 +72,8 @@ export class SerialTransport extends BaseTransport {
         parity: this._parity,
         stopBits: this._stopBits,
         rtscts: this._rtscts,
+        // No DTR pulse on open: ESP32 auto-reset wiring (ELRS modules) reboots on it.
+        hupcl: false,
         autoOpen: false,
       });
 
@@ -108,14 +110,24 @@ export class SerialTransport extends BaseTransport {
 
         this._isOpen = true;
 
-        // Set DTR/RTS after opening; with hardware flow control RTS is the driver's to drive
+        // Set DTR/RTS after opening; with hardware flow control RTS is the driver's to drive.
+        // DTR goes up before RTS: RTS up with DTR down holds an ESP32 auto-reset circuit in reset,
+        // and Windows applies RTS before DTR within a single set().
         if (this.port) {
-          const lines = this._rtscts ? { dtr: this.dtrEnable } : { dtr: this.dtrEnable, rts: this.rtsEnable };
-          this.port.set(lines, (err) => {
-            if (err) {
-              console.warn('Failed to set DTR/RTS:', err.message);
-            }
-          });
+          const steps = this._rtscts
+            ? [{ dtr: this.dtrEnable }]
+            : this.dtrEnable && this.rtsEnable
+              ? [{ dtr: true, rts: false }, { dtr: true, rts: true }]
+              : [{ dtr: this.dtrEnable, rts: this.rtsEnable }];
+          const port = this.port;
+          const apply = (i: number): void => {
+            if (i >= steps.length) return;
+            port.set(steps[i]!, (err) => {
+              if (err) console.warn('Failed to set DTR/RTS:', err.message);
+              apply(i + 1);
+            });
+          };
+          apply(0);
         }
 
         this.emit('open');

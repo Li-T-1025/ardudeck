@@ -8,7 +8,7 @@
  * `<userData>/modules/ardudeck.internal.assistant/extracted/renderer.js`.
  */
 
-import { protocol, app, net } from 'electron';
+import { protocol, app, net, type CustomScheme } from 'electron';
 import { getDevModulePath } from './module-dev.js';
 import { pathToFileURL } from 'node:url';
 import { join, resolve } from 'node:path';
@@ -16,20 +16,16 @@ import { existsSync } from 'node:fs';
 
 export const MODULE_SCHEME = 'ardudeck-module';
 
-export function registerModuleSchemePrivileges(): void {
-  protocol.registerSchemesAsPrivileged([
-    {
-      scheme: MODULE_SCHEME,
-      privileges: {
-        standard: true,
-        secure: true,
-        supportFetchAPI: true,
-        corsEnabled: true,
-        stream: true,
-      },
-    },
-  ]);
-}
+export const MODULE_SCHEME_PRIVILEGES: CustomScheme = {
+  scheme: MODULE_SCHEME,
+  privileges: {
+    standard: true,
+    secure: true,
+    supportFetchAPI: true,
+    corsEnabled: true,
+    stream: true,
+  },
+};
 
 export function setupModuleProtocol(): void {
   protocol.handle(MODULE_SCHEME, (request) => {

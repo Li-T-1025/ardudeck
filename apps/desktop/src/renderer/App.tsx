@@ -1383,7 +1383,10 @@ function App() {
 
     </AppShell>
     </AppTourProvider>
-    <MountPoint name="floatingOverlay" />
+    {/* Out of flow so a cargo that forgets to position itself can't grow the page and scroll the app. */}
+    <div className="pointer-events-none fixed inset-0 z-30 [&>*]:pointer-events-auto">
+      <MountPoint name="floatingOverlay" />
+    </div>
     <ModuleDock />
     <ModuleProposalDialog />
     <ProductionWriteDialog />

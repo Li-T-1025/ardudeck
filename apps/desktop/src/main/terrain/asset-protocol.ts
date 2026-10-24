@@ -1,13 +1,12 @@
-import { net, protocol } from 'electron';
+import { net, protocol, type CustomScheme } from 'electron';
 import { pathToFileURL } from 'node:url';
 import { ASSET_SCHEME } from '../../shared/tile-source-types.js';
 import { sceneMeshByKey } from './scene-mesh-registry.js';
 
-export function registerAssetSchemePrivileges(): void {
-  protocol.registerSchemesAsPrivileged([
-    { scheme: ASSET_SCHEME, privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true, stream: true } },
-  ]);
-}
+export const ASSET_SCHEME_PRIVILEGES: CustomScheme = {
+  scheme: ASSET_SCHEME,
+  privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true, stream: true },
+};
 
 /** ardudeck-asset://mesh/<key>.glb streams the GLB a module registered. Nothing else resolves. */
 export function setupAssetProtocol(): void {

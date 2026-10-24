@@ -91,8 +91,9 @@ export function createMeshThreeJsLayer(): MeshThreeJsLayer {
             scene.add(g);
             map?.triggerRepaint();
           })
-          .catch(() => {
-            // A bad file is the module's problem; the scene stays usable.
+          .catch((err: unknown) => {
+            // A bad file is the module's problem; the scene stays usable, but say why.
+            console.warn(`[SceneMesh] could not load ${e.url}:`, err);
           });
       }
       map?.triggerRepaint();

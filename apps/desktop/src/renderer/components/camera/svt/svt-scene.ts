@@ -14,6 +14,7 @@ import * as THREE from 'three';
 import type { DrapeRing } from './svt-satellite';
 import type { SceneMeshEntry } from '../../../../shared/tile-source-types';
 import { loadGltfScene, releaseGltf } from '../../../three/gltf-cache';
+import { useConsoleStore } from '../../../stores/console-store';
 import { attachDrape } from './drape-material';
 import {
   type ElevationGrid,
@@ -198,6 +199,8 @@ export function createSvtScene(canvas: HTMLCanvasElement): SvtScene {
   const meshGroups = new Map<string, THREE.Group>();
   const meshUrls = new Map<string, { url: string; version: number }>();
   let lastMeshes: SceneMeshEntry[] = [];
+  // A cargo mesh that fails to load says so once in the in-app console.
+  const loggedFailures = new Set<string>();
   const placeMeshes = (entries: SceneMeshEntry[]) => {
     lastMeshes = entries;
     const wanted = new Set(entries.map((e) => `${e.key}@${e.version ?? 0}`));
@@ -231,8 +234,12 @@ export function createSvtScene(canvas: HTMLCanvasElement): SvtScene {
           meshGroups.set(k, g);
           scene.add(g);
         })
-        .catch(() => {
-          // A bad file is the module's problem; the scene stays usable.
+        .catch((err: unknown) => {
+          // A bad file is the module's problem; the scene stays usable, but say why.
+          if (loggedFailures.has(k)) return;
+          loggedFailures.add(k);
+          const reason = err instanceof Error ? err.message : String(err);
+          useConsoleStore.getState().addLog({ id: Date.now(), timestamp: Date.now(), level: 'warn', message: `[SceneMesh] could not load ${e.url}: ${reason}` });
         });
     }
   };

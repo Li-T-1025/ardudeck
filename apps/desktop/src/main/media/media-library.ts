@@ -3,7 +3,7 @@
 import { createReadStream, existsSync, mkdirSync, readdirSync, statSync } from 'node:fs';
 import { basename, dirname, join } from 'node:path';
 import { Readable } from 'node:stream';
-import { app, nativeImage, protocol, type NativeImage } from 'electron';
+import { app, nativeImage, protocol, type NativeImage, type CustomScheme } from 'electron';
 import type { CameraMediaItem } from '../../shared/camera-types.js';
 
 export const MEDIA_SCHEME = 'ardudeck-media';
@@ -92,11 +92,10 @@ export function parseRange(header: string | null, size: number): { start: number
   return start <= end ? { start, end } : null;
 }
 
-export function registerMediaSchemePrivileges(): void {
-  protocol.registerSchemesAsPrivileged([
-    { scheme: MEDIA_SCHEME, privileges: { standard: true, secure: true, supportFetchAPI: true, stream: true } },
-  ]);
-}
+export const MEDIA_SCHEME_PRIVILEGES: CustomScheme = {
+  scheme: MEDIA_SCHEME,
+  privileges: { standard: true, secure: true, supportFetchAPI: true, stream: true },
+};
 
 /** `ardudeck-media://file/<name>` streams a gallery file, with byte ranges so the player can seek. */
 export function setupMediaProtocol(): void {

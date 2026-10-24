@@ -4,18 +4,18 @@
  */
 
 import { DesktopSurfaces, SURFACE_TITLE_PREFIX, type SurfaceWindow } from './desktop-surface.js';
-import { app, BrowserWindow, dialog, shell } from 'electron';
+import { app, BrowserWindow, dialog, protocol, shell } from 'electron';
 import { existsSync, writeFileSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { setupIpcHandlers, cleanupOnShutdown, isCleanExitSafe } from './ipc-handlers.js';
 import { setupModuleIpc } from './modules/module-ipc.js';
 import { setupAppIpc } from './apps/app-ipc.js';
-import { registerTileCacheScheme, setupTileCacheProtocol, setupTileCacheHandlers } from './tile-cache.js';
+import { TILE_CACHE_SCHEME_PRIVILEGES, setupTileCacheProtocol, setupTileCacheHandlers } from './tile-cache.js';
 import { setupBuildingCacheHandlers } from './building-cache.js';
-import { registerModuleSchemePrivileges, setupModuleProtocol } from './modules/module-protocol.js';
-import { registerAssetSchemePrivileges, setupAssetProtocol } from './terrain/asset-protocol.js';
-import { registerMediaSchemePrivileges, setupMediaProtocol } from './media/media-library.js';
+import { MODULE_SCHEME_PRIVILEGES, setupModuleProtocol } from './modules/module-protocol.js';
+import { ASSET_SCHEME_PRIVILEGES, setupAssetProtocol } from './terrain/asset-protocol.js';
+import { MEDIA_SCHEME_PRIVILEGES, setupMediaProtocol } from './media/media-library.js';
 import { setupDeepLinks, handleStartupArgs, flushPendingDeepLink, deliverDeepLinkUrl } from './modules/deep-link.js';
 import { initWindowManager, restoreDetachedWindows, setupWindowManagerIpc, getMainFullScreen, setMainFullScreen, registerSecondaryWindow } from './window-manager.js';
 import { createSplashWindow, splashSetStatus, closeSplash } from './splash-window.js';
@@ -160,11 +160,14 @@ if (graphicsMode === 'auto' && graphicsPrefs.get('lastLaunchUnclean') === true) 
 }
 graphicsPrefs.set('lastLaunchUnclean', true);
 
-// Register tile-cache:// scheme BEFORE app.ready (Electron requirement)
-registerTileCacheScheme();
-registerModuleSchemePrivileges();
-registerAssetSchemePrivileges();
-registerMediaSchemePrivileges();
+// Custom schemes BEFORE app.ready, in ONE call: each call replaces the previous list, which
+// left only the last scheme fetchable (cargo meshes failed with "Failed to fetch").
+protocol.registerSchemesAsPrivileged([
+  TILE_CACHE_SCHEME_PRIVILEGES,
+  MODULE_SCHEME_PRIVILEGES,
+  ASSET_SCHEME_PRIVILEGES,
+  MEDIA_SCHEME_PRIVILEGES,
+]);
 
 /**
  * macOS shows a scary system prompt ("ardudeck wants to access your

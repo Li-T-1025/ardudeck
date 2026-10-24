@@ -7,7 +7,7 @@
  * 3. Offline + cache miss → return empty response (graceful degradation)
  */
 
-import { app, protocol, ipcMain, BrowserWindow } from 'electron';
+import { app, protocol, ipcMain, BrowserWindow, type CustomScheme } from 'electron';
 import { join } from 'path';
 import { readFile, writeFile, mkdir, readdir, stat, unlink } from 'fs/promises';
 import { setMaxListeners } from 'events';
@@ -62,18 +62,14 @@ function getTilePath(layer: string, z: number, x: number, y: number): string {
 
 // ─── Protocol Registration (must be called BEFORE app.ready) ─────────────────
 
-export function registerTileCacheScheme(): void {
-  protocol.registerSchemesAsPrivileged([
-    {
-      scheme: 'tile-cache',
-      privileges: {
-        supportFetchAPI: true,
-        corsEnabled: true,
-        stream: true,
-      },
-    },
-  ]);
-}
+export const TILE_CACHE_SCHEME_PRIVILEGES: CustomScheme = {
+  scheme: 'tile-cache',
+  privileges: {
+    supportFetchAPI: true,
+    corsEnabled: true,
+    stream: true,
+  },
+};
 
 // ─── Protocol Handler (called after app.ready) ──────────────────────────────
 
