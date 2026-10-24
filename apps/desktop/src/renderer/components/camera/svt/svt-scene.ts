@@ -239,7 +239,7 @@ export function createSvtScene(canvas: HTMLCanvasElement): SvtScene {
           if (loggedFailures.has(k)) return;
           loggedFailures.add(k);
           const reason = err instanceof Error ? err.message : String(err);
-          useConsoleStore.getState().addLog({ id: Date.now(), timestamp: Date.now(), level: 'warn', message: `[SceneMesh] could not load ${e.url}: ${reason}` });
+          useConsoleStore.getState().addLog({ id: Date.now(), timestamp: Date.now(), level: 'warn', message: `[SceneMesh] could not load ${e.url}: ${reason}` }); // i18n-exempt: diagnostic log
         });
     }
   };
