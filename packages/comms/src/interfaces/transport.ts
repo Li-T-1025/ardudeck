@@ -24,6 +24,8 @@ export interface TransportOptions {
   rtsEnable?: boolean;
   /** Hardware flow control (RTS/CTS); the driver then owns the RTS line */
   rtscts?: boolean;
+  /** Serial only: receives a timestamped line per port event (open, control lines, first bytes, close) */
+  diagnostics?: (message: string) => void;
   /** Read timeout in milliseconds */
   readTimeout?: number;
   /** Write timeout in milliseconds */

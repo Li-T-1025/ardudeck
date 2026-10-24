@@ -6108,6 +6108,7 @@ export function setupIpcHandlers(mainWindow: BrowserWindow): void {
           dtrEnable: pendingReconnect.options?.holdLinesHigh === true,
           rtsEnable: pendingReconnect.options?.holdLinesHigh === true,
           rtscts: pendingReconnect.options?.flowControl === true,
+          diagnostics: (m) => sendLog(mainWindow, 'debug', `[Serial] ${m}`),
         });
 
         await transport.open();
@@ -6576,6 +6577,8 @@ export function setupIpcHandlers(mainWindow: BrowserWindow): void {
             dtrEnable: options.holdLinesHigh === true,
             rtsEnable: options.holdLinesHigh === true,
             rtscts: options.flowControl === true,
+            // Debug-level: visible with "Show debug logs", for USB issues like ELRS modules rebooting on connect.
+            diagnostics: (m) => sendLog(mainWindow, 'debug', `[Serial] ${m}`),
           });
           transportName = `${options.port} @ ${options.baudRate ?? 115200}${options.flowControl ? ' RTS/CTS' : ''}`;
           break;

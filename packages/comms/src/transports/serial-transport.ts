@@ -18,6 +18,11 @@ import { BaseTransport, TransportOptions, SerialPortInfo } from '../interfaces/t
  */
 const MAX_RX_BUFFER_BYTES = 1024 * 1024;
 
+function hexHead(bytes: Uint8Array, max = 24): string {
+  const head = Array.from(bytes.subarray(0, max), (b) => b.toString(16).padStart(2, '0')).join(' ');
+  return bytes.length > max ? `${head} ...` : head;
+}
+
 export class SerialTransport extends BaseTransport {
   private port: SerialPort | null = null;
   private rxBuffer: Uint8Array[] = [];
@@ -28,6 +33,10 @@ export class SerialTransport extends BaseTransport {
   private _parity: 'none' | 'even' | 'odd' | 'mark' | 'space';
   private _stopBits: 1 | 1.5 | 2;
   private _rtscts: boolean;
+  private diagSink?: (message: string) => void;
+  private diagT0 = 0;
+  private rxLogged = 0;
+  private txLogged = 0;
 
   constructor(portName: string, options: TransportOptions = {}) {
     super();
@@ -39,6 +48,7 @@ export class SerialTransport extends BaseTransport {
     this.dtrEnable = options.dtrEnable ?? false;
     this.rtsEnable = options.rtsEnable ?? false;
     this._rtscts = options.rtscts ?? false;
+    this.diagSink = options.diagnostics;
     this.readTimeout = options.readTimeout ?? 5000;
     this.writeTimeout = options.writeTimeout ?? 5000;
   }
@@ -59,10 +69,19 @@ export class SerialTransport extends BaseTransport {
     return this._portName;
   }
 
+  private diag(message: string): void {
+    if (this.diagSink) this.diagSink(`+${Date.now() - this.diagT0} ms ${message}`);
+  }
+
   async open(): Promise<void> {
     if (this.isOpen) {
       return;
     }
+
+    this.diagT0 = Date.now();
+    this.rxLogged = 0;
+    this.txLogged = 0;
+    this.diag(`open ${this._portName} @ ${this.baudRate}, hupcl off, rtscts ${this._rtscts}, wanted dtr ${this.dtrEnable} rts ${this.rtsEnable}`);
 
     return new Promise((resolve, reject) => {
       this.port = new SerialPort({
@@ -79,6 +98,10 @@ export class SerialTransport extends BaseTransport {
 
       this.port.on('data', (data: Buffer) => {
         const uint8 = new Uint8Array(data);
+        if (this.diagSink && this.rxLogged < 5) {
+          this.rxLogged++;
+          this.diag(`rx ${uint8.length} B ${hexHead(uint8)}`);
+        }
         this.rxBuffer.push(uint8);
         this.rxBufferBytes += uint8.length;
         while (this.rxBufferBytes > MAX_RX_BUFFER_BYTES && this.rxBuffer.length > 1) {
@@ -89,6 +112,7 @@ export class SerialTransport extends BaseTransport {
       });
 
       this.port.on('error', (err: Error) => {
+        this.diag(`error event: ${err.message}`);
         // BSOD FIX: Mark port as closed on error to prevent stale state
         this._isOpen = false;
         // BSOD FIX: Remove all listeners to prevent further events after error
@@ -98,11 +122,13 @@ export class SerialTransport extends BaseTransport {
       });
 
       this.port.on('close', () => {
+        this.diag('close event');
         this._isOpen = false;
         this.emit('close');
       });
 
       this.port.open((err) => {
+        this.diag(err ? `open failed: ${err.message}` : 'opened');
         if (err) {
           reject(new Error(`Failed to open port ${this._portName}: ${err.message}`));
           return;
@@ -121,9 +147,14 @@ export class SerialTransport extends BaseTransport {
               : [{ dtr: this.dtrEnable, rts: this.rtsEnable }];
           const port = this.port;
           const apply = (i: number): void => {
-            if (i >= steps.length) return;
+            if (i >= steps.length) {
+              if (this.diagSink) port.get((err, s) => this.diag(err ? `inputs unreadable: ${err.message}` : `inputs cts ${s?.cts} dsr ${s?.dsr} dcd ${s?.dcd}`));
+              return;
+            }
+            this.diag(`set ${JSON.stringify(steps[i])}`);
             port.set(steps[i]!, (err) => {
               if (err) console.warn('Failed to set DTR/RTS:', err.message);
+              this.diag(err ? `set failed: ${err.message}` : 'set done');
               apply(i + 1);
             });
           };
@@ -149,6 +180,7 @@ export class SerialTransport extends BaseTransport {
 
     // Mark as closed immediately to prevent new operations
     this._isOpen = false;
+    this.diag('close requested');
 
     // BSOD FIX: Drain pending writes before closing to prevent driver issues
     // Use timeout to prevent hanging
@@ -179,6 +211,7 @@ export class SerialTransport extends BaseTransport {
 
       this.port!.close((err) => {
         clearTimeout(closeTimeout);
+        this.diag(err ? `closed with warning: ${err.message}` : 'closed');
         if (err) {
           // Don't reject on close errors - port may already be closed
           console.warn(`[SerialTransport] Warning closing port: ${err.message}`);
@@ -241,6 +274,11 @@ export class SerialTransport extends BaseTransport {
       throw new Error('Port is not open');
     }
 
+    if (this.diagSink && this.txLogged < 10) {
+      this.txLogged++;
+      this.diag(`tx ${data.length} B ${hexHead(data)}`);
+    }
+
     return new Promise((resolve, reject) => {
       // Timeout to prevent hanging on write
       const timeoutId = setTimeout(() => {
@@ -283,6 +321,7 @@ export class SerialTransport extends BaseTransport {
     }
 
     this.dtrEnable = !this.dtrEnable;
+    this.diag(`toggle dtr ${this.dtrEnable}`);
     return new Promise((resolve) => {
       this.port!.set({ dtr: this.dtrEnable }, () => {
         resolve();
@@ -295,6 +334,7 @@ export class SerialTransport extends BaseTransport {
    */
   async setBaudRate(baudRate: number): Promise<void> {
     this.baudRate = baudRate;
+    this.diag(`baud -> ${baudRate}`);
     if (this.port && this.isOpen) {
       return new Promise((resolve, reject) => {
         this.port!.update({ baudRate }, (err) => {
