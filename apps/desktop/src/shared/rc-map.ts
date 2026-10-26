@@ -62,3 +62,23 @@ export function overrideFields(channels: number[]): Record<ChanField, number> {
   for (let i = 0; i < RC_OVERRIDE_CHANNELS; i++) f[`chan${i + 1}Raw` as ChanField] = channels[i] ?? RC_OVERRIDE_IGNORE;
   return f;
 }
+
+/** Hands every channel back to the radio: ArduPilot releases ch1-8 on 0 and ch9-18 on UINT16_MAX-1 (UINT16_MAX only means "ignore"). */
+export function releaseChannels(): number[] {
+  return Array.from({ length: RC_OVERRIDE_CHANNELS }, (_, i) => (i < 8 ? 0 : RC_OVERRIDE_IGNORE - 1));
+}
+
+/** True when the vehicle's RC_CHANNELS carry a real pulse on any channel (a transmitter is driving it). */
+export function hasLiveRcInput(channels: readonly number[]): boolean {
+  return channels.some((v) => v >= 800 && v <= 2200);
+}
+
+/**
+ * One-shot RC_CHANNELS_OVERRIDE sent before arming, standing in for a missing transmitter.
+ * Null when a transmitter is live: the override outranks it, and a wrong RCMAP puts 1500 on throttle (#152).
+ */
+export function armStandInChannels(map: StickChannelMap | null, rcChannels: readonly number[]): number[] | null {
+  // Unknown RCMAP: a centred stick could land on the real throttle channel, so send nothing.
+  if (!map || hasLiveRcInput(rcChannels)) return null;
+  return overrideChannels({ roll: 1500, pitch: 1500, throttle: 1000, yaw: 1500 }, map);
+}

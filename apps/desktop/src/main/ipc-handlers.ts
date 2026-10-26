@@ -276,7 +276,7 @@ import { detectFlightGear } from './simulators/simulator-detector.js';
 import type { SitlConfig, SitlStatus, ArduPilotSitlConfig, ArduPilotSitlStatus, ArduPilotVehicleType, ArduPilotReleaseTrack, ArduPilotSitlBinaryInfo, SwarmSitlConfig, SwarmSitlStatus, ArduPilotFlightGearConfig, Px4SitlConfig, Px4SitlStatus, Px4SitlBinaryInfo, Px4ReleaseTrack } from '../shared/ipc-channels.js';
 import { openAreaEditorWindow, setMainMapViewport } from './area-editor-window.js';
 import { t } from '../shared/i18n/index.js';
-import { DEFAULT_STICK_MAP, overrideChannels, overrideFields, stickMapFrom, type StickChannelMap } from '../shared/rc-map.js';
+import { armStandInChannels, DEFAULT_STICK_MAP, overrideChannels, overrideFields, releaseChannels, stickMapFrom, type StickChannelMap } from '../shared/rc-map.js';
 
 // =============================================================================
 // Legacy Board Detection
@@ -1293,9 +1293,19 @@ function emitMergedRcChannels(mainWindow: BrowserWindow): void {
   });
 }
 
+// Latest RC input per sysid, so arming can tell whether a real transmitter is driving the vehicle.
+const rcInputBySysid = new Map<number, { channels: number[]; at: number }>();
+
+/** RC channels the vehicle reported in the last 3 s, or [] when none. */
+function recentRcInput(sysid: number): number[] {
+  const rc = rcInputBySysid.get(sysid);
+  return rc && Date.now() - rc.at < 3000 ? rc.channels : [];
+}
+
 function resetRcChannelState(): void {
   rcMsg65 = { channels: [], chancount: 0, rssi: 0 };
   rcMsg35 = { channels: [], rssi: 0 };
+  rcInputBySysid.clear();
 }
 
 function queueMavlinkTelemetry(mainWindow: BrowserWindow, fields: Record<string, unknown>, vehicleKey?: string) {
@@ -2231,6 +2241,11 @@ let receivedParams = new Map<string, ParamValue>();
 function stickMapFor(sysid: number): StickChannelMap {
   if (focusedVehicle()?.sysid !== sysid) return DEFAULT_STICK_MAP;
   return stickMapFrom((n) => receivedParams.get(n)?.paramValue);
+}
+
+/** The vehicle's real RCMAP_*, or null until its parameters are loaded. */
+function knownStickMapFor(sysid: number): StickChannelMap | null {
+  return focusedVehicle()?.sysid === sysid && receivedParams.has('RCMAP_THROTTLE') ? stickMapFor(sysid) : null;
 }
 let paramDownloadTimeout: NodeJS.Timeout | null = null;
 let paramDownloadActive = false; // True only during bulk PARAM_REQUEST_LIST download
@@ -3697,6 +3712,7 @@ function parseTelemetry(mainWindow: BrowserWindow, packet: MAVLinkPacket): void 
           rawChannels.push(readUint16(payload, 4 + i * 2));
         }
         rcMsg35 = { channels: rawChannels, rssi: payload[21] ?? 0 };
+        rcInputBySysid.set(packet.sysid, { channels: rawChannels, at: Date.now() });
         emitMergedRcChannels(mainWindow);
       }
       break;
@@ -3727,6 +3743,7 @@ function parseTelemetry(mainWindow: BrowserWindow, packet: MAVLinkPacket): void 
       }
       // Trim to actual channel count (unused channels report UINT16_MAX = 65535)
       rcMsg65 = { channels: channels.slice(0, chancount), chancount, rssi };
+      rcInputBySysid.set(packet.sysid, { channels: rcMsg65.channels, at: Date.now() });
       emitMergedRcChannels(mainWindow);
       break;
     }
@@ -8686,11 +8703,14 @@ export function setupIpcHandlers(mainWindow: BrowserWindow): void {
       // right as we arm (this bit rovers, whose FLTMODE_CH commonly sits in 5-8).
       // Only stand in for a missing transmitter. With a handset actually driving RC, this
       // override would OUTRANK it and freeze the sticks at centre/idle the moment we armed.
-      if (arm && !ardupilotRcSender.hasExternalSource) {
+      const standIn = arm && !ardupilotRcSender.hasExternalSource
+        ? armStandInChannels(knownStickMapFor(target.sysid), recentRcInput(target.sysid))
+        : null;
+      if (standIn) {
         const rcPayload = serializeRcChannelsOverride({
           targetSystem: target.sysid,
           targetComponent: 1,
-          ...overrideFields(overrideChannels({ roll: 1500, pitch: 1500, throttle: 1000, yaw: 1500 }, stickMapFor(target.sysid))),
+          ...overrideFields(standIn),
         });
         const rcPacket = await sendMavlinkPacket(RC_CHANNELS_OVERRIDE_ID, rcPayload, RC_CHANNELS_OVERRIDE_CRC_EXTRA, { link: target.transport });
         await target.transport.write(rcPacket);
@@ -10141,8 +10161,7 @@ export function setupIpcHandlers(mainWindow: BrowserWindow): void {
     }
   });
 
-  // Release RC override by sending UINT16_MAX on every channel - ArduPilot's
-  // documented signal that the GCS is no longer overriding RC.
+  // Release RC override: 0 on ch1-8 and UINT16_MAX-1 on ch9-18 hand control back to the radio.
   const sendOverrideReleaseFrame = async (): Promise<{ success: boolean; error?: string }> => {
     const focus = focusedVehicle();
     if (!focus) {
@@ -10152,15 +10171,10 @@ export function setupIpcHandlers(mainWindow: BrowserWindow): void {
       return { success: false, error: 'RC override requires MAVLink connection' };
     }
     try {
-      const RELEASE = 65535; // UINT16_MAX = "ignore this channel"
       const payload = serializeRcChannelsOverride({
         targetSystem: focus.sysid,
         targetComponent: 1,
-        chan1Raw: RELEASE, chan2Raw: RELEASE, chan3Raw: RELEASE, chan4Raw: RELEASE,
-        chan5Raw: RELEASE, chan6Raw: RELEASE, chan7Raw: RELEASE, chan8Raw: RELEASE,
-        chan9Raw: RELEASE, chan10Raw: RELEASE, chan11Raw: RELEASE, chan12Raw: RELEASE,
-        chan13Raw: RELEASE, chan14Raw: RELEASE, chan15Raw: RELEASE, chan16Raw: RELEASE,
-        chan17Raw: RELEASE, chan18Raw: RELEASE,
+        ...overrideFields(releaseChannels()),
       });
       await sendToFocusedVehicle(focus, RC_CHANNELS_OVERRIDE_ID, payload, RC_CHANNELS_OVERRIDE_CRC_EXTRA);
       sendLog(mainWindow, 'info', 'RC override released');

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_STICK_MAP, overrideChannels, overrideFields, RC_OVERRIDE_IGNORE as X, stickMapFrom } from './rc-map';
+import { armStandInChannels, DEFAULT_STICK_MAP, hasLiveRcInput, overrideChannels, overrideFields, RC_OVERRIDE_IGNORE as X, releaseChannels, stickMapFrom } from './rc-map';
 
 const reader = (p: Record<string, number>) => (n: string) => p[n];
 const sticks = { roll: 1100, pitch: 1200, throttle: 1000, yaw: 1400 };
@@ -50,5 +50,36 @@ describe('overrideFields', () => {
     expect(f.chan2Raw).toBe(1100);
     expect(f.chan18Raw).toBe(X);
     expect(Object.keys(f)).toHaveLength(18);
+  });
+});
+
+describe('armStandInChannels (#152)', () => {
+  // Issue #152: ArduPlane bench, handset live on TAER (throttle stick 0% on RC1), ArduDeck
+  // believed AETR, so the arm stand-in put 1500 on the real throttle channel.
+  const benchRc = [988, 1479, 1517, 1489, 1000, 1500, 1500, 1500];
+
+  it('sends nothing while the vehicle reports a live transmitter', () => {
+    expect(hasLiveRcInput(benchRc)).toBe(true);
+    expect(armStandInChannels(DEFAULT_STICK_MAP, benchRc)).toBeNull();
+  });
+  it('stands in with idle throttle when no transmitter is reporting', () => {
+    expect(hasLiveRcInput([])).toBe(false);
+    expect(hasLiveRcInput([0, 0, 0, 0])).toBe(false);
+    expect(hasLiveRcInput([65535, 65535])).toBe(false);
+    const out = armStandInChannels({ roll: 2, pitch: 3, throttle: 1, yaw: 4 }, [])!;
+    expect(out.slice(0, 5)).toEqual([1000, 1500, 1500, 1500, X]);
+  });
+  it('sends nothing while the vehicle RCMAP is not known yet', () => {
+    expect(armStandInChannels(null, [])).toBeNull();
+  });
+});
+
+describe('releaseChannels', () => {
+  // ArduPilot GCS_Common handle_rc_channels_override: ch1-8 release on 0, ch9-18 on UINT16_MAX-1; UINT16_MAX is ignore.
+  it('hands every channel back to the radio', () => {
+    const out = releaseChannels();
+    expect(out).toHaveLength(18);
+    expect(out.slice(0, 8)).toEqual([0, 0, 0, 0, 0, 0, 0, 0]);
+    expect(out.slice(8)).toEqual(new Array(10).fill(65534));
   });
 });
