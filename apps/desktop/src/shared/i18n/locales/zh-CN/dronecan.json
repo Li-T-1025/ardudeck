@@ -55,7 +55,7 @@
   "fcHint": "这是飞控本身。其设置位于一般的参数表中。",
   "filterPlaceholder": "筛选参数",
   "framesTip": "打开此选项卡期间从总线接收到的 CAN 帧",
-  "frames_one": "{{count}} frame",
+  "frames_one": "{{count}} 个帧",
   "frames_other": "{{count}} 个帧",
   "hardware": "硬件",
   "health": {
@@ -80,7 +80,7 @@
   "noParams": "此节点没有报告任何参数。",
   "nodeFallbackName": "节点 {{id}}",
   "offline": "离线",
-  "paramsSubtitle_one": "Node {{id}} · {{count}} parameter",
+  "paramsSubtitle_one": "节点 {{id}} · {{count}} 个参数",
   "paramsSubtitle_other": "节点 {{id}} · {{count}} 个参数",
   "port": "CAN{{port}}",
   "reboot": "重新启动",
@@ -98,7 +98,7 @@
     "asksToWrite": "{{from}} 要求变更节点参数",
     "saveOnNode": "同时保存到节点上，让这些值在重新启动后仍然保留",
     "title": "查看 DroneCAN 变更",
-    "write_one": "Write {{count}} change",
+    "write_one": "写入 {{count}} 项变更",
     "write_other": "写入 {{count}} 项变更"
   },
   "saveToNode": "保存到节点",
@@ -123,11 +123,11 @@
   "uptime": "运行时间",
   "valueNotListed": "{{value}}（不在列表中）",
   "waitingForNodes": "正在监听总线。节点在发送状态后一秒内就会出现。",
-  "writeChanges_one": "Write {{count}} change",
+  "writeChanges_one": "写入 {{count}} 项变更",
   "writeChanges_other": "写入 {{count}} 项变更",
   "writeFailed": "未写入：{{names}}",
-  "writtenAndSaved_one": "{{count}} value written and saved on the node.",
+  "writtenAndSaved_one": "已写入 {{count}} 个值并保存到节点上。",
   "writtenAndSaved_other": "已写入 {{count}} 个值并保存到节点上。",
-  "written_one": "{{count}} value written.",
+  "written_one": "已写入 {{count}} 个值。",
   "written_other": "已写入 {{count}} 个值。"
 }

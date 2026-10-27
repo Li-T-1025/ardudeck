@@ -204,7 +204,7 @@
     "blurbPrimaryFlight": "基本 T 形扫视：姿态、速度、高度、航向、垂直速度。",
     "blurbStatus": "链接、模式、警告与载具消息。",
     "blurbSummary": "可同时承载多个数值的宽卡片。",
-    "blurbCargo": "Instruments that cargo on board brings along. Configure each one from its gear.",
+    "blurbCargo": "随船 Cargo 带来的仪表。在它的设置中配置每个仪表。",
     "deleteTip": "删除布局",
     "exportTip": "导出布局以分享",
     "fromFile": "从文件…",
@@ -213,7 +213,7 @@
     "importedName": "导入的布局",
     "invalidJson": "这不是有效的 JSON。",
     "layoutAndPresets": "布局与预设",
-    "matches_one": "{{count}} match",
+    "matches_one": "{{count}} 个符合",
     "matches_other": "{{count}} 个符合",
     "noSaved": "尚未保存任何布局。",
     "notLayout": "这看起来不是 ArduDeck 仪表布局。",
@@ -238,7 +238,7 @@
     "rolePrimaryFlight": "主要飞行",
     "roleStatus": "状态",
     "roleSummary": "摘要",
-    "roleCargo": "From cargo",
+    "roleCargo": "来自 Cargo",
     "saveCurrent": "保存目前布局...",
     "savedLayouts": "已保存的布局",
     "searchPlaceholder": "搜索仪表",
@@ -255,7 +255,7 @@
     "opacity": "不透明度",
     "settingsTip": "仪表设置",
     "useGlobalOpacity": "使用全域不透明度",
-    "cargoSettings": "{{name}} settings"
+    "cargoSettings": "{{name}} 设置"
   },
   "instrumentsMenu": {
     "button": "仪表",
@@ -529,7 +529,7 @@
     "unavailable": "无法取得风数据"
   },
   "zoneAlert": {
-    "active_one": "{{count}} active perimeter intrusion",
+    "active_one": "{{count}} 次进行中的周界入侵",
     "active_other": "{{count}} 次进行中的周界入侵",
     "clear": "周界净空",
     "clearLog": "清除警示记录",

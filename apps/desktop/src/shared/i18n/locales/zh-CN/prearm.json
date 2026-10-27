@@ -4,7 +4,7 @@
     "openParamTitle": "在参数中打开 {{paramId}}"
   },
   "preflightCheckCard": {
-    "issues_one": "{{count}} issue",
+    "issues_one": "{{count}} 个问题",
     "issues_other": "{{count}} 个问题",
     "readyToArm": "可以解锁",
     "recheck": "重新检查",
@@ -12,7 +12,7 @@
   },
   "safetyConfigCard": {
     "applied": "已应用",
-    "items_one": "{{count}} item",
+    "items_one": "{{count}} 个项目",
     "items_other": "{{count}} 个项目",
     "setsParamTip": "将 {{param}} 设为 {{value}}",
     "severityAdvisory": "值得留意",

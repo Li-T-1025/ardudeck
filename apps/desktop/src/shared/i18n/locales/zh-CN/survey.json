@@ -163,7 +163,7 @@
       "zigzagDesc": "在线的末端回转（滑移转向地面车）"
     },
     "gsd": "GSD",
-    "hairpinsQualify_one": "{{count}} bend qualify.",
+    "hairpinsQualify_one": "有 {{count}} 个弯处符合条件。",
     "hairpinsQualify_other": "有 {{count}} 个弯处符合条件。",
     "imageH": "影像高度 (px)",
     "imageW": "影像宽度 (px)",
@@ -259,7 +259,7 @@
     "spiralOutwardTitle": "从中心开始，在周边结束",
     "splitAcrossFleetTitle": "将此测绘分配给多架载具（已连接或已规划）",
     "splitAlongRouteTitle": "一架飞行器：每次飞行是航在线连续的一段，包含所有线，因此先完成一个区段再往下移动",
-    "splitAlongRoute_one": "Split along the route ({{count}} section)",
+    "splitAlongRoute_one": "沿航线分段({{count}} 个区段）",
     "splitAlongRoute_other": "沿航线分段({{count}} 个区段）",
     "splitByLines": "依线分割（群飞）",
     "splitByLinesTitle": "群飞：每次飞行负责整条航在线的一部分平行线，让多架飞行器并肩作业",

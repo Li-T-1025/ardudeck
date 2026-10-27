@@ -228,7 +228,7 @@
     "toggleTerrain": "切换地形高程"
   },
   "messagesPanel": {
-    "count_one": "{{count}} message",
+    "count_one": "{{count}} 则消息",
     "count_other": "{{count}} 则消息",
     "fix": "修正 ›",
     "none": "没有消息",
@@ -256,13 +256,13 @@
     "cornersPlaced": "已放置 {{n}} 个角点",
     "cornersProgress": "第 {{n}} 个角点，共 3 个：请继续点击",
     "doneTip": "在地图上按两下，或按 Enter",
-    "pointHint": "Click the map",
-    "pointsPlaced": "{{n}} points placed",
-    "pointsProgress": "{{n}} of {{min}} points - keep clicking",
+    "pointHint": "点击地图",
+    "pointsPlaced": "已放置 {{n}} 个点",
+    "pointsProgress": "已放置 {{n}}/{{min}} 个点 - 继续点击",
     "undoTip": "Backspace",
-    "pointEditHint": "Drag the point or click a new spot, then Done.",
-    "dragHint": "Drag a point to move it, click + on an edge to add one.",
-    "groundHere": "Ground here"
+    "pointEditHint": "拖动该点或点击新位置，然后完成。",
+    "dragHint": "拖动点以移动它，点击边上的 + 添加一个。",
+    "groundHere": "在此接地"
   },
   "ntripPanel": {
     "baseHint": "接收机必须设置为基站（已完成测量或固定位置）,并在此端口输出 RTCM3。",

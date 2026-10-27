@@ -147,7 +147,7 @@
     "reinstallTip": "重新安装或更新到最新发布版",
     "removeFailed": "移除失败",
     "removeTip": "移除此套件安装的所有文件",
-    "screensSetUp_one": "Set up on the radio: telemetry screen pointed at the HUD on {{count}} model.",
+    "screensSetUp_one": "遥控器上的设置：{{count}} 个型号的遥测画面已指向 HUD。",
     "screensSetUp_other": "遥控器上的设置：{{count}} 个型号的遥测画面已指向 HUD。",
     "sdVersionMismatch": "SD 卡内容来自 EdgeTX {{sdVersion}},但遥控器执行的是 {{fwVersion}}。在依赖音效或主题之前，请从 EdgeTX sdcard 发布版更新记忆卡。",
     "title": "遥控器 SD 卡",

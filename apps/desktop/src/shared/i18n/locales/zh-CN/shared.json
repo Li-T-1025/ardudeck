@@ -36,7 +36,7 @@
     "fitnessWeak": "已接受但偏弱：{{value}}。",
     "fitnessWeakAdvice": "飞控接受了此结果，但很可能会有航向漂移。请远离金属与电源线重新校准，并在每个轴向旋转，使适配度低于 {{good}}。",
     "noFitness": "飞控没有报告适配度。",
-    "notPersisted_one": "{{count}} calibration value did not survive the reboot.",
+    "notPersisted_one": "{{count}} 个校准值在重新启动后没有保留。",
     "notPersisted_other": "{{count}} 个校准值在重新启动后没有保留。",
     "nothingToVerify": "没有可验证的项目。",
     "persisted": "校准已在重新启动后于载具上确认。",
@@ -488,7 +488,7 @@
     "badJumps": "{{count}} 个 DO_JUMP 指令指向不存在的航点。",
     "ceiling": "{{count}} 个项目超过飞控 {{ceiling}} 个项目的限制。请拆成较小的飞行。",
     "emptyGroup": "群组「{{name}}」没有航点。",
-    "midMissionReturn_one": "{{count}} survey returns home before the mission ends. Connect them to fly straight on.",
+    "midMissionReturn_one": "有 {{count}} 个测绘在任务结束前就返航。请将它们连接起来，以便直接继续飞行。",
     "midMissionReturn_other": "有 {{count}} 个测绘在任务结束前就返航。请将它们连接起来，以便直接继续飞行。",
     "noTakeoff": "没有起飞指令：载具会从目前状态直接飞往第一个航点。"
   },

@@ -92,7 +92,7 @@
     "allMatch": "全部 {{count}} 个相符",
     "alreadyMatch": "· {{count}} 个已与实时载具相符",
     "appliedAllMatch": "已于 {{when}} 应用到 {{target}} · 所有实时值皆相符",
-    "appliedDrift_one": "Applied to {{target}} {{when}} · <b>{{count}}</b> param drifted from applied state",
+    "appliedDrift_one": "已于 {{when}} 应用到 {{target}} · <b>{{count}}</b> 个参数已偏离应用时的状态",
     "appliedDrift_other": "已于 {{when}} 应用到 {{target}} · <b>{{count}}</b> 个参数已偏离应用时的状态",
     "countsCore": "({{core}} 核心）",
     "countsCoreSim": "({{core}} 核心 + {{sim}} SITL)",
@@ -128,7 +128,7 @@
     "thrustWeightHint": "用于 SIM_ENGINE_MUL"
   },
   "profileApplyOverlay": {
-    "rebootRequired_one": "{{count}} param require reboot to take effect",
+    "rebootRequired_one": "{{count}} 个参数需要重新启动才会生效",
     "rebootRequired_other": "{{count}} 个参数需要重新启动才会生效",
     "writing": "正在将参数写入载具…"
   },
@@ -173,7 +173,7 @@
     "attests": "仅证明 MAVLink 链接与地面站，而非机身。签名是认证，不是加密，而且 USB 连接会绕过它。",
     "chainBroken": "哈希链在第 {{seq}} 笔中断：记录可能遭到篡改",
     "chainFailed": "审计记录未通过哈希链验证。有项目在应用程序之外被编辑、插入或移除。请将该记录视为已遭破坏，并导出供查看。",
-    "chainVerified_one": "{{count}} signing event logged, hash chain verified",
+    "chainVerified_one": "已记录 {{count}} 笔签名事件，哈希链验证通过",
     "chainVerified_other": "已记录 {{count}} 笔签名事件，哈希链验证通过",
     "event": {
       "keyAutoMatched": "连接时自动比对",
@@ -603,7 +603,7 @@
     "waitingSigned": "正在等待载具传来已签名的封包..."
   },
   "snapshotList": {
-    "count_one": "{{count}} snapshot",
+    "count_one": "{{count}} 个快照",
     "count_other": "{{count}} 个快照",
     "delete": "删除快照",
     "empty": "尚无快照。应用此配置文件即可建立一个。",
@@ -722,7 +722,7 @@
     "windSpeed": "风速"
   },
   "useProfileApply": {
-    "applied_one": "Applied {{count}} param to {{target}}{{flashNote}}{{failMsg}}",
+    "applied_one": "已将 {{count}} 个参数应用到 {{target}}{{flashNote}}{{failMsg}}",
     "applied_other": "已将 {{count}} 个参数应用到 {{target}}{{flashNote}}{{failMsg}}",
     "backupFailed": "备份失败，应用已中止",
     "cancelled": "应用已取消",
@@ -736,7 +736,7 @@
   "vehicleTemplatePicker": {
     "choosePx4": "选择 PX4 机架",
     "chooseTemplate": "选择载具范本",
-    "count_one": "{{count}} template",
+    "count_one": "{{count}} 个范本",
     "count_other": "{{count}} 个范本",
     "escCancel": "Esc 取消",
     "import": "从已连接的载具导入",
@@ -756,9 +756,9 @@
     "dms": "度、分、秒",
     "unavailable": "格式来自尚未加载的 Cargo（目前先使用十进位）",
     "precision": "座标精度",
-    "decimals_one": "{{count}} decimal",
+    "decimals_one": "{{count}} 位小数",
     "decimals_other": "{{count}} 位小数",
-    "secondDecimals_one": "Seconds with {{count}} decimal",
+    "secondDecimals_one": "秒，含 {{count}} 位小数",
     "secondDecimals_other": "秒，含 {{count}} 位小数"
   }
 }

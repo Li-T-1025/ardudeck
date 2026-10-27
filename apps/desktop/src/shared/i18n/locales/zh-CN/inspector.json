@@ -7,7 +7,7 @@
     "colMin": "最小",
     "colNow": "目前",
     "exportTip": "将已绘制的字段导出为 CSV",
-    "summary_one": "{{count}} series · sysid {{sysid}} · msgid {{msgid}} · {{samples}} samples",
+    "summary_one": "{{count}} 个数列 · sysid {{sysid}} · msgid {{msgid}} · {{samples}} 笔取样",
     "summary_other": "{{count}} 个数列 · sysid {{sysid}} · msgid {{msgid}} · {{samples}} 笔取样",
     "timeAxis": "时间 (s)"
   },
@@ -32,7 +32,7 @@
     "graphField": "绘制此字段的图表",
     "groupHeader": "载具 {{sysid}} · 组件 {{compid}}",
     "hzTotal": "合计 {{hz}} Hz",
-    "messageTypes_one": "{{count}} message type",
+    "messageTypes_one": "{{count}} 种消息类型",
     "messageTypes_other": "{{count}} 种消息类型",
     "noDecoder": "msgid {{msgid}} 尚未注册解码器，仅显示原始酬载。",
     "noMatch": "没有符合筛选条件的消息。",
@@ -40,7 +40,7 @@
     "pauseTitle": "暂停数据包捕获",
     "plotOn": "绘制到 {{name}} 图表",
     "popOut": "弹出",
-    "popOutTitle_one": "Open all {{count}} tab in a new window",
+    "popOutTitle_one": "在新窗口打开全部 {{count}} 个选项卡",
     "popOutTitle_other": "在新窗口打开全部 {{count}} 个选项卡",
     "removeTrace": "从图表移除此轨迹",
     "resizeTitle": "拖拽以调整大小",
@@ -52,7 +52,7 @@
     "waitingNotConnected": "未连接，等待封包中",
     "watermarkHint": "在左侧树状结构中展开一则消息，再点击任何数值字段上的图表图标。每张图表都会成为这里的一个选项卡。你可以将它们弹出为独立窗口，或将选项卡拖在一起建立多图表查看。",
     "watermarkTitle": "绘制字段以开始绘图",
-    "windowTitle_one": "Inspector: {{count}} graph",
+    "windowTitle_one": "查看器：{{count}} 张图表",
     "windowTitle_other": "查看器：{{count}} 张图表"
   }
 }

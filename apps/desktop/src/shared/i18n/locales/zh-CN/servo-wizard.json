@@ -27,7 +27,7 @@
     "gimbalTitle": "云台伺服设置",
     "noServos": "无伺服",
     "quadHex": "四轴/六轴",
-    "servoCount_one": "{{count}} servo",
+    "servoCount_one": "{{count}} 个伺服",
     "servoCount_other": "{{count}} 个伺服",
     "subtitle": "请选择你的飞行器类型，以取得正确的伺服设置。",
     "tip": "<b>四轴加相机？</b>请选云台。<b2>固定翼？</b2>大多数是传统型。",

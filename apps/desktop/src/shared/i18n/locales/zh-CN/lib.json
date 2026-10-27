@@ -32,7 +32,7 @@
       "vtailGain": "标准 V 尾混控增益",
       "vtailLeft": "V 尾左侧（俯仰+偏航混控）",
       "vtailRight": "V 尾右侧（俯仰+偏航混控）",
-      "airspeedStall": "Stall × 1.05 = {{speed}} m/s (slightly above the true stall, for stall prevention and landing)"
+      "airspeedStall": "失速 × 1.05 = {{speed}} m/s（略高于真实失速，用于防失速和降落）"
     },
     "reason": {
       "aileron": "副翼",

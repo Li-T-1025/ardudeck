@@ -216,7 +216,7 @@
     "armMissingHint": "没有解锁模式，你将无法解锁飞行器。请返回并将解锁指定给一个开关。",
     "beforeFly": "飞行前：",
     "configuredModes": "已设置的模式：",
-    "configured_one": "You have configured {{count}} mode.",
+    "configured_one": "你已设置 {{count}} 个模式。",
     "configured_other": "你已设置 {{count}} 个模式。",
     "presetTitle": "{{name}} 预设",
     "ready": "就绪",
@@ -227,7 +227,7 @@
     "tipAux": "再次确认你的 AUX 开关位置",
     "tipFailsafe": "确认你的 Failsafe 设置正确",
     "title": "查看你的设置",
-    "usingPreset_one": "Using {{name}} preset with {{count}} mode.",
+    "usingPreset_one": "使用 {{name}} 预设，共 {{count}} 个模式。",
     "usingPreset_other": "使用 {{name}} 预设，共 {{count}} 个模式。"
   },
   "transmitterCheckStep": {

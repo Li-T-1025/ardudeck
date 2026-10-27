@@ -12,7 +12,7 @@
     "landHeadingHint": "0 = 任意方向",
     "landImmediately": "立即降落（不盘旋）",
     "landIntoWind": "逆风降落",
-    "pointCount_one": "{{count}} point",
+    "pointCount_one": "{{count}} 个点",
     "pointCount_other": "{{count}} 个点",
     "subtitle": "紧急降落地点",
     "title": "集结点",

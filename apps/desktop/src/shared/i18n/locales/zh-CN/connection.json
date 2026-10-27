@@ -20,7 +20,7 @@
     "elrsWizardHint": "引导式设置：为你寻找并设置",
     "elrsWizardTip": "将 ExpressLRS 模组作为遥测无线电的引导式设置",
     "elrsWizardTitle": "使用 ELRS 无线电？",
-    "forwardClients_one": "{{count}} client",
+    "forwardClients_one": "{{count}} 个用户端",
     "forwardClients_other": "{{count}} 个用户端",
     "forwardHint": "通过 UDP 将此链接的原始 MAVLink 镜像到其他设备，并把它们的指令转送回来。任何能连到此端口的 UDP 对等端，在发送心跳后都会被自动侦测到，例如同一 WiFi 上的手机，或完全没有网路、通过 USB 桥接的手机；也可以在下方输入其位址。",
     "forwardListening": "监听中",
@@ -50,7 +50,7 @@
     "runningOn": "{{name}} 正在 {{endpoint}} 上执行",
     "signingActive": "启用中",
     "signingHint": "接受密语、base64 金钥（来自 Mission Planner)或十六进位金钥。连接时会自动尝试所有金钥。",
-    "signingKeyCount_one": "{{count}} key",
+    "signingKeyCount_one": "{{count}} 个金钥",
     "signingKeyCount_other": "{{count}} 个金钥",
     "signingMatchedSysid": "符合的飞控 sysid:{{ids}}",
     "signingMismatch": "不符",
@@ -77,8 +77,8 @@
     "udpListen": "监听（服务器）",
     "vehicleRefused": "载具拒绝了此变更",
     "waitingHeartbeat": "正在等待心跳...",
-    "flowControl": "Hardware flow control (RTS/CTS)",
-    "flowControlTip": "Turn on when the radio is set to RTS/CTS flow control, as RFD900 and RFD868 radios often are. Needs the RTS and CTS wires connected.",
+    "flowControl": "硬件流控（RTS/CTS）",
+    "flowControlTip": "当无线电设为 RTS/CTS 流控时开启，RFD900 和 RFD868 无线电通常如此。需要连接 RTS 和 CTS 线。",
     "holdLinesHigh": "保持 DTR/RTS 高电平",
     "holdLinesHighTip": "仅对在 DTR 拉高之前保持静默的设备开启，例如某些带独立 USB 的主板。对 ELRS 及其他基于 ESP32 的模块请保持关闭：它们会在这两条线上复位。"
   },
@@ -109,7 +109,7 @@
     "serverUrl": "服务器网址",
     "sources": "连接来源",
     "tokenOptional": "权杖（选填）",
-    "vehicleCount_one": "{{count}} veh",
+    "vehicleCount_one": "{{count}} 架",
     "vehicleCount_other": "{{count}} 架"
   },
   "multiVehicle": {
@@ -135,7 +135,7 @@
     "tabRadio": "无线电",
     "tcpClient": "TCP 用户端",
     "tcpHint": "ArduDeck 会拨号到无人机的位址。当无人机具有可连到的 IP 时使用。",
-    "vehiclesConnected_one": "{{count}} vehicle connected",
+    "vehiclesConnected_one": "已连接 {{count}} 架载具",
     "vehiclesConnected_other": "已连接 {{count}} 架载具",
     "vehiclesHeader": "载具 ({{count}})"
   },

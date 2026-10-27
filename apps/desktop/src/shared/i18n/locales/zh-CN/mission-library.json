@@ -98,7 +98,7 @@
     "legacyTip": "较旧的仅含航点的保存档。可从机队保管库还原，但没有可编辑的群组或测绘。",
     "missions": "任务",
     "noneYet": "尚无",
-    "projectCount_one": "{{count}} project",
+    "projectCount_one": "{{count}} 个专案",
     "projectCount_other": "{{count}} 个专案",
     "revision": "第 {{n}} 版",
     "summary": "{{areas}} 个区域 · {{missions}} 个任务",
@@ -122,7 +122,7 @@
     "import": "导入",
     "importTitle": "导入到任务库",
     "keepAreasHint": "同时保留每个测绘区域各自的形状与设置，这样你可以在另一个任务中重复使用这片场地，而不必打开此任务。",
-    "keepAreas_one": "Keep the survey area as reusable areas",
+    "keepAreas_one": "将测绘区域保留为可重复使用的区域",
     "keepAreas_other": "将全部 {{count}} 个测绘区域保留为可重复使用的区域",
     "nameLabel": "名称 *",
     "namePlaceholder": "例如：北侧场地测绘网格",
@@ -134,9 +134,9 @@
     "tags": "标签",
     "tagsPlaceholder": "测绘、北侧场地、高空",
     "waypointCount": "{{count}} 个航点",
-    "exists": "A project named “{{name}}” already exists here.",
+    "exists": "这里已存在名为“{{name}}”的项目。",
     "replace": "Replace",
-    "saveCopy": "Save as a copy"
+    "saveCopy": "另存为副本"
   },
   "surveyAreaBrowser": {
     "alreadyLocal": " · 已在这台电脑上",

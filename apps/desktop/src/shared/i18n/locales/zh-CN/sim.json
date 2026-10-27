@@ -1,6 +1,6 @@
 {
   "obstaclePanel": {
-    "applied_one": "Applied {{count}} obstacle as exclusion fences",
+    "applied_one": "已将 {{count}} 个障碍物应用为禁入围栏",
     "applied_other": "已将 {{count}} 个障碍物应用为禁入围栏",
     "apply": "应用为围栏 → 飞控",
     "applyFailed": "应用失败",

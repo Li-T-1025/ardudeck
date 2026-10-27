@@ -48,7 +48,7 @@
   },
   "graphToolbar": {
     "compilationErrors": "编译错误",
-    "connectionCount_one": "{{count}} connection",
+    "connectionCount_one": "{{count}} 条连接",
     "connectionCount_other": "{{count}} 条连接",
     "docs": "文件",
     "exportLua": "导出 Lua",
@@ -77,7 +77,7 @@
     "errorCount": "{{count}} 个错误",
     "estMemory": "预估内存：{{kb}} KB",
     "footer": "ArduPilot Lua 脚本",
-    "nodeCount_one": "{{count}} node",
+    "nodeCount_one": "{{count}} 个节点",
     "nodeCount_other": "{{count}} 个节点",
     "valid": "有效"
   },
@@ -344,7 +344,7 @@
       "inputs": {
         "condition": "条件"
       },
-      "label": "If / Else",
+      "label": "如果 / 否则",
       "outputs": {
         "false_out": "False",
         "true_out": "True"

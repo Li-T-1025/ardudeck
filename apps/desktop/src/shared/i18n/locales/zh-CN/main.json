@@ -11,9 +11,9 @@
     "verifying": "正在验证 {{slug}}...",
     "notInstalled": "{{slug}} 未安装",
     "noExecutable": "在 {{slug}} 的安装文件夹中找不到程序",
-    "installingCompanion": "Loading the {{slug}} cargo that goes with it...",
-    "installedWithCargo": "{{name}} installed. Its cargo loads when ArduDeck restarts.",
-    "companionFailed": "{{name}} is installed, but its cargo {{slug}} could not be loaded: {{msg}}"
+    "installingCompanion": "正在加载与之配套的 {{slug}} Cargo...",
+    "installedWithCargo": "{{name}} 已安装。其 Cargo 会在 ArduDeck 重新启动时加载。",
+    "companionFailed": "{{name}} 已安装，但其 Cargo {{slug}} 无法加载：{{msg}}"
   },
   "areaEditorWindow": {
     "title": "区域编辑器",
@@ -310,7 +310,7 @@
     "writeProbeNoResponse": "飞控在 1.5 秒内没有回应写入探测。MAVLink FTP 服务器可能已停用，或飞控没有可写入的文件系统（没有 SD 卡？)。",
     "writeProbeRejected": "飞控拒绝了写入探测：{{error}}",
     "inavNoParams": "此飞控没有 MAVLink 参数 (INAV)。请通过 MSP 设置。",
-    "pickFolderTitle": "Choose a folder"
+    "pickFolderTitle": "选择文件夹"
   },
   "licenseValidator": {
     "invalidKeyFormat": "金钥格式无效",
@@ -454,7 +454,7 @@
     "unsupportedFrame": "不支援的框架"
   },
   "moduleManager": {
-    "activated_one": "Activated {{count}} module(s)",
+    "activated_one": "已启用 {{count}} 个模组",
     "activated_other": "已启用 {{count}} 个模组",
     "activating": "正在向服务器启用...",
     "activationFailed": "启用失败：{{msg}}",
@@ -655,7 +655,7 @@
     "needsConsent": "黄金设置尚未被核准写入",
     "noFirmwareOnBoard": "主板没有执行任何固件。请附加该型号的固件，以便烧录。",
     "resetFailed": "主板没有重置为默认值",
-    "configStillDiffers_one": "{{count}} parameter still differs from the golden",
+    "configStillDiffers_one": "{{count}} 个参数仍与黄金设置不同",
     "configStillDiffers_other": "{{count}} 个参数仍与黄金设置不同",
     "notReady": "请等到主板就绪",
     "operatorRequired": "请输入操作员名称",

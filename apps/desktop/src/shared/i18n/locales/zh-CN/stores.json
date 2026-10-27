@@ -119,7 +119,7 @@
     "readSnapshotFailed": "无法从保管库读取快照。",
     "renameFailed": "重命名失败",
     "restoredPartial": "已还原 {{applied}} 项,{{failed}} 项失败",
-    "restored_one": "Restored {{count}} parameter",
+    "restored_one": "已还原 {{count}} 个参数",
     "restored_other": "已还原 {{count}} 个参数",
     "snapshotFailed": "快照失败",
     "snapshotSaved": "快照已保存({{count}} 个参数）",
