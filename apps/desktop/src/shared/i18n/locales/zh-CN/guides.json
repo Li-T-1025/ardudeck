@@ -1,0 +1,36 @@
+{
+  "guideHost": {
+    "dontShowAgain": "不要再自动显示指南",
+    "gotIt": "知道了",
+    "stepOf": "第 {{step}} 步，共 {{total}} 步"
+  },
+  "guidesAndTours": {
+    "allMarkedUnseen": "已全部标记为未读",
+    "guides": "指南",
+    "offerWalkthroughs": "首次打开查看画面时提供导航",
+    "resetAll": "全部重置",
+    "title": "指南与导航",
+    "tours": "导航"
+  },
+  "layoutsDemo": {
+    "workspace": "工作区 · {{name}}"
+  },
+  "registry": {
+    "grouping": {
+      "blurb": "将一个地图仪表拖拽到另一个上方，即可停靠成共用卡片。把成员拖出来即可解除，也可一次缩放整个群组。",
+      "title": "仪表分组"
+    },
+    "mapSplit": {
+      "blurb": "地图上的「分割」按钮会与视觉画面共用面板。拖拽分隔线调整大小;Pilot 布局预设即以此方式搭配合成视觉。",
+      "title": "地图与视觉并排"
+    },
+    "workspaceLayouts": {
+      "blurb": "「工作区」按钮可在 Pilot、FPV 与 Mission 之间切换，各自拥有专属的面板、驾驶舱仪表与分割设置。你也可以保存自己的布局并以文件分享。",
+      "title": "工作区布局"
+    }
+  },
+  "splitDemo": {
+    "split": "分割",
+    "synthetic": "合成"
+  }
+}

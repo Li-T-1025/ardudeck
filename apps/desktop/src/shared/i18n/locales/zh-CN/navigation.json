@@ -1,0 +1,19 @@
+{
+  "navigationRail": {
+    "cargo": "Cargo",
+    "cliTerminal": "CLI 终端",
+    "companionComputer": "伴随电脑",
+    "fleetVault": "机队保管库",
+    "luaGraphEditor": "Lua 图形编辑器",
+    "osdTool": "OSD 工具",
+    "parameters": "参数",
+    "reportBug": "报告错误",
+    "themeDark": "深色主题",
+    "themeLight": "浅色主题",
+    "themeSystem": "系统主题",
+    "trainer": "训练器",
+    "locus": "Locus",
+    "weatherBriefing": "气象简报",
+    "productionLine": "生产线"
+  }
+}

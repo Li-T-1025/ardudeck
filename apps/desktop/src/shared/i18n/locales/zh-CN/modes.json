@@ -1,0 +1,270 @@
+{
+  "auxChannelPicker": {
+    "current": "目前"
+  },
+  "auxChannels": {
+    "aux1": "通常是 2 段开关",
+    "aux10": "额外通道",
+    "aux11": "额外通道",
+    "aux12": "额外通道",
+    "aux2": "通常是 3 段开关",
+    "aux3": "额外开关",
+    "aux4": "额外开关",
+    "aux5": "额外通道（旋钮/滑块）",
+    "aux6": "额外通道（旋钮/滑块）",
+    "aux7": "额外通道",
+    "aux8": "额外通道",
+    "aux9": "额外通道"
+  },
+  "modeCard": {
+    "channel": "通道：",
+    "configure": "设置",
+    "configureTitle": "设置 {{name}} 的设置",
+    "editMode": "编辑模式",
+    "essential": "必要",
+    "range": "范围：",
+    "removeMode": "移除模式",
+    "unknownMode": "未知模式"
+  },
+  "modeConfigStep": {
+    "correctPosition": "你的开关位于正确位置。此模式在飞行中会启用。",
+    "essentialMode": "必要模式",
+    "isActive": "{{name}} 已启用！",
+    "moveSwitch": "将你的 {{channel}} 移到 {{position}} 位置，即可看到 {{name}} 启用。",
+    "nextMode": "下一个模式",
+    "noMode": "没有可设置的模式",
+    "reviewConfiguration": "查看设置",
+    "switch": "开关",
+    "testIt": "试试看！拨动开关，看看是否启用：",
+    "tryNow": "现在就试！",
+    "whenActivate": "何时应该启用？(PWM 范围）",
+    "whichSwitch": "要用哪个开关来启用此模式？"
+  },
+  "modeFallback": "模式 {{id}}",
+  "modePresets": {
+    "airmode": {
+      "beginner": "进阶：即使油门为零也保有完整的摇杆权限。对自由式特技与翻滚至关重要。通常一直保持打开。",
+      "description": "零油门时仍可完整控制"
+    },
+    "angle": {
+      "beginner": "初学者模式：放开摇杆时，你的飞行器会自动保持水平。最大倾斜角度受到限制。非常适合学习飞行！",
+      "description": "自稳"
+    },
+    "arm": {
+      "beginner": "安全开关：用于解锁/上锁你的飞行器。请务必设在专用开关上！解锁后，螺旋桨随时可能转动。",
+      "description": "启用电机"
+    },
+    "beeper": {
+      "beginner": "寻找器：让你的飞行器大声哔哔叫，以便在坠机后找到它。降落在高草丛中时非常有用！",
+      "description": "寻找飞行器"
+    },
+    "blackbox": {
+      "beginner": "记录：将飞行数据记录到 SD 卡供分析。对调校 PID 与检讨坠机很有用。",
+      "description": "飞行记录"
+    },
+    "failsafe": {
+      "beginner": "紧急：触发 Failsafe 行为（通常是降落或上锁）。信号遗失时通常会自动启用。",
+      "description": "紧急降落"
+    },
+    "flaperon": {
+      "beginner": "启用襟副翼以进行较慢的降落进场。副翼下垂，作为襟翼使用。",
+      "description": "襟翼模式"
+    },
+    "gcsNav": {
+      "beginner": "允许地面控制站发送导航指令（飞往此处等）。",
+      "description": "地面控制"
+    },
+    "gimbalLevelTilt": {
+      "beginner": "无论飞行器姿态如何，都让云台俯仰轴保持水平。适合用于相机稳定。",
+      "description": "云台俯仰水平"
+    },
+    "headingHold": {
+      "beginner": "维持目前的磁航向。适合飞直线。",
+      "description": "保持航向"
+    },
+    "homeReset": {
+      "beginner": "将目前位置设为新的 Home 点。在作业过程中移动位置时使用。",
+      "description": "重置 Home 位置"
+    },
+    "horizon": {
+      "beginner": "中阶模式：摇杆接近中心时像 ANGLE 一样自稳，但在摇杆推到底时允许翻滚。介于 ANGLE 与 ACRO 之间的过渡。",
+      "description": "自稳 + 特技"
+    },
+    "manual": {
+      "beginner": "不经稳定的直接伺服/电机控制。仅供有经验的飞手使用！",
+      "description": "直接控制"
+    },
+    "navAlthold": {
+      "beginner": "使用气压计/GPS 保持目前高度。油门控制爬升/下降率。",
+      "description": "保持高度"
+    },
+    "navCourseHold": {
+      "beginner": "维持目前航向，同时可控制高度。适合飞直线。",
+      "description": "保持航线"
+    },
+    "navCruise": {
+      "beginner": "固定翼巡航模式：维持航向与高度。非常适合长距离飞行。",
+      "description": "定速巡航"
+    },
+    "navLaunch": {
+      "beginner": "固定翼的自动发射程序。把飞机抛出，它会爬升到安全高度。",
+      "description": "自动发射"
+    },
+    "navPoshold": {
+      "beginner": "GPS 定点保持：飞行器会停留在原地。非常适合空拍，或需要停下来时。",
+      "description": "保持位置"
+    },
+    "navRth": {
+      "beginner": "返航：飞行器会爬升到安全高度并飞回起飞点。重要的安全功能！",
+      "description": "返航"
+    },
+    "navWp": {
+      "beginner": "执行已上传的航点任务。飞行器会自动飞往每个航点。",
+      "description": "航点任务"
+    },
+    "prearm": {
+      "beginner": "安全开关：解锁前必须启用。可防止误触解锁。",
+      "description": "解锁前检查"
+    },
+    "turnAssist": {
+      "beginner": "自动让方向舵与副翼协调，使转弯更平顺。很适合固定翼初学者。",
+      "description": "协调转弯"
+    },
+    "turtle": {
+      "beginner": "利用电机旋转把坠毁的飞行器翻回来。仅限多旋翼。",
+      "description": "翻转"
+    },
+    "wpPlanner": {
+      "beginner": "启用通过摇杆指令进行飞行中航点规划。",
+      "description": "任务规划器"
+    }
+  },
+  "modesAdvancedEditor": {
+    "addFirstMode": "新增你的第一个模式",
+    "addMode": "新增模式",
+    "auxChannel": "AUX 通道",
+    "essential": "必要",
+    "loadingModes": "正在加载模式...",
+    "noModesConfigured": "尚未设置任何模式",
+    "noModesFound": "找不到模式",
+    "noModesHint": "新增模式，以控制你的飞行器如何回应开关位置。",
+    "noMoreModes": "没有更多可用的模式",
+    "pwmRange": "PWM 范围",
+    "searchModes": "搜索模式...",
+    "useMainSave": "请使用主要的保存按钮来保存变更"
+  },
+  "modesWizard": {
+    "pressAgain": "再按一次以放弃设置",
+    "stepCheck": "检查",
+    "stepConfigure": "设置",
+    "stepSave": "保存",
+    "stepStyle": "风格",
+    "subtitle": "设置你的飞行模式",
+    "title": "模式设置精灵"
+  },
+  "presets": {
+    "beginner": {
+      "description": "安全简单，很适合学习",
+      "name": "初学者",
+      "tip": "你的飞行器会一直保持水平。非常适合学习悬停与基本动作！"
+    },
+    "cinematic": {
+      "description": "极致平滑，适合拍摄",
+      "name": "电影感",
+      "tip": "NAV RTH 会在信号遗失时带你的飞行器回家（需要 GPS!)。非常适合长距离拍摄。"
+    },
+    "fixedWing": {
+      "description": "适用于具导航功能的飞机",
+      "name": "固定翼",
+      "tip": "固定翼的完整设置，包含发射辅助、RTH 与航点导航。"
+    },
+    "freestyle": {
+      "description": "兼顾特技与流畅",
+      "name": "自由式",
+      "tip": "AUX2 上的三段开关提供 ANGLE/HORIZON/ACRO。拨动开关即可改变你的飞行风格！"
+    },
+    "racing": {
+      "description": "快速且灵敏，适合速度",
+      "name": "竞速",
+      "tip": "纯 ACRO 模式，提供最大控制。AUX3 上的蜂鸣器可帮助你在坠机后找到飞行器！"
+    }
+  },
+  "rangeSlider": {
+    "activeRange": "启用范围",
+    "always": "永远",
+    "clickToSet": "点击以设置范围",
+    "dragHandles": "拖拽握把",
+    "end": "结束：",
+    "high": "高",
+    "hintAlways": "永远打开",
+    "hintHigh": "开关向上",
+    "hintLow": "开关向下",
+    "hintMid": "开关中间",
+    "low": "低",
+    "mid": "中",
+    "start": "开始：",
+    "switchPosition": "开关位置",
+    "yourTransmitter": "你的发射机"
+  },
+  "rcChannelBar": {
+    "active": "启用",
+    "inactive": "未启用",
+    "rc": "RC:"
+  },
+  "reviewStep": {
+    "armMissing": "尚未设置解锁模式！",
+    "armMissingHint": "没有解锁模式，你将无法解锁飞行器。请返回并将解锁指定给一个开关。",
+    "beforeFly": "飞行前：",
+    "configuredModes": "已设置的模式：",
+    "configured_one": "You have configured {{count}} mode.",
+    "configured_other": "你已设置 {{count}} 个模式。",
+    "presetTitle": "{{name}} 预设",
+    "ready": "就绪",
+    "saveToFc": "保存到飞控",
+    "saved": "设置已保存！",
+    "savedHint": "你的模式设置已写入飞控。",
+    "tipArm": "请务必在安全的地方、拆下螺旋桨的情况下测试解锁",
+    "tipAux": "再次确认你的 AUX 开关位置",
+    "tipFailsafe": "确认你的 Failsafe 设置正确",
+    "title": "查看你的设置",
+    "usingPreset_one": "Using {{name}} preset with {{count}} mode.",
+    "usingPreset_other": "使用 {{name}} 预设，共 {{count}} 个模式。"
+  },
+  "transmitterCheckStep": {
+    "armSwitch": "拨动你的解锁开关（通常是 AUX1)",
+    "channelsDetected": "侦测到 {{count}} 个通道！",
+    "confirm": "我可以在上方的视觉化图中看到我的摇杆与开关有反应",
+    "connectedHint": "你的发射机已连接。移动开关以侦测 AUX 通道。",
+    "continue": "继续进行模式设置",
+    "leftStick": "左摇杆上下与左右移动",
+    "noChannels": "没有侦测到通道？",
+    "otherSwitches": "移动你打算使用的其他任何开关",
+    "quickCheck": "快速检查：",
+    "rightStick": "右摇杆上下与左右移动",
+    "subtitle": "移动摇杆并拨动开关，确认信号有被接收。每个通道侦测到动作时会亮起绿灯。",
+    "tipBound": "确认你的发射机已开机并与接收机对频",
+    "tipProtocol": "确认设置工具中已设置正确的接收机通信协议",
+    "tipReceiver": "检查接收机是否已连接到你的飞控",
+    "tipReconnect": "试著拔掉并重新连接你的飞控",
+    "title": "检查你的发射机",
+    "waiting": "正在等待通道动作...",
+    "waitingHint": "将所有摇杆推到极限位置，以确认连接。"
+  },
+  "transmitterVisualizer": {
+    "additionalSwitch": "额外开关",
+    "aux1": "开关（通常是解锁）",
+    "aux2": "开关或 3 段",
+    "leftHorizontal": "左摇杆水平",
+    "leftVertical": "左摇杆垂直",
+    "rightHorizontal": "右摇杆水平",
+    "rightVertical": "右摇杆垂直"
+  },
+  "welcomeStep": {
+    "manualSetup": "手动设置",
+    "manualSetupHint": "逐一设置模式（进阶）",
+    "newToFpv": "刚接触 FPV?",
+    "newToFpvHint": "从<b>初学者</b>预设开始。它会启用 ANGLE 模式，让你的飞行器自动保持水平，非常适合学习！",
+    "subtitle": "选择一个预设，即可依你的风格快速设置必要的飞行模式，或手动设置模式以取得完整控制。",
+    "title": "选择你的飞行风格"
+  }
+}
