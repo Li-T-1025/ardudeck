@@ -960,8 +960,8 @@
       "name": "两个锚点之间巡逻"
     },
     "payload-drop": {
-      "description": "当 RC 辅助开关拨到 HIGH 时，释放以伺服驱动的酬载。",
-      "name": "酬载投放"
+      "description": "当 RC 辅助开关拨到 HIGH 时，释放以伺服驱动的载荷。",
+      "name": "载荷投放"
     },
     "preflight-health-check": {
       "description": "解锁时，检查 GPS 卫星数、电池电压与高度传感器健康状态。以蜂鸣器旋律播报 PASS 或 FAIL。19 个相互连接的节点。",

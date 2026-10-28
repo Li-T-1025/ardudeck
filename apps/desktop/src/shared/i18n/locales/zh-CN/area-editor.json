@@ -69,7 +69,7 @@
     },
     "overlay": {
       "aviation": "航空",
-      "aviationHint": "OpenAIP 机场、导航设施与空域（需要 OpenAIP 金钥）",
+      "aviationHint": "OpenAIP 机场、导航设施与空域（需要 OpenAIP 密钥）",
       "gliders": "滑翔机",
       "glidersHint": "实时 OGN/FLARM 滑翔机",
       "traffic": "交通",

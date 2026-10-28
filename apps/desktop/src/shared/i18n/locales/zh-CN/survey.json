@@ -135,7 +135,7 @@
     "editPolygon": "编辑多边形",
     "editingPolygon": "正在编辑多边形：在地图上拖拽各点（放大才能抓到）。",
     "endurance": "续航",
-    "enduranceHint": "每颗电池可用的飞行时间（扣除你的保留后）。用于电池估算。",
+    "enduranceHint": "每块电池可用的飞行时间（扣除你的保留后）。用于电池估算。",
     "engineParameters": "引擎参数",
     "externalEngineHint": "{{engine}} 会自行选择每个区域的线方向与转弯方式，因此角度、超出量与转弯控制项不适用。请用上方的引擎参数（转弯半径、航点、航迹宽度）来引导计划。",
     "externalMarginHint": "在送进引擎前先对边界做缓冲：正值让覆盖范围超出边缘，负值让线条留在内部。",

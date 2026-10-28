@@ -82,7 +82,7 @@
     "map2d": "2D 地图",
     "map3d": "3D 地形",
     "mapView": "地图查看",
-    "offlineHint": "在地图上框选范围，即可快取其图砖供无网路时飞行使用。",
+    "offlineHint": "在地图上框选范围，即可快取其瓦片供无网路时飞行使用。",
     "offlineMaps": "离线地图",
     "panelLayout": "面板布局",
     "pasteFromClipboard": "从剪贴簿贴上",

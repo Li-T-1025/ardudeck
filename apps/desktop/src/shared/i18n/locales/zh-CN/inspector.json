@@ -34,7 +34,7 @@
     "hzTotal": "合计 {{hz}} Hz",
     "messageTypes_one": "{{count}} 种消息类型",
     "messageTypes_other": "{{count}} 种消息类型",
-    "noDecoder": "msgid {{msgid}} 尚未注册解码器，仅显示原始酬载。",
+    "noDecoder": "msgid {{msgid}} 尚未注册解码器，仅显示原始载荷。",
     "noMatch": "没有符合筛选条件的消息。",
     "notConnected": "未连接",
     "pauseTitle": "暂停数据包捕获",

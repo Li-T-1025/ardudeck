@@ -28,7 +28,7 @@
     "clear": "晴",
     "fog": "雾",
     "overcast": "阴",
-    "partlyCloudy": "多云时晴",
+    "partlyCloudy": "多云转晴",
     "rain": "雨"
   },
   "geomag": {

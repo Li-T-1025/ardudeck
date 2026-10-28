@@ -5,17 +5,17 @@
   },
   "apiKeyDialog": {
     "createAccount": "建立免费账号",
-    "findKey": "前往你的账号设置以找到 API 金钥",
+    "findKey": "前往你的账号设置以找到 API 密钥",
     "goTo": "前往 <a>openaip.net</a>",
-    "howTo": "如何取得你的免费金钥：",
-    "intro": "空域与机场数据由 OpenAIP 提供。需要免费的 API 金钥。",
-    "placeholder": "贴上你的 OpenAIP API 金钥",
-    "required": "必须填写 API 金钥",
-    "saveKey": "保存金钥",
-    "title": "需要 OpenAIP API 金钥"
+    "howTo": "如何取得你的免费密钥：",
+    "intro": "空域与机场数据由 OpenAIP 提供。需要免费的 API 密钥。",
+    "placeholder": "贴上你的 OpenAIP API 密钥",
+    "required": "必须填写 API 密钥",
+    "saveKey": "保存密钥",
+    "title": "需要 OpenAIP API 密钥"
   },
   "cachedAreaOverlay": {
-    "tooltip": "已快取：{{tiles}} 个图砖 (z{{min}}-{{max}})"
+    "tooltip": "已快取：{{tiles}} 个瓦片 (z{{min}}-{{max}})"
   },
   "cameraFootprint": {
     "center": "{{label}} 相机中心"
@@ -405,30 +405,30 @@
     "hours": "{{n}} 小时"
   },
   "offlineArea": {
-    "allCachedSize": "全部 {{count}} 个图砖已快取({{size}})",
+    "allCachedSize": "全部 {{count}} 个瓦片已快取({{size}})",
     "detailLevel": "细节层级（最大缩放）",
-    "doneMixed": "完成：{{fresh}} 个新图砖 + {{cached}} 个已快取图砖({{size}})",
-    "doneSaved": "完成：已保存 {{count}} 个图砖({{size}})",
-    "estimate": "约 {{count}} 个图砖({{size}})",
+    "doneMixed": "完成：{{fresh}} 个新瓦片 + {{cached}} 个已快取瓦片({{size}})",
+    "doneSaved": "完成：已保存 {{count}} 个瓦片({{size}})",
+    "estimate": "约 {{count}} 个瓦片({{size}})",
     "heading": "保存区域供离线使用",
     "layers": "图层",
     "moveMap": "请将地图移到你想保存的区域。",
     "offline": "离线",
     "refresh": "刷新",
-    "refreshTitle": "重新下载所有图砖，以新版本取代快取数据",
+    "refreshTitle": "重新下载所有瓦片，以新版本取代快取数据",
     "saveTitle": "保存此区域供离线使用",
     "buildings": "合成视觉用的建筑物",
-    "buildingsEstimate": "此查看共有 {{count}} 个建筑物图砖",
+    "buildingsEstimate": "此查看共有 {{count}} 个建筑物瓦片",
     "buildingsTooLarge": "区域太大，无法取得建筑物：请放大（最多约 100 x 100 km)。",
-    "buildingsDone": "已保存 {{count}} 个建筑物图砖({{size}})。",
+    "buildingsDone": "已保存 {{count}} 个建筑物瓦片({{size}})。",
     "buildingsFailed": "{{count}} 个无法取得。",
     "saveBuildings": "保存建筑物"
   },
   "offlineCache": {
-    "allCached": "全部 {{count}} 个图砖已快取",
-    "doneNew": "完成：已保存 {{count}} 个新图砖({{size}})",
+    "allCached": "全部 {{count}} 个瓦片已快取",
+    "doneNew": "完成：已保存 {{count}} 个新瓦片({{size}})",
     "dragHint": "拖拽地图上的方框以涵盖该区域，然后下载。",
-    "refreshTip": "重新下载所有图砖，取代快取数据",
+    "refreshTip": "重新下载所有瓦片，取代快取数据",
     "title": "快取地图区域"
   },
   "overlays": {

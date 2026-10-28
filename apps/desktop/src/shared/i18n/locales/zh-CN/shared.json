@@ -417,8 +417,8 @@
         "name": "无限盘旋"
       },
       "NAV_PAYLOAD_PLACE": {
-        "description": "下降并释放酬载",
-        "name": "放置酬载"
+        "description": "下降并释放载荷",
+        "name": "放置载荷"
       },
       "NAV_RETURN_TO_LAUNCH": {
         "description": "返回起飞点/Home 位置",
@@ -722,9 +722,9 @@
   },
   "trafficTypes": {
     "adsbPreset": {
-      "adsb-fi": "adsb.fi（免费，不需金钥）",
-      "adsbexchange": "ADSBExchange(RapidAPI 金钥）",
-      "airplanes-live": "airplanes.live（免费，不需金钥）",
+      "adsb-fi": "adsb.fi（免费，不需密钥）",
+      "adsbexchange": "ADSBExchange(RapidAPI 密钥）",
+      "airplanes-live": "airplanes.live（免费，不需密钥）",
       "custom": "自订端点"
     }
   },

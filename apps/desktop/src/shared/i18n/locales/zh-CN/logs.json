@@ -14,7 +14,7 @@
     "exported": "已导出",
     "fcNotConnected": "飞控未连接",
     "followUp": "追问...",
-    "needsKey": "AI 分析需要 API 金钥。",
+    "needsKey": "AI 分析需要 API 密钥。",
     "poweredClaude": "由 Claude 提供。它会依需求读取此记录的原始遥测来回答。",
     "poweredOther": "由 {{provider}} 提供。飞行数据与健康检查会作为上下文一并提供。",
     "rebootNote": "部分参数需要重新启动飞控才会生效。",

@@ -9,10 +9,10 @@
     "maxAltitude": "最大高度",
     "maxFromHome": "距 Home 最远",
     "reserve": "保留",
-    "reserveDetail": "在最后一颗电池上",
+    "reserveDetail": "在最后一块电池上",
     "setProfile": "请设置载具配置文件以取得续航信息",
     "unknown": "未知",
-    "usableEach": "每颗约可用 {{duration}}",
+    "usableEach": "每块约可用 {{duration}}",
     "wind": "风"
   },
   "joystickSafety": {

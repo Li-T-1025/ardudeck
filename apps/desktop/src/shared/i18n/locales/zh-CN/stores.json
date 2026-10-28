@@ -311,7 +311,7 @@
   "signingStore": {
     "enableFailed": "启用签名失败",
     "sendFailed": "发送到飞控失败",
-    "setKeyFailed": "设置金钥失败"
+    "setKeyFailed": "设置密钥失败"
   },
   "sitlStore": {
     "bridgeStopped": "通信协议桥接已停止。",
