@@ -1,0 +1,19 @@
+{
+  "navigationRail": {
+    "cargo": "Розширення",
+    "cliTerminal": "Термінал CLI",
+    "companionComputer": "Бортовий комп’ютер",
+    "fleetVault": "Сховище флоту",
+    "luaGraphEditor": "Графічний редактор Lua",
+    "osdTool": "Інструмент OSD",
+    "parameters": "Параметри",
+    "reportBug": "Повідомити про помилку",
+    "themeDark": "Темна тема",
+    "themeLight": "Світла тема",
+    "themeSystem": "Системна тема",
+    "trainer": "Тренажер",
+    "locus": "Locus",
+    "weatherBriefing": "Метеобрифінг",
+    "productionLine": "Виробнича лінія"
+  }
+}
