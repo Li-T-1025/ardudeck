@@ -1,0 +1,98 @@
+{
+  "layoutDetails": {
+    "description": "说明",
+    "editTitle": "编辑布局",
+    "name": "名称",
+    "nameTaken": "该名称已被使用。",
+    "optional": "（选填）",
+    "replace": "取代",
+    "replaceContents": "以目前画面取代内容",
+    "replaceContentsHint": "目前的面板、驾驶舱仪表、地图分割与视觉模式。",
+    "replacesExisting": "已有名为「{{name}}」的布局。保存时会将其取代。",
+    "saveTitle": "保存布局"
+  },
+  "layouts": {
+    "fpvDescription": "地图与视觉并排。",
+    "fpvLabel": "FPV",
+    "importInvalidJson": "该文件不是有效的 JSON。",
+    "importNoPanels": "该文件中的布局没有面板配置。",
+    "importNotLayout": "该文件不是 ArduDeck 工作区布局。",
+    "importedName": "导入的布局",
+    "missionDescription": "地图、航点、高度剖面。",
+    "missionLabel": "Mission",
+    "pilotDescription": "地图搭配合成视觉分割。",
+    "pilotLabel": "Pilot"
+  },
+  "panelHeader": {
+    "hideInstrument": "隐藏地图仪表",
+    "popOut": "弹出",
+    "popOutTitle": "在新窗口打开 {{title}}",
+    "showInstrument": "在地图上显示为仪表"
+  },
+  "quickStats": {
+    "alt": "高度",
+    "armed": "已解锁",
+    "bat": "电池",
+    "disarmed": "已上锁",
+    "hdg": "航向",
+    "noLink": "无链接",
+    "notConnected": "未连接",
+    "sat": "卫星",
+    "spd": "速度",
+    "thr": "油门"
+  },
+  "savedLayout": {
+    "confirmDelete": "删除？",
+    "copyToClipboard": "复制到剪贴簿",
+    "deleteTip": "删除",
+    "renameTip": "重命名或加上说明",
+    "saveAsFile": "另存为文件…",
+    "share": "分享…",
+    "shareTip": "分享"
+  },
+  "sensorHealth": {
+    "unhealthyTitle": "异常：{{sensors}},详情请查看「消息」面板"
+  },
+  "share": {
+    "copied": "已复制",
+    "failed": "无法分享",
+    "saved": "已保存"
+  },
+  "speed": {
+    "eco": "省电",
+    "ecoTip": "更新较慢：适合信号弱或远距离的遥测链接",
+    "fc": "FC",
+    "fcTip": "不介入：ArduDeck 不会要求变更数据速率。载具会依飞控上保存的速率持续发送。若你已自行调整过这些速率，请选此项。",
+    "max": "最高",
+    "maxTip": "最快更新，适合 USB 或 WiFi 等高速链接",
+    "normal": "一般",
+    "normalTip": "平衡的更新速度，适合大多数链接"
+  },
+  "workspace": {
+    "buttonTip": "工作区：面板布局、查看与面板",
+    "title": "工作区"
+  },
+  "workspaceDialog": {
+    "addPanel": "新增面板",
+    "builtIn": "内建",
+    "clipboardReadFailed": "无法读取剪贴簿。",
+    "fromFile": "从文件…",
+    "import": "导入",
+    "importTip": "导入他人分享的布局",
+    "map2d": "2D 地图",
+    "map3d": "3D 地形",
+    "mapView": "地图查看",
+    "offlineHint": "在地图上框选范围，即可快取其瓦片供无网路时飞行使用。",
+    "offlineMaps": "离线地图",
+    "panelLayout": "面板布局",
+    "pasteFromClipboard": "从剪贴簿贴上",
+    "resetToPreset": "重置为预设",
+    "saveCurrentAs": "另存目前布局为…",
+    "saveOfflineArea": "保存区域供离线使用",
+    "saved": "已保存",
+    "selectingArea": "选择中… 请在地图上框选范围",
+    "telemetryRate": "遥测速率",
+    "telemetryRateHint": "载具视频流遥测的频率。选择 FC 时不会更动飞控本身的速率。",
+    "cargoPanelMissing": "此面板来自当前未加载的 Cargo。"
+  }
+}

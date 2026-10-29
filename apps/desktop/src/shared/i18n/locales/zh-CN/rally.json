@@ -1,0 +1,21 @@
+{
+  "rallyListPanel": {
+    "alt": "高度：{{value}}",
+    "breakAlt": "脱离高度",
+    "breakAltHint": "结束盘旋并开始降落的高度",
+    "detailsTitle": "集结点 R{{n}}",
+    "downloading": "下载中...",
+    "empty": "没有集结点",
+    "emptyHint": "在地图上点击「新增集结点」即可建立",
+    "flags": "旗标",
+    "landHeading": "降落航向 (°)",
+    "landHeadingHint": "0 = 任意方向",
+    "landImmediately": "立即降落（不盘旋）",
+    "landIntoWind": "逆风降落",
+    "pointCount_one": "{{count}} 个点",
+    "pointCount_other": "{{count}} 个点",
+    "subtitle": "紧急降落地点",
+    "title": "集结点",
+    "uploading": "上传中..."
+  }
+}

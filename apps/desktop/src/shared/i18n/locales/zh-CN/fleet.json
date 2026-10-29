@@ -1,0 +1,104 @@
+{
+  "draggableFleetActions": {
+    "collapseAria": "折叠机队操作面板",
+    "dragTip": "拖拽以移动，会吸附到面板与窗口边缘",
+    "expandAria": "展开机队操作面板",
+    "title": "机队操作"
+  },
+  "fleetContextMenu": {
+    "addToFleet": "加入机队",
+    "alt": "高度",
+    "chipTip": "{{label}} (m)",
+    "commandVehicle": "指挥此载具",
+    "createLeader": "建立领队",
+    "currentShape": "{{label}}（目前）",
+    "disband": "解散机队",
+    "disbandTip": "解散此机队，其僚机将恢复手动控制",
+    "formUp_one": "编队 {{count}} 架自由无人机",
+    "formUp_other": "编队 {{count}} 架自由无人机",
+    "formationShape": "编队形状",
+    "gap": "间距",
+    "join": "加入 {{label}}",
+    "leadsFleet": "领导机队",
+    "leave": "离开机队",
+    "leaveTip": "将 {{label}} 移出机队，其余载具维持队形",
+    "reformShape": "重新编队：{{label}}"
+  },
+  "fleetCoordination": {
+    "alt": "高度",
+    "altitudeTip": "起飞高度 (m)",
+    "collapseFleet": "折叠机队",
+    "engineError": "引擎错误",
+    "engineReportTip": "协调引擎的最新报告（集体起飞/任务开始）",
+    "expandFleet": "展开机队",
+    "fleet": "机队",
+    "leaderModeTip": "{{label}} 模式",
+    "reformTip": "重新编队 {{label}} 的机队：{{shape}}",
+    "startMission": "开始任务",
+    "startMissionTip": "{{label}} 以 AUTO 飞行已上传的任务；其僚机维持队形并跟随",
+    "startMissions": "开始任务 ({{count}})",
+    "startMissionsTip": "上传每架载具被指派的航点群组，并以 AUTO 开始全部 {{count}} 个任务",
+    "takeOff": "起飞",
+    "takeOffAll": "全部起飞",
+    "takeOffAllTip": "所有已连接的载具一起解锁并爬升至 {{alt}} m",
+    "takeOffFleetTip": "仅让 {{label}} 的机队解锁并爬升至 {{alt}} m"
+  },
+  "fleetDisclosure": {
+    "collapseAll": "全部折叠",
+    "collapseEveryTip": "折叠所有机队",
+    "expandAll": "全部展开",
+    "expandEveryTip": "展开所有机队",
+    "fleets": "机队"
+  },
+  "fleetGroupActions": {
+    "arm": "解锁",
+    "confirmArm_one": "要解锁 {{count}} 架载具吗？",
+    "confirmArm_other": "要解锁 {{count}} 架载具吗？",
+    "confirmDisarm_one": "要上锁 {{count}} 架载具吗？",
+    "confirmDisarm_other": "要上锁 {{count}} 架载具吗？",
+    "confirmRtl_one": "要让 {{count}} 架载具返航 (RTL) 吗？",
+    "confirmRtl_other": "要让 {{count}} 架载具返航 (RTL) 吗？",
+    "confirmStart_one": "要在 {{count}} 架载具上开始任务吗？",
+    "confirmStart_other": "要在 {{count}} 架载具上开始任务吗？",
+    "selected": "已选择 {{count}} 架",
+    "start": "开始"
+  },
+  "fleetStrip": {
+    "collapseFleet": "折叠机队",
+    "deselectTip": "{{label}},点击以取消选择",
+    "dragHere": "将载具拖拽到这里",
+    "dropToRemove": "放开以从机队移除",
+    "expandFleet": "展开机队",
+    "fleet": "机队",
+    "identityTip": "{{airframe}},{{state}}（点击以设置识别颜色）",
+    "lead": "领队",
+    "orders": "指令",
+    "selectTip": "选择以进行群组指令",
+    "setColour": "设置颜色 {{color}}",
+    "unassigned": "未指派",
+    "vehicleTip": "{{label}},{{mode}}",
+    "vehicleTipArmed": "{{label}},{{mode}},已解锁"
+  },
+  "formationGlyphs": {
+    "box": "方形（网格）",
+    "column": "纵队（尾随）",
+    "diamond": "菱形",
+    "echelonLeft": "左梯队",
+    "echelonRight": "右梯队",
+    "line": "横队（墙形）",
+    "survey": "扫描式（宽幅）",
+    "vee": "V 形（三角）"
+  },
+  "heartbeatDot": {
+    "none": "尚未收到心跳",
+    "receiving": "正在接收心跳",
+    "stale": "已 {{seconds}} 秒没有心跳"
+  },
+  "missionPathsToggle": {
+    "all": "所有载具航迹",
+    "allTip": "绘制每架载具的飞行航迹（选择者为实线，其余淡化）",
+    "selected": "仅选择者",
+    "selectedTip": "仅绘制选择载具的飞行航迹",
+    "title": "任务航迹"
+  }
+}

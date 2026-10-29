@@ -1,0 +1,203 @@
+{
+  "apply": {
+    "applied": "设置已应用！",
+    "applying": "正在应用设置...",
+    "applyingDesc": "正在将 {{name}} 预设应用到你的飞控...",
+    "errorDesc": "应用设置时发生错误。你可以重试或返回。",
+    "failed": "设置失败",
+    "noPreset": "尚未选择预设。",
+    "platformMismatch": "平台不符",
+    "platformMismatchDesc": "所选预设需要「{{required}}」平台，但你的主板目前设为「{{current}}」。",
+    "savedHint": "你的设置已保存到 EEPROM。你可以在各专属选项卡微调个别设置，或现在就测试你的设置。",
+    "starting": "启动中...",
+    "stepReconnect": "我们会重新连接并继续应用你的预设",
+    "successDesc": "你的 {{name}} 预设已成功应用到飞控。",
+    "tasks": "设置工作",
+    "verifyDirections": "测试伺服方向：移动摇杆时，控制舵面应正确移动",
+    "verifyMotor": "确认电机输出已连接且旋转方向正确",
+    "verifySafe": "飞行前，务必先在安全的环境中测试",
+    "verifyServoMixer": "请查看<b>伺服混控</b>选项卡，并确认伺服已连接到正确的飞控输出",
+    "verifyServos": "确认你的伺服设置"
+  },
+  "configReview": {
+    "applyConfiguration": "应用设置",
+    "delaySeconds": "延迟：{{value}} 秒",
+    "intro": "以下设置将应用到你的飞控。继续之前，请先查看下列设置。",
+    "landingTimeout": "降落逾时：{{value}} 秒",
+    "modeItem": "{{channel}} 上的 {{mode}}({{start}}-{{end}})",
+    "motorMixerMotors": "电机混控：{{n}} 颗电机",
+    "motorMixerQuadX": "电机混控：Quad X({{n}} 颗电机）",
+    "noPreset": "尚未选择预设。请返回并选择一个预设。",
+    "overwriteHint": "如果你想保留目前的设置，请确认已备份你的设置。变更会立即保存到 EEPROM。",
+    "overwriteWarning": "这会覆写你目前的设置",
+    "pitchPid": "俯仰：P={{p}} I={{i}} D={{d}}",
+    "platformAirplane": "平台：飞机",
+    "platformMultirotor": "平台：多旋翼",
+    "procedure": "程序：{{value}}",
+    "rollPid": "横滚：P={{p}} I={{i}} D={{d}}",
+    "servoMixerRules": "伺服混控：{{n}} 条规则",
+    "title": "查看：{{name}}",
+    "viaCli": "通过 CLI 指令",
+    "viaMsp": "通过 MSP 通信协议",
+    "yawPid": "偏航：P={{p}} I={{i}}"
+  },
+  "errorDetails": "错误详细信息",
+  "platformChange": {
+    "boardRebooting": "主板正在重新启动。正在尝试自动重新连接...",
+    "changePlatform": "变更平台",
+    "changingTitle": "正在变更平台...",
+    "errorGeneric": "变更平台时发生错误。",
+    "failed": "平台变更失败",
+    "pleaseWaitChanging": "平台类型变更期间，请稍候...",
+    "rebootingTitle": "正在重新启动飞控...",
+    "reconnecting": "重新连接中...",
+    "required": "必要",
+    "savingEeprom": "正在保存到 EEPROM...",
+    "savingTitle": "正在保存设置...",
+    "settingType": "正在设置平台类型...",
+    "stepReboot": "主板会自动重新启动",
+    "stepSaved": "设置会保存到 EEPROM",
+    "stepTypeChanged": "你的飞控上的平台类型将会被变更",
+    "waitingReboot": "正在等待飞控重新启动...",
+    "waitingReconnection": "正在等待重新连接...",
+    "whatHappens": "变更平台时会发生什么事？"
+  },
+  "pleaseWait": "请稍候...",
+  "presetSelection": {
+    "bfFixedWingExperimental": "Betaflight 对固定翼的支援是实验性的，且缺少导航功能。",
+    "bfGpsRescueHint": "Betaflight 使用 <b>GPS Rescue</b>,而非 iNav 的导航模式。应用预设后，请在 <b>GPS Rescue 选项卡</b>设置 GPS Rescue,以启用紧急返航功能。",
+    "bfNavNote": "<b>注意：</b>导航预设(GPS 定点保持、航点、RTH)仅适用于 iNav。请另外在 GPS Rescue 选项卡设置 GPS Rescue。",
+    "changeVehicleType": "变更载具类型",
+    "chooseDifferent": "选择其他预设",
+    "cliConfig": "CLI 设置（旧版）",
+    "currentPlatform": "目前：{{name}}",
+    "fixedWingDesc": "飞机、飞翼、滑翔机与其他固定翼飞行器",
+    "flashInav": "烧录 iNav 固件",
+    "gpsReturnHome": "GPS 返航",
+    "inavRecommendation": "对于飞机、飞翼与滑翔机，我们建议使用 <b>iNav 固件</b>,它提供完整的导航、自动发射、航点与返航功能。",
+    "inavRecommended": "建议使用 iNav",
+    "modesCount": "{{n}} 个模式",
+    "mspConfig": "MSP 设置",
+    "multirotorDesc": "四旋翼、六旋翼与其他多电机飞行器",
+    "oneClick": "一键设置",
+    "oneClickPresetHint": "这些预设会应用完整且经过测试的设置。你随时可以在各专属选项卡中微调个别设置。",
+    "oneClickVehicleHint": "每个预设都会应用完整且经过测试的设置，包含 PID、速率、飞行模式与 Failsafe 设置。你随时可以之后再微调。",
+    "pids": "PID",
+    "platformChangeBadge": "平台变更",
+    "platformChangeDesc": "「{{name}}」需要 {{required}} 平台，但你的主板设为 {{current}}。",
+    "platformChangeRequired": "需要变更平台",
+    "presetsAvailable": "有 {{n}} 个预设可用",
+    "selectPresetHint": "选择一个预设，即可<b>一次设置所有项目</b>:PID、速率、飞行模式与 Failsafe 设置。",
+    "selectVehicle": "选择你的载具类型以查看可用的预设",
+    "stepReconnect": "我们会重新连接并继续设置精灵",
+    "title": "快速设置",
+    "vehiclePresets": "{{vehicle}} 预设"
+  },
+  "presets": {
+    "beginner": {
+      "description": "安全稳定，适合学习",
+      "name": "初学者",
+      "tip": "自稳让你保持掌控。较慢的速率可避免过度修正。非常适合你的首次飞行！"
+    },
+    "cinematic": {
+      "description": "极致平滑，适合拍摄",
+      "name": "电影感",
+      "tip": "低速率加高 Expo,动作如奶油般滑顺。GPS 定点保持让画面稳定。RTH 确保安全。"
+    },
+    "flyingWing": {
+      "description": "具升降副翼混控的三角翼与飞翼",
+      "name": "飞翼",
+      "tip": "已设置升降副翼混控（左右伺服位于 CH3/CH4)。自动发射、RTH 与航点导航已就绪。"
+    },
+    "freestyle": {
+      "description": "兼顾特技与流畅",
+      "name": "自由式",
+      "tip": "三段开关提供 ANGLE/HORIZON/ACRO。AIRMODE 让零油门时仍可控制，方便翻滚！"
+    },
+    "fwGlider": {
+      "description": "高效翱翔与寻找热气流",
+      "name": "滑翔机",
+      "tip": "针对滑翔效率优化。低速率以求精准。翱翔模式用于热气流。飞翼伺服设置。"
+    },
+    "fwLongRange": {
+      "description": "适合 FPV 任务的延伸航程",
+      "name": "长程 FPV",
+      "tip": "针对效率优化的飞翼设置。完整导航套件，含航点、巡航与 RTH。"
+    },
+    "fwSport": {
+      "description": "适合有经验飞手的敏捷传统飞机",
+      "name": "运动机",
+      "tip": "较高速率，适合特技飞行。副翼/升降舵/方向舵设置。可在稳定模式与特技模式间切换。"
+    },
+    "fwTrainer": {
+      "description": "适合初学者的传统飞机",
+      "name": "教练机",
+      "tip": "经典的副翼/升降舵/方向舵设置。自动水平让机翼保持稳定。非常适合学习固定翼飞行。"
+    },
+    "longRange": {
+      "description": "具 GPS 安全保障的延伸航程",
+      "name": "长程",
+      "tip": "保守的 PID 以求效率。GPS 巡航与 RTH 确保安全。ANGLE 模式便于轻松恢复。"
+    },
+    "racing": {
+      "description": "快速且灵敏，适合速度",
+      "name": "竞速",
+      "tip": "纯 ACRO,提供最大控制。高速率以便快速修正。蜂鸣器有助于找到坠机位置！"
+    }
+  },
+  "summary": {
+    "action": "动作：{{value}}",
+    "aircraftType": "飞行器类型",
+    "delay": "延迟：{{value}} 秒",
+    "elevonMixing": "飞翼升降副翼混控(2 个伺服）",
+    "expo": "Expo:{{value}}%",
+    "maxRotation": "最大旋转 {{rollRate}}%",
+    "modeOnChannel": "{{channel}} 上的 {{mode}}",
+    "modesConfigured": "已设置 {{n}} 个模式",
+    "pidResponse": "{{name}} 响应",
+    "pidTuning": "PID 调校",
+    "pitchPid": "俯仰 P:{{p}},I:{{i}},D:{{d}}",
+    "quadXLayout": "Quad X 电机配置",
+    "rcRate": "RC Rate:{{value}}",
+    "rollPid": "横滚 P:{{p}},I:{{i}},D:{{d}}",
+    "rollPitchRate": "横滚/俯仰速率：{{value}}",
+    "singleMotor": "单一电机",
+    "traditionalSetup": "传统设置：副翼/升降舵/方向舵",
+    "yawPid": "偏航 P:{{p}},I:{{i}}",
+    "yawRate": "偏航速率：{{value}}"
+  },
+  "transmitter": {
+    "allPrimaryResponding": "所有主要通道（横滚、俯仰、油门、偏航）皆有回应",
+    "applyRetry": "应用并重试",
+    "applyingPreset": "正在应用 <b>{{name}}</b> 预设",
+    "channelsDetected": "已侦测到 {{n}}/4 个通道",
+    "connected": "发射机已连接！",
+    "continue": "继续",
+    "fixReceiver": "修正接收机设置",
+    "loadingConfig": "正在从飞控加载设置...",
+    "noSignal": "未侦测到 RC 信号",
+    "noSignalHint": "你的接收机可能没有正确设置。请检查它是否有供电、是否已与发射机对频，以及是否设置了正确的通信协议。",
+    "noneSelected": "未选择",
+    "notLoaded": "未加载",
+    "receiverConfiguration": "接收机设置",
+    "receiverType": "接收机类型",
+    "saveFailed": "保存接收机设置失败",
+    "selectUartHint": "选择你的接收机所接的 UART。只有一个端口可以设为 Serial RX。",
+    "serialRxPort": "Serial RX 端口",
+    "serialRxProtocol": "Serial RX 通信协议",
+    "skip": "跳过发射机检查（不建议）",
+    "turnOnHint": "打开你的发射机并移动所有摇杆，以确认信号有被接收。",
+    "wiggleEach": "摇动每支摇杆以侦测其余通道",
+    "wiggleSticks": "摇动你的摇杆",
+    "workingHint": "你的发射机运作正常。你可以继续查看你的设置。"
+  },
+  "wizard": {
+    "pressAgainToDiscard": "再按一次以放弃设置",
+    "stepApply": "应用",
+    "stepCheck": "检查",
+    "stepReview": "查看",
+    "stepSelect": "选择",
+    "subtitle": "一次完成所有设置",
+    "title": "快速设置精灵"
+  }
+}
