@@ -1,0 +1,23 @@
+{
+  "rallyListPanel": {
+    "alt": "Вис.: {{value}}",
+    "breakAlt": "Висота виходу",
+    "breakAltHint": "Висота, на якій апарат виходить із барражування й починає посадку",
+    "detailsTitle": "Точка збору R{{n}}",
+    "downloading": "Завантаження з апарата...",
+    "empty": "Немає точок збору",
+    "emptyHint": "Натисніть «Додати точку збору» на карті, щоб створити її",
+    "flags": "Прапорці",
+    "landHeading": "Курс посадки (°)",
+    "landHeadingHint": "0 = будь-який напрямок",
+    "landImmediately": "Сідати одразу (без барражування)",
+    "landIntoWind": "Сідати проти вітру",
+    "pointCount_one": "{{count}} точка",
+    "pointCount_few": "{{count}} точки",
+    "pointCount_many": "{{count}} точок",
+    "pointCount_other": "{{count}} точки",
+    "subtitle": "Місця аварійної посадки",
+    "title": "Точки збору",
+    "uploading": "Вивантаження на апарат..."
+  }
+}

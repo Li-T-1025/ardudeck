@@ -1,0 +1,50 @@
+{
+  "appShell": {
+    "about": "Про ArduDeck",
+    "clickToDisconnect": "Натисніть, щоб відключитися",
+    "disconnected": "Відключено",
+    "fleetCount": "Флот ({{count}})",
+    "fleetTitle": "Флот підключено через канали кількох апаратів. Натисніть, щоб відкрити телеметрію.",
+    "noneSelected": " · нічого не вибрано",
+    "staleDisconnect": "Немає даних {{seconds}} с. Натисніть, щоб відключитися",
+    "staleShort": "Немає даних {{seconds}} с",
+    "voiceMuted": "Голосові сповіщення вимкнено. Натисніть, щоб увімкнути",
+    "voiceOn": "Голосові сповіщення ввімкнено. Натисніть, щоб вимкнути",
+    "waiting": "Очікування...",
+    "osBadge": "OS",
+    "osBadgeTitle": "Працює на {{osName}}. Зв’язок з апаратом і кеш параметрів надає система."
+  },
+  "armDisarm": {
+    "arm": "ARM",
+    "armNotConfigured": "Режим ARM не налаштовано на FC. Призначте AUX-канал для ARM на вкладці «Режими».",
+    "armTitle": "Arm",
+    "armingBlocked": "Арм заблоковано",
+    "disarm": "DISARM",
+    "disarmTitle": "Disarm",
+    "forceArm": "FORCE ARM",
+    "forceArmHint": "Обійти перевірки безпеки перед армом",
+    "forceArmLabel": "Force ARM",
+    "forceArmTitle": "Примусовий арм (оминає перевірки)",
+    "mspUnknown": "Невідомо",
+    "preArmFailed": "Перевірки перед армом не пройдено",
+    "title": "{{action}} - правий клік для параметрів"
+  },
+  "quickLaunch": {
+    "areaEditorDesc": "Малювання областей місій: кілька областей, отвори, KML",
+    "button": "Швидкий запуск",
+    "buttonTitle": "Швидкий запуск: відкривати інструменти в окремих вікнах",
+    "inspectorDesc": "Повідомлення й графіки наживо",
+    "simWorldDesc": "Політ у SITL у постійному 3D-світі: перешкоди, геозони, місії",
+    "telemetryDashboard": "Панель телеметрії",
+    "telemetryDashboardDesc": "Телеметрія наживо на окремому екрані",
+    "locusDesc": "Відкрити ArduDeck Locus: PPK, фотограмметрія й LiDAR"
+  },
+  "updateBanner": {
+    "available": "Доступна <b>ArduDeck {{version}}</b>{{name}}",
+    "downloading": "Завантаження <b>ArduDeck {{version}}</b>",
+    "newVersion": "нова версія",
+    "ready": "<b>ArduDeck {{version}}</b> готова до встановлення",
+    "restartToUpdate": "Перезапустити для оновлення",
+    "viewRelease": "Переглянути випуск"
+  }
+}

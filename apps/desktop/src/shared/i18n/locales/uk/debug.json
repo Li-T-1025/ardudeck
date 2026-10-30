@@ -1,0 +1,26 @@
+{
+  "debugConsole": {
+    "console": "Консоль",
+    "dockBottom": "Закріпити внизу",
+    "dockLeft": "Закріпити ліворуч",
+    "dockRight": "Закріпити праворуч",
+    "entries_one": "{{count}} запис",
+    "entries_few": "{{count}} записи",
+    "entries_many": "{{count}} записів",
+    "entries_other": "{{count}} запису",
+    "filter": {
+      "all": "Усі",
+      "error": "Помилки",
+      "info": "Інформація",
+      "packet": "Пакети"
+    },
+    "fix": "Виправити ›",
+    "jumpToLatest": "↓ До останніх (призупинено)",
+    "msgs_one": "{{count}} повід.",
+    "msgs_few": "{{count}} повід.",
+    "msgs_many": "{{count}} повід.",
+    "msgs_other": "{{count}} повід.",
+    "noLogEntries": "Немає записів журналу",
+    "noMessages": "Немає повідомлень від автопілота"
+  }
+}
