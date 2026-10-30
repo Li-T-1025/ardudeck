@@ -1,0 +1,16 @@
+{
+  "detachedRoot": {
+    "closeTitle": "Закрити це вікно й повернутися до ArduDeck",
+    "dockBack": "Повернути на місце",
+    "keepOnTop": "Тримати це вікно поверх ArduDeck",
+    "missing": "(відсутній)",
+    "notRegistered": "componentId <code>{{id}}</code> не зареєстровано.",
+    "pinned": "Закріплено поверх, натисніть, щоб відкріпити",
+    "toggleOnTop": "Перемкнути «завжди поверх»",
+    "unknownComponent": "Невідомий компонент"
+  },
+  "surface": {
+    "linkServiceOff": "Служба зв’язку ArduDeck OS не працює",
+    "searching": "Пошук апарата…"
+  }
+}

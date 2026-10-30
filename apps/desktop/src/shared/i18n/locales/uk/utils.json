@@ -1,0 +1,386 @@
+{
+  "flightBriefing": {
+    "batteries": "Акумулятори",
+    "ceiling": "стеля {{altitude}} AGL",
+    "distance": "Відстань",
+    "flightTime": "Час польоту",
+    "flightTimeDetail": "оцінка на крейсерській швидкості",
+    "gusts": "пориви {{speed}}",
+    "maxAltitude": "Макс. висота",
+    "maxFromHome": "Макс. від Home",
+    "reserve": "Резерв",
+    "reserveDetail": "на останньому акумуляторі",
+    "setProfile": "задайте профіль апарата для оцінки часу польоту",
+    "unknown": "невідомо",
+    "usableEach": "~{{duration}} корисного часу на кожен",
+    "wind": "Вітер"
+  },
+  "joystickSafety": {
+    "assign": "Спершу призначте {{names}}",
+    "offTarget": "{{name}} (CH{{ch}}) на {{pwm}}, потрібно {{want}}",
+    "channel": "CH{{n}}",
+    "role": {
+      "roll": "Крен",
+      "pitch": "Тангаж",
+      "throttle": "Газ",
+      "yaw": "Рискання"
+    },
+    "want": {
+      "centre": "близько {{pwm}} (центр)",
+      "idle": "{{pwm}} або менше (холостий хід)",
+      "zeroThrust": "близько {{pwm}} (нульова тяга)",
+      "radio": "близько {{pwm}} (ваш пульт)",
+      "low": "{{pwm}} або менше (низьке)",
+      "high": "{{pwm}} або більше (високе)"
+    }
+  },
+  "osdCategories": {
+    "altitude": {
+      "description": "Висота, MSL, варіометр",
+      "name": "Висота й варіо"
+    },
+    "attitude": {
+      "description": "Приціл, горизонт, тангаж, крен, курс",
+      "name": "Положення"
+    },
+    "battery": {
+      "description": "Напруга, струм, ємність, ефективність",
+      "name": "Акумулятор і живлення"
+    },
+    "general": {
+      "description": "Польотний режим, попередження, дані апарата",
+      "name": "Загальні"
+    },
+    "gps": {
+      "description": "Супутники, HDOP, координати",
+      "name": "GPS"
+    },
+    "mission": {
+      "description": "VTX, індикатори вітру",
+      "name": "Місія"
+    },
+    "radio": {
+      "description": "RSSI, положення газу",
+      "name": "Радіо й керування"
+    },
+    "sensors": {
+      "description": "Температура, перевантаження, дані ESC",
+      "name": "Датчики"
+    },
+    "speed": {
+      "description": "Шляхова швидкість, повітряна швидкість, відстань",
+      "name": "Швидкість і відстань"
+    },
+    "timers": {
+      "description": "Час польоту, час роботи, залишок",
+      "name": "Таймери"
+    }
+  },
+  "osdElements": {
+    "airspeed": {
+      "description": "Приладова повітряна швидкість від трубки Піто",
+      "name": "Повітряна швидкість"
+    },
+    "altitude": {
+      "description": "Висота над землею / Home",
+      "name": "Висота (AGL)"
+    },
+    "armed_status": {
+      "description": "Показує стан ARMED або DISARMED",
+      "name": "Стан арму"
+    },
+    "artificial_horizon": {
+      "description": "Лінія авіагоризонту",
+      "name": "Авіагоризонт"
+    },
+    "baro_temp": {
+      "description": "Температура барометра",
+      "name": "Температура баро"
+    },
+    "battery_cell_voltage": {
+      "description": "Середня напруга на банку",
+      "name": "Напруга банки"
+    },
+    "battery_percent": {
+      "description": "Залишок заряду акумулятора у відсотках",
+      "name": "Заряд, %"
+    },
+    "battery_voltage": {
+      "description": "Загальна напруга батареї",
+      "name": "Напруга акумулятора"
+    },
+    "coordinates": {
+      "description": "Широта й довгота у два рядки",
+      "name": "Координати"
+    },
+    "craft_name": {
+      "description": "Задана користувачем назва апарата",
+      "name": "Назва апарата"
+    },
+    "crosshairs": {
+      "description": "Індикатор апарата в центрі екрана",
+      "name": "Приціл"
+    },
+    "current_draw": {
+      "description": "Миттєвий струм в амперах",
+      "name": "Струм"
+    },
+    "distance": {
+      "description": "Відстань від точки Home",
+      "name": "Відстань до Home"
+    },
+    "efficiency": {
+      "description": "Ефективність у mAh на км",
+      "name": "Ефективність"
+    },
+    "esc_rpm": {
+      "description": "Оберти моторів із телеметрії ESC",
+      "name": "Оберти ESC"
+    },
+    "esc_temp": {
+      "description": "Температура регулятора обертів",
+      "name": "Температура ESC"
+    },
+    "flight_time": {
+      "description": "Час від арму",
+      "name": "Час польоту"
+    },
+    "flymode": {
+      "description": "Назва поточного польотного режиму (ANGLE, HORIZON тощо)",
+      "name": "Польотний режим"
+    },
+    "g_force": {
+      "description": "Поточне перевантаження",
+      "name": "Перевантаження"
+    },
+    "gps_hdop": {
+      "description": "Горизонтальний геометричний фактор точності",
+      "name": "GPS HDOP"
+    },
+    "gps_sats": {
+      "description": "Кількість видимих супутників GPS",
+      "name": "Супутники GPS"
+    },
+    "heading": {
+      "description": "Компасний курс у градусах",
+      "name": "Курс"
+    },
+    "heading_graph": {
+      "description": "Графічна шкала курсу",
+      "name": "Шкала курсу"
+    },
+    "home_direction": {
+      "description": "Стрілка в напрямку Home",
+      "name": "Напрямок на Home"
+    },
+    "horizon_sidebars": {
+      "description": "Бічні маркери авіагоризонту",
+      "name": "Бічні маркери горизонту"
+    },
+    "imu_temp": {
+      "description": "Температура IMU/гіроскопа",
+      "name": "Температура IMU"
+    },
+    "latitude": {
+      "description": "Поточна широта",
+      "name": "Широта"
+    },
+    "longitude": {
+      "description": "Поточна довгота",
+      "name": "Довгота"
+    },
+    "mah_drawn": {
+      "description": "Загальна витрата в міліампер-годинах",
+      "name": "Витрачено mAh"
+    },
+    "max_speed": {
+      "description": "Максимальна досягнута швидкість",
+      "name": "Макс. швидкість"
+    },
+    "messages": {
+      "description": "Повідомлення про стан і сповіщення FC",
+      "name": "Повідомлення"
+    },
+    "msl_altitude": {
+      "description": "Висота над середнім рівнем моря",
+      "name": "Висота MSL"
+    },
+    "on_time": {
+      "description": "Час від увімкнення живлення",
+      "name": "Час роботи"
+    },
+    "pitch": {
+      "description": "Кут тангажу апарата в градусах",
+      "name": "Кут тангажу"
+    },
+    "power_watts": {
+      "description": "Миттєва споживана потужність",
+      "name": "Потужність (Вт)"
+    },
+    "remaining_flight_time": {
+      "description": "Оцінка залишку часу польоту",
+      "name": "Залишок часу"
+    },
+    "roll": {
+      "description": "Кут крену апарата в градусах",
+      "name": "Кут крену"
+    },
+    "rssi": {
+      "description": "Індикатор рівня прийнятого сигналу (%)",
+      "name": "RSSI"
+    },
+    "rssi_dbm": {
+      "description": "Рівень сигналу в dBm (ELRS, Crossfire)",
+      "name": "RSSI (dBm)"
+    },
+    "rtc_time": {
+      "description": "Годинник реального часу (поточний час)",
+      "name": "Час RTC"
+    },
+    "speed": {
+      "description": "Швидкість відносно землі",
+      "name": "Шляхова швидкість"
+    },
+    "throttle": {
+      "description": "Поточне положення газу у відсотках",
+      "name": "Газ"
+    },
+    "throttle_gauge": {
+      "description": "Візуальна шкала газу",
+      "name": "Шкала газу"
+    },
+    "vario": {
+      "description": "Індикатор вертикальної швидкості (набір/зниження)",
+      "name": "Варіометр"
+    },
+    "vtx_channel": {
+      "description": "Діапазон/канал/потужність відеопередавача",
+      "name": "Канал VTX"
+    },
+    "warnings": {
+      "description": "Системні попередження (низький заряд, втрата GPS тощо)",
+      "name": "Попередження"
+    },
+    "wind_horizontal": {
+      "description": "Горизонтальна швидкість і напрямок вітру",
+      "name": "Вітер (горизонтальний)"
+    },
+    "wind_vertical": {
+      "description": "Вертикальна складова вітру",
+      "name": "Вітер (вертикальний)"
+    }
+  },
+  "radioPreflight": {
+    "firmwareFail": "ArduPilot {{major}}.{{minor}} надто стара для керування стіками через MAVLink - оновіть польотний контролер до 4.6 або новішої. Телеметрія й далі працює.",
+    "firmwarePass": "ArduPilot {{major}}.{{minor}} підтримує керування стіками через MAVLink-радіо.",
+    "firmwareUnknown": "Версію прошивки ще не вдалося визначити.",
+    "firmwareVersion": "Прошивка підтримує RC через радіоканал",
+    "rcOverMavlink": "Керування стіками через радіоканал",
+    "rcOverMavlinkFail": "Апарат налаштовано ігнорувати RC, що надходить через радіоканал, тож стіки нічого не робитимуть (radio failsafe). Виправлення залишає ввімкненими наявні протоколи приймача.",
+    "rcOverMavlinkPass": "Апарат приймає RC, що надходить через MAVLink-радіо.",
+    "rssiSource": "Показ рівня сигналу зв’язку",
+    "rssiSourceFail": "Рівень сигналу береться не з радіоканалу, тож RSSI буде порожнім або хибним.",
+    "rssiSourcePass": "Апарат повідомляє рівень сигналу безпосередньо з каналу зв’язку.",
+    "waitingParams": "Очікування завершення завантаження параметрів."
+  },
+  "rcSourceArbiter": {
+    "joystickOwns": "Каналом RC керує джойстик",
+    "slidersOwn": "Каналом RC керують віртуальні повзунки RC",
+    "trainerOwnsSticks": "Активна сесія Тренажера - стіки під керуванням Тренажера"
+  },
+  "receiverConstants": {
+    "hint": {
+      "CRSF": "Цифровий канал із низькою затримкою. Використовується приймачами TBS Crossfire і ExpressLRS.",
+      "FPORT": "FrSky F.Port поєднує SBUS і телеметрію одним проводом.",
+      "GHST": "Протокол ImmersionRC Ghost з наднизькою затримкою.",
+      "IBUS": "Цифровий протокол FlySky. Під’єднайте до вільного контакту RX UART.",
+      "MSP": "Лише для керування з НС/SITL. Не використовуйте з фізичним приймачем.",
+      "SBUS": "Інвертований послідовний протокол. Поширений у приймачах FrSky і RadioLink. Деяким платам потрібен апаратний інвертор.",
+      "SBUS_SHORT": "Інвертований послідовний протокол. Поширений у приймачах FrSky і RadioLink.",
+      "SPEK2048": "Супутниковий приймач Spektrum. Спершу прив’яжіть до передавача, потім під’єднайте до UART.",
+      "SPEK2048_SHORT": "Супутниковий приймач Spektrum. Спершу прив’яжіть до передавача.",
+      "SRXL2": "Двонаправлений послідовний протокол Spektrum SRXL2."
+    },
+    "receiverType": {
+      "NONE": "Немає",
+      "SERIAL": "Послідовний"
+    }
+  },
+  "rssiState": {
+    "noLink": "Немає каналу телеметрії",
+    "off": "Звітування RSSI на апараті вимкнено (RSSI_TYPE = 0)",
+    "unconfigured": "Приймач під’єднано, але він не повідомляє рівень сигналу. RSSI_TYPE має відповідати приймачу (3 для CRSF/ELRS)."
+  },
+  "rubyOsd": {
+    "category": {
+      "Flight": "Політ",
+      "GPS": "GPS",
+      "Grid": "Сітка",
+      "Instruments": "Прилади",
+      "Link": "Зв’язок",
+      "Navigation": "Навігація",
+      "Power": "Живлення",
+      "System": "Система",
+      "Video": "Відео"
+    },
+    "element": {
+      "ahi_heading": "Курс AHI",
+      "air_speed": "Повітряна швидкість",
+      "alt_graph": "Графік висоти",
+      "altitude": "Висота",
+      "battery": "Акумулятор",
+      "battery_cells": "Банки акумулятора",
+      "cpu_info": "Дані CPU",
+      "distance": "Відстань",
+      "efficiency": "Ефективність",
+      "fc_temperature": "Температура FC",
+      "flight_mode": "Польотний режим",
+      "flight_mode_change": "Зміна польотного режиму",
+      "gps_info": "Дані GPS",
+      "gps_position": "GPS-позиція",
+      "grid_crosshair": "Приціл",
+      "grid_diagonal": "Діагональна сітка",
+      "grid_squares": "Квадратна сітка",
+      "grid_thirds": "Правило третин",
+      "ground_speed": "Шляхова швидкість",
+      "heading": "Курс",
+      "home": "Home",
+      "horizon": "Горизонт",
+      "instruments": "Прилади",
+      "link_quality_bars": "Якість зв’язку (смуги)",
+      "link_quality_numbers": "Якість зв’язку (числа)",
+      "pitch": "Тангаж",
+      "radio_interfaces": "Радіоінтерфейси",
+      "radio_links": "Радіоканали",
+      "rc_rssi": "RSSI RC",
+      "signal_bars": "Смуги сигналу",
+      "speed_alt": "Швидкість і висота",
+      "speed_to_sides": "Бічна швидкість",
+      "throttle": "Газ",
+      "time": "Час",
+      "time_lower": "Час (знизу)",
+      "total_distance": "Загальна відстань",
+      "tx_power": "Потужність TX",
+      "vehicle_radio_links": "Радіоканали апарата",
+      "vertical_speed": "Вертикальна швидкість",
+      "video_bitrate_history": "Історія бітрейту відео",
+      "video_mbps": "Відео, Mbps",
+      "video_mode": "Режим відео",
+      "wind": "Вітер"
+    }
+  },
+  "stickAssign": {
+    "air": {
+      "pitch": "Тангаж",
+      "roll": "Крен",
+      "throttle": "Газ",
+      "yaw": "Рискання"
+    },
+    "ground": {
+      "pitch": "Тангаж (не використовується)",
+      "roll": "Кермування",
+      "throttle": "Газ",
+      "yaw": "Рискання (не використовується)"
+    }
+  }
+}

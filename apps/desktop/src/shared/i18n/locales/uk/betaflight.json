@@ -1,0 +1,19 @@
+{
+  "dashboard": {
+    "accCalStarted": "Калібрування акселерометра почалося. Тримайте плату нерухомо!",
+    "armedBadge": "ARMED",
+    "calibrateAcc": "Калібрувати ACC",
+    "connectedOn": "{{variant}} {{version}} на {{board}}",
+    "cpuLoad": "Навантаження CPU",
+    "cycleTime": "Час циклу",
+    "disarmedBadge": "DISARMED",
+    "fix": "Фікс",
+    "lastUpdate": "Останнє оновлення: {{time}}",
+    "rebootConfirm": "Перезавантажити польотний контролер?",
+    "refreshPorts": "Оновити порти",
+    "startTelemetry": "Почати телеметрію",
+    "stopTelemetry": "Зупинити телеметрію",
+    "subtitle": "Підключення до плат Betaflight, iNav або Cleanflight",
+    "used": "Витрачено"
+  }
+}

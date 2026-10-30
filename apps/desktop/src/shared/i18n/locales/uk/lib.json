@@ -1,0 +1,246 @@
+{
+  "vehicleTemplates": {
+    "apply": {
+      "armed": "Апарат заармлений, дизарміть перед застосуванням",
+      "expectedFc": "Очікувався реальний FC, але підключено SITL",
+      "expectedSitl": "Очікувався SITL, але підключено реальний FC",
+      "noParams": "Параметри ще не завантажено, спершу отримайте їх",
+      "noTemplate": "Для профілю не визначено шаблон",
+      "notConnected": "Апарат не підключено",
+      "nothingToApply": "Апарат уже відповідає профілю, змінювати нічого",
+      "restoreNote": "Відновлення зі знімка {{date}}",
+      "snapshotReason": "Застосування {{name}}"
+    },
+    "helpers": {
+      "airspeedCruise": "Звалювання × 1.5 = {{speed}} m/s (ефективна крейсерська)",
+      "airspeedMax": "Подвоєна крейсерська = {{speed}} m/s (щонайменше на 50% вище мінімальної, для керування висотою TECS)",
+      "airspeedMin": "Звалювання × 1.25 = {{speed}} m/s (щонайменше на 20% вище звалювання, як вимагає ArduPilot)",
+      "armingCheck": "Увімкнути всі перевірки перед армом",
+      "battMonitor": "Аналоговий моніторинг напруги + струму",
+      "capacity": "Ємність із профілю ({{capacity}} mAh)",
+      "critVolt": "{{cells}}S × {{volts}}V (критичний поріг для {{chem}})",
+      "elevonGain": "Стандартний коефіцієнт мікшування елевонів",
+      "elevonLeft": "Вихід лівого елевона (дельта-крило)",
+      "elevonRight": "Вихід правого елевона (дельта-крило)",
+      "lowVolt": "{{cells}}S × {{volts}}V (низький поріг для {{chem}})",
+      "simCapacity": "Симульована ємність ({{capacity}} mAh)",
+      "simDrag": "Коефіцієнт опору з профілю",
+      "simEngine": "Масштабовано з тягоозброєності {{ratio}} (множник потужності двигуна)",
+      "simServo": "Час відгуку серво з {{speed}}°/s",
+      "simVoltage": "Симульована напруга повного заряду ({{cells}}S × 4.20V)",
+      "trimAirspeed": "Крейсерська {{speed}} m/s у см/с, назва для прошивок до 4.5",
+      "vtailGain": "Стандартний коефіцієнт мікшування V-хвоста",
+      "vtailLeft": "V-хвіст лівий (мікс тангаж+рискання)",
+      "vtailRight": "V-хвіст правий (мікс тангаж+рискання)",
+      "airspeedStall": "Звалювання × 1.05 = {{speed}} m/s (трохи вище реального звалювання, для запобігання звалюванню й посадки)"
+    },
+    "reason": {
+      "aileron": "Елерон",
+      "all4MotorsTiltWithWing": "Усі 4 мотори нахиляються з крилом",
+      "belowThisVTOLMotorsAssistFixed": "Нижче цього мотори VTOL допомагають літаку",
+      "bicopter2MotorTiltrotor": "Бікоптер (2-моторний tiltrotor)",
+      "boat": "Човен",
+      "boatRoverFrameClass": "Човен (клас рами rover)",
+      "bodyFrameControlInput": "Керування у зв’язаній системі координат",
+      "bodyFrameStickInput": "Стіки у зв’язаній системі координат",
+      "continuousTilt": "Плавний нахил",
+      "cruiseSpeed60OfMax": "Крейсерська швидкість = 60% від максимальної",
+      "differential": "Диференційне",
+      "elevator": "Кермо висоти",
+      "elevonLeft": "Лівий елевон",
+      "elevonLeftDeltaWing": "Лівий елевон (дельта-крило)",
+      "elevonMixGain": "Коефіцієнт мікшування елевонів",
+      "elevonRight": "Правий елевон",
+      "elevonRightDeltaWing": "Правий елевон (дельта-крило)",
+      "enableTailsitterMode": "Увімкнути режим tailsitter",
+      "enableTiltServos": "Увімкнути серво нахилу",
+      "enableVTOL": "Увімкнути VTOL",
+      "enableVTOLQuadplane": "Увімкнути VTOL (quadplane)",
+      "enableVTOLQuadplaneHex": "Увімкнути VTOL (quadplane hex)",
+      "fixedWingAssistThreshold": "Поріг допомоги літаку",
+      "forwardThrottle": "Газ уперед",
+      "groundSteering": "Наземне кермування",
+      "hArrangement": "Схема H",
+      "hexacopter": "Гексакоптер",
+      "hexacopterLiftFrame": "Підйомна рама гексакоптера",
+      "motor1": "Мотор 1",
+      "motor1ForwardRightVec": "Мотор 1 (передній правий векторний)",
+      "motor1HoverForward": "Мотор 1 (висіння + вперед)",
+      "motor1Left": "Мотор 1 лівий",
+      "motor1Lift": "Мотор 1 (підйомний)",
+      "motor1Tilt": "Нахил мотора 1",
+      "motor2": "Мотор 2",
+      "motor2ForwardLeftVec": "Мотор 2 (передній лівий векторний)",
+      "motor2HoverForward": "Мотор 2 (висіння + вперед)",
+      "motor2Lift": "Мотор 2 (підйомний)",
+      "motor2Right": "Мотор 2 правий",
+      "motor2Tilt": "Нахил мотора 2",
+      "motor3": "Мотор 3",
+      "motor3Lift": "Мотор 3 (підйомний)",
+      "motor3RearRightVec": "Мотор 3 (задній правий векторний)",
+      "motor4": "Мотор 4",
+      "motor4Lift": "Мотор 4 (підйомний)",
+      "motor4RearLeftVec": "Мотор 4 (задній лівий векторний)",
+      "motor5Lift": "Мотор 5 (підйомний)",
+      "motor5VerticalRight": "Мотор 5 (вертикальний правий)",
+      "motor6Lift": "Мотор 6 (підйомний)",
+      "motor6VerticalLeft": "Мотор 6 (вертикальний лівий)",
+      "motors12ActiveInHover": "Мотори 1+2 активні у висінні",
+      "motors12Tilt": "Нахил моторів 1+2",
+      "notATailsitter": "Не tailsitter",
+      "notATiltrotor": "Не tiltrotor",
+      "octaquadCoaxialX8": "OctaQuad (коаксіальний X8)",
+      "octaquadY6": "OctaQuad / Y6",
+      "octocopter": "Октокоптер",
+      "omniRoverFrame": "Рама омні-ровера",
+      "plusArrangement": "Схема +",
+      "quadcopter": "Квадрокоптер",
+      "quadcopterLiftFrame": "Підйомна рама квадрокоптера",
+      "r4WheelOmniX": "4-колісний омні (X)",
+      "roverFrame": "Рама ровера",
+      "rudder": "Кермо напрямку",
+      "rudderGroundSteering": "Кермо напрямку (наземне кермування)",
+      "singleCoaxCopterLiftFrame": "Підйомна рама одно-/коаксіального коптера",
+      "singleCoaxFor2MotorTailsitter": "Одно-/коаксіальна для 2-моторного tailsitter",
+      "tailsitterMode": "Режим tailsitter",
+      "throttle": "Газ",
+      "throttleFrontLeft": "Газ передній лівий",
+      "throttleFrontRight": "Газ передній правий",
+      "throttleL": "Газ Л",
+      "throttleLeft": "Газ лівий",
+      "throttleLeftHull": "Газ лівий корпус",
+      "throttleRTwinMotor": "Газ П (двомоторний)",
+      "throttleRearLeft": "Газ задній лівий",
+      "throttleRearRight": "Газ задній правий",
+      "throttleRight": "Газ правий",
+      "throttleRightHull": "Газ правий корпус",
+      "tiltServoSharedWingTilt": "Серво нахилу (спільний нахил крила)",
+      "tiltwingWholeWingTilts": "Tiltwing (нахиляється все крило)",
+      "transitionDuration5S": "Тривалість переходу (5 с)",
+      "tricopter": "Трикоптер",
+      "undefinedAckermannUsesSteering": "Не визначено (Аккерман використовує кермування)",
+      "useVTOLForRTLLanding": "Використовувати VTOL для посадки в RTL",
+      "vectored6Frame": "Рама Vectored-6",
+      "vectoredThrustHoverGain": "Коефіцієнт векторної тяги у висінні",
+      "vectoredThrustYawGain": "Коефіцієнт векторної тяги за рисканням",
+      "vectoredYawNoRudder": "Векторне рискання (без керма)",
+      "vectoredYawTailsitter": "Tailsitter з векторним рисканням",
+      "vtolAssistBelowThisSpeed": "Допомога VTOL нижче цієї швидкості",
+      "waypointSpeed": "Швидкість між точками",
+      "waypointSpeedFromMaxSpeed": "Швидкість між точками з maxSpeed",
+      "xArrangement": "Схема X",
+      "y6bCoaxial": "Y6B (коаксіальна)",
+      "yArrangement": "Схема Y"
+    },
+    "template": {
+      "boat-catamaran": {
+        "description": "Два корпуси, два гвинти, стабільна платформа",
+        "name": "Катамаран"
+      },
+      "boat-single-prop": {
+        "description": "Кермо + один мотор",
+        "name": "Одногвинтовий човен"
+      },
+      "boat-twin-prop": {
+        "description": "Два мотори, кермування різницею тяги (без керма)",
+        "name": "Двогвинтовий човен"
+      },
+      "copter-coaxial": {
+        "description": "Вісім моторів у 4 коаксіальних парах, промислова робоча конячка",
+        "name": "Коаксіальний квадрокоптер (X8)"
+      },
+      "copter-hex-plus": {
+        "description": "Шість моторів за схемою +, класична вантажна схема",
+        "name": "Гексакоптер (+)"
+      },
+      "copter-hex-x": {
+        "description": "Шість моторів: резервування, велике навантаження",
+        "name": "Гексакоптер (X)"
+      },
+      "copter-octo-plus": {
+        "description": "Вісім моторів за схемою +, симетрична вантажна",
+        "name": "Октокоптер (+)"
+      },
+      "copter-octo-x": {
+        "description": "Вісім моторів: максимальне резервування, важка кінокамера",
+        "name": "Октокоптер (X)"
+      },
+      "copter-quad-h": {
+        "description": "Чотири мотори за схемою H, жорстка платформа для камер",
+        "name": "Квадрокоптер (H)"
+      },
+      "copter-quad-plus": {
+        "description": "Чотири мотори за схемою +, мотор 1 спереду",
+        "name": "Квадрокоптер (+)"
+      },
+      "copter-quad-x": {
+        "description": "Чотири мотори за схемою X, класичний мультиротор",
+        "name": "Квадрокоптер (X)"
+      },
+      "copter-tri": {
+        "description": "Три мотори + серво рискання, ефективний і своєрідний",
+        "name": "Трикоптер"
+      },
+      "copter-y6": {
+        "description": "Три промені, по два мотори (коаксіально), компактне резервування",
+        "name": "Y6 (коаксіальний трикоптер)"
+      },
+      "plane-flying-wing": {
+        "description": "Без хвоста, елевони на задній кромці",
+        "name": "Літаюче крило / дельта"
+      },
+      "plane-standard": {
+        "description": "Класичний фюзеляж з окремими кермом висоти, кермом напрямку й елеронами",
+        "name": "Класичний літак"
+      },
+      "plane-twin-boom": {
+        "description": "Дві хвостові балки, чудово для штовхального мотора й камер",
+        "name": "Двобалковий літак"
+      },
+      "plane-v-tail": {
+        "description": "Дві поверхні тангажу/рискання, менший опір",
+        "name": "Літак із V-хвостом"
+      },
+      "rover-ackermann": {
+        "description": "Як автомобіль: один газ, серво кермування",
+        "name": "Ровер Аккермана"
+      },
+      "rover-omni": {
+        "description": "Всенапрямні колеса, може рухатися боком",
+        "name": "Омні-ровер"
+      },
+      "rover-skid": {
+        "description": "Диференційний привід: як танк, без серво кермування",
+        "name": "Ровер із бортовим поворотом"
+      },
+      "sub-vectored-6": {
+        "description": "Як BlueROV2: 4 векторні + 2 вертикальні рушії",
+        "name": "Векторний, 6 рушіїв"
+      },
+      "vtol-quadplane-hex": {
+        "description": "Літак із 6 моторами вертикальної тяги, вантажний VTOL",
+        "name": "Гексаплан (6 підйомних)"
+      },
+      "vtol-quadplane-quad": {
+        "description": "Літак із 4 моторами вертикальної тяги",
+        "name": "Класичний Quadplane (4 підйомні)"
+      },
+      "vtol-tailsitter-conventional": {
+        "description": "Стоїть на хвості, нахиляється для польоту вперед, елевони для керування у висінні",
+        "name": "Tailsitter (класичний)"
+      },
+      "vtol-tailsitter-delta-duo": {
+        "description": "2-моторний tailsitter із дельта-крилом, компактний і ефективний",
+        "name": "Tailsitter Delta Duo"
+      },
+      "vtol-tiltrotor-dual": {
+        "description": "Два мотори нахиляються з висіння в крейсерський політ, як Osprey",
+        "name": "Tiltrotor (двомоторний)"
+      },
+      "vtol-tiltwing": {
+        "description": "Усе крило повертається з висіння в крейсерський політ",
+        "name": "Tiltwing"
+      }
+    }
+  }
+}

@@ -1,0 +1,36 @@
+{
+  "activeTour": {
+    "nextFeature": "Наступна функція",
+    "nextTitle": "Далі: {{title}}"
+  },
+  "tourLaunchGate": {
+    "apNotInstalled": "ArduPilot SITL ще не встановлено. Перейдіть до розділу SITL, щоб завантажити бінарний файл - тур продовжиться автоматично після підключення.",
+    "apNotSupported": "ArduPilot SITL не підтримується на цій платформі.",
+    "connectOwnFc": "Я під’єднаю власний FC",
+    "connectOwnToContinue": "Під’єднайте власний FC, щоб продовжити тур.",
+    "failedToStartSitl": "Не вдалося запустити SITL",
+    "goToSitlInstall": "Перейти до SITL для встановлення",
+    "intro": "Цей тур демонструє функції, яким потрібен робочий польотний контролер. Можна запустити безпечну симуляцію <b>{{sitl}}</b> або під’єднати власний FC.",
+    "launch": "Запустити {{sitl}}",
+    "needsVehicle": "Для туру потрібен апарат",
+    "notNow": "Не зараз",
+    "startingSitl": "Запуск SITL...",
+    "tcpConnectionFailed": "SITL запущено, але не вдалося встановити TCP-з’єднання"
+  },
+  "tourPanelsGate": {
+    "layoutAdjustment": "Зміна розкладки",
+    "missing": "Відсутні: <b>{{panels}}</b>",
+    "panelsNotInLayout": "Цей тур проходить панелями, яких немає у вашій поточній розкладці:",
+    "recommendedLayout": "рекомендована розкладка",
+    "skipTour": "Пропустити тур",
+    "switchPrompt": "Перейти на розкладку <b>{{preset}}</b> для туру? Поточну розкладку збережено - повернутися до неї можна будь-коли зі списку розкладок.",
+    "switchTo": "Перейти на {{preset}}"
+  },
+  "tourPrompt": {
+    "dontOfferAgain": "Більше не пропонувати тури",
+    "noThanks": "Ні, дякую",
+    "quickTour": "Короткий тур",
+    "remindLater": "Нагадати пізніше",
+    "showMe": "Показати"
+  }
+}
