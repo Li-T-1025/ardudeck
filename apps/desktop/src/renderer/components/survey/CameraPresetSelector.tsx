@@ -3,7 +3,7 @@
  */
 import { useState, useRef, useEffect } from 'react';
 import type { CameraPreset } from './survey-types';
-import { CAMERA_PRESET_GROUPS, CUSTOM_CAMERA, MANUAL_CAMERA } from './camera-presets';
+import { CAMERA_PRESET_GROUPS, CUSTOM_CAMERA, MAGNETOMETER_SENSOR, MANUAL_CAMERA } from './camera-presets';
 import { useSettingsStore } from '../../stores/settings-store';
 import { useTranslation } from 'react-i18next';
 
@@ -45,6 +45,7 @@ export function CameraPresetSelector({ value, onChange }: CameraPresetSelectorPr
 
   const isCustom = value.name === 'Custom';
   const isManual = value.name === 'Manual';
+  const isSensor = !!(value.lineSpacing && value.lineSpacing > 0);
 
   return (
     <div className="relative" ref={dropdownRef}>
@@ -52,14 +53,14 @@ export function CameraPresetSelector({ value, onChange }: CameraPresetSelectorPr
         onClick={() => { setIsOpen(!isOpen); setSearch(''); }}
         className="w-full px-3 py-2 text-left text-xs bg-surface-raised border border rounded-lg text-content hover:border transition-colors flex items-center justify-between"
       >
-        <span className="truncate">{isCustom ? t('survey:cameraPresets.custom') : isManual ? t('survey:cameraPresets.manual') : value.name}</span>
+        <span className="truncate">{isCustom ? t('survey:cameraPresets.custom') : isManual ? t('survey:cameraPresets.manual') : isSensor ? t('survey:cameraPresets.magnetometer') : value.name}</span>
         <svg className={`w-3.5 h-3.5 text-content-secondary transition-transform ${isOpen ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
         </svg>
       </button>
 
       {/* Sensor info summary */}
-      {!isCustom && !isManual && (
+      {!isCustom && !isManual && !isSensor && (
         <div className="mt-1 text-[10px] text-content-secondary leading-tight">
           {t('survey:cameraPresetSelector.sensorSummary', { sensorWidth: value.sensorWidth, sensorHeight: value.sensorHeight, focalLength: value.focalLength, imageWidth: value.imageWidth, imageHeight: value.imageHeight })}
         </div>
@@ -67,6 +68,11 @@ export function CameraPresetSelector({ value, onChange }: CameraPresetSelectorPr
       {isManual && (
         <div className="mt-1 text-[10px] text-content-secondary leading-tight">
           {t('survey:cameraPresetSelector.manualSummary')}
+        </div>
+      )}
+      {isSensor && (
+        <div className="mt-1 text-[10px] text-content-secondary leading-tight">
+          {t('survey:cameraPresetSelector.magnetometerSummary')}
         </div>
       )}
 
@@ -163,6 +169,15 @@ export function CameraPresetSelector({ value, onChange }: CameraPresetSelectorPr
             >
               <div className="font-medium">{t('survey:cameraPresetSelector.manualLabel')}</div>
               <div className="text-[10px] text-content-tertiary">{t('survey:cameraPresetSelector.manualHint')}</div>
+            </button>
+            <button
+              onClick={() => { onChange({ ...MAGNETOMETER_SENSOR }); setIsOpen(false); }}
+              className={`w-full px-3 py-1.5 text-left text-xs hover:bg-purple-600/20 transition-colors ${
+                isSensor ? 'text-purple-300 bg-purple-600/10' : 'text-content-secondary'
+              }`}
+            >
+              <div className="font-medium">{t('survey:cameraPresetSelector.magnetometerLabel')}</div>
+              <div className="text-[10px] text-content-tertiary">{t('survey:cameraPresetSelector.magnetometerHint')}</div>
             </button>
           </div>
         </div>

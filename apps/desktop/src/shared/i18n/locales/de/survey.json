@@ -10,13 +10,17 @@
     "manualTitle": "Keine Kamera: Linienabstand direkt festlegen (z. B. Schnittbreite eines Rovers/Rasenmähers)",
     "saved": "Gespeichert",
     "searchPlaceholder": "Kameras suchen...",
-    "sensorSummary": "{{sensorWidth}}x{{sensorHeight}}mm Sensor, {{focalLength}}mm, {{imageWidth}}x{{imageHeight}}px"
+    "sensorSummary": "{{sensorWidth}}x{{sensorHeight}}mm Sensor, {{focalLength}}mm, {{imageWidth}}x{{imageHeight}}px",
+    "magnetometerLabel": "Magnetometer",
+    "magnetometerHint": "Punktsensor: Linienabstand festlegen, keine Fotos",
+    "magnetometerSummary": "Punktsensor: Linienabstand direkt festgelegt, keine Kameraauslösung"
   },
   "cameraPresets": {
     "custom": "Benutzerdefiniert",
     "groupMultispectral": "Multispektral",
     "groupOther": "Sonstige",
-    "manual": "Manuell"
+    "manual": "Manuell",
+    "magnetometer": "Magnetometer"
   },
   "enginePlanLegend": {
     "coveragePlan": "Abdeckungsplan",
@@ -284,7 +288,12 @@
     "turnsPlaneTitle": "Starrflügler: das kürzere Linienende an jeder Wende verlängern für eine saubere 180°-Racetrack-Wende",
     "unlockShapeTip": "Form entsperren, damit sie wieder verschoben werden kann",
     "width": "Breite",
-    "zigzagHint": "Standard-Zickzackmuster. Der Rover wendet an jedem Linienende um 180°."
+    "zigzagHint": "Standard-Zickzackmuster. Der Rover wendet an jedem Linienende um 180°.",
+    "lineSpacingM": "Linienabstand (m)",
+    "sensorSpacingHint": "Abstand zwischen den Messlinien. Magnetometer-Vermessungen fliegen typischerweise 10 bis 50 m.",
+    "tieLines": "Kontrolllinien",
+    "tieLinesHint": "Eine Kontrolllinie quer dazu alle {{every}} Messlinien, nach ihnen geflogen. Damit werden die Linien untereinander abgeglichen.",
+    "tieLinesOff": "Aus. Magnetometer-Vermessungen setzen meist alle 5 bis 10 Linien eine."
   },
   "surveyMapOverlay": {
     "clickToAddControlPoint": "Klicken, um einen Kontrollpunkt hinzuzufügen",
@@ -319,7 +328,11 @@
       "description": "Bodenfahrzeug. Korridorbreite direkt festlegen.",
       "name": "Rover / Mäher"
     },
-    "savedPreset": "Gespeicherte Vorlage"
+    "savedPreset": "Gespeicherte Vorlage",
+    "magnetometer": {
+      "name": "Magnetometer",
+      "description": "Niedrig, langsam, konstante Höhe über Grund. Kontrolllinien zum Abgleich."
+    }
   },
   "surveyRegen": {
     "generatorNotInstalled": "Generator „{{generatorId}}“ nicht installiert",

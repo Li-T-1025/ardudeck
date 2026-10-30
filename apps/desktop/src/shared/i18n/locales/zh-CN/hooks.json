@@ -4,6 +4,7 @@
   },
   "useModeRequest": {
     "noResponse": "无回应",
-    "notSent": "未发送"
+    "notSent": "未发送",
+    "rejected": "已拒绝"
   }
 }

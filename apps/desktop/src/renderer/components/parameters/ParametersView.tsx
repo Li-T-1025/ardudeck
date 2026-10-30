@@ -676,7 +676,7 @@ export function ParametersView() {
               value={searchQuery}
               onChange={handleSearch}
               placeholder={t('parameters:parametersView.searchPlaceholder')}
-              className="w-full max-w-md px-4 py-2 pl-10 bg-surface border-subtle rounded-lg text-sm text-content placeholder-content-tertiary focus:outline-none focus:border-blue-500/50"
+              className="param-search w-full max-w-md px-4 py-2 pl-10 bg-surface border-subtle rounded-lg text-sm text-content placeholder-content-tertiary focus:outline-none focus:border-blue-500/50"
             />
             <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-content-secondary" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
@@ -901,7 +901,7 @@ export function ParametersView() {
             </div>
           </div>
         ) : (
-          <table className="w-full">
+          <table className="param-table w-full">
             <thead className="sticky top-0 bg-surface backdrop-blur border-b border-subtle">
               <tr className="text-left text-xs text-content-secondary uppercase tracking-wider">
                 <th className="px-4 py-3 font-medium w-[220px]">
@@ -1110,7 +1110,7 @@ export function ParametersView() {
             </div>
 
             <div className="flex-1 overflow-auto px-6 py-4">
-              <table className="w-full text-sm">
+              <table className="param-table w-full text-sm">
                 <thead>
                   <tr className="text-left text-xs text-content-secondary uppercase">
                     <th className="pb-2">{t('common:parameter')}</th>

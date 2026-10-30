@@ -1020,5 +1020,9 @@
     "title": "Videosender (VTX)",
     "whatIsVtx": "Was ist ein VTX?",
     "whatIsVtxBody": "<b>VTX (Videosender)</b> ist die Komponente, die Live-Video von der Kamera Ihrer Drohne an Ihre FPV-Brille oder Ihren Monitor sendet. Er sendet auf bestimmten Funkfrequenzen, auf die Ihre Brille eingestellt wird."
-  }
+  },
+  "paramsValidBitmask": "Der Bitmaskenwert muss eine nicht negative ganze Zahl sein",
+  "paramsValidUnknownValue": "Wert {{value}} steht nicht in der Liste der bekannten Werte",
+  "paramsValidRange": "Der Wert muss zwischen {{min}} und {{max}}{{units}} liegen",
+  "paramsValidIncrement": "Der Wert sollte ein Vielfaches von {{increment}} sein"
 }

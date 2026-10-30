@@ -27,10 +27,42 @@
     "workspaceLayouts": {
       "blurb": "Die Schaltfläche „Workspace“ wechselt zwischen Pilot, FPV und Mission, jeweils mit eigenen Panels, Cockpit-Instrumenten und Teilung. Speichern Sie eigene Layouts und teilen Sie sie als Datei.",
       "title": "Workspace-Layouts"
+    },
+    "sitl": {
+      "title": "Simulieren vor dem Flug",
+      "blurb": "Öffnen Sie SITL in der Leiste, wählen Sie ein Fahrzeug und starten Sie einen Simulator, oder wechseln Sie zu Schwarm, um eine Flotte zu starten. ArduDeck lädt die Firmware beim ersten Mal herunter und verbindet sich selbst."
+    },
+    "crsf": {
+      "title": "Telemetrie von einem ExpressLRS-Backpack",
+      "blurb": "Stellen Sie den ELRS-Telemetriemodus auf WiFi, verbinden Sie sich mit dem Backpack-Netz und verbinden Sie mit CRSF auf Port 14550. Funktioniert hinter jedem CRSF-Empfänger, ohne am Fluggerät etwas zu ändern. Für eine Zwei-Wege-Verbindung nutzen Sie stattdessen den MAVLink-Modus."
+    },
+    "cargo": {
+      "title": "Funktionen mit Cargo hinzufügen",
+      "blurb": "Mods listet das Cargo, das Sie hinzufügen können: installieren, aktualisieren oder entfernen. Installiertes Cargo bringt eigene Ansichten und Karten in die App."
+    },
+    "adjust": {
+      "title": "Im Flug anpassen",
+      "blurb": "Ändern Sie auf dem Telemetrie-Bildschirm Zielgeschwindigkeit, Höhe und Loiter-Radius, ohne die Flugansicht zu verlassen. Eine Änderung des Loiter-Radius wird vor dem Schreiben zur Prüfung angezeigt."
+    },
+    "language": {
+      "title": "ArduDeck spricht Ihre Sprache",
+      "blurb": "Einstellungen, Konfiguration, Sprache: English, Deutsch, 简体中文, 繁體中文 und Українська (Beta). System folgt Ihrem Computer."
     }
   },
   "splitDemo": {
     "split": "Teilen",
     "synthetic": "Synthetisch"
+  },
+  "releaseDemos": {
+    "launch": "Starten",
+    "connected": "Verbunden",
+    "install": "Installieren",
+    "installed": "Installiert",
+    "speed": "Geschw.",
+    "altitude": "Höhe",
+    "radius": "Loiter-Radius",
+    "review": "Prüfen",
+    "language": "Sprache",
+    "system": "System"
   }
 }

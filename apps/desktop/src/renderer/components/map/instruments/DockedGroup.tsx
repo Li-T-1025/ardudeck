@@ -755,7 +755,7 @@ export function DockedGroup({ gid, group }: { gid: string; group: DockGroup }): 
                 ? `flex ${row ? 'flex-row items-center' : 'flex-col items-start'} gap-1.5 p-1.5 ${stretched ? '' : 'rounded-xl'} bg-surface-overlay-light shadow-xl select-none`
                 : shapedGroup
                   ? `relative flex ${row ? 'flex-row items-center' : 'flex-col items-center'} ${trayish ? 'gap-1.5' : ''} select-none`
-                  : `flex ${row ? 'flex-row items-stretch' : 'flex-col items-stretch'} ${stretched ? '' : 'rounded-lg'} shadow-xl select-none overflow-hidden`)
+                  : `dock-card flex ${row ? 'flex-row items-stretch' : 'flex-col items-stretch'} ${stretched ? '' : 'rounded-lg'} shadow-xl select-none overflow-hidden`)
             }
             style={{
               ...chromeStyle,

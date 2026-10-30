@@ -217,6 +217,7 @@ export function SurveyConfigPanel() {
   const setGsd = useSurveyStore((s) => s.setGsd);
   const setEnduranceMinutes = useSurveyStore((s) => s.setEnduranceMinutes);
   const setCrossGridAltitudeOffset = useSurveyStore((s) => s.setCrossGridAltitudeOffset);
+  const setTieLineEvery = useSurveyStore((s) => s.setTieLineEvery);
   const setCorridorWidth = useSurveyStore((s) => s.setCorridorWidth);
   const setCorridorSectionLength = useSurveyStore((s) => s.setCorridorSectionLength);
   const setCorridorStrips = useSurveyStore((s) => s.setCorridorStrips);
@@ -410,6 +411,14 @@ export function SurveyConfigPanel() {
     setCamera(preset);
     setCameraNameDraft(null);
   }, [cameraNameDraft, customCamera, saveCameraPreset, setCamera]);
+
+  // Point sensor (magnetometer): no optics, the line spacing is set directly.
+  const isSensor = !!(config.camera.lineSpacing && config.camera.lineSpacing > 0);
+  const handleSensorSpacingChange = useCallback((value: number) => {
+    const updated = { ...config.camera, lineSpacing: value };
+    setCustomCamera(updated);
+    setCamera(updated);
+  }, [config.camera, setCamera]);
 
   const handleManualCorridorChange = useCallback((value: number) => {
     const updated = { ...customCamera, manualCorridorWidth: value };
@@ -958,6 +967,26 @@ export function SurveyConfigPanel() {
               </p>
             </div>
           )}
+
+          {/* Tie lines: perpendicular lines every N survey lines, used to level magnetometer data. */}
+          {config.pattern === 'grid' && !isManualCamera && (
+            <div className="mt-2">
+              <SliderInput
+                label={t('survey:surveyConfigPanel.tieLines')}
+                value={config.tieLineEvery ?? 0}
+                onChange={setTieLineEvery}
+                min={0}
+                max={20}
+                step={1}
+                unit=""
+              />
+              <p className="mt-1 text-[10px] text-content-tertiary leading-snug">
+                {(config.tieLineEvery ?? 0) > 0
+                  ? t('survey:surveyConfigPanel.tieLinesHint', { every: config.tieLineEvery })
+                  : t('survey:surveyConfigPanel.tieLinesOff')}
+              </p>
+            </div>
+          )}
         </Section>
         )}
 
@@ -1082,7 +1111,7 @@ export function SurveyConfigPanel() {
             )
           )}
           {isManualCamera && (
-            <div className="mt-2">
+            <div className="mt-2" data-tour="survey-width-source">
               <NumberInput
                 label={t('survey:surveyConfigPanel.corridorWidthM')}
                 value={customCamera.manualCorridorWidth ?? 1.5}
@@ -1093,6 +1122,21 @@ export function SurveyConfigPanel() {
               />
               <p className="mt-1 text-[10px] text-content-tertiary leading-snug">
                 {t('survey:surveyConfigPanel.manualWidthHint')}
+              </p>
+            </div>
+          )}
+          {isSensor && (
+            <div className="mt-2">
+              <NumberInput
+                label={t('survey:surveyConfigPanel.lineSpacingM')}
+                value={config.camera.lineSpacing ?? 25}
+                onChange={handleSensorSpacingChange}
+                min={1}
+                max={500}
+                step={1}
+              />
+              <p className="mt-1 text-[10px] text-content-tertiary leading-snug">
+                {t('survey:surveyConfigPanel.sensorSpacingHint')}
               </p>
             </div>
           )}
@@ -1380,6 +1424,7 @@ export function SurveyConfigPanel() {
                     {t('survey:surveyConfigPanel.leadInHint')}
                   </p>
                   <SliderInput
+                    data-tour="survey-turns"
                     label={t('survey:surveyConfigPanel.maxTurn')}
                     value={config.maxTurnAngle ?? 15}
                     onChange={setMaxTurnAngle}
@@ -1526,7 +1571,7 @@ export function SurveyConfigPanel() {
           </button>
           {advancedOpen && (
             <div className="mt-1 space-y-3 pl-2 border-l border-subtle">
-              {!isManualCamera && (
+              {!isManualCamera && !isSensor && (
                 <Section title={t('survey:surveyConfigPanel.overlap')}>
                   <div className="space-y-2">
                     <SliderInput label={t('survey:surveyConfigPanel.front')} value={config.frontOverlap} onChange={setFrontOverlap} min={10} max={95} step={1} unit="%" />
@@ -1620,7 +1665,7 @@ export function SurveyConfigPanel() {
                 </Section>
               )}
 
-              {!externalEngine && !isManualCamera && (config.pattern === 'grid' || config.pattern === 'crosshatch') && (
+              {!externalEngine && !isManualCamera && !isSensor && (config.pattern === 'grid' || config.pattern === 'crosshatch') && (
                 <div className="flex items-center justify-between px-1">
                   <span className="text-xs text-content-secondary" title={t('survey:surveyConfigPanel.cameraOffTitle')}>{t('survey:surveyConfigPanel.cameraOffOnTurns')}</span>
                   <button

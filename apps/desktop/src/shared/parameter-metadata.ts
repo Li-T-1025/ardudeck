@@ -3,6 +3,8 @@
  * Structures for ArduPilot parameter definitions from XML
  */
 
+import { t } from './i18n';
+
 export interface ParameterMetadata {
   name: string;
   humanName: string;
@@ -132,7 +134,7 @@ export function validateParameterValue(
     if (value < 0 || !Number.isInteger(value)) {
       return {
         valid: false,
-        error: 'Bitmask value must be a non-negative integer',
+        error: t('parameters:paramsValidBitmask'),
       };
     }
     return { valid: true };
@@ -145,7 +147,7 @@ export function validateParameterValue(
       // Warn but don't block - ArduPilot may accept values not in metadata
       return {
         valid: true,
-        warning: `Value ${value} is not in the known values list`,
+        warning: t('parameters:paramsValidUnknownValue', { value }),
       };
     }
     return { valid: true };
@@ -158,7 +160,11 @@ export function validateParameterValue(
     if (value < min || value > max) {
       return {
         valid: false,
-        error: `Value must be between ${min} and ${max}${metadata.units ? ` ${metadata.units}` : ''}`,
+        error: t('parameters:paramsValidRange', {
+          min,
+          max,
+          units: metadata.units ? ` ${metadata.units}` : '',
+        }),
       };
     }
   }
@@ -169,7 +175,7 @@ export function validateParameterValue(
     if (remainder > 0.0001 && Math.abs(remainder - metadata.increment) > 0.0001) {
       return {
         valid: true,
-        warning: `Value should be a multiple of ${metadata.increment}`,
+        warning: t('parameters:paramsValidIncrement', { increment: metadata.increment }),
       };
     }
   }

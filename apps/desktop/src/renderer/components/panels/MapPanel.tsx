@@ -1,6 +1,7 @@
 import { useTranslation } from 'react-i18next';
 import React, { useEffect, useLayoutEffect, useRef, useState, useCallback, useMemo } from 'react';
 import { MapContainer, TileLayer, Marker, Polyline, useMap, useMapEvents, Circle } from 'react-leaflet';
+import { Starfield } from '../tribute/Starfield';
 import { ModuleMapLayers, ModulePolygonPick, ModulePolygonPickBar } from './ModuleMapLayers';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
@@ -2816,6 +2817,9 @@ const TelemetryMap2D = React.memo(function TelemetryMap2D() {
           className="relative h-full min-w-0"
           style={{ flexGrow: splitTarget ? effectiveRatio : 1, flexBasis: 0 }}
         >
+      <div className="map-starfield pointer-events-none absolute inset-0 z-0 overflow-hidden">
+        <Starfield count={90} driftSeconds={40} />
+      </div>
       <MapContainer
         center={initialCenter}
         zoom={17}

@@ -1020,5 +1020,9 @@
     "title": "影像发射机 (VTX)",
     "whatIsVtx": "什么是 VTX?",
     "whatIsVtxBody": "<b>VTX（影像发射机）</b>是将无人机相机的实时影像发送到你的 FPV 护目镜或屏幕的组件。它会在特定的无线电频率上广播，你的护目镜会调到该频率。"
-  }
+  },
+  "paramsValidBitmask": "位掩码值必须是非负整数",
+  "paramsValidUnknownValue": "数值 {{value}} 不在已知数值列表中",
+  "paramsValidRange": "数值必须介于 {{min}} 与 {{max}}{{units}} 之间",
+  "paramsValidIncrement": "数值应为 {{increment}} 的倍数"
 }

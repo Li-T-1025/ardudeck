@@ -81,9 +81,15 @@ export const StickTestPanel: React.FC = () => {
   // it during the test because RC_CHANNELS_OVERRIDE doesn't satisfy ArduPilot's
   // "RC found" pre-arm gate even with force=21196.
   const savedArmingCheckRef = useRef<number | null>(null);
+  // Only what this panel itself started is undone on unmount; visiting the tab commands nothing.
+  const overrideActiveRef = useRef(false);
+  const armedByPanelRef = useRef(false);
+  const unmountedRef = useRef(false);
 
   const parameters = useParameterStore((s) => s.parameters);
   const setParameter = useParameterStore((s) => s.setParameter);
+  const setParameterRef = useRef(setParameter);
+  setParameterRef.current = setParameter;
   const mavType = useConnectionStore((s) => s.connectionState.mavType);
   const category = categoryFromMavType(mavType);
   const isRover = category === 'rover';
@@ -168,9 +174,18 @@ export const StickTestPanel: React.FC = () => {
       //    Plane 1100 = min) so it can't lurch on arm.
       setThrottle(throttleNeutral);
       const sendCentered = () => sendOverride(1500, 1500, throttleNeutral, 1500);
+      overrideActiveRef.current = true;
       sendCentered();
       preArmInterval = setInterval(sendCentered, SEND_INTERVAL_MS);
       await new Promise(resolve => setTimeout(resolve, 1000));
+
+      // The panel was closed while waiting: never arm a vehicle nobody is watching.
+      if (unmountedRef.current) {
+        if (preArmInterval) clearInterval(preArmInterval);
+        overrideActiveRef.current = false;
+        void window.electronAPI?.rcOverrideRelease?.();
+        return;
+      }
 
       // 4. Force-arm.
       const armOk = await window.electronAPI?.mavlinkArmDisarm?.(true, true);
@@ -178,15 +193,24 @@ export const StickTestPanel: React.FC = () => {
         setError(t('mavlink-config:stickTestPanel.errArm'));
         setBusy(false);
         if (preArmInterval) clearInterval(preArmInterval);
+        overrideActiveRef.current = false;
         void window.electronAPI?.rcOverrideRelease?.();
         return;
       }
+      if (unmountedRef.current) {
+        if (preArmInterval) clearInterval(preArmInterval);
+        void window.electronAPI?.rcOverrideRelease?.();
+        void window.electronAPI?.mavlinkArmDisarm?.(false, true);
+        return;
+      }
+      armedByPanelRef.current = true;
 
       // 5. Hand off streaming from the prearm interval to the active useEffect.
       if (preArmInterval) clearInterval(preArmInterval);
       setActive(true);
     } catch (e) {
       if (preArmInterval) clearInterval(preArmInterval);
+      overrideActiveRef.current = false;
       void window.electronAPI?.rcOverrideRelease?.();
       setError(e instanceof Error ? e.message : t('common:unknownError'));
     } finally {
@@ -202,6 +226,8 @@ export const StickTestPanel: React.FC = () => {
     setPitch(1500);
     setYaw(1500);
     try {
+      overrideActiveRef.current = false;
+      armedByPanelRef.current = false;
       await window.electronAPI?.rcOverrideRelease?.();
       await window.electronAPI?.mavlinkArmDisarm?.(false, true);
       // Restore ARMING_CHECK if we changed it.
@@ -214,19 +240,26 @@ export const StickTestPanel: React.FC = () => {
     }
   }, [setParameter, isRover]);
 
-  // Safety: release on unmount so we don't leave the FC armed with overrides
-  // and ARMING_CHECK relaxed if the user navigates away or closes the app.
+  // Runs once, on real unmount; never commands a vehicle the panel did not arm.
   useEffect(() => {
+    unmountedRef.current = false;
     return () => {
-      void window.electronAPI?.rcOverrideRelease?.();
-      void window.electronAPI?.mavlinkArmDisarm?.(false, true);
+      unmountedRef.current = true;
+      if (overrideActiveRef.current) {
+        overrideActiveRef.current = false;
+        void window.electronAPI?.rcOverrideRelease?.();
+      }
+      if (armedByPanelRef.current) {
+        armedByPanelRef.current = false;
+        void window.electronAPI?.mavlinkArmDisarm?.(false, true);
+      }
       const saved = savedArmingCheckRef.current;
       if (saved !== null) {
-        void setParameter('ARMING_CHECK', saved);
         savedArmingCheckRef.current = null;
+        void setParameterRef.current('ARMING_CHECK', saved);
       }
     };
-  }, [setParameter]);
+  }, []);
 
   if (category === 'copter') {
     return (

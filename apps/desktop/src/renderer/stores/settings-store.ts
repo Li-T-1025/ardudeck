@@ -288,7 +288,7 @@ export type DefaultSitlType = 'inav' | 'ardupilot' | 'px4';
  * Theme preference
  * 'dark' = dark theme (default), 'light' = light theme, 'system' = follow OS preference
  */
-export type ThemePreference = 'dark' | 'light' | 'system';
+export type ThemePreference = 'dark' | 'light' | 'system' | 'bridge';
 
 /**
  * App-level settings store

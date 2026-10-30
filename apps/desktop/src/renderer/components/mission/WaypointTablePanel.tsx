@@ -3847,7 +3847,7 @@ function WaypointHeadingField({ heading, readOnly, onCommit }: { heading: number
   };
 
   return (
-    <div className="mt-2">
+    <div className="mt-2" data-tour="waypoint-heading">
       <label className="block text-[11px] text-content-secondary mb-1">
         {t('mission:waypointTable.heading.label')} <span className="text-content-tertiary">(°)</span>
       </label>

@@ -14,6 +14,33 @@
     "trainer": "Trainer",
     "locus": "Locus",
     "weatherBriefing": "Wetterbriefing",
-    "productionLine": "Produktionslinie"
+    "productionLine": "Produktionslinie",
+    "themeBridge": "Bridge"
+  },
+  "short": {
+    "calibration": "KAL",
+    "cli": "CLI",
+    "companion": "COMP",
+    "firmware": "FW",
+    "inspector": "MAVLINK",
+    "library": "BIBLIO",
+    "locus": "LOCUS",
+    "logs": "LOGS",
+    "lua-graph": "LUA",
+    "mission": "MISSION",
+    "modules": "MODULE",
+    "osd": "OSD",
+    "parameters": "PARAM",
+    "production": "PRODUKT",
+    "radio-hud": "FUNK",
+    "recording": "AUFN",
+    "report": "MELDEN",
+    "settings": "SETUP",
+    "sitl": "SITL",
+    "telemetry": "TELEM",
+    "trainer": "TRAINER",
+    "tribute": "WIDMUNG",
+    "vault": "FLOTTE",
+    "weather": "WETTER"
   }
 }

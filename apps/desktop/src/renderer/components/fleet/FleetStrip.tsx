@@ -72,6 +72,7 @@ function FleetCard({ v, role, count = 0 }: { v: FleetVehicle; role?: 'leader' | 
         v.isActive ? 'border-cyan-500/50 bg-cyan-500/10' : 'border-subtle bg-surface hover:bg-surface-raised'
       }`}
       data-tip={v.isActive ? t('fleet:fleetStrip.deselectTip', { label: v.label }) : t(v.armed ? 'fleet:fleetStrip.vehicleTipArmed' : 'fleet:fleetStrip.vehicleTip', { label: v.label, mode: v.mode })}
+      data-tour="fleet-strip-vehicle"
     >
       {/* Identity colour bar - matches this vehicle's map marker + its waypoints */}
       <span className="absolute left-0 top-1 bottom-1 w-0.5 rounded-full" style={{ background: identityColor }} />

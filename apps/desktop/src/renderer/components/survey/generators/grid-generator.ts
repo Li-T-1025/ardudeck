@@ -78,6 +78,8 @@ export function generateGrid(config: SurveyConfig): SurveyResult {
   // waypoints. Also force overshoot=0 since it's a fixed-wing turn-radius
   // buffer that doesn't apply to skid-steer ground vehicles.
   const isManual = !!(camera.manualCorridorWidth && camera.manualCorridorWidth > 0);
+  // A point sensor (magnetometer) flies like a camera survey but takes no photos.
+  const noPhotos = isManual || !!(camera.lineSpacing && camera.lineSpacing > 0);
   const effectiveOvershoot = isManual ? 0 : overshoot;
 
   const origin = polygonCentroid(polygon);
@@ -200,7 +202,7 @@ export function generateGrid(config: SurveyConfig): SurveyResult {
 
     // Photo positions along the line — skipped in manual/ground-vehicle mode
     // since there's no camera and rendering thousands of dots tanks the map.
-    if (!isManual) {
+    if (!noPhotos) {
       const lineLength = Math.abs(endX - startX);
       const direction = endX > startX ? 1 : -1;
       const numPhotos = Math.max(1, Math.floor(lineLength / photoSpacing));
@@ -239,8 +241,33 @@ export function generateGrid(config: SurveyConfig): SurveyResult {
   });
 
   const stats = computeSurveyStats(config, waypoints, photoPositions, clippedLines.length);
+  const result: SurveyResult = { waypoints, photoPositions, footprints, stats, legStarts: legStarts.map((i) => i + leadShift) };
 
-  return { waypoints, photoPositions, footprints, stats, legStarts: legStarts.map((i) => i + leadShift) };
+  const every = Math.round(config.tieLineEvery ?? 0);
+  return !isManual && config.pattern === 'grid' && every > 0 ? withTieLines(config, result, lineSpacing * every) : result;
+}
+
+/**
+ * Appends perpendicular tie lines (spacing `tieSpacing`) after the survey lines, entered from the
+ * end nearest the last survey line. Same altitude reference, overshoot and hole routing.
+ */
+function withTieLines(config: SurveyConfig, main: SurveyResult, tieSpacing: number): SurveyResult {
+  const last = main.waypoints[main.waypoints.length - 1];
+  if (!last) return main;
+  const tieCamera: SurveyConfig['camera'] = { ...config.camera, lineSpacing: tieSpacing };
+  const tieConfig = (flipLegs: boolean): SurveyConfig => ({
+    ...config, camera: tieCamera, gridAngle: (config.gridAngle + 90) % 360, tieLineEvery: 0, leadIn: 0, flipLegs, invertPath: false,
+  });
+  const dist = (a: LatLng, b: LatLng) => Math.hypot((a.lat - b.lat) * 111320, (a.lng - b.lng) * 111320 * Math.cos((a.lat * Math.PI) / 180));
+  const options = [generateGrid(tieConfig(false)), generateGrid(tieConfig(true))].filter((r) => r.waypoints.length > 0);
+  if (!options.length) return main;
+  const ties = options.reduce((best, r) => (dist(last, r.waypoints[0]!) < dist(last, best.waypoints[0]!) ? r : best));
+  const junction = routeTransitLatLng(last, ties.waypoints[0]!, config.holes ?? []);
+  const waypoints = [...main.waypoints, ...junction, ...ties.waypoints];
+  const shift = main.waypoints.length + junction.length;
+  const tieStarts = (ties.legStarts ?? []).map((i) => i + shift);
+  const stats = computeSurveyStats(config, waypoints, main.photoPositions, main.stats.lineCount + ties.stats.lineCount);
+  return { ...main, waypoints, stats, legStarts: [...(main.legStarts ?? []), ...tieStarts], tieLineStarts: tieStarts };
 }
 
 /** Shoelace signed area of a local ring; sign indicates winding. */

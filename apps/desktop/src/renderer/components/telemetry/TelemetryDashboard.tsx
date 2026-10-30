@@ -895,7 +895,7 @@ function QuickStatsBar({ trailing }: { trailing?: ReactNode }) {
   }
 
   return (
-    <div className={`shrink-0 px-4 py-2 flex items-center justify-between border-b ${
+    <div className={`quick-stats shrink-0 px-4 py-2 flex items-center justify-between border-b ${
       flight.armed
         ? 'bg-red-500/10 border-red-500/30'
         : 'bg-surface border-subtle'
@@ -911,28 +911,28 @@ function QuickStatsBar({ trailing }: { trailing?: ReactNode }) {
         </span>
       </div>
       <div className="flex items-center gap-6 text-xs">
-        <div className="flex items-baseline gap-1.5">
-          <span className="text-content-secondary">{t('telemetry:quickStats.hdg')}</span>
+        <div className="quick-stat flex items-baseline gap-1.5">
+          <span className="quick-stat-label text-content-secondary">{t('telemetry:quickStats.hdg')}</span>
           <span className="font-mono text-sm text-content">{stat(`${vfrHud.heading.toFixed(0)}°`)}</span>
         </div>
-        <div className="flex items-baseline gap-1.5">
-          <span className="text-content-secondary">{t('telemetry:quickStats.alt')}</span>
+        <div className="quick-stat flex items-baseline gap-1.5">
+          <span className="quick-stat-label text-content-secondary">{t('telemetry:quickStats.alt')}</span>
           <span className="font-mono text-sm text-content">{stat(formatAltitudeFromMeters(vfrHud.alt, altitudeUnit))}</span>
         </div>
-        <div className="flex items-baseline gap-1.5">
-          <span className="text-content-secondary">{t('telemetry:quickStats.spd')}</span>
+        <div className="quick-stat flex items-baseline gap-1.5">
+          <span className="quick-stat-label text-content-secondary">{t('telemetry:quickStats.spd')}</span>
           <span className="font-mono text-sm text-content">{stat(formatSpeedFromMetersPerSecond(vfrHud.groundspeed, speedUnit))}</span>
         </div>
-        <div className="flex items-baseline gap-1.5">
-          <span className="text-content-secondary">{t('telemetry:quickStats.thr')}</span>
+        <div className="quick-stat flex items-baseline gap-1.5">
+          <span className="quick-stat-label text-content-secondary">{t('telemetry:quickStats.thr')}</span>
           <span className="font-mono text-sm text-content">{stat(`${vfrHud.throttle}%`)}</span>
         </div>
-        <div className="flex items-baseline gap-1.5">
-          <span className="text-content-secondary">{t('telemetry:quickStats.bat')}</span>
+        <div className="quick-stat flex items-baseline gap-1.5">
+          <span className="quick-stat-label text-content-secondary">{t('telemetry:quickStats.bat')}</span>
           <span className={`font-mono text-sm ${batteryColor}`}>{stat(`${battery.voltage.toFixed(1)}V`)}</span>
         </div>
-        <div className="flex items-baseline gap-1.5">
-          <span className="text-content-secondary">{t('telemetry:quickStats.sat')}</span>
+        <div className="quick-stat flex items-baseline gap-1.5">
+          <span className="quick-stat-label text-content-secondary">{t('telemetry:quickStats.sat')}</span>
           <span className={`font-mono text-sm ${satColor}`}>{stat(String(gps.satellites))}</span>
         </div>
         {unhealthySensors.length > 0 && (

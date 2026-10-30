@@ -760,5 +760,7 @@
     "decimals_other": "{{count}} decimals",
     "secondDecimals_one": "Seconds with {{count}} decimal",
     "secondDecimals_other": "Seconds with {{count}} decimals"
-  }
+  },
+  "themeTitle": "Theme",
+  "themeHint": "Changes the colours across every screen."
 }

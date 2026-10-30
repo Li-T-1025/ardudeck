@@ -6,6 +6,8 @@ import { DraftNumberInput } from '../../hooks/useNumericDraft';
 import { TileCacheCard } from './TileCacheCard';
 import { UnitSelectionCard } from './UnitSelectionCard';
 import { LanguageCard } from './LanguageCard';
+import { ThemeCard } from './ThemeCard';
+import { DedicationPlaque } from '../tribute/DedicationPlaque';
 import { TrafficSettingsCard } from './TrafficSettingsCard';
 import { GroupShapeCard } from './GroupShapeCard';
 import { useSettingsStore, type VehicleProfile, type VehicleType, type ExperienceLevel, type UiVisibility } from '../../stores/settings-store';
@@ -1713,6 +1715,7 @@ export function SettingsView() {
           </div>
 
           <LanguageCard />
+          <ThemeCard />
           <UnitSelectionCard />
 
           {/* Experience Level & UI Visibility */}
@@ -2698,6 +2701,10 @@ function AboutSection() {
       <div className="flex items-center gap-2 mb-4">
         <div className="w-1.5 h-5 bg-content-secondary rounded-full" />
         <h2 className="text-sm font-medium text-content uppercase tracking-wider">{t('settings:settingsView.about.title')}</h2>
+      </div>
+
+      <div className="mb-4">
+        <DedicationPlaque />
       </div>
 
       <section className="bg-gradient-to-br from-surface to-surface-base rounded-xl border border-subtle p-5">

@@ -11,7 +11,7 @@ export function SpeedPanel() {
   const speedLabel = UNIT_LABELS.speed[speedUnit];
 
   return (
-    <PanelContainer>
+    <PanelContainer accent="navigation">
       <div className="space-y-1">
         <StatRow label={t('panels:speedPanel.ground')} value={formatNumber(speedValueFromMetersPerSecond(vfrHud.groundspeed, speedUnit), 1)} unit={speedLabel} highlight />
         <StatRow label={t('panels:speedPanel.air')} value={formatNumber(speedValueFromMetersPerSecond(vfrHud.airspeed, speedUnit), 1)} unit={speedLabel} />

@@ -4,6 +4,7 @@
   },
   "useModeRequest": {
     "noResponse": "Немає відповіді",
-    "notSent": "Не надіслано"
+    "notSent": "Не надіслано",
+    "rejected": "Відхилено"
   }
 }

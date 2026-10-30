@@ -12,6 +12,8 @@ import { OsLinkPanel } from './components/connection/OsLinkPanel';
 import { useOsIntegrationStore } from './stores/os-integration-store';
 import { TelemetryDashboard } from './components/telemetry/TelemetryDashboard';
 import { NavigationRail } from './components/navigation/NavigationRail';
+import { BridgeElbow, useBridge } from './components/bridge/BridgeFrame';
+import { WarpStarfield } from './components/tribute/WarpStarfield';
 import { ParametersView } from './components/parameters/ParametersView';
 import { DeepLinkInstallPrompt } from './components/modules/DeepLinkInstallPrompt';
 import { MissionPlanningView } from './components/mission';
@@ -350,6 +352,7 @@ function CollapsedSidebar({ onExpand }: { onExpand: () => void }) {
 }
 
 function App() {
+  const bridge = useBridge();
   const { t } = useTranslation();
   // Mirror the main-process connection registry into the active-vehicle store
   // (vehicle discovery/loss, active selection). Single-vehicle behavior is
@@ -1158,10 +1161,11 @@ function App() {
       }
       // Default welcome screen for telemetry
       return (
-        <div className="h-full flex items-center justify-center p-8">
-          <div className="text-center max-w-2xl">
+        <div className="welcome-wrap relative min-h-full flex items-center justify-center p-8">
+          {bridge && <div className="absolute inset-0 overflow-hidden pointer-events-none"><WarpStarfield /></div>}
+          <div className="welcome-hero relative text-center max-w-2xl">
             {/* Logo */}
-            <div className="mx-auto w-48 h-48 mb-6 rounded-3xl overflow-hidden">
+            <div className="welcome-logo mx-auto w-48 h-48 mb-6 rounded-3xl overflow-hidden">
               {/* i18n-exempt */}
               <img src={logoImage} alt="ArduDeck" className="w-full h-full object-cover" />
             </div>
@@ -1273,7 +1277,8 @@ function App() {
       <ProfileApplyOverlay />
       <ParameterCompareModalRoot />
       <WiringCheckPrompt />
-      <div className="flex h-full">
+      <div className={bridge ? 'bridge-frame' : 'flex h-full'}>
+        {bridge && <BridgeElbow position="top" />}
         {/* Navigation Rail */}
         <NavigationRail onViewChange={handleViewChange} />
 
@@ -1308,6 +1313,7 @@ function App() {
             {renderMainContent()}
           </ErrorBoundary>
         </main>
+        {bridge && <BridgeElbow position="bottom" />}
       </div>
 
       {/* Deep-link module install prompt (ardudeck://install) */}

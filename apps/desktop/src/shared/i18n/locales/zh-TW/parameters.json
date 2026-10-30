@@ -1020,5 +1020,9 @@
     "title": "影像發射機 (VTX)",
     "whatIsVtx": "什麼是 VTX?",
     "whatIsVtxBody": "<b>VTX(影像發射機)</b>是將無人機相機的即時影像傳送到你的 FPV 護目鏡或螢幕的元件。它會在特定的無線電頻率上廣播,你的護目鏡會調到該頻率。"
-  }
+  },
+  "paramsValidBitmask": "位元遮罩值必須是非負整數",
+  "paramsValidUnknownValue": "數值 {{value}} 不在已知數值清單中",
+  "paramsValidRange": "數值必須介於 {{min}} 與 {{max}}{{units}} 之間",
+  "paramsValidIncrement": "數值應為 {{increment}} 的倍數"
 }

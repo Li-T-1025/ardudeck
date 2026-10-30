@@ -5,6 +5,7 @@ import { MediaGallery } from '../camera/MediaGallery';
 import { useNavigationStore, type ViewId } from '../../stores/navigation-store';
 import { useConnectionStore } from '../../stores/connection-store';
 import { useSettingsStore, type ThemePreference } from '../../stores/settings-store';
+import { useTributeStore } from '../../stores/tribute-store';
 import { isViewAvailable, useEnabledCapabilitySlugs, CARGO_VIEWS } from '../../modules/capabilities';
 import { viewBodyRegistry } from '../../modules/module-extension-registries';
 import { useTrainerAvailable, useTrainerStore } from '../../stores/trainer-store';
@@ -315,7 +316,7 @@ export function NavigationRail({ onViewChange }: NavigationRailProps) {
   };
 
   return (
-    <nav className="w-14 h-full bg-surface-nav border-r border-subtle flex flex-col items-center py-3 gap-1">
+    <nav className="nav-rail w-14 h-full bg-surface-nav border-r border-subtle flex flex-col items-center py-3 gap-1">
       {/* Active navigation items */}
       {visibleNavItems.map((item) => (
         <button
@@ -323,7 +324,7 @@ export function NavigationRail({ onViewChange }: NavigationRailProps) {
           onClick={() => !item.disabled && (item.action ? item.action() : handleClick(item.id))}
           disabled={item.disabled}
           className={`
-            relative w-10 h-10 rounded-lg flex items-center justify-center
+            nav-rail-item relative w-10 h-10 rounded-lg flex items-center justify-center
             transition-all duration-200 group
             ${item.disabled
               ? 'text-content-disabled cursor-not-allowed'
@@ -339,6 +340,7 @@ export function NavigationRail({ onViewChange }: NavigationRailProps) {
             <div className="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-5 bg-blue-400 rounded-r" />
           )}
           {item.icon}
+          <span className="nav-rail-short">{t(`navigation:short.${item.id}`)}</span>
 
           {/* Tooltip */}
           <div className={`absolute left-full ml-2 px-2 py-1 bg-surface-solid text-xs rounded opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all whitespace-nowrap z-50 shadow-lg ${item.disabled ? 'text-content-tertiary' : 'text-content'}`}>
@@ -375,11 +377,13 @@ export function NavigationRail({ onViewChange }: NavigationRailProps) {
       {/* Theme toggle */}
       <ThemeToggle />
 
+      <TributeStar />
+
       {/* Report Bug button */}
       <button
         onClick={() => handleClick('report')}
         className={`
-          relative w-10 h-10 rounded-lg flex items-center justify-center
+          nav-rail-util relative w-10 h-10 rounded-lg flex items-center justify-center
           transition-all duration-200 group mb-2
           ${currentView === 'report'
             ? 'bg-red-500/20 text-red-400'
@@ -394,6 +398,7 @@ export function NavigationRail({ onViewChange }: NavigationRailProps) {
         <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
         </svg>
+        <span className="nav-rail-short">{t('navigation:short.report')}</span>
         <div className="absolute left-full ml-2 px-2 py-1 bg-surface-solid text-content text-xs rounded opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all whitespace-nowrap z-50 shadow-lg">
           {t('navigation:navigationRail.reportBug')}
         </div>
@@ -410,12 +415,13 @@ function MediaButton() {
     <>
       <button
         onClick={() => setOpen(true)}
-        className={`relative w-10 h-10 rounded-lg flex items-center justify-center transition-all duration-200 group mb-1 ${
+        className={`nav-rail-util relative w-10 h-10 rounded-lg flex items-center justify-center transition-all duration-200 group mb-1 ${
           open ? 'bg-blue-500/20 text-blue-400' : 'text-content-tertiary hover:text-content-secondary hover:bg-surface-raised'
         }`}
         title={t('camera:gallery.title')}
       >
         <Film className="w-5 h-5" strokeWidth={1.5} />
+        <span className="nav-rail-short">{t('navigation:short.recording')}</span>
         <div className="absolute left-full ml-2 px-2 py-1 bg-surface-solid text-content text-xs rounded opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all whitespace-nowrap z-50 shadow-lg">
           {t('camera:gallery.title')}
         </div>
@@ -425,12 +431,32 @@ function MediaButton() {
   );
 }
 
-const THEME_CYCLE: ThemePreference[] = ['dark', 'light', 'system'];
+const THEME_CYCLE: ThemePreference[] = ['dark', 'light', 'system', 'bridge'];
 const THEME_LABEL_KEYS: Record<ThemePreference, string> = {
   dark: 'navigation:navigationRail.themeDark',
   light: 'navigation:navigationRail.themeLight',
   system: 'navigation:navigationRail.themeSystem',
+  bridge: 'navigation:navigationRail.themeBridge',
 };
+
+function TributeStar() {
+  const { t } = useTranslation();
+  const openBanner = useTributeStore((s) => s.openBanner);
+
+  return (
+    <button
+      onClick={openBanner}
+      className="nav-rail-util relative w-10 h-10 rounded-lg flex items-center justify-center transition-all duration-200 text-content-tertiary hover:text-amber-400 hover:bg-surface-raised mb-1"
+      title={t('tribute:banner.reopen')}
+      aria-label={t('tribute:banner.reopen')}
+    >
+      <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} aria-hidden="true">
+        <path d="M12 2l2.9 6.9 7.1.6-5.4 4.7 1.7 7-6.3-3.9-6.3 3.9 1.7-7L2 9.5l7.1-.6z" />
+      </svg>
+      <span className="nav-rail-short">{t('navigation:short.tribute')}</span>
+    </button>
+  );
+}
 
 function ThemeToggle() {
   const { t } = useTranslation();
@@ -446,7 +472,7 @@ function ThemeToggle() {
   return (
     <button
       onClick={cycle}
-      className="relative w-10 h-10 rounded-lg flex items-center justify-center transition-all duration-200 group text-content-tertiary hover:text-content-secondary hover:bg-surface-raised mb-1"
+      className="nav-rail-util relative w-10 h-10 rounded-lg flex items-center justify-center transition-all duration-200 group text-content-tertiary hover:text-content-secondary hover:bg-surface-raised mb-1"
       title={t(THEME_LABEL_KEYS[theme])}
     >
       {theme === 'dark' && (
@@ -464,6 +490,15 @@ function ThemeToggle() {
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
         </svg>
       )}
+      {theme === 'bridge' && (
+        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 21a9 9 0 110-18c4.97 0 9 3.58 9 8 0 2.21-1.79 4-4 4h-1.5a1.5 1.5 0 00-1.06 2.56A1.5 1.5 0 0112 21z" />
+          <circle cx="7.5" cy="11" r="1" fill="currentColor" stroke="none" />
+          <circle cx="11" cy="7.5" r="1" fill="currentColor" stroke="none" />
+          <circle cx="15.5" cy="9" r="1" fill="currentColor" stroke="none" />
+        </svg>
+      )}
+      <span className="nav-rail-short">{t(THEME_LABEL_KEYS[theme])}</span>
       <div className="absolute left-full ml-2 px-2 py-1 bg-surface-solid text-content text-xs rounded opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all whitespace-nowrap z-50 shadow-lg">
         {t(THEME_LABEL_KEYS[theme])}
       </div>

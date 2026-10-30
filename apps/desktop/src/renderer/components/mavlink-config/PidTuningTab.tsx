@@ -166,6 +166,7 @@ const PidTuningTab: React.FC = () => {
     <div className="space-y-5">
       <DraggableSlider
         label={t('mavlink-config:pidTuningTab.pLabel')}
+        bridgeIndex={0}
         value={Math.round(values.p * axisScheme.pScale)}
         onChange={(v) => handlePidChange(axis.p, v / axisScheme.pScale)}
         min={0}
@@ -176,6 +177,7 @@ const PidTuningTab: React.FC = () => {
       />
       <DraggableSlider
         label={t('mavlink-config:pidTuningTab.iLabel')}
+        bridgeIndex={1}
         value={Math.round(values.i * axisScheme.iScale)}
         onChange={(v) => handlePidChange(axis.i, v / axisScheme.iScale)}
         min={0}
@@ -186,6 +188,7 @@ const PidTuningTab: React.FC = () => {
       />
       <DraggableSlider
         label={t('mavlink-config:pidTuningTab.dLabel')}
+        bridgeIndex={2}
         value={Math.round(values.d * axisScheme.dScale)}
         onChange={(v) => handlePidChange(axis.d, v / axisScheme.dScale)}
         min={0}
@@ -197,6 +200,7 @@ const PidTuningTab: React.FC = () => {
       {axisScheme.hasFF && axis.ff && (
         <DraggableSlider
           label={t('mavlink-config:pidTuningTab.ffLabel')}
+        bridgeIndex={3}
           value={Math.round(values.ff * axisScheme.ffScale)}
           onChange={(v) => handlePidChange(axis.ff!, v / axisScheme.ffScale)}
           min={0}

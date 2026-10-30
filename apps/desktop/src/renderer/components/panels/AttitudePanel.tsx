@@ -195,7 +195,7 @@ export const AttitudePanel = React.memo(function AttitudePanel() {
   }, [attitude.roll, attitude.pitch, attitude.yaw, vfrHud.heading]);
 
   return (
-    <PanelContainer className="flex flex-col items-center justify-center">
+    <PanelContainer accent="attitude" className="flex flex-col items-center justify-center">
       <AttitudeIndicator
         roll={throttled.roll}
         pitch={throttled.pitch}

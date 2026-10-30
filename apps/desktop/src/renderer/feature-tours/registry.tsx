@@ -64,11 +64,20 @@ function itemStep(tabId: string, textKey: string): FeatureTourStep {
   };
 }
 
+// The Quick Setup tour never moves the wizard between steps: ApplyStep writes the
+// preset to the board on mount. Steps 2 to 5 only show when that step is already open.
+const quickSetupStep = (anchor: string, k: string): FeatureTourStep => ({
+  selector: `[data-tour="${anchor}"]`,
+  predicate: present(`[data-tour="${anchor}"]`),
+  content: <TourText k={k} />,
+});
+
 export const FEATURE_TOURS: FeatureTour[] = [
   {
-    id: 'mission-planning-alpha32',
+    // id bumped for 1.2: the corridor step was rewritten and turns, projects and heading added
+    id: 'mission-planning-v012',
     view: 'mission',
-    version: '0.0.32',
+    version: '0.1.2',
     titleKey: 'feature-tours:registry.missionPlanning.title',
     blurbKey: 'feature-tours:registry.missionPlanning.blurb',
     cleanup: () => useSurveyMenuStore.getState().setOpen(false),
@@ -96,6 +105,12 @@ export const FEATURE_TOURS: FeatureTour[] = [
         content: <TourText k="missionPlanning.areaSurvey" />,
       },
       {
+        selector: '[data-tour="survey-turns"]',
+        predicate: present('[data-tour="survey-turns"]'),
+        setup: () => useSurveyMenuStore.getState().setOpen(false),
+        content: <TourText k="missionPlanning.turns" />,
+      },
+      {
         selector: '[data-tour="mission-import"]',
         predicate: present('[data-tour="mission-import"]'),
         setup: () => useSurveyMenuStore.getState().setOpen(false),
@@ -105,6 +120,11 @@ export const FEATURE_TOURS: FeatureTour[] = [
         selector: '[data-tour="mission-export"]',
         predicate: present('[data-tour="mission-export"]'),
         content: <TourText k="missionPlanning.export" />,
+      },
+      {
+        selector: '[data-tour="waypoint-heading"]',
+        predicate: present('[data-tour="waypoint-heading"]'),
+        content: <TourText k="missionPlanning.heading" />,
       },
       {
         selector: '[data-tour="mission-history"]',
@@ -383,6 +403,35 @@ export const FEATURE_TOURS: FeatureTour[] = [
         content: <TourText k="libraryProjects.tabs" />,
       },
     ],
+  },
+  {
+    id: 'quick-setup-msp-v012',
+    view: 'parameters',
+    version: '0.1.2',
+    titleKey: 'feature-tours:registry.quickSetup.title',
+    blurbKey: 'feature-tours:registry.quickSetup.blurb',
+    predicate: present('[data-tour="msp-quick-setup"]'),
+    steps: [
+      quickSetupStep('msp-quick-setup', 'quickSetup.launch'),
+      quickSetupStep('quick-setup-presets', 'quickSetup.presets'),
+      quickSetupStep('quick-setup-transmitter', 'quickSetup.transmitter'),
+      quickSetupStep('quick-setup-review', 'quickSetup.review'),
+      quickSetupStep('quick-setup-apply', 'quickSetup.apply'),
+    ],
+  },
+  {
+    id: 'fleet-focus-v012',
+    view: 'telemetry',
+    version: '0.1.2',
+    titleKey: 'feature-tours:registry.fleetFocus.title',
+    blurbKey: 'feature-tours:registry.fleetFocus.blurb',
+    requires: { connection: true },
+    predicate: present('[data-tour="fleet-strip-vehicle"]'),
+    steps: ['pick', 'tools', 'switch'].map((k) => ({
+      selector: '[data-tour="fleet-strip-vehicle"]',
+      predicate: present('[data-tour="fleet-strip-vehicle"]'),
+      content: <TourText k={`fleetFocus.${k}`} />,
+    })),
   },
 ];
 

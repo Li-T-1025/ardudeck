@@ -2488,6 +2488,7 @@ export function MspConfigView() {
           <div className="flex items-center gap-3">
             {/* Quick Setup Button */}
             <button
+              data-tour="msp-quick-setup"
               onClick={() => openQuickSetup('msp', connectionState.fcVariant || undefined, connectionState.fcVersion || undefined)}
               className="px-4 py-2 text-sm font-medium rounded-lg bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-500 hover:to-purple-500 text-white shadow-lg shadow-blue-500/20 flex items-center gap-2 transition-all"
             >

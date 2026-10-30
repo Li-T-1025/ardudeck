@@ -116,7 +116,8 @@
     "theme": {
       "dark": "Theme: Dark (click for Light)",
       "light": "Theme: Light (click for System)",
-      "system": "Theme: System (click for Dark)"
+      "system": "Theme: System (click for Dark)",
+      "bridge": "Bridge"
     },
     "tool": {
       "branch": "Branch: select a corridor, draw a fork off it (double-click to finish)",

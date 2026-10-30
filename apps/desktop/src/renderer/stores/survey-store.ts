@@ -150,6 +150,8 @@ interface SurveyStore {
   setEnduranceMinutes: (minutes: number) => void;
   /** Crosshatch second-pass altitude offset, % of relative altitude. */
   setCrossGridAltitudeOffset: (percent: number) => void;
+  /** Grid only: one perpendicular tie line every N survey lines; 0 = off. */
+  setTieLineEvery: (every: number) => void;
   // Corridor pattern tuning
   setCorridorWidth: (meters: number) => void;
   /** Length of one flight's stretch along the centreline, or null for auto. */
@@ -736,6 +738,11 @@ export const useSurveyStore = create<SurveyStore>()(subscribeWithSelector((set, 
   setCrossGridAltitudeOffset: (percent) => {
     const clamped = Math.max(0, Math.min(100, Math.round(percent)));
     set({ config: { ...get().config, crossGridAltitudeOffset: clamped } });
+    get().requestRecompute();
+  },
+
+  setTieLineEvery: (every) => {
+    set({ config: { ...get().config, tieLineEvery: Math.max(0, Math.min(50, Math.round(every))) } });
     get().requestRecompute();
   },
 

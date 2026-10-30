@@ -15,10 +15,8 @@ export function getEffectiveFootprint(
   camera: CameraPreset,
   altitude: number,
 ): { width: number; height: number } {
-  if (camera.manualCorridorWidth && camera.manualCorridorWidth > 0) {
-    const w = camera.manualCorridorWidth;
-    return { width: w, height: w };
-  }
+  const direct = camera.lineSpacing ?? camera.manualCorridorWidth;
+  if (direct && direct > 0) return { width: direct, height: direct };
   return calculateFootprint(camera.sensorWidth, camera.sensorHeight, camera.focalLength, altitude);
 }
 
@@ -37,10 +35,8 @@ export function getEffectiveSpacing(
   frontOverlap: number,
   sideOverlap: number,
 ): { lineSpacing: number; photoSpacing: number } {
-  if (camera.manualCorridorWidth && camera.manualCorridorWidth > 0) {
-    const w = camera.manualCorridorWidth;
-    return { lineSpacing: w, photoSpacing: w };
-  }
+  const direct = camera.lineSpacing ?? camera.manualCorridorWidth;
+  if (direct && direct > 0) return { lineSpacing: direct, photoSpacing: direct };
   return calculateSpacing(footprintWidth, footprintHeight, frontOverlap, sideOverlap);
 }
 
@@ -145,7 +141,7 @@ export function computeSurveyStats(
 ): SurveyStats {
   const { camera, altitude, speed } = config;
   // GSD is meaningless without a real camera; report 0 in manual mode.
-  const isManual = !!(camera.manualCorridorWidth && camera.manualCorridorWidth > 0);
+  const isManual = !!(camera.manualCorridorWidth && camera.manualCorridorWidth > 0) || !!(camera.lineSpacing && camera.lineSpacing > 0);
   const gsd = isManual ? 0 : calculateGSD(camera.sensorWidth, camera.focalLength, camera.imageWidth, altitude);
   const { width: footprintWidth, height: footprintHeight } = getEffectiveFootprint(camera, altitude);
   const { lineSpacing, photoSpacing } = getEffectiveSpacing(

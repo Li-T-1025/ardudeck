@@ -34,7 +34,7 @@ export function GpsPanel() {
   const gps2 = useTelemetryStore((s) => s.gps2);
 
   return (
-    <PanelContainer>
+    <PanelContainer accent="navigation">
       <div className="space-y-3">
         <GpsReadout gps={gps} label={gps2 ? t('panels:gpsPanel.receiverN', { n: 1 }) : undefined} />
         {gps2 && (

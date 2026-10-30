@@ -175,10 +175,10 @@ export const QuickSetupWizard: React.FC = () => {
 
         {/* Content area */}
         <div className="flex-1 overflow-y-auto p-6">
-          {currentStep === 'welcome' && <PresetSelectionStep />}
-          {currentStep === 'transmitter' && <TransmitterCheckStep />}
-          {currentStep === 'review' && <ConfigReviewStep />}
-          {currentStep === 'apply' && <ApplyStep />}
+          {currentStep === 'welcome' && <div data-tour="quick-setup-presets"><PresetSelectionStep /></div>}
+          {currentStep === 'transmitter' && <div data-tour="quick-setup-transmitter"><TransmitterCheckStep /></div>}
+          {currentStep === 'review' && <div data-tour="quick-setup-review"><ConfigReviewStep /></div>}
+          {currentStep === 'apply' && <div data-tour="quick-setup-apply"><ApplyStep /></div>}
         </div>
       </div>
     </div>

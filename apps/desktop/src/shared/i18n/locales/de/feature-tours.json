@@ -63,14 +63,14 @@
         "body": "Planen Sie nach <b>GSD</b> (cm/px), statt die Höhe zu raten, sehen Sie Live-Schätzungen für <b>Akku und Daten</b>, und teilen Sie einen großen Auftrag mit einem Klick in <b>akkugerechte Einsätze</b> auf. Crosshatch kann seine beiden Durchgänge sogar in <b>zwei verschiedenen Höhen</b> fliegen, für besseres 3D.",
         "title": "Intelligentere Flächenvermessung"
       },
-      "blurb": "Gruppierte Missionen, Korridorvermessung, GSD-basierte Planung, GIS-Import, Export in mehreren Formaten und vollständiges Rückgängigmachen - alles im Planer.",
+      "blurb": "Gruppierte Missionen, Korridor- und Flächenvermessung mit passenden Wenden, GIS-Import, Projekte, Wegpunkt-Kurs und vollständiges Rückgängig.",
       "corridor": {
-        "body": "Wählen Sie unter der Schaltfläche <b>Survey</b> die Option <b>Corridor</b> für lineare Aufträge - Straßen, Bahnstrecken, Stromleitungen, Pipelines. Zeichnen Sie eine Mittellinie, und ArduDeck legt parallele Streifen entlang dieser an. Wählen Sie <b>Plane</b> (Racetrack-Kurven an scharfen Knicken) oder <b>Copter</b> (Drehung auf der Stelle) und legen Sie Breite, Streifenanzahl und Überlappung fest.",
-        "title": "Korridorvermessung"
+        "title": "Korridorvermessung",
+        "body": "Wählen Sie unter <b>Vermessung</b> den <b>Korridor</b> für Straßen, Bahnstrecken, Stromleitungen und Pipelines. Zeichnen Sie die Mittellinie und legen Sie die Korridorbreite fest. ArduDeck legt Streifen entlang der Linie, ihr Abstand ergibt sich aus Kamera-Footprint und Überlappung, die Streifenzahl wird also nie geraten. Ein <b>Rand</b> deckt über die Kante hinaus ab, und <b>Überlauf</b> hält die Wenden von der kartierten Linie fern. <b>Flächenflugzeug</b> bekommt Racetrack-Wenden an scharfen Knicken, <b>Copter</b> wendet auf der Stelle. Rover und Mähroboter wählen die Kamera <b>Manuell</b> und setzen den Abstand direkt."
       },
       "export": {
-        "body": "Speichern oder exportieren Sie hier die gesamte Mission - <b>.waypoints</b> (QGC WPL, für ArduPilot / Mission Planner) oder <b>.plan</b> (QGroundControl). Wählen Sie das Format vorab; kein Raten mehr im Dateidialog.",
-        "title": "In jedem Format exportieren"
+        "title": "Projekt speichern oder exportieren",
+        "body": "<b>Projekt speichern</b> hält Wegpunktgruppen, jede Vermessungsfläche und ihre Einstellungen zusammen, alles später bearbeitbar; Projekte sammeln sich in der Bibliothek unter dem Namen des Auftrags oder Orts. Der Export schreibt <b>.waypoints</b> (ArduPilot, Mission Planner) oder <b>.plan</b> (QGroundControl)."
       },
       "gisImport": {
         "body": "Übernehmen Sie eine Vermessungsgrenze direkt aus <b>KML</b>, <b>KMZ</b> oder <b>GeoJSON</b> - eine Vermessungsgruppe pro Polygon, innere Ringe bleiben als Flugverbotslöcher erhalten. Kein manuelles Nachzeichnen von Grenzen mehr.",
@@ -84,7 +84,15 @@
         "body": "Vollständiges <b>Rückgängig / Wiederholen</b> (Cmd/Ctrl+Z) über alle Bearbeitungen, dazu automatisches <b>Autosave</b> - wird die App mitten in der Planung geschlossen, wird Ihre Mission beim nächsten Start wiederhergestellt.",
         "title": "Rückgängig, Wiederholen und Absturzwiederherstellung"
       },
-      "title": "Missionsplanung, eine Stufe höher"
+      "title": "Missionsplanung, eine Stufe höher",
+      "turns": {
+        "title": "Wenden, die passen",
+        "body": "<b>Überspringen</b> lässt Linien aus, damit jede 180°-Wende Platz hat (1, 3, 5, dann 2, 4), und <b>Kamera in Wenden aus</b> beschränkt die Fotos auf die Messlinien. Ein <b>Anlauf</b> richtet das Fluggerät vor dem ersten Foto aus."
+      },
+      "heading": {
+        "title": "Kurs pro Wegpunkt",
+        "body": "Setzen Sie an einem Wegpunkt einen <b>Kurs</b>: Das Fahrzeug richtet sich auf dem Weg dorthin und am Wegpunkt danach aus (0 ist Norden). Leer lassen für den normalen Kurs."
+      }
     },
     "multiVehicle": {
       "blurb": "Multi-Fahrzeug ist da: Ein Schalter startet die Engine, Fahrzeuge erscheinen, sobald sie online gehen, und ArduDeck steuert sie einzeln oder gemeinsam.",
@@ -221,6 +229,46 @@
         "body": "Ein QuadPlane nutzt getrennte Regler für Schwebeflug und Vorwärtsflug. Dieser Schalter wechselt den PID-Tab zwischen dem <b>VTOL</b>-Ratenregler (<code>Q_A_RAT_</code>) und dem <b>Flächenflug</b>-Regler (<code>RLL_RATE_</code> / <code>RLL2SRV_</code>).",
         "body2": "Schieberegler, Presets und Profile folgen Ihrer Wahl, sodass Sie jeden Satz tunen können, ohne die Seite zu verlassen.",
         "title": "Zwei Regler, ein Autopilot"
+      }
+    },
+    "quickSetup": {
+      "title": "Schnelleinrichtung",
+      "blurb": "Ein Betaflight- oder INAV-Board in vier Schritten einrichten: Preset, Sender, Prüfen, Anwenden.",
+      "launch": {
+        "title": "Schnelleinrichtung in vier Schritten",
+        "body": "Wählen Sie ein <b>Preset</b> für Ihren Rahmen, prüfen Sie Ihren <b>Sender</b>, <b>prüfen</b> Sie jede Änderung und <b>wenden</b> Sie sie dann an. Erst im letzten Schritt wird etwas geschrieben."
+      },
+      "presets": {
+        "title": "Mit einem Preset beginnen",
+        "body": "Presets passen zu gängigen Rahmen und Flugstilen. Wählen Sie das passendste; jeder Wert lässt sich danach in den Tabs feinjustieren."
+      },
+      "transmitter": {
+        "title": "Sender prüfen",
+        "body": "Bewegen Sie jeden Knüppel und Schalter: Die Balken müssen folgen. Ein umgekehrter oder vertauschter Kanal wird hier korrigiert, bevor etwas davon abhängt."
+      },
+      "review": {
+        "title": "Vor dem Schreiben prüfen",
+        "body": "Jede Änderung steht mit altem und neuem Wert in der Liste. Gehen Sie zurück, um das Preset zu ändern, oder fahren Sie mit dem Anwenden fort."
+      },
+      "apply": {
+        "title": "Anwenden, dann testen",
+        "body": "ArduDeck schreibt das Preset und speichert es auf dem Board. Testen Sie danach Ausgänge und Motoren ohne Propeller."
+      }
+    },
+    "fleetFocus": {
+      "title": "Fahrzeugfokus in der Flotte",
+      "blurb": "Mit mehreren verbundenen Fahrzeugen wirken die Werkzeuge auf das fokussierte.",
+      "pick": {
+        "title": "Das Fahrzeug wählen, an dem Sie arbeiten",
+        "body": "Klicken Sie ein Fahrzeug in der Flottenleiste an, um es zu fokussieren. Telemetrie, Karte und Steuerung folgen dem fokussierten Fahrzeug."
+      },
+      "tools": {
+        "title": "Werkzeuge folgen dem Fokus",
+        "body": "Kalibrierung, Motortest, Dateiübertragung, Logs und Neustart wirken nur auf das fokussierte Fahrzeug, und nur seine Antworten zählen. Prüfen Sie den Fokus vor dem Kalibrieren."
+      },
+      "switch": {
+        "title": "Wechseln ohne zu trennen",
+        "body": "Fokussieren Sie jederzeit ein anderes Fahrzeug. Die anderen bleiben verbunden und senden im Hintergrund weiter."
       }
     }
   }

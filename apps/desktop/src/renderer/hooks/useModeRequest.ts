@@ -79,7 +79,7 @@ export function useModeRequest(
   const modeScope = firmware === 'px4' ? 'px4' : vehicleClass;
   const [phase, setPhase] = useState<ModePhase>('active');
   const [requestedMode, setRequestedMode] = useState<number | null>(null);
-  const [rejectLabel, setRejectLabel] = useState('Rejected');
+  const [rejectLabel, setRejectLabel] = useState(() => t('hooks:useModeRequest.rejected'));
   const [pendingCommit, setPendingCommit] = useState<number | null>(null);
   const [justConfirmed, setJustConfirmed] = useState(false);
   const [recents, setRecents] = useState<number[]>(() => loadRecents(modeScope));

@@ -10,6 +10,9 @@ import { useTheme } from '../../hooks/useTheme';
 import { DebugConsole } from '../debug/DebugConsole';
 import { useConsoleStore } from '../../stores/console-store';
 import { UpdateBanner } from './UpdateBanner';
+import { TributeBanner } from '../tribute/TributeBanner';
+import { WarpOverlay } from '../tribute/WarpOverlay';
+import { DedicationMoment } from '../tribute/DedicationMoment';
 import { ArmDisarmButton } from './ArmDisarmButton';
 import { ScriptHealthBadge } from '../script-installer/ScriptHealthBadge';
 import { QuickLaunchMenu } from './QuickLaunchMenu';
@@ -66,9 +69,10 @@ export function AppShell({ children }: AppShellProps) {
   return (
     <div className="h-screen flex flex-col bg-surface-base">
       {/* Header */}
-      <header className="h-14 border-b border-subtle bg-surface-nav backdrop-blur-sm flex items-center shrink-0 relative z-50">
+      <header className="app-header h-14 border-b border-subtle bg-surface-nav backdrop-blur-sm flex items-center shrink-0 relative z-50">
+        <span className="bridge-header-cap" aria-hidden="true" />
         {/* Logo sits in a nav-rail-width slot so it lines up with the sidebar icons */}
-        <div className="w-14 flex items-center justify-center shrink-0">
+        <div className="app-header-logo w-14 flex items-center justify-center shrink-0">
           <img src={iconImage} alt={t('common:ardudeck')} className="h-8 w-8 rounded-md object-cover" />
         </div>
         <h1 className="text-lg font-semibold text-content">{t('common:ardudeck')}</h1>
@@ -179,12 +183,21 @@ export function AppShell({ children }: AppShellProps) {
       {/* Update notification banner */}
       <UpdateBanner />
 
+      {/* v0.1.2 dedication, shown once per release. */}
+      <TributeBanner />
+
       {/* Main content, with the console beside it when docked to an edge. */}
       <div className={`flex-1 overflow-hidden flex min-h-0 ${consoleDock === 'left' ? 'flex-row' : consoleDock === 'right' ? 'flex-row-reverse' : 'flex-col'}`}>
         {consoleDock !== 'bottom' && <DebugConsole />}
-        <div className="flex-1 min-w-0 min-h-0 overflow-hidden">{children}</div>
+        <div className="relative flex-1 min-w-0 min-h-0 overflow-hidden">
+          {children}
+          {/* Over the content only, so the rail and top bar never flash. */}
+          <WarpOverlay />
+        </div>
         {consoleDock === 'bottom' && <DebugConsole />}
       </div>
+
+      <DedicationMoment />
     </div>
   );
 }

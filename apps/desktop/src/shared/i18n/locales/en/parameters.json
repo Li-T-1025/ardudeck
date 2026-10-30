@@ -1020,5 +1020,9 @@
     "title": "Video Transmitter (VTX)",
     "whatIsVtx": "What is a VTX?",
     "whatIsVtxBody": "<b>VTX (Video Transmitter)</b> is the component that sends live video from your drone's camera to your FPV goggles or monitor. It broadcasts on specific radio frequencies that your goggles tune into."
-  }
+  },
+  "paramsValidBitmask": "Bitmask value must be a non-negative integer",
+  "paramsValidUnknownValue": "Value {{value}} is not in the known values list",
+  "paramsValidRange": "Value must be between {{min}} and {{max}}{{units}}",
+  "paramsValidIncrement": "Value should be a multiple of {{increment}}"
 }

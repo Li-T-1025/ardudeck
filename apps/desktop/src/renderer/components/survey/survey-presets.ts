@@ -11,7 +11,7 @@
  * forces Manual camera).
  */
 import type { SurveyConfig, SurveyPattern, CameraPreset } from './survey-types';
-import { MANUAL_CAMERA } from './camera-presets';
+import { MAGNETOMETER_SENSOR, MANUAL_CAMERA } from './camera-presets';
 import { t } from '../../../shared/i18n/index.js';
 
 export interface SurveyPreset {
@@ -27,7 +27,7 @@ export interface SurveyPreset {
   /** Partial config the preset writes. Fields it omits are left untouched. */
   config: Partial<Pick<
     SurveyConfig,
-    'pattern' | 'altitude' | 'speed' | 'frontOverlap' | 'sideOverlap' | 'overshoot' | 'altitudeReference' | 'groundPattern' | 'spiralDirection' | 'perimeterPasses' | 'crossGridAltitudeOffset' | 'corridorWidth' | 'corridorStrips' | 'corridorMode' | 'corridorSideOffset' | 'maxTurnAngle'
+    'pattern' | 'altitude' | 'speed' | 'frontOverlap' | 'sideOverlap' | 'overshoot' | 'altitudeReference' | 'groundPattern' | 'spiralDirection' | 'perimeterPasses' | 'crossGridAltitudeOffset' | 'corridorWidth' | 'corridorStrips' | 'corridorMode' | 'corridorSideOffset' | 'maxTurnAngle' | 'terrainFollow' | 'tieLineEvery' | 'cameraOffOutside'
   >>;
   /**
    * When set, the preset replaces the active camera. Mower mode uses this to
@@ -139,6 +139,26 @@ export const BUILTIN_SURVEY_PRESETS: SurveyPreset[] = [
     },
   },
   {
+    id: 'magnetometer',
+    nameKey: 'survey:surveyPresets.magnetometer.name',
+    descriptionKey: 'survey:surveyPresets.magnetometer.description',
+    name: 'Magnetometer', // i18n-exempt
+    description: 'Low, slow, constant height above ground. Tie lines for levelling.', // i18n-exempt
+    tag: 'Flying',
+    camera: { ...MAGNETOMETER_SENSOR },
+    config: {
+      pattern: 'grid',
+      altitude: 30,
+      speed: 6,
+      overshoot: 20,
+      altitudeReference: 'relative',
+      // Constant height above ground over the DEM (or the Locus surface when one covers the area).
+      terrainFollow: true,
+      tieLineEvery: 10,
+      cameraOffOutside: false,
+    },
+  },
+  {
     id: 'rover-mower',
     nameKey: 'survey:surveyPresets.roverMower.name',
     descriptionKey: 'survey:surveyPresets.roverMower.description',
@@ -205,6 +225,8 @@ export function captureCurrentAsPresetConfig(c: SurveyConfig): SurveyPreset['con
     ...(c.spiralDirection ? { spiralDirection: c.spiralDirection } : {}),
     ...(c.perimeterPasses !== undefined ? { perimeterPasses: c.perimeterPasses } : {}),
     ...(c.crossGridAltitudeOffset !== undefined ? { crossGridAltitudeOffset: c.crossGridAltitudeOffset } : {}),
+    ...(c.tieLineEvery ? { tieLineEvery: c.tieLineEvery } : {}),
+    ...(c.terrainFollow ? { terrainFollow: c.terrainFollow } : {}),
     ...(c.pattern === 'corridor'
       ? {
           corridorWidth: c.corridorWidth,

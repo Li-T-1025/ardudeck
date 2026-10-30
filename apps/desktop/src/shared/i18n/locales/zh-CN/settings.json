@@ -495,7 +495,6 @@
     },
     "uid": "UID:{{uid}}",
     "usage": "用量",
-
     "validation": {
       "invalidNumber": "无效的数字",
       "max": "最大：{{value}}",
@@ -761,5 +760,7 @@
     "decimals_other": "{{count}} 位小数",
     "secondDecimals_one": "秒，含 {{count}} 位小数",
     "secondDecimals_other": "秒，含 {{count}} 位小数"
-  }
+  },
+  "themeTitle": "主题",
+  "themeHint": "更改所有界面的配色。"
 }

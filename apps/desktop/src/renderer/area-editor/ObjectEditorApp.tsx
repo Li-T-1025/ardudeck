@@ -61,11 +61,13 @@ const ISun = () => <svg {...S}><circle cx="12" cy="12" r="4" /><path d="M12 2v2M
 const IMonitor = () => <svg {...S}><rect x="3" y="4" width="18" height="12" rx="1" /><path d="M8 20h8M12 16v4" /></svg>;
 const IUndo = () => <svg {...S}><path d="M9 14L4 9l5-5" /><path d="M4 9h11a5 5 0 0 1 0 10h-3" /></svg>;
 const IRedo = () => <svg {...S}><path d="M15 14l5-5-5-5" /><path d="M20 9H9a5 5 0 0 0 0 10h3" /></svg>;
+const IStar = () => <svg {...S}><path d="M12 2l2.9 6.9 7.1.6-5.4 4.7 1.7 7-6.3-3.9-6.3 3.9 1.7-7L2 9.5l7.1-.6z" /></svg>;
 
 const THEME_CYCLE: ThemePreference[] = ['dark', 'light', 'system'];
-const THEME_ICON: Record<ThemePreference, () => JSX.Element> = { dark: IMoon, light: ISun, system: IMonitor };
+const THEME_ICON: Record<ThemePreference, () => JSX.Element> = { dark: IMoon, light: ISun, system: IMonitor, bridge: IStar };
 const THEME_TIP_KEY: Record<ThemePreference, string> = {
   dark: 'area-editor:objectEditorApp.theme.dark', light: 'area-editor:objectEditorApp.theme.light', system: 'area-editor:objectEditorApp.theme.system',
+  bridge: 'area-editor:objectEditorApp.theme.bridge',
 };
 
 const TOOLS: { id: AreaTool; icon: () => JSX.Element; tipKey: string }[] = [

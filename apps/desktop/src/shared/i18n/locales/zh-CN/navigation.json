@@ -14,6 +14,33 @@
     "trainer": "训练器",
     "locus": "Locus",
     "weatherBriefing": "气象简报",
-    "productionLine": "生产线"
+    "productionLine": "生产线",
+    "themeBridge": "舰桥"
+  },
+  "short": {
+    "calibration": "校准",
+    "cli": "CLI",
+    "companion": "伴随",
+    "firmware": "固件",
+    "inspector": "MAVLINK",
+    "library": "资料库",
+    "locus": "轨迹",
+    "logs": "日志",
+    "lua-graph": "LUA",
+    "mission": "任务",
+    "modules": "模块",
+    "osd": "OSD",
+    "parameters": "参数",
+    "production": "生产",
+    "radio-hud": "无线电",
+    "recording": "录制",
+    "report": "回报",
+    "settings": "设置",
+    "sitl": "SITL",
+    "telemetry": "遥测",
+    "trainer": "训练",
+    "tribute": "献词",
+    "vault": "机队",
+    "weather": "天气"
   }
 }

@@ -30,12 +30,34 @@ function nativeNameOf(code: string): string {
   }
 }
 
+/**
+ * Chinese never reduces to a base: 'zh' alone names no shipped file, so the
+ * script decides. Hant and the regions that use it go to zh-TW, the rest to
+ * zh-CN, rather than falling through to English.
+ */
+function resolveChinese(tag: string): string {
+  const parts = tag.toLowerCase().split(/[-_]/);
+  if (parts.includes('hant')) return 'zh-TW';
+  if (parts.includes('hans')) return 'zh-CN';
+  if (parts.some((p) => p === 'tw' || p === 'hk' || p === 'mo')) return 'zh-TW';
+  return 'zh-CN';
+}
+
 /** Map a preference plus the OS locale (e.g. 'de-AT') to a shipped language. */
 export function resolveLanguage(preference: LanguagePreference | undefined, systemLocale: string): string {
   const wanted = !preference || preference === 'system' ? systemLocale : preference;
   const codes = Object.keys(resources);
   if (codes.includes(wanted)) return wanted;
+
   const base = wanted.split(/[-_]/)[0]!.toLowerCase();
+  if (base === 'zh') {
+    const chinese = resolveChinese(wanted);
+    if (codes.includes(chinese)) return chinese;
+  }
+
+  const exact = codes.find((c) => c.toLowerCase() === wanted.toLowerCase());
+  if (exact) return exact;
+
   return codes.find((c) => c.toLowerCase() === base) ?? DEFAULT_LANGUAGE;
 }
 

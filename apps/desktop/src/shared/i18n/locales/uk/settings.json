@@ -776,5 +776,7 @@
     "secondDecimals_few": "Секунди, знаків після коми: {{count}}",
     "secondDecimals_many": "Секунди, знаків після коми: {{count}}",
     "secondDecimals_other": "Секунди, знаків після коми: {{count}}"
-  }
+  },
+  "themeTitle": "Тема",
+  "themeHint": "Змінює кольори на всіх екранах."
 }

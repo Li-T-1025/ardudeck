@@ -12,7 +12,7 @@ export function PositionPanel() {
   const coord = useCoordinateFormat();
 
   return (
-    <PanelContainer>
+    <PanelContainer accent="navigation">
       <div className="space-y-2">
         {coord.current.id === 'decimal' ? (<>
         <div className="flex justify-between items-baseline">

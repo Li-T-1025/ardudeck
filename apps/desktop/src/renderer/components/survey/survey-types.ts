@@ -50,6 +50,8 @@ export interface CameraPreset {
    * cases (e.g. ArduRover lawnmower defining lines by cutting deck width).
    */
   manualCorridorWidth?: number;  // meters
+  /** Point sensor flown by air (magnetometer): line spacing in meters, no photos or camera triggers. */
+  lineSpacing?: number;
 }
 
 export interface LatLng {
@@ -113,6 +115,11 @@ export interface SurveyConfig {
    * trigger distance runs for the whole flight. Grid/crosshatch only.
    */
   cameraOffOutside?: boolean;
+  /**
+   * Grid only. Adds perpendicular tie lines after the survey lines, one every
+   * N survey lines (spacing N x line spacing), for levelling magnetometer data. 0 / unset = off.
+   */
+  tieLineEvery?: number;
   /**
    * Grid/crosshatch turn strategy.
    * - 'copter' (default): lines connect directly; the vehicle turns on the spot.
@@ -313,6 +320,8 @@ export interface SurveyResult {
    * when, which matters once the strips are not flown in their drawn order.
    */
   legStarts?: number[];
+  /** Grid with tie lines: the subset of `legStarts` that begin a tie line. */
+  tieLineStarts?: number[];
   /**
    * Optional per-waypoint look-at target on the subject, aligned 1:1 with
    * `waypoints`. When present the mission builder emits ROI commands so the

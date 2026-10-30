@@ -27,10 +27,42 @@
     "workspaceLayouts": {
       "blurb": "「工作区」按钮可在 Pilot、FPV 与 Mission 之间切换，各自拥有专属的面板、驾驶舱仪表与分割设置。你也可以保存自己的布局并以文件分享。",
       "title": "工作区布局"
+    },
+    "sitl": {
+      "title": "飞行前先模拟",
+      "blurb": "从侧边栏打开 SITL，选择一种载具并启动一个模拟器，或切换到群飞以启动整个机队。ArduDeck 首次会自动下载固件，并自行连接。"
+    },
+    "crsf": {
+      "title": "来自 ExpressLRS 背包的遥测",
+      "blurb": "将 ELRS 的 Telemetry Mode 设为 WiFi，加入背包网络，并通过端口 14550 以 CRSF 连接。适用于任何 CRSF 接收机，飞机上无需任何改动。如需双向链路，请改用 MAVLink 模式。"
+    },
+    "cargo": {
+      "title": "通过 Cargo 添加功能",
+      "blurb": "模块会列出可添加的 Cargo：每一个都可以安装、更新或移除。已安装的 Cargo 会将自己的视图与卡片带入应用程序。"
+    },
+    "adjust": {
+      "title": "飞行中调整",
+      "blurb": "在遥测画面中即可更改目标速度、高度与盘旋半径，无需离开飞行视图。盘旋半径的变更会先显示供查看，然后才写入。"
+    },
+    "language": {
+      "title": "ArduDeck 说你的语言",
+      "blurb": "在设置中选择语言：English、Deutsch、简体中文、繁體中文和 Українська（测试版）。选择“系统”则跟随你的电脑。"
     }
   },
   "splitDemo": {
     "split": "分割",
     "synthetic": "合成"
+  },
+  "releaseDemos": {
+    "launch": "启动",
+    "connected": "已连接",
+    "install": "安装",
+    "installed": "已安装",
+    "speed": "速度",
+    "altitude": "高度",
+    "radius": "盘旋半径",
+    "review": "查看",
+    "language": "语言",
+    "system": "系统"
   }
 }

@@ -56,6 +56,8 @@ export function surveyToMissionItems(
 
   const isManual = !!(config.camera.manualCorridorWidth && config.camera.manualCorridorWidth > 0);
   const isReverseAlt = isManual && config.groundPattern === 'reverse-alternating';
+  // Point sensor (magnetometer): an aircraft survey with no camera to trigger.
+  const noCamera = isManual || !!(config.camera.lineSpacing && config.camera.lineSpacing > 0);
   const isPx4 = firmware === 'px4';
 
   // Camera-off-outside: trigger only along the scan lines, off in the turns. A line is its start waypoint
@@ -64,7 +66,7 @@ export function surveyToMissionItems(
   const lineStarts = new Set(result.legStarts ?? []);
   const lineEnds = new Set([...lineStarts].map((i) => i + 1));
   const bracketCamera =
-    !isManual &&
+    !noCamera &&
     !!config.cameraOffOutside &&
     (config.pattern === 'grid' || config.pattern === 'crosshatch') &&
     lineStarts.size > 0;
@@ -256,7 +258,7 @@ export function surveyToMissionItems(
 
       // DO_SET_CAM_TRIGG_DIST — aircraft only. Mower has no camera to trigger.
       // Skipped when bracketing per-line (the brackets below own the trigger).
-      if (!isManual && !bracketCamera) {
+      if (!noCamera && !bracketCamera) {
         items.push({ ...camTrigg(triggerDist), seq: seq++ });
       }
     }
@@ -293,7 +295,7 @@ export function surveyToMissionItems(
   }
 
   // 4. DO_SET_CAM_TRIGG_DIST — disable trigger. Aircraft only.
-  if (!isManual) {
+  if (!noCamera) {
     items.push({
       seq: seq++,
       frame: MAV_FRAME.GLOBAL_RELATIVE_ALT,

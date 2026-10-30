@@ -6,6 +6,7 @@ import { useSettingsStore } from '../stores/settings-store';
  * - 'dark' (default): no class added (CSS variables in :root are dark)
  * - 'light': adds .light class which overrides CSS variables
  * - 'system': follows OS prefers-color-scheme, adds .light when OS is light
+ * - 'bridge': adds .bridge, the v0.1.2 dedication theme (dark, never .light)
  *
  * Call this once at the app root (AppShell).
  */
@@ -16,11 +17,19 @@ export function useTheme(): void {
     const root = document.documentElement;
 
     function apply(resolved: 'dark' | 'light') {
+      root.classList.remove('bridge');
       if (resolved === 'light') {
         root.classList.add('light');
       } else {
         root.classList.remove('light');
       }
+    }
+
+    // Bridge is a dark theme with its own token block, so it never carries .light.
+    if (theme === 'bridge') {
+      root.classList.remove('light');
+      root.classList.add('bridge');
+      return;
     }
 
     if (theme === 'light') {
@@ -58,7 +67,8 @@ function getOSDark() {
 export function useResolvedTheme(): 'dark' | 'light' {
   const pref = useSettingsStore((s) => s.theme);
   const osDark = useSyncExternalStore(subscribeOS, getOSDark);
-  if (pref === 'dark') return 'dark';
+  // Callers ask this to pick between a dark and a light asset. Bridge is dark.
+  if (pref === 'dark' || pref === 'bridge') return 'dark';
   if (pref === 'light') return 'light';
   return osDark ? 'dark' : 'light';
 }

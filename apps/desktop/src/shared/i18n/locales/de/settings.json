@@ -760,5 +760,7 @@
     "decimals_other": "{{count}} Nachkommastellen",
     "secondDecimals_one": "Sekunden mit {{count}} Nachkommastelle",
     "secondDecimals_other": "Sekunden mit {{count}} Nachkommastellen"
-  }
+  },
+  "themeTitle": "Thema",
+  "themeHint": "Ändert die Farben in allen Ansichten."
 }

@@ -82,3 +82,14 @@ export const MANUAL_CAMERA: CameraPreset = {
   focalLength: 0,
   manualCorridorWidth: 1.5, // 1.5 m default — typical residential mower deck
 };
+
+/** Magnetometer or other point sensor: lines at a set spacing, no photos, flown like any aircraft survey. */
+export const MAGNETOMETER_SENSOR: CameraPreset = {
+  name: 'Magnetometer',
+  sensorWidth: 0,
+  sensorHeight: 0,
+  imageWidth: 0,
+  imageHeight: 0,
+  focalLength: 0,
+  lineSpacing: 25,
+};

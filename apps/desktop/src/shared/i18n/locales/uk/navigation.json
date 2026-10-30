@@ -14,6 +14,33 @@
     "trainer": "Тренажер",
     "locus": "Locus",
     "weatherBriefing": "Метеобрифінг",
-    "productionLine": "Виробнича лінія"
+    "productionLine": "Виробнича лінія",
+    "themeBridge": "Тема «Місток»"
+  },
+  "short": {
+    "calibration": "КАЛІБР",
+    "cli": "CLI",
+    "companion": "БОРТ",
+    "firmware": "ПРОШ",
+    "inspector": "MAVLINK",
+    "library": "БІБЛІО",
+    "locus": "LOCUS",
+    "logs": "ЖУРНАЛИ",
+    "lua-graph": "LUA",
+    "mission": "МІСІЯ",
+    "modules": "МОДИ",
+    "osd": "OSD",
+    "parameters": "ПАРАМ",
+    "production": "ВИРОБН",
+    "radio-hud": "РАДІО",
+    "recording": "ЗАПИС",
+    "report": "ЗВІТ",
+    "settings": "НАЛАШТ",
+    "sitl": "SITL",
+    "telemetry": "ТЕЛЕМ",
+    "trainer": "ТРЕНАЖ",
+    "tribute": "ПРИСВЯТА",
+    "vault": "ФЛОТ",
+    "weather": "ПОГОДА"
   }
 }

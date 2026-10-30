@@ -379,7 +379,9 @@ export const useFlightControlStore = create<FlightControlStore>((set, get) => ({
 
   // Stop RC override
   stopOverride: () => {
-    const { overrideInterval } = get();
+    const { overrideInterval, isOverrideActive } = get();
+    // Nothing running: send no release frame to a vehicle the sliders never touched.
+    if (!isOverrideActive && !overrideInterval) return;
     if (overrideInterval) {
       clearInterval(overrideInterval);
     }

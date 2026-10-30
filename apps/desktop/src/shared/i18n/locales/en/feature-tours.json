@@ -63,14 +63,14 @@
         "body": "Plan by <b>GSD</b> (cm/px) instead of guessing altitude, see live <b>battery and data</b> estimates, and split a big job into <b>battery-sized sorties</b> in one click. Crosshatch can even fly its two passes at <b>two different heights</b> for better 3D.",
         "title": "Smarter area surveys"
       },
-      "blurb": "Grouped missions, corridor surveys, GSD-first planning, GIS import, multi-format export, and full undo - all in the planner.",
+      "blurb": "Grouped missions, corridor and area surveys with turns that fit, GIS import, projects, waypoint headings and full undo.",
       "corridor": {
-        "body": "Under the <b>Survey</b> button, pick <b>Corridor</b> for linear jobs - roads, rail, power lines, pipelines. Draw a centerline and ArduDeck lays parallel strips along it. Pick <b>Plane</b> (racetrack turns at sharp bends) or <b>Copter</b> (turns on the spot), and set width, strip count and overlap.",
-        "title": "Corridor surveys"
+        "title": "Corridor surveys",
+        "body": "Under <b>Survey</b>, pick <b>Corridor</b> for roads, rail, power lines and pipelines. Draw the centerline and set the corridor width. ArduDeck lays strips along it, spaced from your camera footprint and overlap, so the strip count is never guessed. A <b>margin</b> covers past the edge, and <b>overshoot</b> keeps turns off the mapped line. <b>Plane</b> gets racetrack turns at sharp bends, <b>Copter</b> turns on the spot. Rovers and mowers pick the <b>Manual</b> camera to set the spacing directly."
       },
       "export": {
-        "body": "Save or export the whole mission from here - <b>.waypoints</b> (QGC WPL, for ArduPilot / Mission Planner) or <b>.plan</b> (QGroundControl). Pick the format up front; no guessing from the file dialog.",
-        "title": "Export in any format"
+        "title": "Save a project, or export",
+        "body": "<b>Save project</b> keeps waypoint groups, every survey area and its settings together, all editable later; projects collect in the Library under the job or site name. Export writes <b>.waypoints</b> (ArduPilot, Mission Planner) or <b>.plan</b> (QGroundControl)."
       },
       "gisImport": {
         "body": "Bring a survey boundary straight in from <b>KML</b>, <b>KMZ</b> or <b>GeoJSON</b> - one survey group per polygon, inner rings kept as no-fly holes. No more re-tracing a boundary by hand.",
@@ -84,7 +84,15 @@
         "body": "Full <b>undo / redo</b> (Cmd/Ctrl+Z) across edits, plus automatic <b>autosave</b> - if the app closes mid-plan, your mission is recovered on the next launch.",
         "title": "Undo, redo and crash recovery"
       },
-      "title": "Mission planning, leveled up"
+      "title": "Mission planning, leveled up",
+      "turns": {
+        "title": "Turns that fit",
+        "body": "<b>Skip</b> lines so every 180° turn has room (1, 3, 5, then 2, 4), and <b>Camera off on turns</b> keeps photos to the scan lines. A <b>lead-in</b> lines the aircraft up before the first photo."
+      },
+      "heading": {
+        "title": "Heading per waypoint",
+        "body": "Set a <b>Heading</b> on a waypoint: the vehicle faces it on the way to and at that waypoint (0 is north). Leave it empty for the normal heading."
+      }
     },
     "multiVehicle": {
       "blurb": "Multi-vehicle is here: one switch starts the engine, vehicles appear as they come online, and ArduDeck commands them individually or together.",
@@ -221,6 +229,46 @@
         "body": "A QuadPlane runs separate controllers for hover and forward flight. This switch flips the PID tab between the <b>VTOL</b> rate controller (<code>Q_A_RAT_</code>) and the <b>fixed-wing</b> controller (<code>RLL_RATE_</code> / <code>RLL2SRV_</code>).",
         "body2": "The sliders, presets and profiles all follow your choice, so you can tune each set without leaving the page.",
         "title": "Two controllers, one autopilot"
+      }
+    },
+    "quickSetup": {
+      "title": "Quick Setup",
+      "blurb": "Set up a Betaflight or INAV board in four steps: preset, transmitter, review, apply.",
+      "launch": {
+        "title": "Quick Setup in four steps",
+        "body": "Pick a <b>preset</b> for your frame, check your <b>transmitter</b>, <b>review</b> every change, then <b>apply</b>. Nothing is written until the last step."
+      },
+      "presets": {
+        "title": "Start from a preset",
+        "body": "Presets match common frames and flying styles. Pick the closest one; every value can be fine-tuned in the tabs afterwards."
+      },
+      "transmitter": {
+        "title": "Check the transmitter",
+        "body": "Move each stick and switch: the bars must follow. A reversed or swapped channel is fixed here, before anything depends on it."
+      },
+      "review": {
+        "title": "Review before writing",
+        "body": "Every change is listed with its old and new value. Go back to change the preset, or continue to apply."
+      },
+      "apply": {
+        "title": "Apply, then test",
+        "body": "ArduDeck writes the preset and saves it to the board. When it finishes, test outputs and motors with the props off."
+      }
+    },
+    "fleetFocus": {
+      "title": "Fleet vehicle focus",
+      "blurb": "With several vehicles connected, the tools act on the one you focus.",
+      "pick": {
+        "title": "Pick the vehicle you are working on",
+        "body": "Click a vehicle in the fleet strip to focus it. Telemetry, the map and the controls follow the focused vehicle."
+      },
+      "tools": {
+        "title": "Tools follow the focus",
+        "body": "Calibration, motor test, file transfer, logs and reboot act on the focused vehicle only, and only its replies count. Check the focus before you calibrate."
+      },
+      "switch": {
+        "title": "Switch without disconnecting",
+        "body": "Focus another vehicle at any time. The others stay connected and keep streaming in the background."
       }
     }
   }

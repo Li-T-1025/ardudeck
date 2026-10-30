@@ -27,10 +27,42 @@
     "workspaceLayouts": {
       "blurb": "The Workspace button switches between Pilot, FPV and Mission, each with its own panels, cockpit instruments and split. Save your own and share them as a file.",
       "title": "Workspace layouts"
+    },
+    "sitl": {
+      "title": "Simulate before you fly",
+      "blurb": "Open SITL from the rail, pick a vehicle and launch one simulator, or switch to Swarm to launch a fleet. ArduDeck downloads the firmware the first time and connects on its own."
+    },
+    "crsf": {
+      "title": "Telemetry from an ExpressLRS backpack",
+      "blurb": "Set the ELRS Telemetry Mode to WiFi, join the backpack network and connect with CRSF on port 14550. Works behind any CRSF receiver with nothing changed on the aircraft. For a two-way link, use MAVLink mode instead."
+    },
+    "cargo": {
+      "title": "Add features with cargo",
+      "blurb": "Mods lists the cargo you can add: install, update or remove each one. Installed cargo brings its own views and cards into the app."
+    },
+    "adjust": {
+      "title": "Adjust while flying",
+      "blurb": "From the telemetry screen, change the target speed, altitude and loiter radius without leaving the flight view. A loiter radius change is shown for review before it is written."
+    },
+    "language": {
+      "title": "ArduDeck speaks your language",
+      "blurb": "Settings, Configuration, Language: English, Deutsch, 简体中文, 繁體中文 and Українська (beta). System follows your computer."
     }
   },
   "splitDemo": {
     "split": "Split",
     "synthetic": "Synthetic"
+  },
+  "releaseDemos": {
+    "launch": "Launch",
+    "connected": "Connected",
+    "install": "Install",
+    "installed": "Installed",
+    "speed": "Speed",
+    "altitude": "Altitude",
+    "radius": "Loiter radius",
+    "review": "Review",
+    "language": "Language",
+    "system": "System"
   }
 }

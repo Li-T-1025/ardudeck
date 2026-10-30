@@ -13,7 +13,7 @@ export function AltitudePanel() {
   const displayClimb = verticalSpeedValueFromMetersPerSecond(vfrHud.climb, verticalSpeedUnit);
 
   return (
-    <PanelContainer>
+    <PanelContainer accent="navigation">
       <div className="space-y-1">
         <StatRow label={t('panels:altitudePanel.msl')} value={formatAltitudeFromMeters(vfrHud.alt, altitudeUnit)} highlight />
         <StatRow label={t('panels:altitudePanel.agl')} value={formatAltitudeFromMeters(position.relativeAlt, altitudeUnit)} />

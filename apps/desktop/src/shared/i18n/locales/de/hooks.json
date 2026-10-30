@@ -4,6 +4,7 @@
   },
   "useModeRequest": {
     "noResponse": "Keine Antwort",
-    "notSent": "Nicht gesendet"
+    "notSent": "Nicht gesendet",
+    "rejected": "Abgelehnt"
   }
 }

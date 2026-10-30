@@ -106,7 +106,7 @@ export function BatteryPanel() {
   const now = Date.now();
 
   return (
-    <PanelContainer className="flex flex-col gap-3 justify-center">
+    <PanelContainer accent="power" className="flex flex-col gap-3 justify-center">
       {/* Voltage (primary) + remaining (secondary) */}
       <div className="flex items-baseline justify-between gap-3">
         <div className="flex items-baseline gap-1">

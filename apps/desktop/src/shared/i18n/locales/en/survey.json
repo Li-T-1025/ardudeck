@@ -10,13 +10,17 @@
     "manualTitle": "No camera: set the line spacing directly (e.g. rover/lawnmower deck width)",
     "saved": "Saved",
     "searchPlaceholder": "Search cameras...",
-    "sensorSummary": "{{sensorWidth}}x{{sensorHeight}}mm sensor, {{focalLength}}mm, {{imageWidth}}x{{imageHeight}}px"
+    "sensorSummary": "{{sensorWidth}}x{{sensorHeight}}mm sensor, {{focalLength}}mm, {{imageWidth}}x{{imageHeight}}px",
+    "magnetometerLabel": "Magnetometer",
+    "magnetometerHint": "Point sensor: set the line spacing, no photos",
+    "magnetometerSummary": "Point sensor: line spacing set directly, no camera triggers"
   },
   "cameraPresets": {
     "custom": "Custom",
     "groupMultispectral": "Multispectral",
     "groupOther": "Other",
-    "manual": "Manual"
+    "manual": "Manual",
+    "magnetometer": "Magnetometer"
   },
   "enginePlanLegend": {
     "coveragePlan": "Coverage plan",
@@ -284,7 +288,12 @@
     "turnsPlaneTitle": "Fixed-wing: extend the shorter line end at each turn for a clean 180° racetrack turn",
     "unlockShapeTip": "Unlock the shape so it can be dragged again",
     "width": "Width",
-    "zigzagHint": "Standard zigzag pattern. Rover turns 180° at each line end."
+    "zigzagHint": "Standard zigzag pattern. Rover turns 180° at each line end.",
+    "lineSpacingM": "Line spacing (m)",
+    "sensorSpacingHint": "Distance between survey lines. Typical magnetometer surveys fly 10 to 50 m.",
+    "tieLines": "Tie lines",
+    "tieLinesHint": "One perpendicular tie line every {{every}} survey lines, flown after them. Used to level the lines against each other.",
+    "tieLinesOff": "Off. Magnetometer surveys usually add one every 5 to 10 lines."
   },
   "surveyMapOverlay": {
     "clickToAddControlPoint": "Click to add a control point",
@@ -319,7 +328,11 @@
       "description": "Ground vehicle. Set corridor width directly.",
       "name": "Rover / Mower"
     },
-    "savedPreset": "Saved preset"
+    "savedPreset": "Saved preset",
+    "magnetometer": {
+      "name": "Magnetometer",
+      "description": "Low, slow, constant height above ground. Tie lines for levelling."
+    }
   },
   "surveyRegen": {
     "generatorNotInstalled": "Generator \"{{generatorId}}\" not installed",
