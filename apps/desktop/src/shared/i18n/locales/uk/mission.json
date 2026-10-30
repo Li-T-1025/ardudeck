@@ -227,7 +227,7 @@
     "boundaryMap": "карта",
     "boundarySurveyPanel": "панель аерозйомки",
     "boundaryWaypointList": "список точок маршруту",
-    "flashInavBody": "iNav - це форк Betaflight з повноцінною GPS-навігацією та плануванням місій. Та сама плата, інша прошивка. Перейдіть до <hl>Прошивки FC</hl> і виберіть iNav.",
+    "flashInavBody": "iNav - це форк Betaflight з повноцінною GPS-навігацією та плануванням місій. Та сама плата, інша прошивка. Перейдіть до розділу <hl>Прошивання FC</hl> і виберіть iNav.",
     "flashInavTitle": "Прошити iNav",
     "flashLegacy": "Прошити iNav 2.6.1",
     "legacyBody": "Ваша плата <board>{{board}}</board> - це F3 з 256KB флеш-пам’яті. Можна прошити <fw>iNav 2.6.1</fw> для базового планування місій і GPS-навігації.",

@@ -38,7 +38,8 @@
 | parameter | параметр |
 | write / read (params to/from FC) | записати / прочитати |
 | upload / download | вивантажити / завантажити |
-| flash (firmware) | прошити; прошивка |
+| firmware / flash (firmware) | прошивка (ПЗ) / прошити, прошивання (процес) |
+| flash (memory) | флеш-пам’ять |
 | calibration / calibrate | калібрування / калібрувати |
 | accelerometer / gyro / compass / barometer | акселерометр / гіроскоп / компас / барометр |
 | level (calibration) | горизонт |
