@@ -23,7 +23,7 @@
     "join": "Приєднатися до {{label}}",
     "leadsFleet": "Веде флот",
     "leave": "Вийти з флоту",
-    "leaveTip": "Виключити {{label}} з флоту - решта тримає стрій",
+    "leaveTip": "Вилучити {{label}} з флоту - решта тримає стрій",
     "reformShape": "Перешикувати: {{label}}"
   },
   "fleetCoordination": {
@@ -77,7 +77,7 @@
     "collapseFleet": "Згорнути флот",
     "deselectTip": "{{label}} - натисніть, щоб скасувати вибір",
     "dragHere": "Перетягніть апарат сюди",
-    "dropToRemove": "Відпустіть, щоб виключити з флоту",
+    "dropToRemove": "Відпустіть, щоб вилучити з флоту",
     "expandFleet": "Розгорнути флот",
     "fleet": "Флот",
     "identityTip": "{{airframe}} - {{state}} (натисніть, щоб задати колір апарата)",

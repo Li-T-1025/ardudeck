@@ -125,7 +125,7 @@
       "airspeedDesc": "Приладова проти істинної повітряної швидкості",
       "altitude": "Висота",
       "altitudeDesc": "Задана проти фактичної висоти",
-      "attitude": "Положення",
+      "attitude": "Орієнтація",
       "attitudeDesc": "DesRoll проти Roll, DesPitch проти Pitch",
       "battery": "Акумулятор",
       "batteryDesc": "Напруга й споживаний струм",
@@ -161,8 +161,8 @@
       "windEstimateDesc": "Вітер X/Y/Z (NKF2)"
     },
     "px4Preset": {
-      "attitude": "Положення",
-      "attitudeDesc": "Кватерніон положення",
+      "attitude": "Орієнтація",
+      "attitudeDesc": "Кватерніон просторового положення",
       "battery": "Акумулятор",
       "batteryDesc": "Напруга й споживаний струм",
       "ekf": "EKF",

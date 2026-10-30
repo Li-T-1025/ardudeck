@@ -171,7 +171,7 @@
     }
   },
   "mapPanel": {
-    "attitude": "Положення",
+    "attitude": "Орієнтація",
     "autoSize": "Авторозмір",
     "autoSizeTip": "Апарат автоматично масштабується, щоб лишатися видимим",
     "changeLayerTitle": "Змінити шар карти",
@@ -322,7 +322,7 @@
   "registry": {
     "altitude": "Висота",
     "altitudeProfile": "Профіль висоти",
-    "attitude": "Положення",
+    "attitude": "Орієнтація",
     "battery": "Акумулятор",
     "camera": "Відео",
     "flightControl": "Керування польотом",
