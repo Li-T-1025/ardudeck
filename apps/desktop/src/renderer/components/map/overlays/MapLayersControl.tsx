@@ -17,7 +17,7 @@ import { ui } from '../../ui/ui-hooks';
 import { useTranslation } from 'react-i18next';
 import { useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
-import { mapLayerName, type LayerKey } from '../../../../shared/map-layers';
+import { mapLayerName } from '../../../../shared/map-layers';
 import { LayerIcon } from '../LayerIcon';
 import { useOverlayStore } from '../../../stores/overlay-store';
 import { OVERLAYS } from './OverlayToggles';
@@ -25,9 +25,10 @@ import { useModuleMapLayerToggles } from '../../panels/ModuleMapLayers';
 import { useUserModelsStore } from '../../../stores/user-models-store';
 
 interface MapLayersControlProps {
-  baseLayers: LayerKey[];
-  activeLayer: LayerKey;
-  onSelectLayer: (key: LayerKey) => void;
+  /** Built-in layer keys plus any a cargo registered (`mb-<slug>.<id>`). */
+  baseLayers: string[];
+  activeLayer: string;
+  onSelectLayer: (key: string) => void;
   /** Optional terrain/height heatmap toggle (screens that support it). */
   showTerrain?: boolean;
   onToggleTerrain?: () => void;

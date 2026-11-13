@@ -4,7 +4,7 @@
  */
 import { useTranslation } from 'react-i18next';
 import { useState, useEffect, useCallback } from 'react';
-import { mapLayerName, type LayerKey } from '../../../shared/map-layers';
+import { mapLayerName, isBuiltinMapLayer, type LayerKey } from '../../../shared/map-layers';
 import type { TileCacheDownloadProgress } from '../../../shared/ipc-channels';
 import { useNetworkStore } from '../../stores/network-store';
 import { useTileCacheStore } from '../../stores/tile-cache-store';
@@ -32,7 +32,8 @@ export function OfflineAreaDownload({ bounds, activeLayer }: OfflineAreaDownload
   const [open, setOpen] = useState(false);
   const [maxZoom, setMaxZoom] = useState(16);
   const [selectedLayers, setSelectedLayers] = useState<Set<LayerKey>>(
-    () => new Set([activeLayer as LayerKey]),
+    // A cargo basemap is downloaded by its own cargo, not by this list.
+    () => new Set(isBuiltinMapLayer(activeLayer) ? [activeLayer as LayerKey] : []),
   );
   const [estimate, setEstimate] = useState<number | null>(null);
   const [progress, setProgress] = useState<TileCacheDownloadProgress | null>(null);
@@ -42,7 +43,7 @@ export function OfflineAreaDownload({ bounds, activeLayer }: OfflineAreaDownload
 
   // Sync default layer with active map layer
   useEffect(() => {
-    if (!open) setSelectedLayers(new Set([activeLayer as LayerKey]));
+    if (!open) setSelectedLayers(new Set(isBuiltinMapLayer(activeLayer) ? [activeLayer as LayerKey] : []));
   }, [activeLayer, open]);
 
   // Listen for progress

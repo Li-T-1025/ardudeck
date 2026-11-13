@@ -73,12 +73,13 @@ import { demSourceMaxZoom, useTileSourceStore } from '../../stores/tile-source-s
 import { meshesFor, useSceneMeshStore } from '../../stores/scene-mesh-store';
 
 // Shared map layer definitions (centralized)
-import { MAP_LAYERS, mapLayerName, type LayerKey, type MapLayer } from '../../../shared/map-layers';
+import { MAP_LAYERS, mapLayerDef, mapLayerName, isModuleBasemapLayer, tileCacheTemplate, type LayerKey, type MapLayer } from '../../../shared/map-layers';
+import { useModuleBasemaps } from '../../modules/module-basemaps';
 
 // Exclude 'dem' from the layer picker (it's a data layer, not a base map)
 type BaseLayerKey = Exclude<LayerKey, 'dem'>;
 
-const BASE_LAYERS = (Object.keys(MAP_LAYERS) as LayerKey[]).filter((k) => k !== 'dem' && k !== 'openaip' && k !== 'radar');
+const BASE_LAYER_KEYS = (Object.keys(MAP_LAYERS) as LayerKey[]).filter((k) => k !== 'dem' && k !== 'openaip' && k !== 'radar');
 const BUILDINGS_FILTER: maplibregl.FilterSpecification = ['!=', ['get', 'hide_3d'], true];
 
 /** MapLibre colour-relief stops for the 2D height scale, over `range` (else absolute), shifted by `ref`. */
@@ -178,8 +179,8 @@ function noteTileMiss(sourceId: string): void {
 }
 
 /** Get tile-cache:// URL template for a layer (MapLibre substitutes {z}/{x}/{y}) */
-function getCachedTileUrl(layerKey: BaseLayerKey): string {
-  return `tile-cache://${layerKey}/{z}/{x}/{y}.png`;
+function getCachedTileUrl(layerKey: string): string {
+  return tileCacheTemplate(layerKey);
 }
 
 /** CSS overrides to dark-theme the MapLibre navigation control */
@@ -283,9 +284,14 @@ export function Mission3DPanel({
 
   const sharedMapLayer = useEditModeStore((s) => s.mapLayer);
   const setSharedMapLayer = useEditModeStore((s) => s.setMapLayer);
+  // Cargo basemaps are valid 3D keys too: the same tile-cache source serves them.
+  const { keys: cargoBasemapKeys } = useModuleBasemaps();
   // Use shared layer if it's a valid 3D key, otherwise fall back to 'googleSat'
-  const activeLayer: LayerKey = (sharedMapLayer in MAP_LAYERS ? sharedMapLayer : 'googleSat') as LayerKey;
-  const setActiveLayer = (layer: LayerKey) => setSharedMapLayer(layer);
+  const activeLayer: string =
+    (sharedMapLayer in MAP_LAYERS && sharedMapLayer !== 'dem') || isModuleBasemapLayer(sharedMapLayer)
+      ? sharedMapLayer
+      : 'googleSat';
+  const setActiveLayer = (layer: string) => setSharedMapLayer(layer);
   const [exaggeration, setExaggeration] = useState(1.0);
   const exaggerationRef = useRef(1);
   exaggerationRef.current = exaggeration;
@@ -852,7 +858,7 @@ export function Mission3DPanel({
     const map = mapRef.current;
     if (!map || !mapReady) return;
     const source = map.getSource('raster-tiles') as maplibregl.RasterTileSource | undefined;
-    if (source) source.setTiles([getCachedTileUrl(activeLayer as BaseLayerKey)]);
+    if (source) source.setTiles([getCachedTileUrl(activeLayer)]);
   }, [activeLayer, mapReady]);
 
   // Update terrain exaggeration (only when terrain is enabled)
@@ -1097,7 +1103,7 @@ export function Mission3DPanel({
           </div>
         )}
         <MapLayersControl
-          baseLayers={BASE_LAYERS}
+          baseLayers={[...BASE_LAYER_KEYS, ...cargoBasemapKeys]}
           activeLayer={activeLayer}
           onSelectLayer={setActiveLayer}
           showTerrain={showHeight}
@@ -1231,14 +1237,14 @@ function setSourceData(map: maplibregl.Map, id: string, features: GeoJSON.Featur
   if (src) src.setData({ type: 'FeatureCollection', features });
 }
 
-function buildStyle(layerKey: LayerKey): maplibregl.StyleSpecification {
-  const layer = MAP_LAYERS[layerKey];
+function buildStyle(layerKey: string): maplibregl.StyleSpecification {
+  const layer = mapLayerDef(layerKey) ?? MAP_LAYERS.googleSat;
   return {
     version: 8,
     sources: {
       'raster-tiles': {
         type: 'raster',
-        tiles: [getCachedTileUrl(layerKey as BaseLayerKey)],
+        tiles: [getCachedTileUrl(layerKey)],
         tileSize: 256,
         maxzoom: (layer as MapLayer).maxNativeZoom ?? layer.maxZoom,
       },

@@ -76,7 +76,8 @@ import { buildSegmentedPath } from './mission-path';
 import { computeCameraTriggerPoints, photographedSeqs } from './camera-triggers';
 
 // Shared map layer definitions (centralized)
-import { MAP_LAYERS, DARK_LABELS_LAYER, ESRI_CANVAS_MAX_NATIVE_ZOOM, layerAttribution, type LayerKey, type MapLayer } from '../../../shared/map-layers';
+import { MAP_LAYERS, DARK_LABELS_LAYER, ESRI_CANVAS_MAX_NATIVE_ZOOM, layerAttribution, mapLayerDef, isBuiltinMapLayer, tileCacheTemplate, type LayerKey, type MapLayer } from '../../../shared/map-layers';
+import { useModuleBasemaps } from '../../modules/module-basemaps';
 import { useMapKeysStore } from '../../stores/map-keys-store';
 import { MapSearchControl } from '../map/MapSearchControl';
 import { EnginePlanLegend } from '../survey/EnginePlanLegend';
@@ -613,7 +614,9 @@ function MissionMapPanel2D({ readOnly = false }: MissionMapPanelProps) {
   const defaultLayer: LayerKey = isRover ? 'googleHybrid' : 'googleSat';
   const defaultZoom = isRover ? DEFAULT_ZOOM_ROVER : DEFAULT_ZOOM_AIRCRAFT;
 
-  const [activeLayer, setActiveLayer] = useState<LayerKey>(defaultLayer);
+  // Built-in layers plus any a cargo registered (`mb-<slug>.<id>`).
+  const { keys: cargoBasemapKeys } = useModuleBasemaps();
+  const [activeLayer, setActiveLayer] = useState<string>(defaultLayer);
   const [isAddingWaypoint, setIsAddingWaypoint] = useState(false);
   const [isSettingHome, setIsSettingHome] = useState(false);
   const [fitTrigger, setFitTrigger] = useState(0);
@@ -958,7 +961,7 @@ function MissionMapPanel2D({ readOnly = false }: MissionMapPanelProps) {
     return () => window.removeEventListener('keydown', handler);
   }, [readOnly, selectedSeq, waypoints]);
 
-  const layer = MAP_LAYERS[activeLayer];
+  const layer = mapLayerDef(activeLayer) ?? MAP_LAYERS.googleSat;
   const cartoKey = useMapKeysStore((s) => s.carto);
 
   // Build colored path segments from visible mission items (includes DO_* state
@@ -1122,7 +1125,7 @@ function MissionMapPanel2D({ readOnly = false }: MissionMapPanelProps) {
 
         <TileLayer
           key={activeLayer}
-          url={`tile-cache://${activeLayer}/{z}/{x}/{y}.png`}
+          url={tileCacheTemplate(activeLayer)}
           attribution={layerAttribution(activeLayer, cartoKey)}
           maxZoom={layer.maxZoom}
           maxNativeZoom={(layer as MapLayer).maxNativeZoom ?? layer.maxZoom}
@@ -1362,13 +1365,15 @@ function MissionMapPanel2D({ readOnly = false }: MissionMapPanelProps) {
       {/* Consolidated Layers control (base map + overlays + terrain + offline) */}
       <div className="absolute top-3 right-3 z-[1000]">
         <MapLayersControl
-          baseLayers={(Object.keys(MAP_LAYERS) as LayerKey[]).filter((k) => k !== 'dem' && k !== 'radar' && k !== 'openaip')}
+          baseLayers={[
+            ...(Object.keys(MAP_LAYERS) as LayerKey[]).filter((k) => k !== 'dem' && k !== 'radar' && k !== 'openaip'),
+            ...cargoBasemapKeys,
+          ]}
           activeLayer={activeLayer}
           onSelectLayer={setActiveLayer}
           showTerrain={showTerrain}
           onToggleTerrain={() => setShowTerrain(!showTerrain)}
-          extra={<OfflineAreaDownload bounds={mapBounds} activeLayer={activeLayer} />}
-        />
+          extra={<OfflineAreaDownload bounds={mapBounds} activeLayer={activeLayer} />}        />
       </div>
 
       {/* Airspace legend */}

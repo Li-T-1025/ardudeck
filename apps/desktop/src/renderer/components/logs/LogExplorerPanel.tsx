@@ -37,6 +37,8 @@ import { px4ModeName } from '@ardudeck/ulog-parser';
 import { fieldNames, logCount, logRows } from '../../utils/log-columns';
 import { useTranslation } from 'react-i18next';
 import { ui } from '../ui/ui-hooks';
+import { mapLayerDef, mapLayerName, tileCacheTemplate } from '../../../shared/map-layers';
+import { useModuleBasemaps } from '../../modules/module-basemaps';
 import type { TFunction } from 'i18next';
 
 // All chart panels share one uPlot cursor-sync group, keyed by x VALUE (time
@@ -1434,6 +1436,17 @@ const FLIGHT_MAP_LAYERS: Record<string, { nameKey: string; tiles: string[]; maxZ
 };
 
 /**
+ * Tile source and zoom limit for one layer key. A cargo basemap has no provider
+ * URL here: the app's tile cache serves it, so its key never reaches this map.
+ */
+function flightLayerSource(layerKey: string): { tiles: string[]; maxZoom: number } {
+  const builtin = FLIGHT_MAP_LAYERS[layerKey];
+  if (builtin) return { tiles: builtin.tiles, maxZoom: builtin.maxZoom };
+  const def = mapLayerDef(layerKey);
+  return { tiles: [tileCacheTemplate(layerKey)], maxZoom: def?.maxZoom ?? 19 };
+}
+
+/**
  * Min/max entry for one series' Y axis in split mode. Shows the auto-fitted
  * range until the user types over it; a pinned axis is exempt from auto-fit
  * and shows a reset back to it.
@@ -1547,6 +1560,9 @@ function FlightPathPanel() {
   const meshLayerRef = useRef<MeshThreeJsLayer | null>(null);
   const meshVersion = useSceneMeshStore((s) => s.version);
   const [activeLayer, setActiveLayer] = useState('satellite');
+  // This overlay is small, so a cargo that registers several styles only offers
+  // the row it marked `primary` here; the full-size pickers list them all.
+  const { narrowKeys: cargoBasemapKeys } = useModuleBasemaps();
   const [colorMode, setColorMode] = useState<PathColorMode>('mode');
 
   // Compute per-segment colors based on color mode
@@ -1613,7 +1629,7 @@ function FlightPathPanel() {
   useEffect(() => {
     if (!mapContainerRef.current || points.length < 2) return;
 
-    const layerDef = FLIGHT_MAP_LAYERS[activeLayer] ?? FLIGHT_MAP_LAYERS['satellite']!;
+    const layerSource = flightLayerSource(activeLayer);
 
     const map = new maplibregl.Map({
       container: mapContainerRef.current,
@@ -1622,9 +1638,9 @@ function FlightPathPanel() {
         sources: {
           'raster-tiles': {
             type: 'raster',
-            tiles: layerDef.tiles,
+            tiles: layerSource.tiles,
             tileSize: 256,
-            maxzoom: layerDef.maxZoom,
+            maxzoom: layerSource.maxZoom,
           },
         },
         layers: [{ id: 'raster-layer', type: 'raster', source: 'raster-tiles' }],
@@ -1842,20 +1858,27 @@ function FlightPathPanel() {
       <div className="absolute top-2 right-2 z-10 flex flex-col items-stretch gap-1.5">
         {/* Layer switcher */}
         <div {...ui('segmented')} className="flex bg-surface-overlay rounded-md backdrop-blur-sm overflow-hidden">
-          {Object.entries(FLIGHT_MAP_LAYERS).map(([key, l]) => (
-            <button
-              {...ui('segment', { active: activeLayer === key })}
-              key={key}
-              onClick={() => setActiveLayer(key)}
-              className={`flex-1 text-[10px] px-2 py-1 transition-colors ${
-                activeLayer === key
-                  ? 'bg-blue-500/30 text-blue-300'
-                  : 'text-content-secondary hover:text-content'
-              }`}
-            >
-              {t(l.nameKey)}
-            </button>
-          ))}
+          {[...Object.keys(FLIGHT_MAP_LAYERS), ...cargoBasemapKeys].map((key) => {
+            // This panel keeps its own layer table, whose keys are not the app's
+            // built-in keys (`hybrid` here is Google's, not `googleHybrid`), so
+            // the translation comes from that table's row, not from the shared map.
+            const entry = FLIGHT_MAP_LAYERS[key];
+            const label = entry ? t(entry.nameKey) : mapLayerName(key);
+            return (
+              <button
+                {...ui('segment', { active: activeLayer === key })}
+                key={key}
+                onClick={() => setActiveLayer(key)}
+                className={`flex-1 text-[10px] px-2 py-1 transition-colors ${
+                  activeLayer === key
+                    ? 'bg-blue-500/30 text-blue-300'
+                    : 'text-content-secondary hover:text-content'
+                }`}
+              >
+                {label}
+              </button>
+            );
+          })}
         </div>
         {/* Path color mode */}
         <div {...ui('segmented')} className="flex bg-surface-overlay rounded-md backdrop-blur-sm overflow-hidden">

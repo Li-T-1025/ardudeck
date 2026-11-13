@@ -112,8 +112,121 @@ export const MAP_LAYERS = {
 
 export type LayerKey = keyof typeof MAP_LAYERS;
 
-export function mapLayerName(layerKey: LayerKey): string {
-  return t(`shared:mapLayers.${layerKey}`);
+// ─── Basemaps cargos contribute ─────────────────────────────────────────────
+// A cargo's basemap arrives as a registration in the main process; the renderer
+// only ever sees a layer key, a label and the credit (see module-basemap-types).
+// Keeping them in this table means every picker, the attribution corner and the
+// tile-cache URL builder read one source, exactly as they do for the built-ins.
+
+export interface ModuleBasemapLayerDef {
+  /** `mb-<slug>.<id>`, which is also the tile-cache:// host name. */
+  key: string;
+  /** The registration's own label, used until the cargo's strings are loaded. */
+  name: string;
+  attribution?: string;
+  minZoom?: number;
+  maxZoom: number;
+  maxNativeZoom?: number;
+  /** Set by a cargo that registers several styles; narrow pickers list only these. */
+  primary?: boolean;
+}
+
+const basemapLayers = new Map<string, ModuleBasemapLayerDef>();
+const basemapLayerListeners = new Set<() => void>();
+let basemapLayerVersion = 0;
+/**
+ * Translated labels, resolved when a picker draws rather than when the table
+ * was built: a cargo's strings arrive with its renderer activation, which can
+ * be after the first IPC list.
+ */
+let basemapNameFor: ((layerKey: string, fallback: string) => string) | undefined;
+
+export function setModuleBasemapNameResolver(fn?: (layerKey: string, fallback: string) => string): void {
+  basemapNameFor = fn;
+  basemapLayerVersion++;
+  for (const l of basemapLayerListeners) l();
+}
+
+/** Replace the cargo-contributed basemaps. Called on load, unload and language change. */
+export function setModuleBasemapLayers(entries: ModuleBasemapLayerDef[]): void {
+  basemapLayers.clear();
+  for (const e of entries) basemapLayers.set(e.key, e);
+  basemapLayerVersion++;
+  for (const l of basemapLayerListeners) l();
+}
+
+export function subscribeModuleBasemapLayers(cb: () => void): () => void {
+  basemapLayerListeners.add(cb);
+  return () => {
+    basemapLayerListeners.delete(cb);
+  };
+}
+
+/** Bumped on every change, so a component can re-render its picker. */
+export function moduleBasemapLayersVersion(): number {
+  return basemapLayerVersion;
+}
+
+export function moduleBasemapLayerDefs(): ModuleBasemapLayerDef[] {
+  return [...basemapLayers.values()];
+}
+
+/**
+ * Cargo rows for a narrow picker (the flight-log overlay): the ones a cargo
+ * marked `primary`, or every row when it marked none, so a provider that ships
+ * a single style is never hidden.
+ */
+export function narrowModuleBasemapKeys(): string[] {
+  const defs = moduleBasemapLayerDefs();
+  const marked = defs.filter((d) => d.primary);
+  return (marked.length > 0 ? marked : defs).map((d) => d.key);
+}
+
+/** True for one of the host's own layers, false for a cargo's. */
+export function isBuiltinMapLayer(layerKey: string): boolean {
+  return Object.prototype.hasOwnProperty.call(MAP_LAYERS, layerKey);
+}
+
+/** True for a layer a cargo registered, false for a built-in one. */
+export function isModuleBasemapLayer(layerKey: string): boolean {
+  return basemapLayers.has(layerKey);
+}
+
+/** The tile-cache URL MapLibre loads for a layer; a cargo basemap never fetches its provider directly. */
+export function tileCacheTemplate(layerKey: string): string {
+  return `tile-cache://${layerKey}/{z}/{x}/{y}.png`;
+}
+
+/** A built-in or cargo layer, as the panels need it (zoom limits, credit). */
+export function mapLayerDef(layerKey: string): MapLayer | undefined {
+  const mod = basemapLayers.get(layerKey);
+  if (mod) {
+    return {
+      name: mod.name,
+      // The renderer only ever loads cargo tiles through tile-cache://, so the
+      // provider URL (and any key in it) never leaves the main process.
+      url: tileCacheTemplate(layerKey),
+      subdomains: [],
+      maxZoom: mod.maxZoom,
+      maxNativeZoom: mod.maxNativeZoom,
+      attribution: mod.attribution,
+    };
+  }
+  return (MAP_LAYERS as Record<string, MapLayer>)[layerKey];
+}
+
+/** Every layer a picker may offer, built-ins first in their table order. */
+export function allMapLayerKeys(moduleFirst = false): string[] {
+  const builtin = Object.keys(MAP_LAYERS);
+  const mod = moduleBasemapLayerDefs().map((m) => m.key);
+  return moduleFirst ? [...mod, ...builtin] : [...builtin, ...mod];
+}
+
+export function mapLayerName(layerKey: string): string {
+  const mod = basemapLayers.get(layerKey);
+  if (mod) return basemapNameFor?.(layerKey, mod.name) ?? mod.name;
+  if (isBuiltinMapLayer(layerKey)) return t(`shared:mapLayers.${layerKey}`);
+  return layerKey;
 }
 
 /**
@@ -137,8 +250,10 @@ export function tileToQuadkey(z: number, x: number, y: number): string {
  * Handles subdomain rotation and different URL patterns (Esri {z}/{y}/{x},
  * Bing {q} quadkeys).
  */
-export function resolveTileUrl(layerKey: LayerKey, z: number, x: number, y: number): string {
-  const layer = MAP_LAYERS[layerKey];
+export function resolveTileUrl(layerKey: string, z: number, x: number, y: number): string {
+  const layer = mapLayerDef(layerKey);
+  // A cargo basemap has no provider URL here: its tiles are served by the host.
+  if (!layer) return '';
   let url: string = layer.url;
 
   // Rotate subdomains deterministically based on (x + y) to spread load
@@ -159,8 +274,10 @@ export function resolveTileUrl(layerKey: LayerKey, z: number, x: number, y: numb
  * MapLibre handles {z}/{x}/{y} substitution itself, and speaks quadkeys
  * natively via its {quadkey} token.
  */
-export function getMapLibreTileUrl(layerKey: LayerKey): string {
-  const layer = MAP_LAYERS[layerKey];
+export function getMapLibreTileUrl(layerKey: string): string {
+  const layer = mapLayerDef(layerKey);
+  if (!layer) return '';
+  if (!isBuiltinMapLayer(layerKey)) return tileCacheTemplate(layerKey);
   let url: string = layer.url;
   if (layer.subdomains.length > 0) {
     url = url.replace('{s}', layer.subdomains[0]!);
@@ -181,5 +298,8 @@ export const ESRI_CANVAS_MAX_NATIVE_ZOOM = 16;
 /** The credit to show for a base layer; the dark style credits CARTO while a Carto key serves it. */
 export function layerAttribution(key: string, cartoKey: boolean): string | undefined {
   if (key === 'dark' && cartoKey) return CARTO_ATTRIBUTION;
+  // A cargo basemap carries the credit its provider requires.
+  const mod = basemapLayers.get(key);
+  if (mod) return mod.attribution;
   return (MAP_LAYERS as Record<string, MapLayer>)[key]?.attribution;
 }

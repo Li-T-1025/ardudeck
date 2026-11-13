@@ -64,7 +64,8 @@ import { ElevationLegend } from '../map/ElevationLegend';
 import { CachedAreaOverlay } from '../map/CachedAreaOverlay';
 
 // Shared map layer definitions (centralized)
-import { MAP_LAYERS, DARK_LABELS_LAYER, ESRI_CANVAS_MAX_NATIVE_ZOOM, layerAttribution, mapLayerName, type LayerKey, type MapLayer } from '../../../shared/map-layers';
+import { MAP_LAYERS, DARK_LABELS_LAYER, ESRI_CANVAS_MAX_NATIVE_ZOOM, layerAttribution, mapLayerDef, mapLayerName, isModuleBasemapLayer, isBuiltinMapLayer, tileCacheTemplate, type LayerKey, type MapLayer } from '../../../shared/map-layers';
+import { useModuleBasemaps } from '../../modules/module-basemaps';
 import { useMapKeysStore } from '../../stores/map-keys-store';
 
 // Map overlays (weather radar, aviation, airspace zones)
@@ -109,6 +110,9 @@ const TELEMETRY_LAYERS = {
 } as const;
 
 type TelemetryLayerKey = keyof typeof TELEMETRY_LAYERS;
+
+/** Built-in telemetry basemaps, in the order the picker has always shown them. */
+const TELEMETRY_BUILTIN_KEYS = Object.keys(TELEMETRY_LAYERS) as LayerKey[];
 
 // Calculate distance between two points (Haversine formula)
 function calculateDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {
@@ -2316,9 +2320,14 @@ const TelemetryMap2D = React.memo(function TelemetryMap2D() {
   const [homePosition, setHomePosition] = useState<[number, number] | null>(initialMapHome);
   const sharedMapLayer = useEditModeStore((s) => s.mapLayer);
   const setSharedMapLayer = useEditModeStore((s) => s.setMapLayer);
-  // Use shared layer if it's a valid 2D key, otherwise fall back to 'googleSat'
-  const currentLayer: TelemetryLayerKey = (sharedMapLayer in TELEMETRY_LAYERS ? sharedMapLayer : 'googleSat') as TelemetryLayerKey;
-  const setCurrentLayer = (layer: TelemetryLayerKey) => setSharedMapLayer(layer);
+  // Cargo basemaps live in the same picker, so the list re-renders when one
+  // loads, unloads or renames itself after a language switch.
+  const { keys: cargoBasemapKeys } = useModuleBasemaps();
+  // Use the shared layer if it is a valid 2D key or a cargo basemap, otherwise
+  // fall back to 'googleSat'.
+  const currentLayer: string =
+    sharedMapLayer in TELEMETRY_LAYERS || isModuleBasemapLayer(sharedMapLayer) ? sharedMapLayer : 'googleSat';
+  const setCurrentLayer = (layer: string) => setSharedMapLayer(layer);
   const [showHeadingLine, setShowHeadingLine] = useState(true);
   // The old small CompassOverlay is gone in 2D; the toolbar Compass button
   // now drives the 'heading' round gauge instrument instead.
@@ -2814,7 +2823,8 @@ const TelemetryMap2D = React.memo(function TelemetryMap2D() {
     setDragRatio(null);
   }, [setSplitRatio]);
 
-  const layer = TELEMETRY_LAYERS[currentLayer];
+  // A built-in layer or a cargo basemap; both resolve their zoom limits here.
+  const layer = mapLayerDef(currentLayer) ?? MAP_LAYERS.googleSat;
   const cartoKey = useMapKeysStore((s) => s.carto);
 
   return (
@@ -2934,7 +2944,9 @@ const TelemetryMap2D = React.memo(function TelemetryMap2D() {
         <MapBoundsTracker onBoundsChange={handleBoundsChange} />
         <TileLayer
           key={currentLayer}
-          url={`tile-cache://${currentLayer}/{z}/{x}/{y}.png`}
+          // Every basemap is served through tile-cache://; a cargo's provider
+          // URL (and its key) stays in the main process.
+          url={tileCacheTemplate(currentLayer)}
           attribution={layerAttribution(currentLayer, cartoKey)}
           maxZoom={layer.maxZoom}
           maxNativeZoom={(layer as MapLayer).maxNativeZoom ?? layer.maxZoom}
@@ -3125,9 +3137,9 @@ const TelemetryMap2D = React.memo(function TelemetryMap2D() {
         </button>
         {splitFull ? <SplitControl /> : (<>
         <MapLayersControl
-          baseLayers={Object.keys(TELEMETRY_LAYERS) as LayerKey[]}
+          baseLayers={[...TELEMETRY_BUILTIN_KEYS, ...cargoBasemapKeys]}
           activeLayer={currentLayer}
-          onSelectLayer={(k) => setCurrentLayer(k as TelemetryLayerKey)}
+          onSelectLayer={setCurrentLayer}
           showTerrain={showTerrain}
           onToggleTerrain={() => setShowTerrain(!showTerrain)}
           extra={<MissionPathsToggle />}

@@ -7,7 +7,7 @@
 
 import { useTranslation } from 'react-i18next';
 import { useState, useEffect, useCallback } from 'react';
-import { mapLayerName, type LayerKey } from '../../../shared/map-layers';
+import { mapLayerName, isBuiltinMapLayer, type LayerKey } from '../../../shared/map-layers';
 import type { TileCacheDownloadProgress } from '../../../shared/ipc-channels';
 import { useTileCacheStore } from '../../stores/tile-cache-store';
 import { useTileCacheAreaStore } from '../../stores/tile-cache-area-store';
@@ -29,13 +29,16 @@ export function OfflineCachePanel({ activeLayer }: { activeLayer: string }): JSX
   const addRegion = useTileCacheStore((s) => s.addRegion);
 
   const [maxZoom, setMaxZoom] = useState(16);
-  const [selectedLayers, setSelectedLayers] = useState<Set<LayerKey>>(() => new Set([activeLayer as LayerKey]));
+  // A cargo basemap is downloaded by its own cargo, not by this list.
+  const [selectedLayers, setSelectedLayers] = useState<Set<LayerKey>>(
+    () => new Set(isBuiltinMapLayer(activeLayer) ? [activeLayer as LayerKey] : []),
+  );
   const [estimate, setEstimate] = useState<number | null>(null);
   const [progress, setProgress] = useState<TileCacheDownloadProgress | null>(null);
   const [downloadId, setDownloadId] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!active) { setSelectedLayers(new Set([activeLayer as LayerKey])); setProgress(null); setDownloadId(null); }
+    if (!active) { setSelectedLayers(new Set(isBuiltinMapLayer(activeLayer) ? [activeLayer as LayerKey] : [])); setProgress(null); setDownloadId(null); }
   }, [active, activeLayer]);
 
   useEffect(() => {
