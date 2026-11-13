@@ -1,0 +1,12 @@
+{
+  "manifestVersion": 1,
+  "slug": "com.litao.tianditu",
+  "name": "Tianditu Basemaps",
+  "version": "0.1.0",
+  "entry": {
+    "main": "dist/main.js",
+    "renderer": "dist/renderer.js"
+  },
+  "permissions": ["network"],
+  "minArduDeckVersion": "1.3.0"
+}
