@@ -790,6 +790,10 @@ export const IPC_CHANNELS = {
   MODULE_DEV_UNLOAD: 'module:dev-unload',
   MODULE_DEV_CHANGED: 'module:dev-changed',
 
+  // Basemaps cargos added to the layer pickers: rows only, never a template.
+  MODULE_BASEMAPS_LIST: 'module-basemaps:list',
+  MODULE_BASEMAPS_CHANGED: 'module-basemaps:changed',
+
   // Hangar APPS: native programs the Hangar delivers, distinct from cargo modules.
   APP_CATALOG_LIST: 'app:catalog-list',
   APP_LIST: 'app:list',

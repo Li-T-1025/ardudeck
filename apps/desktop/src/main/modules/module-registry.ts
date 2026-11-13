@@ -8,6 +8,7 @@ import { createMainHostApi } from './module-host-main.js';
 import { killAllForModule } from './module-pty-service.js';
 import { unregisterTileSourcesFor } from '../terrain/tile-source-registry.js';
 import { unregisterSceneMeshesFor } from '../terrain/scene-mesh-registry.js';
+import { unregisterModuleBasemapsFor } from './module-basemap-registry.js';
 
 interface LoadedRecord {
   slug: string;
@@ -65,6 +66,7 @@ export function unloadAllModules(): void {
     killAllForModule(slug);
     unregisterTileSourcesFor(slug);
     unregisterSceneMeshesFor(slug);
+    unregisterModuleBasemapsFor(slug);
   }
   loaded.clear();
 }

@@ -17,9 +17,18 @@ import { resolveTileUrl, MAP_LAYERS, CARTO_DARK_URL, CARTO_KEY_SERVICE, DARK_LAB
 import { createHash } from 'crypto';
 import { getApiKey } from './overlays/overlay-ipc-handlers.js';
 import { demSourcesForTile, listTileSources, rasterSourceByKey, subscribeTileSources } from './terrain/tile-source-registry.js';
-import { composeDem, encodePng, readSourceTile, type Rgba } from './terrain/dem-tiles.js';
+import { composeDem, encodePng, overzoomRgba, readSourceTile, type Rgba } from './terrain/dem-tiles.js';
 import { listSceneMeshes, subscribeSceneMeshes } from './terrain/scene-mesh-registry.js';
 import { TILE_SOURCE_LAYER_PREFIX } from '../shared/tile-source-types.js';
+import { MODULE_BASEMAP_LAYER_PREFIX } from '../shared/module-basemap-types.js';
+import {
+  moduleBasemapByLayerKey,
+  publicModuleBasemaps,
+  resolveModuleBasemapUrl,
+  subscribeModuleBasemaps,
+} from './modules/module-basemap-registry.js';
+import type { ModuleBasemapEntry } from '../shared/module-basemap-types.js';
+import { blendBasemapOverlay, decodeTileImage } from './module-basemap-tiles.js';
 import { isImageBytes } from './tile-image.js';
 
 // ─── Settings Store ──────────────────────────────────────────────────────────
@@ -110,6 +119,10 @@ export async function resolveTileBytes(requestUrl: string): Promise<{ status: nu
     return { status: 200, body: toArrayBuffer(img ? encodePng(img) : TRANSPARENT_PNG) };
   }
 
+  if (layer.startsWith(MODULE_BASEMAP_LAYER_PREFIX)) {
+    return resolveModuleBasemapTileBytes(layer, z, x, y);
+  }
+
   if (layer !== 'dem') return resolveDefaultTileBytes(requestUrl);
 
   const sources = demSourcesForTile(z, x, y);
@@ -134,6 +147,99 @@ export async function resolveTileBytes(requestUrl: string): Promise<{ status: nu
     compositeCache.set(cacheKey, bytes);
   }
   return { status: 200, body: bytes };
+}
+
+// ─── Cargo basemaps ─────────────────────────────────────────────────────────
+// One provider style served at tile-cache://mb-<slug>.<id>/{z}/{x}/{y}.png.
+// The template, and any key inside it, stays in this process; a renderer only
+// ever receives the layer key. A label template is composited over the base
+// tile pixel by pixel, so a hybrid style is one picker entry rather than two
+// layers the pilot has to switch on separately.
+
+/** One line per failing layer: a keyless install must not log a line per tile. */
+const basemapTileWarned = new Set<string>();
+function warnBasemapOnce(key: string, message: string, err?: unknown): void {
+  if (basemapTileWarned.has(key)) return;
+  basemapTileWarned.add(key);
+  console.warn(message, err ?? '');
+}
+
+async function resolveModuleBasemapTileBytes(
+  layer: string,
+  z: number,
+  x: number,
+  y: number,
+): Promise<{ status: number; body: ArrayBuffer | null }> {
+  const entry = moduleBasemapByLayerKey(layer);
+  if (!entry) return { status: 404, body: null };
+
+  // Past the provider's deepest real level, upscale a parent tile. A 200 with a
+  // stretched image beats a blank corner, which reads as "this provider has no
+  // map here" — the failure mode pilots reported as a smeared basemap.
+  const nativeMax = entry.maxNativeZoom ?? entry.maxZoom ?? 18;
+  const fz = Math.min(z, nativeMax);
+  const dz = z - fz;
+  const fx = x >> dz;
+  const fy = y >> dz;
+
+  const base = await readModuleBasemapTile(entry, entry.urlTemplate, fz, fx, fy);
+  if (!base) return { status: 200, body: toArrayBuffer(TRANSPARENT_PNG) };
+  const overlay = entry.overlayUrlTemplate
+    ? await readModuleBasemapTile(entry, entry.overlayUrlTemplate, fz, fx, fy)
+    : null;
+  let img: Rgba = overlay ? blendBasemapOverlay(base, overlay) : base;
+  if (dz > 0) img = overzoomRgba(img, dz, x - (fx << dz), y - (fy << dz));
+  return { status: 200, body: toArrayBuffer(encodePng(img)) };
+}
+
+async function readModuleBasemapTile(
+  entry: ModuleBasemapEntry,
+  template: string,
+  z: number,
+  x: number,
+  y: number,
+): Promise<Rgba | null> {
+  // Labels share the base's layer directory so clearing one basemap clears both.
+  const cacheLayer = template === entry.urlTemplate ? entry.layerKey : `${entry.layerKey}-labels`;
+  const tilePath = getTilePath(cacheLayer, z, x, y);
+  try {
+    const cached = await readFile(tilePath);
+    if (isImageBytes(cached)) {
+      const img = decodeTileImage(cached);
+      if (img) return img;
+      unlink(tilePath).catch(() => { /* a tile that will not decode is fetched again */ });
+    }
+  } catch {
+    // Cache miss — continue to network
+  }
+  try {
+    const url = resolveModuleBasemapUrl(template, entry, z, x, y);
+    const response = await fetch(url, { headers: entry.headers });
+    if (!response.ok) {
+      // 403 usually means the key is the browser-side type, or the server-side
+      // one does not have this machine's egress IP on its allow-list.
+      warnBasemapOnce(`${cacheLayer}:${response.status}`, `[tile-cache] ${cacheLayer} answered HTTP ${response.status}`);
+      return null;
+    }
+    const buffer = Buffer.from(await response.arrayBuffer());
+    if (!isImageBytes(buffer)) {
+      warnBasemapOnce(`${cacheLayer}:notimage`, `[tile-cache] ${cacheLayer} returned bytes that are not an image`);
+      return null;
+    }
+    const img = decodeTileImage(buffer);
+    if (!img) {
+      warnBasemapOnce(`${cacheLayer}:undecodable`, `[tile-cache] ${cacheLayer} returned an image the host cannot decode`);
+      return null;
+    }
+    const dir = join(getCacheDir(), cacheLayer, String(z), String(x));
+    mkdir(dir, { recursive: true })
+      .then(() => writeFile(tilePath, buffer))
+      .catch(() => { /* ignore write errors */ });
+    return img;
+  } catch (err) {
+    warnBasemapOnce(`${cacheLayer}:offline`, `[tile-cache] ${cacheLayer} could not be fetched`, err);
+    return null;
+  }
 }
 
 async function resolveDefaultTileBytes(
@@ -694,6 +800,10 @@ export function setupTileCacheHandlers(mainWindow: BrowserWindow): void {
   };
   ipcMain.handle(IPC_CHANNELS.TILE_SOURCES_LIST, () => listTileSources());
   subscribeTileSources(() => broadcast(IPC_CHANNELS.TILE_SOURCES_CHANGED, listTileSources()));
+  // Cargo basemaps: the renderer gets the picker rows and nothing else. The
+  // public projection drops templates and headers, which carry provider keys.
+  ipcMain.handle(IPC_CHANNELS.MODULE_BASEMAPS_LIST, () => publicModuleBasemaps());
+  subscribeModuleBasemaps(() => broadcast(IPC_CHANNELS.MODULE_BASEMAPS_CHANGED, publicModuleBasemaps()));
   ipcMain.handle(IPC_CHANNELS.SCENE_MESHES_LIST, () => listSceneMeshes());
   subscribeSceneMeshes(() => broadcast(IPC_CHANNELS.SCENE_MESHES_CHANGED, listSceneMeshes()));
 

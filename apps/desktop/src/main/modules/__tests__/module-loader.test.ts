@@ -18,6 +18,7 @@ describe('loadModuleMain', () => {
     process: { run: async () => { throw new Error('no'); } },
     scripts: { install: async () => ({ status: 'installed' as const }), saveCopy: async () => null },
     tiles: { register: () => {}, unregister: () => {} },
+    basemaps: { register: () => {}, unregister: () => {} },
     scene: { registerMesh: () => {}, unregisterMesh: () => {} },
   };
 

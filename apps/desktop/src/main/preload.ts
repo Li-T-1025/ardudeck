@@ -2599,6 +2599,19 @@ const api = {
   // Tile Cache (Offline Maps)
   // =============================================================================
 
+  // Basemaps the loaded cargos added to the layer pickers. Rows only: the
+  // templates (and any provider key in them) stay in the main process.
+  moduleBasemapsList: (): Promise<import('../shared/module-basemap-types').PublicModuleBasemapEntry[]> =>
+    ipcRenderer.invoke(IPC_CHANNELS.MODULE_BASEMAPS_LIST),
+
+  onModuleBasemapsChanged: (
+    callback: (entries: import('../shared/module-basemap-types').PublicModuleBasemapEntry[]) => void,
+  ): (() => void) => {
+    const handler = (_: unknown, entries: import('../shared/module-basemap-types').PublicModuleBasemapEntry[]) => callback(entries);
+    ipcRenderer.on(IPC_CHANNELS.MODULE_BASEMAPS_CHANGED, handler);
+    return () => ipcRenderer.removeListener(IPC_CHANNELS.MODULE_BASEMAPS_CHANGED, handler);
+  },
+
   // Fetch raw PNG bytes for a tile-cache:// URL. Used by detached windows'
   // MapLibre addProtocol handler, which cannot fetch the privileged scheme.
   tileCacheGetTile: (url: string): Promise<ArrayBuffer | null> =>
