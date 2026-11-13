@@ -192,6 +192,53 @@ export interface TileSourceRegistration {
   version?: number;
 }
 
+/**
+ * A basemap this module adds to the host's layer pickers (telemetry map,
+ * mission planning, the 3D mission view, the flight-log map). The host fetches
+ * and caches the tiles in the main process, so a provider key stays out of the
+ * renderer and never appears in a screenshot or a devtools network log.
+ *
+ * Provider terms come first: a key type that only works from a browser page
+ * needs a browser, and this is a desktop client. Ask the provider for a
+ * server-side key instead of faking a User-Agent.
+ */
+export interface BasemapRegistration {
+  /** Stable id within this module. Re-registering the same id replaces it. */
+  id: string;
+  /** Shown in the layer picker. Ship it in the pilot's language when you can. */
+  name: string;
+  /** XYZ template: `{z}`, `{x}`, `{y}`, and `{s}` filled from `subdomains`. */
+  urlTemplate: string;
+  /**
+   * Transparent label or annotation template drawn over the base tile by the
+   * host, e.g. Tianditu's `cia` over its `img`. Keeps one picker entry instead
+   * of asking the pilot to switch two layers.
+   */
+  overlayUrlTemplate?: string;
+  /** Values for `{s}`; rotates deterministically so one tile host is not hammered. */
+  subdomains?: string[];
+  /** Credit the provider requires, shown in the map's attribution corner. */
+  attribution?: string;
+  /**
+   * Extra request headers for the tile endpoint. Not for impersonating a
+   * browser: the host sends what the provider's server-side key needs and
+   * nothing that claims to be Chrome.
+   */
+  headers?: Record<string, string>;
+  minZoom?: number;
+  maxZoom?: number;
+  /** Deepest zoom the provider actually serves; beyond it the host upscales a parent tile. */
+  maxNativeZoom?: number;
+  /**
+   * Mark the one style a narrow picker should offer. The flight-log map sits in
+   * a small overlay and shows only these rows, so a provider that registers
+   * several styles (imagery, vector, terrain) does not crowd it; full-size
+   * pickers still list everything. Leave it unset on every row and the narrow
+   * picker lists them all.
+   */
+  primary?: boolean;
+}
+
 /** How a scene model's origin altitude is read. */
 export type SceneAltitudeMode = 'amsl' | 'agl' | 'clamp';
 
@@ -1891,6 +1938,16 @@ export interface MainHostApi {
   /** Map tiles this module serves (DEM override or raster overlay). */
   tiles: {
     register(reg: TileSourceRegistration): void;
+    unregister(id: string): void;
+  };
+  /**
+   * Basemaps this module adds to the layer pickers. One entry per provider
+   * style: give it a template and the host serves it from `tile-cache://`, so
+   * the key stays here and the renderer only ever sees a layer key.
+   */
+  basemaps: {
+    register(reg: BasemapRegistration): void;
+    /** Remove a basemap this module registered. Other modules' ids are ignored. */
     unregister(id: string): void;
   };
   /** Textured meshes for the synthetic vision and 3D mission scenes. */
